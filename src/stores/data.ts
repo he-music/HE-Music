@@ -1,0 +1,470 @@
+import { defineStore } from "pinia";
+import type { CoverType, UserLikeDataType } from "@/types/main";
+import { playlistCategories } from "@/api/playlist";
+import { cloneDeep, isEmpty } from "lodash-es";
+import localforage from "localforage";
+import {
+  SongInfo,
+  CategoryGroupInfo,
+  UserInfo,
+  UserPlaylistInfo,
+  FilterInfo,
+} from "@/types/main.hemusic";
+import { artistFilters } from "@/api/artist";
+import { songEqual } from "@/utils/song";
+import { mvFilters } from "@/api/video";
+
+interface ListState {
+  playList: SongInfo[];
+  originalPlayList: SongInfo[];
+  historyList: SongInfo[];
+  searchHistory: string[];
+  localPlayList: CoverType[];
+  // loginType: LoginType;
+  userData: UserInfo;
+  // 登录状态
+  userLoginStatus: boolean;
+  token: string;
+  // refresh token 和过期时间
+  refreshToken: string;
+  expiresAt: number;
+  userLikeData: UserLikeDataType;
+  userCreatedPlaylist: UserPlaylistInfo[]; //用户创建的歌单
+  playlistCategories: Record<string, CategoryGroupInfo[]>;
+  artistFilters: Record<string, FilterInfo[]>;
+  mvFilters: Record<string, FilterInfo[]>;
+  /** 正在下载的歌曲列表 */
+  downloadingSongs: Array<{
+    /** 歌曲信息 */
+    song: SongInfo;
+    /** 音质 */
+    quality: string;
+    /** 状态：下载中 / 等待中 / 失败 */
+    status: "downloading" | "waiting" | "failed";
+    /** 下载进度 */
+    progress: number;
+    /** 已传输大小 */
+    transferred: string;
+    /** 总大小 */
+    totalSize: string;
+  }>;
+}
+
+type UserDataKeys = keyof ListState["userLikeData"];
+
+// musicDB
+const musicDB = localforage.createInstance({
+  name: "music-data",
+  description: "List data of the application",
+  storeName: "music",
+});
+
+// userDB
+const userDB = localforage.createInstance({
+  name: "user-data",
+  description: "User data of the application",
+  storeName: "user",
+});
+// backgroundDB
+const backgroundDB = localforage.createInstance({
+  name: "background-data",
+  description: "Background image data",
+  storeName: "background",
+});
+
+export const useDataStore = defineStore("data", {
+  state: (): ListState => ({
+    // 播放列表
+    playList: [],
+    originalPlayList: [],
+    // 播放历史
+    historyList: [],
+    // 搜索历史
+    searchHistory: [],
+    // 本地歌单
+    localPlayList: [],
+    // 登录状态
+    userLoginStatus: false,
+    token: "",
+    refreshToken: "",
+    expiresAt: 0,
+    userCreatedPlaylist: [],
+    // 用户数据
+    userData: {
+      id: "",
+      username: "",
+      email: "",
+      status: 0,
+      nickname: "",
+      avatar: "",
+    },
+    // 用户喜欢数据
+    userLikeData: {
+      songs: [],
+      playlists: [],
+      artists: [],
+      albums: [],
+      mvs: [],
+    },
+    // 分类数据
+    playlistCategories: {},
+    artistFilters: {},
+    mvFilters: {},
+    // 正在下载的歌曲列表
+    downloadingSongs: [],
+  }),
+  getters: {
+    // 是否为喜欢歌曲
+    isLikeSong:
+      (state) =>
+      ({ id, platform }: { id: string; platform: string } = { id: "", platform: "" }) =>
+        state.userLikeData.songs.some((item) => item.id === id && item.platform === platform),
+  },
+  actions: {
+    async loadData() {
+      try {
+        // 获取 music-data
+        const musicDataKeys = await musicDB.keys();
+        console.log(musicDataKeys);
+        await Promise.all(
+          musicDataKeys.map(async (key) => {
+            const data = await musicDB.getItem(key);
+            this[key] = data || [];
+          }),
+        );
+        // 获取 user-data
+        const userDataKeys = await userDB.keys();
+        await Promise.all(
+          userDataKeys.map(async (key) => {
+            const data = await userDB.getItem(key);
+            this.userLikeData[key] = data;
+          }),
+        );
+      } catch (error) {
+        console.error("Error loading data from localforage:", error);
+      }
+    },
+    // 更新播放列表
+    async setPlayList(data: SongInfo | SongInfo[]): Promise<number> {
+      try {
+        // 若为列表
+        if (Array.isArray(data)) {
+          this.playList = data;
+          // 更新本地存储
+          data = cloneDeep(data);
+          await musicDB.setItem("playList", data);
+          return 0;
+        }
+        // 若为单曲
+        else {
+          // 若为单曲
+          const song = cloneDeep(data as SongInfo);
+          // 歌曲去重
+          const playList = this.playList.filter(
+            (item) => item.id !== song.id || item.platform !== song.platform,
+          );
+          // 添加到歌单末尾
+          playList.push(song);
+          // 获取索引
+          const index = playList.length - 1;
+          // 更新本地存储
+          this.playList = playList;
+          await musicDB.setItem("playList", playList);
+          return index;
+        }
+      } catch (error) {
+        console.error("Error updating playlist:", error);
+        throw error;
+      }
+    },
+
+    // 保存原始播放列表
+    async setOriginalPlayList(data: SongInfo[]): Promise<void> {
+      const snapshot = cloneDeep(data);
+      this.originalPlayList = snapshot;
+      await musicDB.setItem("originalPlayList", snapshot);
+    },
+    // 获取原始播放列表
+    async getOriginalPlayList(): Promise<SongInfo[] | null> {
+      if (Array.isArray(this.originalPlayList) && this.originalPlayList.length > 0) {
+        return this.originalPlayList;
+      }
+      const data = (await musicDB.getItem("originalPlayList")) as SongInfo[] | null;
+      if (Array.isArray(data) && data.length > 0) {
+        this.originalPlayList = data;
+        return data;
+      }
+      return null;
+    },
+    // 清除原始播放列表
+    async clearOriginalPlayList(): Promise<void> {
+      this.originalPlayList = [];
+      await musicDB.setItem("originalPlayList", []);
+    },
+    // 新增下一首播放歌曲
+    async setNextPlaySong(song: SongInfo, index: number): Promise<number> {
+      if (this.playList.length === 0) {
+        this.playList = [song];
+        await musicDB.setItem("playList", cloneDeep(this.playList));
+        return 0;
+      }
+
+      const indexAdd = index + 1;
+      this.playList.splice(indexAdd, 0, song);
+      // 再移除重复的歌曲
+      const playList = this.playList.filter(
+        (item, idx) => idx === indexAdd || item.id !== song.id || item.platform !== song.platform,
+      );
+
+      // 更新本地存储
+      this.playList = playList;
+      await musicDB.setItem("playList", cloneDeep(playList));
+      // 返回刚刚插入的歌曲索引
+      return playList.findIndex((item) => item.id === song.id && item.platform === song.platform);
+    },
+    // 更改播放历史
+    async setHistory(song: SongInfo) {
+      try {
+        let historyList: ListState["historyList"] | null = await musicDB.getItem("historyList");
+        // 是否无数据
+        if (historyList === null) {
+          historyList = [];
+        } else if (!Array.isArray(historyList)) return;
+        // 深拷贝
+        song = cloneDeep(song);
+        // 添加到首项并移除重复项
+        const updatedList = [
+          song,
+          ...historyList.filter((item) => item.id !== song.id || item.platform !== song.platform),
+        ];
+        // 最多 500 首
+        if (updatedList.length > 500) updatedList.splice(500);
+        await musicDB.setItem("historyList", updatedList);
+        // 更新播放历史
+        this.historyList = updatedList as SongInfo[];
+      } catch (error) {
+        console.error("Error updating history:", error);
+        throw error;
+      }
+    },
+    // 清除播放历史
+    async clearHistory(): Promise<void> {
+      try {
+        await musicDB.setItem("historyList", []);
+        this.historyList = [];
+      } catch (error) {
+        console.error("Error clearing history:", error);
+        throw error;
+      }
+    },
+    // 更改用户数据
+    async setUserLikeData<K extends UserDataKeys>(
+      name: K,
+      data: ListState["userLikeData"][K],
+    ): Promise<void> {
+      try {
+        // 更新本地存储
+        await userDB.setItem(name, cloneDeep(data));
+        this.userLikeData[name] = data;
+      } catch (error) {
+        console.error("Error updating user data:", error);
+        throw error;
+      }
+    },
+    // 清除用户数据
+    async clearUserData() {
+      try {
+        this.userLoginStatus = false;
+        this.token = "";
+        this.refreshToken = "";
+        this.expiresAt = 0;
+        this.userCreatedPlaylist = [];
+        this.userData = {
+          id: "",
+          username: "",
+          email: "",
+          status: 0,
+          nickname: "",
+          avatar: "",
+        };
+        await Promise.all(
+          Object.keys(this.userLikeData).map(async (key) => {
+            const userDataKey = key as UserDataKeys;
+            await this.setUserLikeData(userDataKey, []);
+            this.userLikeData[userDataKey] = [];
+          }),
+        );
+      } catch (error) {
+        console.error("Error clearing user data:", error);
+        throw error;
+      }
+    },
+    // 删除数据库
+    async deleteDB(name?: string): Promise<void> {
+      try {
+        if (name) {
+          await localforage.dropInstance({ name });
+          console.log(`Dropped ${name} database`);
+          return;
+        }
+        await musicDB.clear();
+        await userDB.clear();
+        console.log("All databases cleared");
+      } catch (error) {
+        console.error("Error deleting database:", error);
+        throw error;
+      }
+    },
+    // 获取歌单分类
+    async getPlaylistCategories(platform: string) {
+      if (!isEmpty(this.playlistCategories[platform])) return;
+      // 获取歌单分类
+      try {
+        const res = await playlistCategories(platform);
+        this.playlistCategories[platform] = res.groups;
+      } catch (error) {
+        console.error("Error getting playlist cat list:", error);
+        throw error;
+      }
+    },
+    // 获取歌手分类
+    async getArtistFilters(platform: string) {
+      if (!isEmpty(this.artistFilters[platform])) return;
+      // 获取歌单分类
+      try {
+        const res = await artistFilters(platform);
+        this.artistFilters[platform] = res.filters;
+      } catch (error) {
+        console.error("Error getting artist filters:", error);
+        throw error;
+      }
+    },
+    // 获取歌手分类
+    async getMVFilters(platform: string) {
+      if (!isEmpty(this.mvFilters[platform])) return;
+      // 获取歌单分类
+      try {
+        const res = await mvFilters(platform);
+        this.mvFilters[platform] = res.filters;
+      } catch (error) {
+        console.error("Error getting mv filters:", error);
+        throw error;
+      }
+    },
+    // 添加正在下载的歌曲
+    addDownloadingSong(song: SongInfo, quality: string) {
+      // 检查是否已存在
+      const exists = this.downloadingSongs.find(
+        (item) => item.song.id === song.id && item.song.platform === song.platform,
+      );
+      if (exists) return;
+      this.downloadingSongs.push({
+        song: cloneDeep(song),
+        quality,
+        status: "downloading",
+        progress: 0,
+        transferred: "0MB",
+        totalSize: "0MB",
+      });
+      // 保存到本地存储
+      musicDB.setItem("downloadingSongs", cloneDeep(this.downloadingSongs));
+    },
+    // 更新下载状态
+    updateDownloadStatus(song: SongInfo, status: "downloading" | "waiting" | "failed") {
+      const index = this.downloadingSongs.findIndex((item) => songEqual(song, item.song));
+      if (index !== -1) {
+        this.downloadingSongs[index].status = status;
+        // 强制触发响应式更新 (Fix: 下一首歌曲状态更新UI不变化的问题)
+        this.downloadingSongs = [...this.downloadingSongs];
+      }
+    },
+    // 更新下载进度
+    updateDownloadProgress(
+      song: SongInfo,
+      progress: number,
+      transferred: string,
+      totalSize: string,
+    ) {
+      const item = this.downloadingSongs.find((item) => songEqual(song, item.song));
+      if (item) {
+        item.progress = progress;
+        item.transferred = transferred;
+        item.totalSize = totalSize;
+        // 进度更新过于频繁，不再实时保存到本地存储，仅在添加/删除时保存
+      }
+    },
+    // 移除正在下载的歌曲（下载失败时）
+    removeDownloadingSong(song: SongInfo) {
+      const index = this.downloadingSongs.findIndex((item) => songEqual(song, item.song));
+      if (index !== -1) {
+        this.downloadingSongs.splice(index, 1);
+        musicDB.setItem("downloadingSongs", cloneDeep(this.downloadingSongs));
+      }
+    },
+    // 标记下载失败（保留在列表中）
+    markDownloadFailed(song: SongInfo) {
+      const index = this.downloadingSongs.findIndex((item) => songEqual(song, item.song));
+      if (index !== -1) {
+        this.downloadingSongs[index].status = "failed";
+        this.downloadingSongs[index].progress = 0;
+        this.downloadingSongs[index].transferred = "0MB";
+        this.downloadingSongs[index].totalSize = "0MB";
+        this.downloadingSongs = [...this.downloadingSongs];
+        musicDB.setItem("downloadingSongs", cloneDeep(this.downloadingSongs));
+      }
+    },
+    // 重置下载任务状态（用于重试）
+    resetDownloadingSong(song: SongInfo) {
+      const index = this.downloadingSongs.findIndex((item) => songEqual(song, item.song));
+      if (index !== -1) {
+        this.downloadingSongs[index].status = "waiting";
+        this.downloadingSongs[index].progress = 0;
+        this.downloadingSongs[index].transferred = "0MB";
+        this.downloadingSongs[index].totalSize = "0MB";
+        this.downloadingSongs = [...this.downloadingSongs];
+      }
+    },
+    /**
+     * 保存背景图
+     * @param blob 图片 Blob 数据
+     */
+    async saveBackgroundImage(blob: Blob): Promise<void> {
+      try {
+        await backgroundDB.setItem("image", blob);
+      } catch (error) {
+        console.error("Error saving background image:", error);
+        throw error;
+      }
+    },
+    /**
+     * 获取背景图
+     * @returns Blob 数据
+     */
+    async getBackgroundImage(): Promise<Blob | null> {
+      try {
+        const data = await backgroundDB.getItem<Blob>("image");
+        return data || null;
+      } catch (error) {
+        console.error("Error getting background image:", error);
+        return null;
+      }
+    },
+    /**
+     * 清除背景图
+     */
+    async clearBackgroundImage(): Promise<void> {
+      try {
+        await backgroundDB.removeItem("image");
+      } catch (error) {
+        console.error("Error clearing background image:", error);
+        throw error;
+      }
+    },
+  },
+  // 持久化
+  persist: {
+    key: "data-store",
+    storage: localStorage,
+    pick: ["userLoginStatus", "userData", "searchHistory", "token", "refreshToken", "expiresAt"],
+  },
+});

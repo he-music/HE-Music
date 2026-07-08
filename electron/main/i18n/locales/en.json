@@ -1,0 +1,26 @@
+{
+  "common": {
+    "no_song_playing": "No song playing",
+    "add_to_favorites": "Add to favorites",
+    "remove_from_favorites": "Remove from favorites",
+    "play_mode_repeat": "Repeat All",
+    "play_mode_repeat_once": "Repeat One",
+    "play_mode_shuffle": "Shuffle",
+    "previous": "Previous",
+    "play": "Play",
+    "pause": "Pause",
+    "next": "Next",
+    "show_desktop_lyrics": "Show desktop lyrics",
+    "hide_desktop_lyrics": "Hide desktop lyrics",
+    "lock_desktop_lyrics": "Lock desktop lyrics",
+    "unlock_desktop_lyrics": "Unlock desktop lyrics",
+    "exit": "Exit",
+    "export_settings": "Export settings",
+    "import_settings": "Import settings",
+    "choose_folder": "Choose folder",
+    "setting": "Setting"
+  },
+  "message": {
+    "file_exists": "File exists"
+  }
+}

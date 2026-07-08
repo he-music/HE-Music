@@ -1,0 +1,548 @@
+<template>
+  <div class="setting">
+    <!-- 移动端遮罩层 -->
+    <Transition name="fade">
+      <div v-if="showLeftMenu" class="mobile-overlay" @click="showLeftMenu = false" />
+    </Transition>
+    <Transition name="slideLeft">
+      <div v-show="showLeftMenu" class="set-left">
+        <n-flex class="title" :size="0" vertical>
+          <n-h1>{{ t("common.setting") }}</n-h1>
+        </n-flex>
+        <!-- 搜索 -->
+        <div class="search-wrapper">
+          <SettingSearch
+            :options="searchOptions"
+            @select="handleSearch"
+            @active-change="(val) => (isSearchActive = val)"
+          />
+        </div>
+        <!-- 设置菜单 -->
+        <Transition name="fade" mode="out-in">
+          <div v-show="!isSearchActive" style="height: calc(100% - 210px)">
+            <n-scrollbar>
+              <n-menu
+                v-model:value="activeKey"
+                :options="menuOptions"
+                :indent="10"
+                @update:value="onMenuSelect"
+              />
+            </n-scrollbar>
+          </div>
+        </Transition>
+        <!-- 信息 -->
+        <div class="power">
+          <n-text class="author" :depth="2" @click="toGithub">
+            <SvgIcon name="Github" :size="20" />
+            {{ packageJson.author }}
+          </n-text>
+          <n-text class="name">HE-Music</n-text>
+          <n-text class="version" depth="3">v{{ packageJson.version }}</n-text>
+        </div>
+      </div>
+    </Transition>
+    <div class="set-right">
+      <n-flex class="mobile-title" size="small" align="end">
+        <n-button quaternary circle @click="showLeftMenu = !showLeftMenu">
+          <template #icon>
+            <SvgIcon :depth="2" size="24" name="Menu" />
+          </template>
+        </n-button>
+        <n-h1>{{ t("common.setting") }}</n-h1>
+      </n-flex>
+      <n-scrollbar
+        ref="setScrollbar"
+        class="set-content"
+        :content-style="{ overflow: 'hidden', padding: '40px 0' }"
+      >
+        <Transition name="fade" mode="out-in" @after-leave="setScrollbar?.scrollTo({ top: 0 })">
+          <!-- 常规 -->
+          <UniversalSetting
+            v-if="activeKey === 'general'"
+            :groups="generalConfig.groups"
+            :highlight-key="highlightKey"
+          />
+          <!-- 外观 -->
+          <UniversalSetting
+            v-else-if="activeKey === 'appearance'"
+            :groups="appearanceConfig.groups"
+            :highlight-key="highlightKey"
+          />
+          <!-- 播放 -->
+          <UniversalSetting
+            v-else-if="activeKey === 'play'"
+            :groups="playConfig.groups"
+            :highlight-key="highlightKey"
+          />
+          <!-- 歌词 -->
+          <UniversalSetting
+            v-else-if="activeKey === 'lyrics'"
+            :groups="lyricConfig.groups"
+            :highlight-key="highlightKey"
+          />
+          <!-- 快捷键 -->
+          <UniversalSetting
+            v-else-if="activeKey === 'keyboard'"
+            :groups="keyboardConfig.groups"
+            :highlight-key="highlightKey"
+          />
+          <!-- 本地 -->
+          <UniversalSetting
+            v-else-if="activeKey === 'local'"
+            :groups="localConfig.groups"
+            :highlight-key="highlightKey"
+          />
+          <!-- 网络 -->
+          <UniversalSetting
+            v-else-if="activeKey === 'network'"
+            :groups="networkConfig.groups"
+            :highlight-key="highlightKey"
+          />
+          <!-- 关于 -->
+          <AboutSetting v-else-if="activeKey === 'about'" />
+          <!-- 空白 -->
+          <n-text v-else class="error">暂无该设置项</n-text>
+        </Transition>
+      </n-scrollbar>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import type { MenuOption, NScrollbar, SelectOption } from "naive-ui";
+import { SettingItem, SettingGroup } from "@/types/settings";
+import type { SettingType } from "@/types/main";
+import { useMobile } from "@/composables/useMobile";
+import { renderIcon } from "@/utils/helper";
+import { isElectron } from "@/utils/env";
+import packageJson from "@/../package.json";
+import { usePlaySettings } from "./config/play";
+import { useGeneralSettings } from "./config/general";
+import { useAppearanceSettings } from "./config/appearance";
+import { useLyricSettings } from "./config/lyric";
+import { useKeyboardSettings } from "./config/keyboard";
+import { useLocalSettings } from "./config/local";
+import { useNetworkSettings } from "./config/network";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
+const props = defineProps<{ type: SettingType; scrollTo?: string }>();
+
+const playConfig = computed(() => usePlaySettings());
+const generalConfig = computed(() => useGeneralSettings());
+const appearanceConfig = computed(() => useAppearanceSettings());
+const lyricConfig = computed(() => useLyricSettings());
+const keyboardConfig = computed(() => useKeyboardSettings());
+const localConfig = computed(() => useLocalSettings());
+const networkConfig = computed(() => useNetworkSettings());
+
+// 配置映射表
+const configs: Record<string, ComputedRef> = {
+  play: playConfig,
+  general: generalConfig,
+  appearance: appearanceConfig,
+  lyrics: lyricConfig,
+  keyboard: keyboardConfig,
+  local: localConfig,
+  network: networkConfig,
+};
+
+// 聚合所有设置
+const allSettingGroups = computed(() => {
+  return [
+    { key: "general", groups: generalConfig.value.groups },
+    { key: "appearance", groups: appearanceConfig.value.groups },
+    { key: "play", groups: playConfig.value.groups },
+    { key: "lyrics", groups: lyricConfig.value.groups },
+    { key: "keyboard", groups: keyboardConfig.value.groups },
+    { key: "local", groups: localConfig.value.groups },
+    { key: "network", groups: networkConfig.value.groups },
+  ];
+});
+
+const { isSmallScreen } = useMobile();
+
+// 设置内容
+const setScrollbar = ref<InstanceType<typeof NScrollbar> | null>(null);
+
+// 移动端菜单显示状态
+const showLeftMenu = ref(true);
+
+// 监听屏幕大小变化，非小屏时自动显示侧边栏
+watch(isSmallScreen, (small) => {
+  if (!small) {
+    showLeftMenu.value = true;
+  }
+});
+
+// 菜单数据
+const activeKey = ref<SettingType>(props.type);
+
+// 菜单选择处理
+const onMenuSelect = () => {
+  if (isSmallScreen.value) {
+    showLeftMenu.value = false;
+  }
+};
+
+// 监听 ActiveKey 变化，触发懒加载事件
+watch(
+  activeKey,
+  (newKey, oldKey) => {
+    // 触发销毁
+    if (oldKey && configs[oldKey]?.value.onDeactivate) {
+      configs[oldKey].value.onDeactivate();
+    }
+    // 触发激活
+    if (newKey && configs[newKey]?.value.onActivate) {
+      configs[newKey].value.onActivate();
+    }
+  },
+  { immediate: true },
+);
+
+const highlightKey = ref<string>();
+const isSearchActive = ref(false);
+
+// 搜索选项
+const searchOptions = computed<SelectOption[]>(() => {
+  const options: SelectOption[] = [];
+  allSettingGroups.value.forEach(({ key, groups }) => {
+    // 分类是否显示
+    const menuOption = menuOptions.value.find((m) => m.key === key);
+    if (menuOption?.show === false) return;
+    // 检查分组可见性
+    groups.forEach((group: SettingGroup) => {
+      const groupShow =
+        group.show === undefined
+          ? true
+          : typeof group.show === "function"
+            ? group.show()
+            : toValue(group.show);
+      if (!groupShow) return;
+      // 检查设置项可见性
+      group.items.forEach((item: SettingItem) => {
+        const itemShow =
+          item.show === undefined
+            ? true
+            : typeof item.show === "function"
+              ? item.show()
+              : toValue(item.show);
+        if (!itemShow) return;
+        const label = toValue(item.label);
+        const desc = toValue(item.description);
+        options.push({
+          label: label,
+          value: `${key}::${item.key}`,
+          searchLabel: `${label} ${typeof desc === "string" ? desc : ""} ${item.keywords?.join(" ") || ""}`,
+          desc: typeof desc === "string" ? desc : undefined,
+          groupLabel: group.title,
+        });
+      });
+    });
+  });
+  return options;
+});
+
+// 处理搜索选择
+const handleSearch = (value: string | number) => {
+  if (!value) return;
+  const keyStr = String(value);
+  const [targetTab, targetKey] = keyStr.split("::");
+  // 标记正在跳转
+  highlightKey.value = targetKey;
+  // 切换到对应标签页
+  if (activeKey.value !== targetTab) {
+    activeKey.value = targetTab as SettingType;
+  }
+  // 移动端收起菜单
+  if (isSmallScreen.value) {
+    showLeftMenu.value = false;
+  }
+  nextTick(() => {
+    setTimeout(() => {
+      const element = document.getElementById(`setting-${targetKey}`);
+      if (!element) {
+        highlightKey.value = undefined;
+        return;
+      }
+      // 滚动到元素位置
+      element.scrollIntoView({ block: "center" });
+      // 清理跳转标记
+      setTimeout(() => {
+        highlightKey.value = undefined;
+      }, 2500);
+    }, 300);
+  });
+};
+
+// 菜单内容
+const menuOptions = computed<MenuOption[]>(() => [
+  {
+    key: "general",
+    label: t("setting.general.general_setting"),
+    icon: renderIcon("SettingsLine"),
+  },
+  {
+    key: "appearance",
+    label: t("setting.appearance.appearance_setting"),
+    icon: renderIcon("Palette"),
+  },
+  {
+    key: "play",
+    label: t("setting.play.play_setting"),
+    icon: renderIcon("Music"),
+  },
+  {
+    key: "lyrics",
+    label: t("setting.lyrics.lyrics_setting"),
+    icon: renderIcon("Lyrics"),
+  },
+  {
+    key: "local",
+    label: t("setting.local.local_setting"),
+    show: isElectron,
+    icon: renderIcon("Storage"),
+  },
+  {
+    key: "keyboard",
+    label: t("setting.shortcut.shortcut_setting"),
+    icon: renderIcon("Keyboard"),
+  },
+  {
+    key: "network",
+    label: t("setting.network.network_and_connect"),
+    icon: renderIcon("Link"),
+  },
+  {
+    key: "about",
+    label: t("common.about"),
+    icon: renderIcon("Info"),
+  },
+]);
+
+// 跳转
+const toGithub = () => {
+  window.open(packageJson.github);
+};
+
+onMounted(() => {
+  if (props.scrollTo) {
+    handleSearch(`${props.type}::${props.scrollTo}`);
+  }
+});
+</script>
+
+<style lang="scss" scoped>
+.setting {
+  position: relative;
+  display: flex;
+  width: 100%;
+  height: 75vh;
+  min-height: 75vh;
+  overflow: hidden;
+  .mobile-overlay {
+    display: none;
+  }
+  .set-left {
+    display: flex;
+    flex-direction: column;
+    width: 280px;
+    height: 100%;
+    padding: 20px;
+    background-color: var(--surface-container-hex);
+    .title {
+      height: 60px;
+      margin: 10px 0 20px 10px;
+      .n-h1 {
+        font-size: 26px;
+        font-weight: bold;
+        margin-top: 0;
+        line-height: normal;
+        margin-bottom: 6px;
+      }
+    }
+    .n-menu {
+      width: 100%;
+      flex: 1;
+    }
+    .power {
+      height: 50px;
+      margin: auto 0 0 10px;
+      .name {
+        font-weight: bold;
+        margin-right: 6px;
+      }
+      .version {
+        pointer-events: none;
+      }
+      .author {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        margin-bottom: 4px;
+        cursor: pointer;
+        .n-icon {
+          margin-right: 4px;
+        }
+      }
+    }
+  }
+  .set-right {
+    flex: 1;
+    height: 100%;
+    background-color: var(--background-hex);
+    .mobile-title {
+      display: none !important;
+    }
+  }
+  @media (max-width: 768px) {
+    .mobile-overlay {
+      display: block;
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.5);
+      z-index: 10;
+    }
+    .set-left {
+      position: absolute;
+      left: 0;
+      top: 0;
+      z-index: 11;
+      box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+    }
+    .set-right {
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      .mobile-title {
+        display: flex !important;
+        padding: 20px 12px 16px;
+        gap: 12px;
+        .n-h1 {
+          font-size: 24px;
+          font-weight: bold;
+          margin-bottom: 0;
+          line-height: normal;
+          margin: 0;
+        }
+      }
+    }
+  }
+}
+</style>
+
+<style lang="scss">
+.main-setting {
+  position: relative;
+  width: calc(100vw - 40px);
+  max-width: 1024px !important;
+  overflow: hidden;
+  .n-card-header {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 20px;
+    z-index: 1;
+  }
+  .n-card__content {
+    padding: 0;
+    .setting-type {
+      transition: opacity 0.2s ease-in-out;
+    }
+    .set-content {
+      padding: 0 40px;
+    }
+    .set-list {
+      padding-top: 30px;
+      &:first-child {
+        padding-top: 0;
+      }
+    }
+    .n-h {
+      display: inline-flex;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+    }
+    .n-collapse-transition {
+      margin-bottom: 12px;
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
+    .set-item {
+      width: 100%;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      transition: margin 0.3s;
+      &:last-child {
+        margin-bottom: 0;
+      }
+      .n-card__content {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px;
+      }
+      .label {
+        display: flex;
+        flex-direction: column;
+        padding-right: 20px;
+        .name {
+          font-size: 16px;
+          display: inline-flex;
+          gap: 6px;
+        }
+      }
+      .n-flex {
+        flex-flow: nowrap !important;
+      }
+      .set {
+        justify-content: flex-end;
+        min-width: 200px;
+        width: 200px;
+        &.n-switch {
+          width: max-content;
+        }
+      }
+    }
+    @media (max-width: 768px) {
+      .set-content {
+        padding: 0 16px;
+        .n-scrollbar-content {
+          padding: 12px 0 !important;
+        }
+      }
+      .set-item {
+        .set {
+          @media (max-width: 768px) {
+            width: 140px;
+            min-width: 140px;
+          }
+        }
+      }
+    }
+  }
+  .n-menu {
+    padding-bottom: 0;
+    .n-menu-item {
+      &:first-child {
+        margin-top: 0;
+      }
+    }
+    .n-menu-item-content {
+      &::before {
+        left: 0px;
+        right: 0;
+        width: 100%;
+        border-radius: 6px;
+      }
+    }
+  }
+}
+</style>

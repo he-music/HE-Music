@@ -1,0 +1,54 @@
+<template>
+  <div class="like-type">
+    <!-- 分类 -->
+    <n-flex class="type">
+      <n-tag
+        v-for="(item, index) in plTypeName"
+        :key="index"
+        :bordered="index === plTypeChoose"
+        :type="index === plTypeChoose ? 'primary' : 'default'"
+        round
+        @click="changeType(index)"
+      >
+        {{ item }}
+      </n-tag>
+    </n-flex>
+    <Transition name="fade" mode="out-in">
+      <PlaylistList :key="plTypeChoose" :data="listData" type="playlist" />
+    </Transition>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { useDataStore } from "@/stores";
+import PlaylistList from "@/components/List/PlaylistList.vue";
+import { useI18n } from "vue-i18n";
+import { computed } from "vue";
+const { t } = useI18n();
+
+const dataStore = useDataStore();
+
+// 歌单分类
+const plTypeChoose = ref<number>(0);
+const plTypeName = computed<string[]>(() => [t("playlist.my_created"), t("playlist.my_collected")]);
+
+// 歌单列表内容
+const listData = computed(() =>
+  plTypeChoose.value === 0 ? dataStore.userCreatedPlaylist : dataStore.userLikeData.playlists,
+);
+
+// 更换歌单类型
+const changeType = (index: number) => (plTypeChoose.value = index);
+</script>
+
+<style lang="scss" scoped>
+.type {
+  margin-top: 20px;
+  .n-tag {
+    font-size: 14px;
+    &.choose {
+      background-color: rgba(var(--primary), 0.14);
+    }
+  }
+}
+</style>

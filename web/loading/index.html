@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>HE-Music</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+
+  <body>
+    <main>
+      <div class="logo">
+        <img src="/icons/logo.svg" alt="HEMusic" />
+      </div>
+      <div class="loader"></div>
+      <button id="startApp">直接启动</button>
+    </main>
+    <footer>
+      <span>HE-Music · Copyright &copy; <span id="year"></span> he-music</span>
+    </footer>
+
+    <script>
+      const startAppDom = document.getElementById("startApp");
+
+      // 更改年份
+      const currentYear = new Date().getFullYear();
+      document.getElementById("year").innerHTML = currentYear;
+
+      startAppDom.addEventListener("click", () => {
+        window.electron.ipcRenderer.send("win-loaded");
+      });
+
+      window.addEventListener("load", () => {
+        setTimeout(() => {
+          startAppDom.style.opacity = 1;
+        }, 3000);
+      });
+    </script>
+  </body>
+</html>

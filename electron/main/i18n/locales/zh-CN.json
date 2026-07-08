@@ -1,0 +1,26 @@
+{
+  "common": {
+    "no_song_playing": "未播放歌曲",
+    "add_to_favorites": "添加到我喜欢",
+    "remove_from_favorites": "从我喜欢中移除",
+    "play_mode_repeat": "列表循环",
+    "play_mode_repeat_once": "单曲循环",
+    "play_mode_shuffle": "随机播放",
+    "previous": "上一曲",
+    "play": "播放",
+    "pause": "暂停",
+    "next": "下一曲",
+    "show_desktop_lyrics": "开启桌面歌词",
+    "hide_desktop_lyrics": "关闭桌面歌词",
+    "lock_desktop_lyrics": "锁定桌面歌词",
+    "unlock_desktop_lyrics": "解锁桌面歌词",
+    "exit": "退出",
+    "export_settings": "导出设置",
+    "import_settings": "导入设置",
+    "choose_folder": "选择文件夹",
+    "setting": "设置"
+  },
+  "message": {
+    "file_exists": "文件已存在"
+  }
+}
