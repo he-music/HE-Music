@@ -11,7 +11,11 @@ import {
   FilterInfo,
 } from "@/types/main.hemusic";
 import { artistFilters } from "@/api/artist";
-import { songEqual } from "@/utils/song";
+import {
+  createPlaybackListSnapshot,
+  createPlaybackSongSnapshot,
+  songEqual,
+} from "@/utils/song";
 import { mvFilters } from "@/api/video";
 
 interface ListState {
@@ -72,6 +76,8 @@ const backgroundDB = localforage.createInstance({
   storeName: "background",
 });
 
+const playbackDataKeys = new Set(["playList", "originalPlayList", "historyList"]);
+
 export const useDataStore = defineStore("data", {
   state: (): ListState => ({
     // 播放列表
@@ -129,7 +135,10 @@ export const useDataStore = defineStore("data", {
         await Promise.all(
           musicDataKeys.map(async (key) => {
             const data = await musicDB.getItem(key);
-            this[key] = data || [];
+            this[key] =
+              playbackDataKeys.has(key) && Array.isArray(data)
+                ? createPlaybackListSnapshot(data as SongInfo[])
+                : data || [];
           }),
         );
         // 获取 user-data
@@ -149,16 +158,15 @@ export const useDataStore = defineStore("data", {
       try {
         // 若为列表
         if (Array.isArray(data)) {
-          this.playList = data;
-          // 更新本地存储
-          data = cloneDeep(data);
-          await musicDB.setItem("playList", data);
+          const playList = createPlaybackListSnapshot(data);
+          this.playList = playList;
+          await musicDB.setItem("playList", playList);
           return 0;
         }
         // 若为单曲
         else {
           // 若为单曲
-          const song = cloneDeep(data as SongInfo);
+          const song = createPlaybackSongSnapshot(data as SongInfo);
           // 歌曲去重
           const playList = this.playList.filter(
             (item) => item.id !== song.id || item.platform !== song.platform,
@@ -180,7 +188,7 @@ export const useDataStore = defineStore("data", {
 
     // 保存原始播放列表
     async setOriginalPlayList(data: SongInfo[]): Promise<void> {
-      const snapshot = cloneDeep(data);
+      const snapshot = createPlaybackListSnapshot(data);
       this.originalPlayList = snapshot;
       await musicDB.setItem("originalPlayList", snapshot);
     },
@@ -191,8 +199,9 @@ export const useDataStore = defineStore("data", {
       }
       const data = (await musicDB.getItem("originalPlayList")) as SongInfo[] | null;
       if (Array.isArray(data) && data.length > 0) {
-        this.originalPlayList = data;
-        return data;
+        const snapshot = createPlaybackListSnapshot(data);
+        this.originalPlayList = snapshot;
+        return snapshot;
       }
       return null;
     },
@@ -203,24 +212,30 @@ export const useDataStore = defineStore("data", {
     },
     // 新增下一首播放歌曲
     async setNextPlaySong(song: SongInfo, index: number): Promise<number> {
+      const songSnapshot = createPlaybackSongSnapshot(song);
       if (this.playList.length === 0) {
-        this.playList = [song];
+        this.playList = [songSnapshot];
         await musicDB.setItem("playList", cloneDeep(this.playList));
         return 0;
       }
 
       const indexAdd = index + 1;
-      this.playList.splice(indexAdd, 0, song);
+      this.playList.splice(indexAdd, 0, songSnapshot);
       // 再移除重复的歌曲
       const playList = this.playList.filter(
-        (item, idx) => idx === indexAdd || item.id !== song.id || item.platform !== song.platform,
+        (item, idx) =>
+          idx === indexAdd ||
+          item.id !== songSnapshot.id ||
+          item.platform !== songSnapshot.platform,
       );
 
       // 更新本地存储
       this.playList = playList;
       await musicDB.setItem("playList", cloneDeep(playList));
       // 返回刚刚插入的歌曲索引
-      return playList.findIndex((item) => item.id === song.id && item.platform === song.platform);
+      return playList.findIndex(
+        (item) => item.id === songSnapshot.id && item.platform === songSnapshot.platform,
+      );
     },
     // 更改播放历史
     async setHistory(song: SongInfo) {
@@ -230,12 +245,14 @@ export const useDataStore = defineStore("data", {
         if (historyList === null) {
           historyList = [];
         } else if (!Array.isArray(historyList)) return;
-        // 深拷贝
-        song = cloneDeep(song);
+        const songSnapshot = createPlaybackSongSnapshot(song);
+        const historySnapshot = createPlaybackListSnapshot(historyList);
         // 添加到首项并移除重复项
         const updatedList = [
-          song,
-          ...historyList.filter((item) => item.id !== song.id || item.platform !== song.platform),
+          songSnapshot,
+          ...historySnapshot.filter(
+            (item) => item.id !== songSnapshot.id || item.platform !== songSnapshot.platform,
+          ),
         ];
         // 最多 500 首
         if (updatedList.length > 500) updatedList.splice(500);

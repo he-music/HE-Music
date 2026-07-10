@@ -1,4 +1,14 @@
 import type { Link, SongInfo } from "@/types/main.hemusic";
+import { cloneDeep } from "lodash-es";
+
+/** 创建不包含“更多版本”上下文的播放数据副本。 */
+export const createPlaybackSongSnapshot = (song: SongInfo): SongInfo => {
+  return cloneDeep({ ...song, sublist: [] });
+};
+
+export const createPlaybackListSnapshot = (songs: SongInfo[]): SongInfo[] => {
+  return songs.map(createPlaybackSongSnapshot);
+};
 
 export const songEqual = (a: SongInfo, b: SongInfo) => {
   return a?.id === b?.id && a?.platform === b?.platform;
@@ -12,7 +22,7 @@ export const getSongCanDownload = (a: SongInfo) => {
   return a.links?.length > 0;
 };
 
-export const getSongCanPlayLinks = ({ links, platform }: SongInfo) => {
+export const getSongCanPlayLinks = ({ links }: SongInfo) => {
   const res: Link[] = [];
   links.forEach((item) => {
     const { name, format } = item;
@@ -22,12 +32,6 @@ export const getSongCanPlayLinks = ({ links, platform }: SongInfo) => {
     // ape暂时不支持播放
     if (name === "ape" || format === "ape") {
       return;
-    }
-    // migu m4a 暂时只能在mac播放
-    if (platform === "migu") {
-      if (format === "m4a" || name.toUpperCase().includes("3D")) {
-        return;
-      }
     }
     res.push(item);
   });

@@ -127,6 +127,7 @@ declare module 'vue' {
     NTag: typeof import('naive-ui')['NTag']
     NText: typeof import('naive-ui')['NText']
     NThing: typeof import('naive-ui')['NThing']
+    NTooltip: typeof import('naive-ui')['NTooltip']
     NVirtualList: typeof import('naive-ui')['NVirtualList']
     ParseSourceUrl: typeof import('./src/components/Modal/ParseSourceUrl.vue')['default']
     PlayerBackground: typeof import('./src/components/Player/PlayerMeta/PlayerBackground.vue')['default']
