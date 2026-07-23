@@ -116,6 +116,7 @@ export const logoutApi = () => {
   return requestHemusic({
     url: "/v1/auth/logout",
     method: "post",
+    data: {},
   });
 };
 
