@@ -14,13 +14,13 @@ export const usePlatformStore = defineStore("platform", {
   getters: {
     featureSupportList(state) {
       return (flag: bigint): PlatformInfo[] =>
-        state.platforms.filter((item) => item.feature_support_flag & flag);
+        state.platforms.filter((item) => (item.feature_support_flag & flag) !== 0n);
     },
 
     isFeatureSupport() {
       return (platform: string, flag: bigint): boolean => {
         const platformInfo = this.getPlatformInfo(platform);
-        return !!platformInfo && !!(platformInfo.feature_support_flag & flag);
+        return !!platformInfo && (platformInfo.feature_support_flag & flag) !== 0n;
       };
     },
 

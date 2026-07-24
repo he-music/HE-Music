@@ -1,9 +1,9 @@
 import type { Link, SongInfo } from "@/types/main.hemusic";
 import { cloneDeep } from "lodash-es";
 
-/** 创建不包含“更多版本”上下文的播放数据副本。 */
+/** 创建与来源数据隔离的播放歌曲副本。 */
 export const createPlaybackSongSnapshot = (song: SongInfo): SongInfo => {
-  return cloneDeep({ ...song, sublist: [] });
+  return cloneDeep(song);
 };
 
 export const createPlaybackListSnapshot = (songs: SongInfo[]): SongInfo[] => {

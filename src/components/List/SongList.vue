@@ -12,7 +12,7 @@
           class="virtual-list-wrapper"
         >
           <!-- 悬浮顶栏 -->
-          <div class="list-header song-card sticky-header">
+          <div v-if="showHeader" class="list-header song-card sticky-header">
             <n-text class="num">#</n-text>
             <n-popover
               v-if="!disabledSort"
@@ -81,7 +81,7 @@
             :item-height="90"
             :item-fixed="false"
             :items="virtualListItems"
-            :height="`calc(100% - 40px)`"
+            :height="showHeader ? 'calc(100% - 40px)' : '100%'"
             :padding-bottom="showFooter ? 80 : 0"
             @scroll="onScroll"
           >
@@ -93,9 +93,24 @@
                 :hiddenCover="hiddenCover"
                 :hiddenAlbum="hiddenAlbum"
                 :hiddenSize="hiddenSize"
-                @dblclick.stop="handleSongPlay(item.data)"
+                :highlight-keywords="highlightKeywords?.[index]"
+                @click="handleSongClick(item.data)"
+                @dblclick.stop="handleSongDoubleClick(item.data)"
                 @contextmenu.stop="handleShowMenu($event, item.data, index)"
                 @show-menu="handleShowMenu($event, item.data, index)"
+              >
+                <template #tags>
+                  <slot name="tags" :song="item.data" :index="index" />
+                </template>
+                <template #details>
+                  <slot name="details" :song="item.data" :index="index" />
+                </template>
+              </SongCard>
+              <slot
+                v-if="item.type === 'song'"
+                name="item-after"
+                :song="item.data"
+                :index="index"
               />
               <!-- 加载更多 -->
               <div v-else-if="item.type === 'footer'" class="load-more">
@@ -186,6 +201,10 @@ const props = withDefaults(
     keepOffset?: boolean;
     /** 禁用高度过渡动画 */
     disableHeightTransition?: boolean;
+    /** 每首歌曲对应的纯文本高亮词。 */
+    highlightKeywords?: string[][];
+    /** 单击歌曲卡片时直接播放。 */
+    singleClickAction?: boolean;
   }>(),
   {
     type: "song",
@@ -226,6 +245,14 @@ const handleSongPlay = (song: SongInfo) => {
   } else {
     player.updatePlayList(listData.value, song, props.playlist);
   }
+};
+
+const handleSongClick = (song: SongInfo) => {
+  if (props.singleClickAction) handleSongPlay(song);
+};
+
+const handleSongDoubleClick = (song: SongInfo) => {
+  if (!props.singleClickAction) handleSongPlay(song);
 };
 
 // 列表状态
@@ -367,6 +394,12 @@ const scrollToCurrentSong = () => {
     listRef.value?.scrollToIndex(hasPlaySong.value);
   }
 };
+
+const refreshMeasurements = () => {
+  listRef.value?.refreshMeasurements();
+};
+
+defineExpose({ refreshMeasurements });
 
 // 更新列表播放顺序
 const updatePlayListOrder = () => {

@@ -57,14 +57,22 @@ export interface SongInfo {
   links: Link[];
   platform: string;
   cover: string;
-  sublist: SongInfo[]; // 更多版本
-  original_type: number;
 
   // 以下
   path?: string;
   size?: number;
   quality?: string;
   alias?: string;
+}
+
+/** 搜索结果中的歌曲及其命中上下文。 */
+export interface SearchSongInfo {
+  song: SongInfo;
+  sublist: SearchSongInfo[];
+  original_type: number;
+  lyric_snippet: string;
+  lyric: string;
+  matched_keywords: string[];
 }
 
 export interface PlaylistInfo extends CoverType {
@@ -270,11 +278,30 @@ export interface SearchDefaultInfo {
   description: string;
 }
 
+export interface SearchSongResponse {
+  platform: string;
+  key: string;
+  list: SearchSongInfo[];
+  page_index: number;
+  page_size: number;
+  total_count: number;
+  has_more: boolean;
+}
+
+export interface SearchLyricSongRequest {
+  platform: string;
+  key: string;
+  page_index: number;
+  page_size: number;
+}
+
+export type SearchLyricSongResponse = SearchSongResponse;
+
 // 综合搜索结果
 export interface ComprehensiveSearchResponse {
   key: string;
   song: {
-    list: SongInfo[];
+    list: SearchSongInfo[];
     has_more: boolean;
     total_count: number;
   };
@@ -310,7 +337,7 @@ export interface RecommendItem {
   artist?: ArtistInfo;
   playlist?: PlaylistInfo;
   album?: AlbumInfo;
-  song?: SongInfo;
+  song?: SearchSongInfo;
   mv?: MVInfo;
 }
 

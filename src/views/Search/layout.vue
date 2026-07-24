@@ -170,6 +170,31 @@
           </n-tab-pane>
         </n-tabs>
       </n-tab-pane>
+      <n-tab-pane
+        v-if="getSupportedPlatforms('lyric').length"
+        name="lyric"
+        :tab="t('common.lyrics')"
+        display-directive="show:lazy"
+      >
+        <n-tabs
+          class="tabs"
+          type="bar"
+          animated
+          :value="searchPlatform"
+          @update:value="platformChange"
+        >
+          <n-tab-pane
+            v-for="platform in getSupportedPlatforms('lyric')"
+            :key="`search-lyric-${platform.id}`"
+            :name="platform.id"
+            :tab="platform.shortname"
+            :disabled="platform.status !== 1"
+            display-directive="show:lazy"
+          >
+            <Lyrics :keyword="searchKeyword" :platform="platform.id" />
+          </n-tab-pane>
+        </n-tabs>
+      </n-tab-pane>
     </n-tabs>
 
     <!-- 路由 -->
@@ -186,6 +211,7 @@
 <script setup lang="ts">
 import { usePlatformStore } from "@/stores";
 import Songs from "@/views/Search/songs.vue";
+import Lyrics from "@/views/Search/lyrics.vue";
 import Playlists from "@/views/Search/playlists.vue";
 import Albums from "@/views/Search/albums.vue";
 import Artists from "@/views/Search/artists.vue";
@@ -214,6 +240,7 @@ const searchPlatform = computed(() => (router.currentRoute.value.query.platform 
 const typeToFlagMap: Record<string, bigint> = {
   comprehensive: FeatureSupportFlag.ComprehensiveSearch,
   song: FeatureSupportFlag.SearchSong,
+  lyric: FeatureSupportFlag.FeatureSupportSearchLyricSong,
   playlist: FeatureSupportFlag.SearchPlaylist,
   album: FeatureSupportFlag.SearchAlbum,
   audiobook: FeatureSupportFlag.SearchAudiobook,

@@ -46,11 +46,20 @@
             <div class="primary-body">
               <div class="primary-heading">
                 <n-tag :bordered="false" size="small" type="info" round>
-                  {{ t("common.artist") }}
+                  {{ t(`common.${getResourceTypeKey(displayPrimary.resource_type)}`) }}
                 </n-tag>
-                <span class="primary-name">{{ getItemName(displayPrimary) }}</span>
+                <n-highlight
+                  class="primary-name"
+                  :text="getItemName(displayPrimary)"
+                  :patterns="getItemKeywords(displayPrimary)"
+                />
               </div>
-              <span v-if="primaryArtistMeta" class="primary-sub">{{ primaryArtistMeta }}</span>
+              <n-highlight
+                v-if="primaryMeta"
+                class="primary-sub"
+                :text="primaryMeta"
+                :patterns="getItemKeywords(displayPrimary)"
+              />
               <div v-if="primaryArtistStats.length" class="primary-stats">
                 <span v-for="stat in primaryArtistStats" :key="stat.label" class="primary-stat">
                   <span class="primary-stat-value">{{ stat.value }}</span>
@@ -85,9 +94,18 @@
                   <span class="recommend-type">{{
                     t(`common.${getResourceTypeKey(item.resource_type)}`)
                   }}</span>
-                  <span class="recommend-name">{{ getItemName(item) }}</span>
+                  <n-highlight
+                    class="recommend-name"
+                    :text="getItemName(item)"
+                    :patterns="getItemKeywords(item)"
+                  />
                 </div>
-                <span v-if="getItemSub(item)" class="recommend-sub">{{ getItemSub(item) }}</span>
+                <n-highlight
+                  v-if="getItemSub(item)"
+                  class="recommend-sub"
+                  :text="getItemSub(item)"
+                  :patterns="getItemKeywords(item)"
+                />
               </div>
             </button>
           </div>
@@ -104,13 +122,11 @@
             {{ t("search.view_more") }}
           </n-button>
         </n-flex>
-        <SongList
+        <SearchSongList
           :data="displayResult.song.list"
+          :keyword="keyword"
           height="auto"
           :show-header="!isSmall"
-          doubleClickAction="add"
-          disabled-sort
-          :hidden-size="true"
           :show-footer="false"
         />
       </div>
@@ -183,6 +199,7 @@
 <script setup lang="ts">
 import { comprehensiveSearch } from "@/api/search";
 import SongList from "@/components/List/SongList.vue";
+import SearchSongList from "@/components/List/SearchSongList.vue";
 import PlaylistList from "@/components/List/PlaylistList.vue";
 import AlbumList from "@/components/List/AlbumList.vue";
 import ArtistList from "@/components/List/ArtistList.vue";
@@ -198,10 +215,12 @@ import type {
 } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
 import { useMobile } from "@/composables/useMobile";
+import { usePlayer } from "@/utils/player";
 const { t } = useI18n();
 const { isSmall } = useMobile();
 
 const router = useRouter();
+const player = usePlayer();
 
 const props = defineProps<{
   keyword: string;
@@ -214,11 +233,11 @@ const result = ref<ComprehensiveSearchResponse | null>(null);
 // best_match 可能为空，统一收口为空值，避免模板直接读取嵌套字段。
 const bestMatchPrimary = computed(() => result.value?.best_match?.primary ?? null);
 const bestMatchRecommendations = computed(() => result.value?.best_match?.recommendations ?? []);
-const primaryArtist = computed(() => bestMatchPrimary.value?.artist ?? null);
 const displayPrimary = computed(() => {
   const primary = bestMatchPrimary.value;
-  const artist = primary?.artist;
-  if (!primary || !artist?.id || !artist.name || !artist.cover) return null;
+  if (!primary) return null;
+  const data = getRecommendData(primary);
+  if (!data?.id || !data.name || !data.cover) return null;
   return primary;
 });
 const hasBestMatch = computed(
@@ -237,13 +256,10 @@ const hasSearchResult = computed(() => {
   );
 });
 const displayResult = computed(() => (hasSearchResult.value ? result.value : null));
-const primaryArtistMeta = computed(() => {
-  const artist = primaryArtist.value;
-  if (!artist) return "";
-  return artist.alias || artist.description || "";
-});
+const primaryMeta = computed(() => (displayPrimary.value ? getItemSub(displayPrimary.value) : ""));
 const primaryArtistStats = computed(() => {
-  const artist = primaryArtist.value;
+  const artist =
+    displayPrimary.value?.resource_type === "artist" ? displayPrimary.value.artist : null;
   if (!artist) return [];
   return [
     { label: t("common.songs"), value: artist.song_count },
@@ -308,18 +324,28 @@ const getItemSub = (item: RecommendItem): string => {
   }
 };
 
-const getRecommendData = (item: RecommendItem) => {
+const getItemKeywords = (item: RecommendItem): string[] => {
+  const matched = item.resource_type === "song" ? item.song?.matched_keywords || [] : [];
+  const keywords = matched.length ? matched : [props.keyword];
+  return [...new Set(keywords.map((word) => word.trim()).filter(Boolean))].sort(
+    (a, b) => b.length - a.length,
+  );
+};
+
+const getRecommendData = (
+  item: RecommendItem,
+): ArtistInfo | PlaylistInfo | AlbumInfo | SongInfo | MVInfo | null => {
   switch (item.resource_type) {
     case "artist":
-      return item.artist;
+      return item.artist || null;
     case "playlist":
-      return item.playlist;
+      return item.playlist || null;
     case "album":
-      return item.album;
+      return item.album || null;
     case "song":
-      return item.song;
+      return item.song?.song || null;
     case "mv":
-      return item.mv;
+      return item.mv || null;
     default:
       return null;
   }
@@ -327,15 +353,16 @@ const getRecommendData = (item: RecommendItem) => {
 
 // 跳转详情页
 const goDetail = (item: RecommendItem) => {
+  if (item.resource_type === "song") {
+    if (item.song?.song) player.addNextSong(item.song.song, true);
+    return;
+  }
   const data = getRecommendData(item);
   if (!data) return;
   const id = (data as { id?: string }).id;
   const platform = (data as { platform?: string }).platform;
   if (!id || !platform) return;
   switch (item.resource_type) {
-    case "song":
-      // 歌曲不跳详情页，直接播放或不做操作
-      break;
     case "playlist":
       router.push({ name: "playlist", query: { id, platform } });
       break;
@@ -366,6 +393,12 @@ onMounted(() => {
 
 <style lang="scss" scoped>
 .comprehensive-search {
+  :deep(.n-highlight__mark) {
+    color: var(--primary-hex);
+    background-color: transparent;
+    font-weight: 600;
+  }
+
   .section {
     margin-bottom: 24px;
   }

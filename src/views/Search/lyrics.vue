@@ -1,19 +1,19 @@
 <template>
   <div class="search-type" style="height: auto">
-    <!--    <Transition name="fade" mode="out-in">-->
     <SearchSongList
       v-if="searchResultData.length || loading"
       :data="searchResultData"
       :keyword="keyword"
       :loading="loading"
-      load-more
       :height="songListHeight"
-      @reach-bottom="reachBottom"
       :show-header="!isSmall"
+      allow-full-lyric
+      load-more
+      @reach-bottom="reachBottom"
     />
     <n-empty
       v-else
-      :description="t('search.no_song_result', { keyword })"
+      :description="t('search.no_lyric_result', { keyword })"
       style="margin-top: 60px"
       size="large"
     >
@@ -21,38 +21,39 @@
         <SvgIcon name="SearchOff" />
       </template>
     </n-empty>
-    <!--    </Transition>-->
   </div>
 </template>
 
 <script setup lang="ts">
-import { searchSong } from "@/api/search";
+import { searchLyricSong } from "@/api/search";
 import SearchSongList from "@/components/List/SearchSongList.vue";
 import { useStatusStore } from "@/stores";
 import type { SearchSongInfo } from "@/types/main.hemusic";
-import { useI18n } from "vue-i18n";
 import { useMobile } from "@/composables/useMobile";
-const { t } = useI18n();
-const { isSmall } = useMobile();
+import { useI18n } from "vue-i18n";
 
 const props = defineProps<{
   keyword: string;
   platform: string;
 }>();
 
+const { t } = useI18n();
+const { isSmall } = useMobile();
 const statusStore = useStatusStore();
-
-// 搜索数据
-const hasMore = ref<boolean>(true);
-const loading = ref<boolean>(true);
-const searchPage = ref<number>(1);
+const hasMore = ref(true);
+const loading = ref(true);
+const searchPage = ref(1);
 const searchResultData = ref<SearchSongInfo[]>([]);
 
-// 获取搜索结果
 const getSearchResult = async () => {
   loading.value = true;
   try {
-    const result = await searchSong(props.keyword, 30, searchPage.value, props.platform);
+    const result = await searchLyricSong({
+      platform: props.platform,
+      key: props.keyword,
+      page_index: searchPage.value,
+      page_size: 30,
+    });
     hasMore.value = result.has_more;
     searchResultData.value = searchResultData.value.concat(result.list);
   } finally {
@@ -60,19 +61,13 @@ const getSearchResult = async () => {
   }
 };
 
-// 列表触底
 const reachBottom = () => {
   if (!hasMore.value || loading.value) return;
   searchPage.value++;
   getSearchResult();
 };
 
-onMounted(() => {
-  getSearchResult();
-});
+const songListHeight = computed(() => statusStore.mainContentHeight - 175);
 
-// 列表高度
-const songListHeight = computed(() => {
-  return statusStore.mainContentHeight - 175;
-});
+onMounted(getSearchResult);
 </script>

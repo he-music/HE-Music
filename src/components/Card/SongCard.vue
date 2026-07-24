@@ -12,10 +12,10 @@
           :size="28"
           :name="statusStore.playStatus ? 'Pause' : 'Play'"
           class="status"
-          @click="player.playOrPause()"
+          @click.stop="player.playOrPause()"
         />
         <!-- 播放 -->
-        <SvgIcon :size="28" name="Play" class="play" @click="player.addNextSong(song, true)" />
+        <SvgIcon :size="28" name="Play" class="play" @click.stop="player.addNextSong(song, true)" />
       </div>
       <!-- 标题 -->
       <div class="title">
@@ -39,7 +39,7 @@
               }"
               class="name-text"
             >
-              {{ song?.name }}
+              <n-highlight :text="song.name" :patterns="highlightKeywords || []" />
             </n-ellipsis>
           </div>
           <n-flex :size="4" :wrap="false" class="desc" align="center">
@@ -47,9 +47,7 @@
             <n-tag v-if="quality.name" :bordered="false" :type="quality.type || 'default'" round>
               {{ quality.name }}
             </n-tag>
-            <n-tag v-if="song.original_type === 1" :bordered="false" type="primary" round>
-              原唱
-            </n-tag>
+            <slot name="tags" />
             <n-tag
               v-if="song?.mv_id && song?.mv_id != '0'"
               :bordered="false"
@@ -73,7 +71,7 @@
                 class="ar"
                 @click.stop="openJumpArtist(song.platform, song.artists)"
               >
-                {{ ar.name }}
+                <n-highlight :text="ar.name" :patterns="highlightKeywords || []" />
               </n-text>
             </div>
             <!--          <div v-else-if="song.type === 'radio'" class="artists">-->
@@ -85,7 +83,10 @@
               @click.stop="openJumpArtist(song.platform, song.artists)"
             >
               <n-text class="ar">
-                {{ song.artists || t("common.unknown_artist") }}
+                <n-highlight
+                  :text="song.artists || t('common.unknown_artist')"
+                  :patterns="highlightKeywords || []"
+                />
               </n-text>
             </div>
           </n-flex>
@@ -93,17 +94,9 @@
           <n-text v-if="song.subtitle" class="alia text-hidden" depth="3">
             {{ song.subtitle }}
           </n-text>
-          <!--更多版本-->
-          <n-collapse
-            v-if="song.sublist?.length > 0"
-            class="sublist-btn"
-            arrow-placement="right"
-            @item-header-click="toggleSublist"
-            @dblclick.stop=""
-          >
-            <n-collapse-item :title="t('search.more_version')" name="1" />
-          </n-collapse>
-          <!--          <n-text v-if="song.sublist?.length > 0" @click.stop="toggleSublist">更多版本 {{showSublist? '收起' : '展开' }} </n-text>-->
+          <div class="details">
+            <slot name="details" />
+          </div>
         </div>
       </div>
       <!-- 专辑 -->
@@ -111,7 +104,7 @@
         <n-text
           v-if="isObject(song.album)"
           class="album-text"
-          @click="
+          @click.stop="
             IsValidId(song.album?.id) &&
             platformStore.isFeatureSupport(song.platform, FeatureSupportFlag.GetAlbumInfo) &&
             router.push({
@@ -156,17 +149,6 @@
         {{ formatFileSize(song.size || 0) }}
       </n-text>
     </div>
-
-    <!-- 更多版本折叠面板 (新增) -->
-    <n-collapse-transition class="sublist-content" :show="showSublist">
-      <SongList
-        :data="song.sublist"
-        height="auto"
-        :loading="false"
-        :show-footer="false"
-        :show-header="false"
-      />
-    </n-collapse-transition>
   </div>
 </template>
 
@@ -184,7 +166,6 @@ import { getSizeCover } from "@/utils/format";
 import { TagProps } from "naive-ui";
 import { IsValidId, songEqual } from "@/utils/song";
 import { FeatureSupportFlag } from "@/api/platform";
-import SongList from "@/components/List/SongList.vue";
 import { useI18n } from "vue-i18n";
 import { isElectron } from "@/utils/env";
 const { t } = useI18n();
@@ -199,6 +180,8 @@ const props = defineProps<{
   hiddenCover?: boolean;
   hiddenAlbum?: boolean;
   hiddenSize?: boolean;
+  // 仅用于纯文本展示，不改变歌曲数据结构。
+  highlightKeywords?: string[];
 }>();
 
 const player = usePlayer();
@@ -279,14 +262,6 @@ const getQuality = (song: SongInfo) => {
 const quality = getQuality(song.value) as {
   name?: string;
   type: TagProps["type"];
-};
-
-// 子列表控制
-const showSublist = ref(false);
-
-// 切换子列表显示状态
-const toggleSublist = (data: any) => {
-  showSublist.value = data.expanded;
 };
 </script>
 
@@ -375,6 +350,7 @@ const toggleSublist = (data: any) => {
     flex: 1;
     display: flex;
     align-items: center;
+    min-width: 0;
     padding: 4px 20px 4px 0;
     .cover {
       width: 50px;
@@ -390,6 +366,8 @@ const toggleSublist = (data: any) => {
     .info {
       display: flex;
       flex-direction: column;
+      flex: 1;
+      min-width: 0;
       .name {
         display: flex;
         flex-direction: row;
@@ -441,16 +419,10 @@ const toggleSublist = (data: any) => {
         font-size: 12px;
         opacity: 0.8;
       }
-
-      .sublist-btn {
-        margin-top: 2px;
-        :deep(.n-collapse-item__header-main) {
-          opacity: 0.8;
-          font-size: 12px;
-        }
-        :deep(.n-collapse-item__content-wrapper) {
-          display: none;
-        }
+      .details {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
       }
     }
     .sort {
@@ -533,8 +505,10 @@ const toggleSublist = (data: any) => {
     }
   }
 
-  .sublist-content {
-    background-color: rgba(var(--primary), 0.05);
+  :deep(.n-highlight__mark) {
+    color: var(--primary-hex);
+    background-color: transparent;
+    font-weight: 600;
   }
 }
 </style>

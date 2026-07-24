@@ -322,11 +322,20 @@ const getScrollTop = () => {
   return scrollTop.value;
 };
 
+// 展开可变内容后由父级触发，避免缓存高度导致列表项重叠。
+const refreshMeasurements = () => {
+  nextTick(() => {
+    measureItemHeights();
+    calculateVisibleRange(scrollTop.value);
+  });
+};
+
 // 暴露方法给父组件
 defineExpose({
   scrollTo: scrollToPosition,
   scrollToIndex,
   getScrollTop,
+  refreshMeasurements,
 });
 
 // 防抖高度测量
