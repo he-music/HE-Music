@@ -26,6 +26,27 @@
           }}
         </n-button>
       </n-card>
+      <n-card class="set-item mobile-client">
+        <n-flex :wrap="false" align="center" class="mobile-client-info">
+          <div class="mobile-client-icon">
+            <SvgIcon name="Phone" :size="24" />
+          </div>
+          <div class="mobile-client-copy">
+            <n-text class="name" strong>
+              {{ t("setting.about.mobile_app") }}
+            </n-text>
+            <n-text class="description" :depth="3">
+              {{ t("setting.about.mobile_app_description") }}
+            </n-text>
+          </div>
+        </n-flex>
+        <n-button type="primary" strong secondary @click="openLink(MOBILE_APP_RELEASE_URL)">
+          <template #icon>
+            <SvgIcon name="Download" />
+          </template>
+          {{ t("setting.about.download_mobile_app") }}
+        </n-button>
+      </n-card>
       <n-collapse-transition :show="!!updateData">
         <n-card class="set-item update-data">
           <n-flex class="version">
@@ -123,6 +144,7 @@ import "github-markdown-css/github-markdown.css";
 import packageJson from "@/../package.json";
 import { useI18n } from "vue-i18n";
 import { isElectron } from "@/utils/env";
+import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
 
 const { t } = useI18n();
 const statusStore = useStatusStore();
@@ -172,11 +194,6 @@ const communityData = [
   {
     name: "HE-Music",
     url: packageJson.github,
-    icon: "Github",
-  },
-  {
-    name: "HE-Music-Fluter",
-    url: "https://github.com/he-music/HE-Music-Flutter",
     icon: "Github",
   },
   {
@@ -235,6 +252,50 @@ onMounted(getUpdateData);
   }
   .n-tag {
     border-radius: 6px;
+  }
+}
+.mobile-client {
+  border-color: rgba(var(--primary), 0.28);
+  :deep(.n-card__content) {
+    gap: 16px;
+  }
+  .mobile-client-info {
+    min-width: 0;
+  }
+  .mobile-client-icon {
+    display: flex;
+    flex: 0 0 42px;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    color: var(--primary-hex);
+    background-color: rgba(var(--primary), 0.12);
+    border-radius: 8px;
+  }
+  .mobile-client-copy {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+    .name {
+      font-size: 16px;
+    }
+    .description {
+      font-size: 12px;
+    }
+  }
+  :deep(.n-card__content > .n-button) {
+    flex-shrink: 0;
+  }
+  @media (max-width: 520px) {
+    :deep(.n-card__content) {
+      align-items: stretch;
+      flex-direction: column;
+    }
+    .n-button {
+      width: 100%;
+    }
   }
 }
 .update-data {

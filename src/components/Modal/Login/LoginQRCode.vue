@@ -16,7 +16,7 @@
       {{ qrTipText }}
     </n-text>
     <n-text class="download-tip" depth="3">
-      <n-a href="https://github.com/he-music/HE-Music-Flutter" target="_blank">
+      <n-a :href="MOBILE_APP_RELEASE_URL" target="_blank">
         <SvgIcon name="Phone" :size="14" />
         {{ t("modal.download_client_tip") }}
       </n-a>
@@ -30,6 +30,7 @@ import { LoginType } from "@/types/main";
 import { isElectron, isLinux, isMac, isWin } from "@/utils/env";
 import { useI18n } from "vue-i18n";
 import { getDeviceInfo } from "@/utils/device";
+import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
 
 const { t } = useI18n();
 

@@ -391,7 +391,7 @@
     "create": "Create",
     "create_playlist": "Create Playlist",
     "delete_selected_songs": "Delete selected tracks",
-    "download_client_tip": "Download Mobile APP",
+    "download_client_tip": "Download Mobile App",
     "download_path": "Download Path",
     "download_path_not_configured": "Download directory not configured",
     "downloading": "Downloading...",
@@ -454,6 +454,7 @@
     "collected_playlist": "Collected Playlists",
     "created_playlist": "Created Playlists",
     "device_management": "Device Management",
+    "download_mobile_app": "Download Mobile App",
     "discover": "Discover Music",
     "download_manager": "Download Manager",
     "exit_login": "Logout",
@@ -543,8 +544,11 @@
       "check_update": "Check for Updates",
       "checking_update": "Checking for Updates",
       "community_and_news": "Community & News",
+      "download_mobile_app": "Download Mobile App",
       "history_version": "Version History",
       "latest_version": "Latest Version",
+      "mobile_app": "HE Music Mobile",
+      "mobile_app_description": "Android packages and unsigned iOS IPA files are available",
       "official_blog": "Official Blog"
     },
     "appearance": {

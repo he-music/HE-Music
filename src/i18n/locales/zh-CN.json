@@ -391,7 +391,7 @@
     "create": "新建",
     "create_playlist": "创建歌单",
     "delete_selected_songs": "删除已选歌曲",
-    "download_client_tip": "点击下载手机版",
+    "download_client_tip": "下载手机版",
     "download_path": "下载路径",
     "download_path_not_configured": "未配置下载目录",
     "downloading": "正在下载...",
@@ -454,6 +454,7 @@
     "collected_playlist": "收藏的歌单",
     "created_playlist": "创建的歌单",
     "device_management": "设备管理",
+    "download_mobile_app": "下载手机版",
     "discover": "发现音乐",
     "download_manager": "下载管理",
     "exit_login": "退出登录",
@@ -543,8 +544,11 @@
       "check_update": "检查更新",
       "checking_update": "正在检查更新",
       "community_and_news": "社区与资讯",
+      "download_mobile_app": "下载手机版",
       "history_version": "历史版本",
       "latest_version": "最新版本",
+      "mobile_app": "HE Music 手机版",
+      "mobile_app_description": "提供 Android 安装包与 iOS 未签名 IPA",
       "official_blog": "官方博客"
     },
     "appearance": {

@@ -124,9 +124,10 @@
 <script setup lang="ts">
 import type { DropdownOption } from "naive-ui";
 import { useSettingStore } from "@/stores";
-import { renderIcon } from "@/utils/helper";
+import { openLink, renderIcon } from "@/utils/helper";
 import { isDev, isElectron, isMac } from "@/utils/env";
 import { openParseSourceUrl, openSetting, openThemeConfig } from "@/utils/modal";
+import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
 import { useI18n } from "vue-i18n";
 import { ref, onMounted, onUnmounted } from "vue";
 import { useMobile } from "@/composables/useMobile";
@@ -227,6 +228,15 @@ const setOptions = computed<DropdownOption[]>(() => [
     icon: renderIcon("Parse"),
   },
   {
+    key: "mobile-app",
+    label: t("nav.download_mobile_app"),
+    icon: renderIcon("Phone"),
+  },
+  {
+    key: "divider-2",
+    type: "divider",
+  },
+  {
     key: "setting",
     label: t("nav.global_setting"),
     icon: renderIcon("Settings"),
@@ -254,6 +264,9 @@ const setSelect = (key: string) => {
       break;
     case "parse-source-url":
       openParseSourceUrl();
+      break;
+    case "mobile-app":
+      openLink(MOBILE_APP_RELEASE_URL);
       break;
     default:
       break;
