@@ -31,3 +31,7 @@ components.d.ts
 .env.development
 .env.production
 /deploy.sh
+/docs/
+/.agents/
+/.claude/
+/.codex/
