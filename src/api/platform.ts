@@ -40,7 +40,7 @@ export const FeatureSupportFlag = {
   GetCommentList: 1n << 25n, // 获取评论列表
 
   // 推荐相关
-  GetDailyRecommendSongList: 1n << 26n, // 获取每日推荐歌曲列表
+  FeatureSupportGetRecommendSongList: 1n << 26n, // 获取推荐歌曲集合
   GetRecommendPlaylist: 1n << 27n, // 获取推荐歌单
   GetNewSongTabList: 1n << 28n, // 获取新歌TAB列表
   GetNewSongList: 1n << 29n, // 获取新歌列表

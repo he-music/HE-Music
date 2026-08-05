@@ -22,8 +22,13 @@
         </n-button>
       </n-h3>
 
+      <QuickEntryList
+        v-if="item.section.section_type === PageSectionType.QuickEntries"
+        :entries="item.section.entries || []"
+        :platform="platform"
+      />
       <SongList
-        v-if="item.section.resource_type === 'song'"
+        v-else-if="item.section.resource_type === 'song'"
         :data="item.section.songs || []"
         height="auto"
         :show-footer="false"
@@ -61,6 +66,7 @@
 import SvgIcon from "@/components/Global/SvgIcon.vue";
 import AlbumList from "@/components/List/AlbumList.vue";
 import ArtistList from "@/components/List/ArtistList.vue";
+import QuickEntryList from "@/components/Page/QuickEntryList.vue";
 import PlaylistList from "@/components/List/PlaylistList.vue";
 import RadioList from "@/components/List/RadioList.vue";
 import RankingList from "@/components/List/RankingList.vue";

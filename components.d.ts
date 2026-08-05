@@ -146,6 +146,7 @@ declare module 'vue' {
     PlaylistAdd: typeof import('./src/components/Modal/PlaylistAdd.vue')['default']
     PlaylistList: typeof import('./src/components/List/PlaylistList.vue')['default']
     Provider: typeof import('./src/components/Global/Provider.vue')['default']
+    QuickEntryList: typeof import('./src/components/Page/QuickEntryList.vue')['default']
     RadioList: typeof import('./src/components/List/RadioList.vue')['default']
     RankingList: typeof import('./src/components/List/RankingList.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']

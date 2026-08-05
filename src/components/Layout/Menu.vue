@@ -320,6 +320,9 @@ const checkMenuItem = () => {
   menuRef.value?.showOption(routerName);
   // 高亮菜单
   switch (routerName) {
+    case "recommend-song-list":
+      menuActiveKey.value = "home";
+      break;
     case "playlist": {
       // 获取歌单 id
       const playlistId = router.currentRoute.value.query.id as string;

@@ -15,9 +15,28 @@ export const PageSectionType = {
   NewAlbums: 3,
   Ranking: 4,
   Feed: 5,
+  QuickEntries: 6,
 } as const;
 
 export type PageSectionTypeValue = (typeof PageSectionType)[keyof typeof PageSectionType];
+
+export const PageEntryTargetType = {
+  Unspecified: 0,
+  SongList: 1,
+  Radio: 2,
+  Playlist: 3,
+} as const;
+
+export type PageEntryTargetTypeValue =
+  (typeof PageEntryTargetType)[keyof typeof PageEntryTargetType];
+
+export interface PageEntry {
+  target_type: number;
+  target_id: string;
+  title: string;
+  subtitle?: string;
+  cover?: string;
+}
 
 export type PageResourceType =
   | "song"
@@ -48,11 +67,20 @@ export interface PageSection {
   rankings?: RankingInfo[];
   radios?: RadioInfo[];
   artists?: ArtistInfo[];
+  entries?: PageEntry[];
 }
 
 export interface NormalizedPageSection extends Omit<PageSection, "resource_type" | "title"> {
-  resource_type: PageResourceType;
+  resource_type: string;
   title: string;
+}
+
+export interface RecommendSongListInfo {
+  id: string;
+  title: string;
+  cover: string;
+  description: string;
+  songs: SongInfo[];
 }
 
 export interface DiscoverPageResponse {

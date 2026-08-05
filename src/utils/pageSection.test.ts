@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import type { AlbumInfo, SongInfo } from "@/types/main.hemusic";
-import { PageSectionType, type NormalizedPageSection, type PageSection } from "@/types/page";
+import {
+  PageEntryTargetType,
+  PageSectionType,
+  type NormalizedPageSection,
+  type PageSection,
+} from "@/types/page";
 import { appendPageSections, normalizePageSections } from "@/utils/pageSection";
 
 const song = (id: string) => ({ id }) as SongInfo;
@@ -41,6 +46,64 @@ describe("normalizePageSections", () => {
     expect(section.section_type).toBe(PageSectionType.Generic);
     expect(section.resource_type).toBe("song");
     expect(warn).toHaveBeenCalledWith("未知区块类型：100");
+  });
+
+  it("QUICK_ENTRIES 忽略 resource_type 并保留可选空字段", () => {
+    const warn = vi.fn();
+    const [section] = normalizePageSections(
+      [
+        {
+          section_type: PageSectionType.QuickEntries,
+          resource_type: "",
+          title: "快捷入口",
+          entries: [
+            {
+              target_type: PageEntryTargetType.SongList,
+              target_id: "daily",
+              title: "每日推荐",
+              subtitle: "",
+              cover: "",
+            },
+          ],
+        },
+      ],
+      { warn },
+    );
+
+    expect(section.resource_type).toBe("");
+    expect(section.entries).toEqual([
+      {
+        target_type: PageEntryTargetType.SongList,
+        target_id: "daily",
+        title: "每日推荐",
+        subtitle: "",
+        cover: "",
+      },
+    ]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("过滤未知快捷入口，并在没有有效入口时跳过区块", () => {
+    const sections = normalizePageSections([
+      {
+        section_type: PageSectionType.QuickEntries,
+        resource_type: "future-resource",
+        entries: [
+          {
+            target_type: PageEntryTargetType.Unspecified,
+            target_id: "unknown",
+            title: "未知入口",
+          },
+        ],
+      },
+      {
+        section_type: PageSectionType.QuickEntries,
+        resource_type: "",
+        entries: [],
+      },
+    ]);
+
+    expect(sections).toEqual([]);
   });
 });
 

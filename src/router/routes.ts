@@ -12,6 +12,16 @@ const appRoutes: Array<RouteRecordRaw> = [
     name: "home",
     component: () => import("@/views/Home/index.vue"),
   },
+  // 推荐歌曲集合
+  {
+    path: "/recommend/song-list",
+    name: "recommend-song-list",
+    component: () => import("@/views/List/recommendSongList.vue"),
+    beforeEnter: (to, _, next) => {
+      if (!to.query.target_id || !to.query.platform) next({ path: "/403" });
+      else next();
+    },
+  },
   // 搜索
   {
     path: "/search",

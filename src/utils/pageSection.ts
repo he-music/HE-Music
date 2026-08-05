@@ -1,6 +1,8 @@
 import {
+  PageEntryTargetType,
   PageSectionType,
   type NormalizedPageSection,
+  type PageEntry,
   type PageResourceType,
   type PageSection,
   type PageSectionResource,
@@ -46,9 +48,15 @@ export const getPageSectionResourceField = (
 ): PageSectionResourceField => resourceFields[resourceType];
 
 export const getPageSectionResources = (section: NormalizedPageSection): PageSectionResource[] => {
+  if (!isPageResourceType(section.resource_type)) return [];
   const field = getPageSectionResourceField(section.resource_type);
   return (section[field] || []) as PageSectionResource[];
 };
+
+export const isSupportedPageEntry = (entry: PageEntry): boolean =>
+  entry.target_type === PageEntryTargetType.SongList ||
+  entry.target_type === PageEntryTargetType.Radio ||
+  entry.target_type === PageEntryTargetType.Playlist;
 
 /**
  * 将后端区块收敛为客户端可渲染的数据，并隔离未知枚举和空区块。
@@ -62,6 +70,23 @@ export const normalizePageSections = (
 
   sections.forEach((section) => {
     if (!section) return;
+
+    // 快捷入口由 target_type 决定行为，协议明确不依赖 resource_type。
+    if (section.section_type === PageSectionType.QuickEntries) {
+      const entries = Array.isArray(section.entries)
+        ? section.entries.filter(isSupportedPageEntry)
+        : [];
+      if (entries.length === 0) return;
+
+      normalized.push({
+        ...section,
+        resource_type: section.resource_type,
+        title: section.title?.trim() || "",
+        entries,
+      });
+      return;
+    }
+
     if (!isPageResourceType(section.resource_type)) {
       warn(`未知资源类型：${section.resource_type || "(empty)"}`);
       return;
@@ -109,10 +134,13 @@ export const appendPageSections = (
   const shouldMerge =
     previous.section_type === PageSectionType.Feed &&
     next.section_type === PageSectionType.Feed &&
+    isPageResourceType(previous.resource_type) &&
+    isPageResourceType(next.resource_type) &&
     previous.resource_type === next.resource_type;
 
   if (!shouldMerge) return [...current, ...incoming];
 
+  if (!isPageResourceType(previous.resource_type)) return [...current, ...incoming];
   const field = getPageSectionResourceField(previous.resource_type);
   const previousResources = (previous[field] || []) as PageSectionResource[];
   const nextResources = (next[field] || []) as PageSectionResource[];
