@@ -203,6 +203,15 @@
     "new_album": "New Releases",
     "new_song": "New Tracks"
   },
+  "page_section": {
+    "empty": "No content available",
+    "load_failed": "Couldn't load content",
+    "load_failed_description": "Check your connection and try again",
+    "loading_more": "Loading more",
+    "more": "View more {title}",
+    "no_platform": "No music platform available",
+    "retry": "Retry"
+  },
   "download": {
     "add": "Download",
     "download_manager": "Download Manager",
@@ -468,6 +477,7 @@
     "open_dev_tool": "Open Developer Console",
     "parse_source_url": "Parse Link",
     "play_history": "Recently Played",
+    "recommend": "For You",
     "playlist_square": "Playlist Square",
     "restore": "Restore",
     "software_hot_reload": "Hot Reload",

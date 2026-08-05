@@ -56,16 +56,16 @@ const menuActiveKey = ref<string | number>((router.currentRoute.value.name as st
 const menuOptions = computed<MenuOption[] | MenuGroupOption[]>(() => {
   return settingStore.useOnlineService
     ? [
-        // {
-        //   key: "home",
-        //   link: "home",
-        //   label: "为我推荐",
-        //   icon: renderIcon("Home", {
-        //     style: {
-        //       transform: "translateY(-1px)",
-        //     },
-        //   }),
-        // },
+        {
+          key: "home",
+          link: "home",
+          label: t("nav.recommend"),
+          icon: renderIcon("Home", {
+            style: {
+              transform: "translateY(-1px)",
+            },
+          }),
+        },
         {
           key: "discover",
           link: "discover",

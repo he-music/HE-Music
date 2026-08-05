@@ -20,6 +20,7 @@
   "type": "module",
   "scripts": {
     "format": "prettier --write .",
+    "test": "vitest run",
     "lint": "npx eslint . --fix",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json --composite false",
     "typecheck:web": "vue-tsc --noEmit -p tsconfig.web.json --composite false",
@@ -35,8 +36,8 @@
     "build:linux": "pnpm run build && electron-builder --linux --config electron-builder.config.ts"
   },
   "dependencies": {
-    "@applemusic-like-lyrics/lyric": "^1.0.1",
     "@applemusic-like-lyrics/core": "^0.5.1",
+    "@applemusic-like-lyrics/lyric": "^1.0.1",
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "@imsyy/color-utils": "^1.0.2",
@@ -116,6 +117,7 @@
     "vite": "^7.3.0",
     "vite-plugin-compression": "^0.5.1",
     "vite-plugin-wasm": "^3.5.0",
+    "vitest": "^4.1.10",
     "vue": "^3.5.18",
     "vue-router": "^4.5.1",
     "vue-tsc": "3.0.5"

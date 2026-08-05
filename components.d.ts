@@ -129,6 +129,8 @@ declare module 'vue' {
     NThing: typeof import('naive-ui')['NThing']
     NTooltip: typeof import('naive-ui')['NTooltip']
     NVirtualList: typeof import('naive-ui')['NVirtualList']
+    PageSectionList: typeof import('./src/components/Page/PageSectionList.vue')['default']
+    PageSectionSkeleton: typeof import('./src/components/Page/PageSectionSkeleton.vue')['default']
     ParseSourceUrl: typeof import('./src/components/Modal/ParseSourceUrl.vue')['default']
     PlayerBackground: typeof import('./src/components/Player/PlayerMeta/PlayerBackground.vue')['default']
     PlayerComment: typeof import('./src/components/Player/PlayerComponents/PlayerComment.vue')['default']

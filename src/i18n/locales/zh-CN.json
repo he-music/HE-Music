@@ -203,6 +203,15 @@
     "new_album": "新碟上架",
     "new_song": "新歌速递"
   },
+  "page_section": {
+    "empty": "暂无可展示的内容",
+    "load_failed": "内容加载失败",
+    "load_failed_description": "请检查网络连接后重试",
+    "loading_more": "正在加载更多",
+    "more": "查看更多{title}",
+    "no_platform": "暂无可用的音乐平台",
+    "retry": "重试"
+  },
   "download": {
     "add": "添加下载",
     "download_manager": "下载管理",
@@ -468,6 +477,7 @@
     "open_dev_tool": "开启控制台",
     "parse_source_url": "链接解析",
     "play_history": "最近播放",
+    "recommend": "为我推荐",
     "playlist_square": "歌单广场",
     "restore": "还原",
     "software_hot_reload": "软件热重载",

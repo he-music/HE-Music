@@ -1,5 +1,5 @@
 <template>
-  <div class="discover-page">
+  <div class="home-page">
     <n-tabs
       v-if="availablePlatforms.length"
       :value="platform"
@@ -9,14 +9,14 @@
       @update:value="platformChange"
     >
       <n-tab-pane
-        v-for="platform in supportPlatforms"
-        :key="`discover-${platform.id}`"
-        :name="platform.id"
-        :tab="platform.shortname"
-        :disabled="platform.status !== 1"
+        v-for="item in supportPlatforms"
+        :key="`recommend-${item.id}`"
+        :name="item.id"
+        :tab="item.shortname"
+        :disabled="item.status !== 1"
         display-directive="show:lazy"
       >
-        <DiscoverOnline :platform="platform.id" />
+        <RecommendOnline :platform="item.id" />
       </n-tab-pane>
     </n-tabs>
     <n-empty v-else :description="t('page_section.no_platform')" size="large" />
@@ -28,14 +28,14 @@ import { FeatureSupportFlag } from "@/api/platform";
 import { usePlatformStore } from "@/stores";
 import type { PlatformInfo } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
-import DiscoverOnline from "./DiscoverOnline.vue";
+import RecommendOnline from "./RecommendOnline.vue";
 
 const router = useRouter();
 const platformStore = usePlatformStore();
 const { t } = useI18n();
 
 const supportPlatforms = computed<PlatformInfo[]>(
-  () => platformStore.featureSupportList(FeatureSupportFlag.GetDiscoverPage) || [],
+  () => platformStore.featureSupportList(FeatureSupportFlag.GetRecommendPage) || [],
 );
 const availablePlatforms = computed(() =>
   supportPlatforms.value.filter((platform) => platform.status === 1),
@@ -43,22 +43,33 @@ const availablePlatforms = computed(() =>
 
 const platform = computed<string>(() => {
   const currentRoute = router.currentRoute.value;
-  if (currentRoute.name !== "discover") return "";
+  if (currentRoute.name !== "home") return "";
   return String(currentRoute.query.platform || "");
 });
 
+const scrollToTop = () => {
+  nextTick(() => {
+    document.querySelector<HTMLElement>("#main-content .n-scrollbar-container")?.scrollTo({
+      top: 0,
+      behavior: "auto",
+    });
+  });
+};
+
 const platformChange = (value: string) => {
   if (value === platform.value) return;
-  router.replace({
-    name: "discover",
-    query: { platform: value },
-  });
+  router
+    .replace({
+      name: "home",
+      query: { platform: value },
+    })
+    .then(scrollToTop);
 };
 
 watch(
   [availablePlatforms, platform, () => router.currentRoute.value.name],
   () => {
-    if (router.currentRoute.value.name !== "discover" || !availablePlatforms.value.length) return;
+    if (router.currentRoute.value.name !== "home" || !availablePlatforms.value.length) return;
     if (!availablePlatforms.value.some((item) => item.id === platform.value)) {
       platformChange(availablePlatforms.value[0].id);
     }
@@ -68,7 +79,7 @@ watch(
 </script>
 
 <style lang="scss" scoped>
-.discover-page {
+.home-page {
   width: 100%;
   margin: 0 auto;
 

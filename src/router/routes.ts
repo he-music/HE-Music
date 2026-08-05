@@ -10,7 +10,7 @@ const appRoutes: Array<RouteRecordRaw> = [
   {
     path: "/",
     name: "home",
-    redirect: "/discover",
+    component: () => import("@/views/Home/index.vue"),
   },
   // 搜索
   {
