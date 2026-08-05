@@ -87,6 +87,7 @@
           }"
           :content-style="{
             display: 'grid',
+            gridTemplateColumns: 'minmax(0, 1fr)',
             gridTemplateRows: '1fr',
             minHeight: '100%',
             padding: isMobile ? '0 16px' : '0 24px',

@@ -219,6 +219,8 @@ const openEntry = async (entry: PageEntry) => {
 
 @media (max-width: 600px) {
   .quick-entry-grid {
+    --entry-size: clamp(96px, calc((100% - 30px) / 3.1), 112px);
+
     display: flex;
     gap: 10px;
     overflow-x: auto;
@@ -232,8 +234,8 @@ const openEntry = async (entry: PageEntry) => {
   }
 
   .quick-entry {
-    flex: 0 0 112px;
-    width: 112px;
+    flex: 0 0 var(--entry-size);
+    width: var(--entry-size);
     scroll-snap-align: start;
   }
 
