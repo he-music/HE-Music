@@ -464,7 +464,7 @@
     "created_playlist": "Created Playlists",
     "device_management": "Device Management",
     "download_mobile_app": "Download Mobile App",
-    "discover": "Discover Music",
+    "discover": "Discover",
     "download_manager": "Download Manager",
     "exit_login": "Logout",
     "global_setting": "Global Settings",
@@ -478,7 +478,7 @@
     "parse_source_url": "Parse Link",
     "play_history": "Recently Played",
     "recommend": "For You",
-    "playlist_square": "Playlist Square",
+    "playlist_square": "Playlists",
     "restore": "Restore",
     "software_hot_reload": "Hot Reload",
     "un_login": "Not Logged In"
