@@ -9,6 +9,7 @@ import { getDeviceInfo } from "@/utils/device";
 export const API_URL = String(import.meta.env["VITE_API_URL"]);
 // 全局地址
 const baseURL: string = String(isDev ? "/api/netease" : import.meta.env["VITE_NETEASE_API_URL"]);
+const REFRESH_TOKEN_URL = "/v1/auth/token/refresh";
 
 // Token 刷新并发保护
 let isRefreshing = false;
@@ -32,8 +33,17 @@ function isSkipRefreshUrl(url: string | undefined): boolean {
   return (
     url.includes("/v1/auth/login") ||
     url.includes("/v1/user/login") ||
-    url.includes("/v1/auth/token/refresh") ||
+    url.includes(REFRESH_TOKEN_URL) ||
     url.includes("/v1/auth/logout")
+  );
+}
+
+/** 判断刷新失败是否由 refresh token 失效导致 */
+function isInvalidRefreshTokenError(error: unknown): boolean {
+  return (
+    axios.isAxiosError(error) &&
+    error.response?.status === 401 &&
+    (error.response.data as { reason?: string } | undefined)?.reason === "INVALID_REFRESH_TOKEN"
   );
 }
 
@@ -102,6 +112,8 @@ serverHemusic.interceptors.response.use(
       case 401: {
         const dataStore = useDataStore();
         const refreshToken = dataStore.refreshToken;
+        // 刷新请求的 401 交给发起刷新流程的外层请求统一处理，避免重复登出
+        if (config?.url?.includes(REFRESH_TOKEN_URL)) return Promise.reject(error);
         // 有 refreshToken 且不是登录/刷新接口，尝试自动刷新
         if (refreshToken && !isSkipRefreshUrl(config?.url)) {
           if (isRefreshing) {
@@ -132,10 +144,16 @@ serverHemusic.interceptors.response.use(
               return serverHemusic.request(config);
             }
           } catch (refreshError) {
-            // 刷新失败，清除登录状态
+            // 刷新失败时拒绝所有等待请求，只有 refresh token 明确失效才强制退出
             processPendingQueue(refreshError);
-            dataStore.userLoginStatus = false;
-            openUserLogin();
+            if (isInvalidRefreshTokenError(refreshError)) {
+              try {
+                await dataStore.clearUserData();
+              } catch (clearError) {
+                console.error("清除登录信息失败：", clearError);
+              }
+              openUserLogin();
+            }
             console.error("Token 刷新失败：", refreshError);
           } finally {
             isRefreshing = false;
