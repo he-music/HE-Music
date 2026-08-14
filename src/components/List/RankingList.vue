@@ -1,8 +1,76 @@
 <template>
   <Transition name="fade" mode="out-in">
-    <div v-if="data.length > 0" class="cover-list playlist">
-      <n-grid :cols="cols" x-gap="20" y-gap="20">
-        <n-gi v-for="(item, index) in data" :key="index">
+    <div v-if="props.data.length > 0" class="cover-list ranking">
+      <!-- 包含歌曲预览的排行榜使用横向卡片 -->
+      <n-grid
+        v-if="listRankings.length > 0"
+        class="ranking-row-grid"
+        cols="1 600:2 1000:3"
+        x-gap="20"
+        y-gap="20"
+      >
+        <n-gi v-for="item in listRankings" :key="`${item.platform}-${item.id}`">
+          <n-card
+            class="ranking-row-card"
+            @click="goDetail(item)"
+            @contextmenu="coverMenuRef?.openDropdown($event, item, 'ranking')"
+          >
+            <n-text class="ranking-name text-hidden">
+              {{ item.name }}
+            </n-text>
+            <div class="ranking-row-content">
+              <div class="cover ranking-row-cover">
+                <s-image
+                  :key="item.cover"
+                  :src="item.cover"
+                  default-src="/images/album.jpg?asset"
+                  class="cover-img"
+                  once
+                />
+                <div class="play-btn" @click.stop>
+                  <n-button
+                    :focusable="false"
+                    :loading="item.loading"
+                    secondary
+                    circle
+                    class="play"
+                    @click.stop="playList(item)"
+                  >
+                    <template #icon>
+                      <SvgIcon :size="32" :name="isPlaying(item) ? 'Pause' : 'Play'" />
+                    </template>
+                  </n-button>
+                </div>
+              </div>
+              <div class="song-list">
+                <div
+                  v-for="(song, songIndex) in item.songs.slice(0, 3)"
+                  :key="`${song.platform}-${song.id}`"
+                  class="song-item text-hidden"
+                >
+                  <n-text class="name">{{ songIndex + 1 }}. {{ song.name }}</n-text>
+                  <n-text v-if="Array.isArray(song.artists)" class="desc" depth="3">
+                    {{ song.artists[0]?.name || t("common.unknown_artist") }}
+                  </n-text>
+                  <n-text v-else class="desc" depth="3">
+                    {{ song.artists || t("common.unknown_artist") }}
+                  </n-text>
+                </div>
+              </div>
+            </div>
+          </n-card>
+        </n-gi>
+      </n-grid>
+
+      <!-- 不包含歌曲预览的排行榜使用封面网格 -->
+      <n-grid
+        v-if="gridRankings.length > 0"
+        :class="['ranking-cover-grid', { 'with-row-grid': listRankings.length > 0 }]"
+        :cols="props.cols"
+        x-gap="20"
+        y-gap="20"
+      >
+        <n-gi v-for="item in gridRankings" :key="`${item.platform}-${item.id}`">
           <div
             class="cover-item"
             @click="goDetail(item)"
@@ -58,17 +126,24 @@
         </n-gi>
       </n-grid>
       <!-- 加载更多 -->
-      <n-flex v-if="loadMore" class="load-more" justify="center">
-        <n-button :loading="loading" size="large" strong secondary round @click="emit('loadMore')">
+      <n-flex v-if="props.loadMore" class="load-more" justify="center">
+        <n-button
+          :loading="props.loading"
+          size="large"
+          strong
+          secondary
+          round
+          @click="emit('loadMore')"
+        >
           {{ t("common.load_more") }}
         </n-button>
       </n-flex>
       <!-- 右键菜单 -->
       <CoverMenu ref="coverMenuRef" @to-play="playList" />
     </div>
-    <div v-else-if="loading" class="cover-list loading playlist">
-      <n-grid :cols="cols" x-gap="20" y-gap="20">
-        <n-gi v-for="item in loadingNum || 50" :key="item">
+    <div v-else-if="props.loading" class="cover-list loading ranking">
+      <n-grid :cols="props.cols" x-gap="20" y-gap="20">
+        <n-gi v-for="item in props.loadingNum || 50" :key="item">
           <div class="cover-item">
             <div class="cover">
               <n-skeleton class="cover-img" />
@@ -104,7 +179,7 @@ interface Props {
   loadingText?: string;
 }
 
-withDefaults(defineProps<Props>(), {
+const props = withDefaults(defineProps<Props>(), {
   cols: "3 600:3 800:4 900:5 1200:6 1400:7",
 });
 
@@ -118,10 +193,13 @@ const router = useRouter();
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
 
+// 有歌曲预览和无歌曲预览的排行榜使用不同卡片布局
+const listRankings = computed(() => props.data.filter((item) => item.songs?.length > 0));
+const gridRankings = computed(() => props.data.filter((item) => !item.songs?.length));
+
 // 右键菜单
 const coverMenuRef = ref<InstanceType<typeof CoverMenu> | null>(null);
 
-// 是否处于当前播放列表
 // 是否处于当前播放列表
 const isPlaying = (item: RankingInfo) =>
   musicStore.isPlayingPlaylist(item.id, item.platform, "ranking") && statusStore.playStatus;
@@ -165,6 +243,109 @@ const playList = debounce(
 .cover-list {
   width: 100%;
   padding: 20px 4px;
+  .ranking-row-card {
+    height: 160px;
+    border-radius: 12px;
+    cursor: pointer;
+    :deep(.n-card__content) {
+      height: 100%;
+      padding: 16px;
+    }
+    .ranking-name {
+      display: block;
+      margin-bottom: 12px;
+      font-size: 18px;
+      font-weight: bold;
+    }
+    .ranking-row-content {
+      display: flex;
+      height: calc(100% - 34px);
+      min-width: 0;
+    }
+    .ranking-row-cover {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      height: 100%;
+      width: auto;
+      aspect-ratio: 1 / 1;
+      margin-right: 20px;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0px 0px 4px 2px rgba(0, 0, 0, 0.1);
+      :deep(img) {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+      .cover-img {
+        transition:
+          filter 0.3s,
+          transform 0.3s;
+      }
+      .play-btn {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+      }
+      .play {
+        opacity: 0;
+        transform: translateY(8px);
+        transition: all 0.3s;
+        background-color: #ffffff66;
+        backdrop-filter: blur(6px);
+        pointer-events: auto;
+        --n-width: 42px;
+        --n-height: 42px;
+        .n-icon {
+          color: #fff;
+        }
+        :deep(.n-base-loading) {
+          color: #fff;
+        }
+        &:active {
+          background-color: #ffffff33;
+        }
+      }
+    }
+    .song-list {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-evenly;
+      min-width: 0;
+    }
+    .song-item {
+      width: 100%;
+      .desc {
+        &::before {
+          content: "-";
+          margin: 0 4px;
+        }
+      }
+    }
+    &:hover {
+      border-color: rgba(var(--primary), 0.6);
+      .cover {
+        .cover-img {
+          transform: scale(1.1);
+          filter: brightness(0.4);
+        }
+        .play {
+          transform: translateY(0);
+          opacity: 1;
+        }
+      }
+    }
+  }
+  .ranking-cover-grid.with-row-grid {
+    margin-top: 20px;
+  }
   .cover-item {
     position: relative;
     height: auto;
