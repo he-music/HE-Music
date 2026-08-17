@@ -3,7 +3,7 @@ import { openUserLogin } from "@/utils/modal";
 import { isElectron } from "@/utils/env";
 import { isLogin } from "@/utils/auth";
 import routes from "./routes";
-import { usePlatformStore } from "@/stores";
+import { usePlatformStore, useStatusStore } from "@/stores";
 import { t } from "@/i18n";
 
 // 基础配置
@@ -65,6 +65,13 @@ router.beforeEach(async (to, from, next) => {
 router.afterEach(() => {
   // 进度条
   window.$loadingBar.finish();
+
+  // 以搜索路由为准同步搜索框，确保所有搜索入口及前进、后退行为一致
+  const currentRoute = router.currentRoute.value;
+  const keyword = currentRoute.query.keyword;
+  if (currentRoute.name === "search" && typeof keyword === "string") {
+    useStatusStore().searchInputValue = keyword;
+  }
 });
 
 export default router;
