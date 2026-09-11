@@ -1,7 +1,8 @@
 <template>
-  <div class="player-lyric">
+  <div :class="['player-lyric', { monet: settingStore.lyricRenderer === 'monet' }]">
     <!-- 歌词内容 -->
-    <AMLyric v-if="settingStore.useAMLyrics" :currentTime="playSeek" />
+    <AMLyric v-if="settingStore.lyricRenderer === 'amll'" :currentTime="playSeek" />
+    <MonetLyric v-else-if="settingStore.lyricRenderer === 'monet'" :clock="lyricClock" />
     <DefaultLyric v-else :currentTime="playSeek" />
     <!-- 歌词菜单 -->
     <n-flex :class="['lyric-menu', { show: statusStore.playerMetaShow }]" justify="center" vertical>
@@ -59,6 +60,8 @@ import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { openSetting, openCopyLyrics } from "@/utils/modal";
 import { usePlayer } from "@/utils/player";
 
+const MonetLyric = defineAsyncComponent(() => import("./MonetLyric.vue"));
+
 const musicStore = useMusicStore();
 const settingStore = useSettingStore();
 const statusStore = useStatusStore();
@@ -71,12 +74,29 @@ const currentSong = computed(() => musicStore.playSong);
 
 // 实时播放进度
 const playSeek = ref<number>(player.getSeek() + statusStore.getSongOffset(musicStore.playSong));
+// 稳定时钟对象让 Monet 订阅时间，而不让整个歌词组件每帧重渲染。
+const lyricClock = { time: playSeek };
+const documentVisibility = useDocumentVisibility();
+const updateSeek = () => {
+  playSeek.value = player.getSeek() + statusStore.getSongOffset(currentSong.value);
+};
 
-// 实时更新播放进度
-const { pause: pauseSeek, resume: resumeSeek } = useRafFn(() => {
-  const offsetTime = statusStore.getSongOffset(currentSong.value);
-  playSeek.value = player.getSeek() + offsetTime;
-});
+// 暂停时通过状态和偏移变化刷新，播放且窗口可见时才持续采样。
+const { pause: pauseSeek, resume: resumeSeek } = useRafFn(updateSeek, { immediate: false });
+watch(
+  () => [
+    statusStore.playStatus,
+    documentVisibility.value,
+    statusStore.currentTime,
+    statusStore.getSongOffset(currentSong.value),
+  ],
+  () => {
+    updateSeek();
+    if (statusStore.playStatus && documentVisibility.value === "visible") resumeSeek();
+    else pauseSeek();
+  },
+  { immediate: true },
+);
 
 /**
  * 当前进度偏移值
@@ -116,9 +136,7 @@ const resetOffset = () => {
   statusStore.resetSongOffset(currentSong.value);
 };
 
-onMounted(() => {
-  resumeSeek();
-});
+onMounted(updateSeek);
 
 onBeforeUnmount(() => {
   pauseSeek();
@@ -141,6 +159,10 @@ onBeforeUnmount(() => {
     hsla(0, 0%, 100%, 0.6) 85%,
     hsla(0, 0%, 100%, 0)
   );
+  &.monet {
+    mask: none;
+    filter: none;
+  }
   @media (hover: hover) and (pointer: fine) {
     &:hover {
       .lyric-menu {

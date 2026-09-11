@@ -1,5 +1,6 @@
 import { useDataStore, useMusicStore, useStatusStore } from "@/stores";
-import { getCoverColorData } from "./color";
+import { getCoverColorData, MONOTONOUS_THEME } from "./color";
+import type { CoverColors } from "@/types/main";
 import type { Link, SongInfo } from "@/types/main.hemusic";
 import { songUrl } from "@/api/song";
 
@@ -8,6 +9,8 @@ import { songUrl } from "@/api/song";
  */
 
 class SongManager {
+  private coverRequest = 0;
+  private coverThemeCache = new Map<string, CoverColors>();
   /**
    * 获取当前播放歌曲
    * @returns 当前播放歌曲
@@ -88,20 +91,41 @@ class SongManager {
    * @param coverUrl 歌曲封面地址
    */
   public getCoverColor = async (coverUrl: string) => {
-    if (!coverUrl) return;
+    const request = ++this.coverRequest;
     const statusStore = useStatusStore();
-    // 创建图像元素
-    const image = new Image();
-    image.crossOrigin = "anonymous";
-    image.src = coverUrl;
-    // 图像加载完成
-    image.onload = () => {
-      // 获取图片数据
-      const coverColorData = getCoverColorData(image);
-      if (coverColorData) statusStore.songCoverTheme = coverColorData;
-      // 移除元素
-      image.remove();
-    };
+    const cached = this.coverThemeCache.get(coverUrl);
+    // 每次换封面立即清除旧歌配色；仅缓存成功结果，失败允许重试。
+    statusStore.songCoverTheme = structuredClone(cached ?? MONOTONOUS_THEME);
+    if (!coverUrl || cached) return;
+    const theme = await new Promise<CoverColors | null>((resolve) => {
+      const image = new Image();
+      const finish = (result: CoverColors | null) => {
+        clearTimeout(timer);
+        image.onload = null;
+        image.onerror = null;
+        image.remove();
+        resolve(result);
+      };
+      const timer = setTimeout(() => finish(null), 10000);
+      image.crossOrigin = "anonymous";
+      image.onload = () => {
+        try {
+          finish(getCoverColorData(image));
+        } catch {
+          finish(null);
+        } // 跨域画布读取失败时保留回退配色。
+      };
+      image.onerror = () => finish(null);
+      image.src = coverUrl;
+    });
+    if (theme) {
+      if (this.coverThemeCache.size >= 32) {
+        const oldest = this.coverThemeCache.keys().next().value;
+        if (oldest) this.coverThemeCache.delete(oldest);
+      }
+      this.coverThemeCache.set(coverUrl, theme);
+      if (request === this.coverRequest) statusStore.songCoverTheme = structuredClone(theme);
+    }
   };
 }
 

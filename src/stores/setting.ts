@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { keywords, regexes } from "@/assets/data/exclude";
 import { ThemeColorType } from "@/types/color";
 import { FontStyleSelection } from "@/types/global";
+import { deserializeLyricSettings, type LyricRenderer } from "@/utils/lyric/renderer";
 
 interface SettingState {
   /** 明暗模式 */
@@ -37,6 +38,7 @@ interface SettingState {
   showRoma: boolean;
   lyricsPosition: "flex-start" | "center" | "flex-end";
   lyricsScrollOffset: number;
+  monetScrollOffset: number;
   downloadPath: string;
   /** 音乐命名格式 */
   fileNameFormat: "title" | "artist-title" | "title-artist";
@@ -76,7 +78,7 @@ interface SettingState {
   lyricsBlur: boolean;
   lrcMousePause: boolean;
   showSearchHistory: boolean;
-  useAMLyrics: boolean;
+  lyricRenderer: LyricRenderer;
   useAMSpring: boolean;
   AMHidePassedLines: boolean;
   AMWordFadeWidth: number;
@@ -159,7 +161,7 @@ export const useSettingStore = defineStore("setting", {
     lyricTranFontSize: 22, // 歌词翻译大小
     lyricRomaFontSize: 18, // 歌词音译大小
     lyricFontBold: true, // 歌词字体加粗
-    useAMLyrics: false, // 是否使用 AM 歌词
+    lyricRenderer: "default", // 歌词效果：普通、AMLL、Monet
     useAMSpring: false, // 是否使用 AM 歌词弹簧效果
     AMHidePassedLines: false /** 隐藏已播放歌词 */,
     AMWordFadeWidth: 0.5 /** 文字动画的渐变宽度 */,
@@ -170,6 +172,7 @@ export const useSettingStore = defineStore("setting", {
     showRoma: true, // 显示歌词音译
     lyricsPosition: "flex-start", // 歌词位置
     lyricsScrollOffset: 0.25, // 歌词滚动偏移量
+    monetScrollOffset: 0.46, // Monet 当前句中心位置，独立于传统滚动歌词
     lyricsBlur: false, // 歌词模糊
     lrcMousePause: false, // 鼠标悬停暂停
     enableOnlineLyricsExclude: true, // 在线歌词排除
@@ -232,5 +235,9 @@ export const useSettingStore = defineStore("setting", {
   persist: {
     key: "setting-store",
     storage: localStorage,
+    serializer: {
+      serialize: JSON.stringify,
+      deserialize: deserializeLyricSettings,
+    },
   },
 });

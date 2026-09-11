@@ -785,6 +785,11 @@
       "show_font_lyrics_animation_tip": "May cause performance issues. Turn off if experiencing lag.",
       "show_lyrics_roma": "Show Romanized Lyrics",
       "show_lyrics_trans": "Show Translated Lyrics",
+      "renderer": "Lyric style",
+      "renderer_default": "Standard",
+      "monet_loading": "Loading lyrics…",
+      "monet_empty": "No lyrics available",
+      "monet_seek": "Play from this line",
       "use_am_lyrics": "Use Apple Music-like Lyrics",
       "use_am_lyrics_tip": "Render lyrics in Apple Music-like style (requires high-performance device)"
     },

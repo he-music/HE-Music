@@ -785,6 +785,11 @@
       "show_font_lyrics_animation_tip": "可能会造成性能问题，如遇卡顿请关闭",
       "show_lyrics_roma": "显示歌词音译",
       "show_lyrics_trans": "显示歌词翻译",
+      "renderer": "歌词效果",
+      "renderer_default": "普通",
+      "monet_loading": "歌词正在加载中…",
+      "monet_empty": "暂无歌词",
+      "monet_seek": "从这句开始播放",
       "use_am_lyrics": "使用 Apple Music-like Lyrics",
       "use_am_lyrics_tip": "歌词使用 Apple Music-like Lyrics 进行渲染，需要高性能设备"
     },

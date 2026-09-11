@@ -1,0 +1,161 @@
+// src/components/Monet/monet.scss — Monet 歌词轨道，尺寸由宿主提供。
+.monet-rail {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, transparent, black 5%, black 95%, transparent);
+  touch-action: pan-y;
+  user-select: none;
+  container-type: inline-size;
+  color: rgb(var(--monet-color));
+  text-align: var(--monet-align);
+}
+.monet-line {
+  position: absolute;
+  top: 0;
+  left: 18px;
+  right: 18px;
+  padding: 0.16em 4px 0.34em;
+  box-sizing: border-box;
+  transform-origin: var(--monet-origin);
+  will-change: transform;
+  cursor: pointer;
+  transition:
+    opacity 0.28s,
+    filter 0.32s;
+  border-radius: 12px;
+  &.active {
+    max-height: var(--monet-available-height);
+  }
+  &.monet-overflow {
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(var(--monet-color), 0.25) transparent;
+    overscroll-behavior: contain;
+  }
+  &.duet {
+    text-align: right;
+    transform-origin: right top;
+  }
+  &:focus-visible {
+    outline: 2px solid rgba(var(--monet-color), 0.65);
+    outline-offset: 4px;
+  }
+  .monet-text {
+    line-height: 1.3;
+    font-size: var(--monet-font-size);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: rgba(var(--monet-color), 0.46);
+    &:lang(en) {
+      font-family: var(--en-font-family, inherit);
+      font-weight: var(--en-font-weight, inherit);
+      font-style: var(--en-font-style, inherit);
+    }
+    &:lang(ja) {
+      font-family: var(--ja-font-family, inherit);
+      font-weight: var(--ja-font-weight, inherit);
+      font-style: var(--ja-font-style, inherit);
+    }
+    &:lang(ko) {
+      font-family: var(--ko-font-family, inherit);
+      font-weight: var(--ko-font-weight, inherit);
+      font-style: var(--ko-font-style, inherit);
+    }
+  }
+  &.active .monet-text,
+  &.passed .monet-text {
+    color: rgb(var(--monet-color));
+  }
+  &:not(.active) .monet-text {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    overflow: hidden;
+  }
+}
+.monet-word {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: baseline;
+  white-space: pre-wrap;
+}
+.monet-glyph {
+  --fill: 0%;
+  --glow: 0;
+  display: inline-block;
+  position: relative;
+  color: rgba(var(--monet-color), 0.34);
+  // 分开的字形允许超长词换行，扫光仍以每个字形自己的时间与宽度为准。
+  &::after {
+    content: attr(data-text);
+    position: absolute;
+    inset: -0.5em 0;
+    padding-block: 0.5em;
+    pointer-events: none;
+    color: transparent;
+    background: linear-gradient(
+      90deg,
+      rgb(var(--monet-color)) max(0%, calc(var(--fill) - 12%)),
+      rgba(var(--monet-color), 0) var(--fill)
+    );
+    background-clip: text;
+    -webkit-background-clip: text;
+  }
+  text-shadow:
+    0 0 0.16em rgba(var(--monet-color), var(--glow)),
+    0 0 0.36em rgba(var(--monet-color), calc(var(--glow) * 0.65));
+}
+.passed .monet-glyph {
+  color: rgb(var(--monet-color));
+}
+.monet-translation,
+.monet-romanization {
+  line-height: 1.4;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-weight: 400;
+  margin-top: 0.4em;
+  animation: monet-subtitle-enter 0.28s ease-out;
+}
+.monet-translation {
+  font-size: var(--monet-translation-size);
+  opacity: 0.68;
+}
+.monet-romanization {
+  font-size: var(--monet-romanization-size);
+  opacity: 0.52;
+}
+.monet-empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  font-size: 18px;
+  opacity: 0.65;
+}
+@keyframes monet-subtitle-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+.monet-reduced-motion {
+  .monet-line {
+    transition: none;
+  }
+  .monet-translation,
+  .monet-romanization {
+    animation: none;
+  }
+}
+@container (max-width: 340px) {
+  .monet-line {
+    left: 10px;
+    right: 10px;
+  }
+}

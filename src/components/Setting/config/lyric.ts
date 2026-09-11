@@ -99,6 +99,20 @@ export const useLyricSettings = (): SettingConfig => {
         title: t("setting.lyrics.lyrics_setting"),
         items: [
           {
+            key: "lyricRenderer",
+            label: t("setting.lyrics.renderer"),
+            type: "select",
+            options: [
+              { label: t("setting.lyrics.renderer_default"), value: "default" },
+              { label: "AMLL", value: "amll" },
+              { label: "Monet", value: "monet" },
+            ],
+            value: computed({
+              get: () => settingStore.lyricRenderer,
+              set: (v) => (settingStore.lyricRenderer = v),
+            }),
+          },
+          {
             key: "lyricPreview",
             label: t("common.preview"),
             type: "custom",
@@ -132,7 +146,7 @@ export const useLyricSettings = (): SettingConfig => {
               set: (v) => (settingStore.lyricTranFontSize = v || 22),
             }),
             forceIf: {
-              condition: () => settingStore.useAMLyrics,
+              condition: () => settingStore.lyricRenderer === "amll",
               forcedValue: () => Math.max(0.5 * settingStore.lyricFontSize, 10),
             },
             defaultValue: 22,
@@ -150,7 +164,7 @@ export const useLyricSettings = (): SettingConfig => {
               set: (v) => (settingStore.lyricRomaFontSize = v || 18),
             }),
             forceIf: {
-              condition: () => settingStore.useAMLyrics,
+              condition: () => settingStore.lyricRenderer === "amll",
               forcedValue: () => Math.max(0.5 * settingStore.lyricFontSize, 10),
             },
             defaultValue: 18,
@@ -187,7 +201,7 @@ export const useLyricSettings = (): SettingConfig => {
               set: (v) => (settingStore.lyricsPosition = v),
             }),
             forceIf: {
-              condition: () => settingStore.useAMLyrics,
+              condition: () => settingStore.lyricRenderer === "amll",
               forcedValue: "flex-start",
             },
           },
@@ -205,8 +219,14 @@ export const useLyricSettings = (): SettingConfig => {
             },
             formatTooltip: (v) => `${(v * 100).toFixed(0)}%`,
             value: computed({
-              get: () => settingStore.lyricsScrollOffset,
-              set: (v) => (settingStore.lyricsScrollOffset = v),
+              get: () =>
+                settingStore.lyricRenderer === "monet"
+                  ? settingStore.monetScrollOffset
+                  : settingStore.lyricsScrollOffset,
+              set: (v) => {
+                if (settingStore.lyricRenderer === "monet") settingStore.monetScrollOffset = v;
+                else settingStore.lyricsScrollOffset = v;
+              },
             }),
           },
           {
@@ -279,50 +299,39 @@ export const useLyricSettings = (): SettingConfig => {
       {
         title: "Apple Music-like Lyrics",
         tags: [{ text: "Beta", type: "warning" }],
+        show: () => settingStore.lyricRenderer === "amll",
         items: [
           {
-            key: "useAMLyrics",
-            label: t("setting.lyrics.use_am_lyrics"),
+            key: "useAMSpring",
+            label: t("setting.lyrics.am_lyrics_spring"),
             type: "switch",
-            description: t("setting.lyrics.use_am_lyrics_tip"),
+            description: t("setting.lyrics.am_lyrics_spring_tip"),
             value: computed({
-              get: () => settingStore.useAMLyrics,
-              set: (v) => (settingStore.useAMLyrics = v),
+              get: () => settingStore.useAMSpring,
+              set: (v) => (settingStore.useAMSpring = v),
             }),
-            children: [
-              {
-                key: "useAMSpring",
-                label: t("setting.lyrics.am_lyrics_spring"),
-                type: "switch",
-                description: t("setting.lyrics.am_lyrics_spring_tip"),
-                value: computed({
-                  get: () => settingStore.useAMSpring,
-                  set: (v) => (settingStore.useAMSpring = v),
-                }),
-              },
-              {
-                key: "hidePassedLines",
-                label: t("setting.lyrics.am_hide_passed_lines"),
-                type: "switch",
-                value: computed({
-                  get: () => settingStore.AMHidePassedLines,
-                  set: (v) => (settingStore.AMHidePassedLines = v),
-                }),
-              },
-              {
-                key: "wordFadeWidth",
-                label: t("setting.lyrics.am_word_fade_width"),
-                type: "input-number",
-                description: t("setting.lyrics.am_word_fade_width_tip"),
-                min: 0.01,
-                max: 1,
-                step: 0.01,
-                value: computed({
-                  get: () => settingStore.AMWordFadeWidth,
-                  set: (v) => (settingStore.AMWordFadeWidth = v),
-                }),
-              },
-            ],
+          },
+          {
+            key: "hidePassedLines",
+            label: t("setting.lyrics.am_hide_passed_lines"),
+            type: "switch",
+            value: computed({
+              get: () => settingStore.AMHidePassedLines,
+              set: (v) => (settingStore.AMHidePassedLines = v),
+            }),
+          },
+          {
+            key: "wordFadeWidth",
+            label: t("setting.lyrics.am_word_fade_width"),
+            type: "input-number",
+            description: t("setting.lyrics.am_word_fade_width_tip"),
+            min: 0.01,
+            max: 1,
+            step: 0.01,
+            value: computed({
+              get: () => settingStore.AMWordFadeWidth,
+              set: (v) => (settingStore.AMWordFadeWidth = v),
+            }),
           },
         ],
       },

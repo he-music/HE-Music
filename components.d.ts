@@ -49,6 +49,8 @@ declare module 'vue' {
     MobilePlayerSongMenu: typeof import('./src/components/Menu/MobilePlayerSongMenu.vue')['default']
     MobileSongMenu: typeof import('./src/components/Menu/MobileSongMenu.vue')['default']
     MobileSongQualityMenu: typeof import('./src/components/Menu/MobileSongQualityMenu.vue')['default']
+    MonetLyric: typeof import('./src/components/Player/PlayerLyric/MonetLyric.vue')['default']
+    MonetLyricRail: typeof import('./src/components/Monet/MonetLyricRail.vue')['default']
     NA: typeof import('naive-ui')['NA']
     NAlert: typeof import('naive-ui')['NAlert']
     Nav: typeof import('./src/components/Layout/Nav.vue')['default']
