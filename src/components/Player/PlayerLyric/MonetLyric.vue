@@ -5,6 +5,8 @@
       :lines="lines"
       :clock="clock"
       :playing="statusStore.playStatus"
+      :word-animation="settingStore.showYrcAnimation"
+      :long-word-effect="settingStore.showYrcLongEffect"
       :loading="statusStore.lyricLoading"
       :font-size="settingStore.lyricFontSize"
       :translation-size="settingStore.lyricTranFontSize"
@@ -45,7 +47,7 @@ const lines = computed(() => {
   const lyrics = musicStore.songLyric;
   const wordTimed = Boolean(settingStore.showYrc && lyrics.yrcData?.length);
   return adaptMonetLines(
-    wordTimed ? lyrics.yrcData : lyrics.lrcData || [],
+    wordTimed ? lyrics.yrcData : lyrics.lrcData?.length ? lyrics.lrcData : lyrics.yrcData || [],
     wordTimed,
     statusStore.duration,
   );

@@ -40,6 +40,8 @@ interface MotionOptions {
   reducedMotion: Readonly<Ref<boolean>>;
   alignment: () => number;
   fontSize: () => number;
+  wordAnimation: () => boolean;
+  longWordEffect: () => boolean;
 }
 
 export function useMonetMotion(options: MotionOptions) {
@@ -86,15 +88,17 @@ export function useMonetMotion(options: MotionOptions) {
           ? 1
           : !active || time < glyph.start
             ? 0
-            : glyph.end <= glyph.start
+            : !options.wordAnimation() || options.reducedMotion.value || glyph.end <= glyph.start
               ? 1
               : clamp((time - glyph.start) / (glyph.end - glyph.start));
       const glow =
-        !options.reducedMotion.value && glyph.status !== "waiting"
+        options.wordAnimation() && !options.reducedMotion.value && glyph.status !== "waiting"
           ? resolveGlow(time, glyph.start, glyph.end, glyph.line.end)
           : 0;
       glyph.node.style.setProperty("--fill", `${progress * 112}%`);
-      glyph.node.style.setProperty("--glow", `${glow * 0.62}`);
+      const isLong = Number(glyph.node.dataset.wordDuration) >= 1000;
+      const emphasis = options.longWordEffect() && isLong ? 1 : 0.55;
+      glyph.node.style.setProperty("--glow", `${glow * 0.62 * emphasis}`);
     }
   }
 
@@ -196,6 +200,11 @@ export function useMonetMotion(options: MotionOptions) {
     } else nodes.delete(key);
   }
   watch(options.clock.time, paint, { flush: "post" });
+  watch(
+    [options.wordAnimation, options.longWordEffect, options.reducedMotion],
+    () => paint(options.clock.time.value),
+    { flush: "post" },
+  );
   watch(options.entries, () => nextTick(scheduleMeasure), { flush: "post" });
   watch([options.visible, options.running, options.reducedMotion], () => {
     stop();

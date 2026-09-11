@@ -24,6 +24,16 @@
         :lines="previewLines"
         :clock="previewClock"
         :playing="previewVisible && documentVisibility === 'visible'"
+        :word-animation="settingStore.showYrcAnimation"
+        :long-word-effect="settingStore.showYrcLongEffect"
+        :text-align="
+          settingStore.lyricsPosition === 'center'
+            ? 'center'
+            : settingStore.lyricsPosition === 'flex-end'
+              ? 'right'
+              : 'left'
+        "
+        :style="{ ...lyricFontStyle(settingStore.lyricFont), ...lyricLangFontStyle(settingStore) }"
         :font-size="settingStore.lyricFontSize"
         :translation-size="settingStore.lyricTranFontSize"
         :romanization-size="settingStore.lyricRomaFontSize"
@@ -35,49 +45,72 @@
         @seek="seekPreview"
       />
     </div>
-    <n-card class="warning" v-if="settingStore.lyricRenderer === 'amll'">
-      <n-text> {{ t("setting.lyric.preview_using_amll") }} </n-text>
-    </n-card>
-    <template v-if="settingStore.lyricRenderer !== 'monet'">
-      <div v-for="item in 2" :key="item" :class="['lrc-item', { on: item === 2 }]">
-        <n-text>我是一句歌词</n-text>
-        <n-text v-if="settingStore.showTran">I'm the lyric</n-text>
-        <n-text v-if="settingStore.showRoma">wo shi yi ju ge ci</n-text>
-      </div>
-    </template>
+    <div v-if="settingStore.lyricRenderer === 'amll'" ref="previewRoot" class="monet-preview">
+      <LyricPlayer
+        class="amll-preview"
+        :lyric-lines="amllPreviewLines"
+        :current-time="Math.floor(previewTime)"
+        :playing="previewActive"
+        :disabled="!previewActive"
+        :enable-spring="settingStore.useAMSpring"
+        :enable-scale="settingStore.useAMSpring"
+        :enable-blur="settingStore.lyricsBlur"
+        :align-position="settingStore.lyricsScrollOffset"
+        :align-anchor="settingStore.lyricsScrollOffset > 0.4 ? 'center' : 'top'"
+        :hide-passed-lines="settingStore.AMHidePassedLines"
+        :word-fade-width="settingStore.AMWordFadeWidth"
+        :style="{
+          '--amll-lp-font-size': `${settingStore.lyricFontSize}px`,
+          ...lyricFontStyle(settingStore.lyricFont),
+        }"
+        @line-click="seekPreview($event.line.getLine().startTime)"
+      />
+    </div>
+    <div v-if="settingStore.lyricRenderer === 'default'" ref="previewRoot" class="monet-preview">
+      <DefaultLyric
+        :current-time="previewTime"
+        :preview="defaultPreview"
+        @preview-seek="seekPreview"
+      />
+    </div>
   </n-card>
 </template>
 
 <script setup lang="ts">
 import { useSettingStore } from "@/stores";
 import { useI18n } from "vue-i18n";
-import { lyricFontStyle } from "@/utils/lyric/lyricFontConfig";
+import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
 import { adaptMonetLines } from "@/components/Monet/model";
 
+const DefaultLyric = defineAsyncComponent(
+  () => import("@/components/Player/PlayerLyric/DefaultLyric.vue"),
+);
+const LyricPlayer = defineAsyncComponent(() => import("@/components/AMLL/LyricPlayer.vue"));
 const MonetLyricRail = defineAsyncComponent(() => import("@/components/Monet/MonetLyricRail.vue"));
 const previewTime = shallowRef(0);
 const previewClock = { time: previewTime };
 const previewRoot = ref<HTMLElement | null>(null);
 const previewVisible = useElementVisibility(previewRoot);
 const documentVisibility = useDocumentVisibility();
-const previewLines = adaptMonetLines(
-  ["让旋律轻轻流淌", "我是一句歌词", "让每一个字随音乐发光", "听见此刻的声音"].map(
-    (text, index) => ({
-      startTime: index * 4000,
-      endTime: index * 4000 + 3500,
-      words: Array.from(text).map((word, i) => ({
-        word,
-        startTime: index * 4000 + (i * 3500) / text.length,
-        endTime: index * 4000 + ((i + 1) * 3500) / text.length,
-      })),
-      translatedLyric: "Let every word glow with the music",
-      romanLyric: "rang xuan lü qing qing liu tang",
-      isBG: false,
-      isDuet: false,
-    }),
-  ),
-  true,
-);
+const previewSource = [
+  "让旋律轻轻流淌",
+  "我是一句歌词",
+  "让每一个字随音乐发光",
+  "听见此刻的声音",
+].map((text, index) => ({
+  startTime: index * 4000,
+  endTime: index * 4000 + 3500,
+  words: Array.from(text).map((word, i) => ({
+    word,
+    startTime: index * 4000 + (i * 3500) / text.length,
+    endTime: index * 4000 + ((i + 1) * 3500) / text.length,
+  })),
+  translatedLyric: "Let every word glow with the music",
+  romanLyric: "rang xuan lü qing qing liu tang",
+  isBG: false,
+  isDuet: false,
+}));
+const previewLines = computed(() => adaptMonetLines(previewSource, settingStore.showYrc));
 let previewEpoch = 0;
 function seekPreview(time: number) {
   previewTime.value = time;
@@ -86,6 +119,42 @@ function seekPreview(time: number) {
 
 const settingStore = useSettingStore();
 const { t } = useI18n();
+const amllPreviewLines = computed(() =>
+  previewSource.map((line) => ({
+    ...line,
+    words: settingStore.showYrc
+      ? line.words.map((word) => ({ ...word }))
+      : [
+          {
+            word: line.words.map((word) => word.word).join(""),
+            startTime: line.startTime,
+            endTime: line.endTime,
+          },
+        ],
+    translatedLyric: settingStore.showTran ? line.translatedLyric : "",
+    romanLyric: settingStore.showRoma ? line.romanLyric : "",
+  })),
+);
+const previewActive = computed(
+  () => previewVisible.value && documentVisibility.value === "visible",
+);
+const defaultPreviewLyrics = {
+  yrcData: previewSource,
+  lrcData: previewSource.map((line) => ({
+    ...line,
+    words: [
+      {
+        word: line.words.map((word) => word.word).join(""),
+        startTime: line.startTime,
+        endTime: line.endTime,
+      },
+    ],
+  })),
+};
+const defaultPreview = computed(() => ({
+  lyrics: defaultPreviewLyrics,
+  playing: previewActive.value,
+}));
 const { pause: pausePreview, resume: resumePreview } = useRafFn(
   () => {
     previewTime.value = (performance.now() - previewEpoch) % 16000;
@@ -93,10 +162,7 @@ const { pause: pausePreview, resume: resumePreview } = useRafFn(
   { immediate: false },
 );
 watch(
-  () =>
-    settingStore.lyricRenderer === "monet" &&
-    previewVisible.value &&
-    documentVisibility.value === "visible",
+  previewActive,
   (active) => {
     if (active) {
       previewEpoch = performance.now() - previewTime.value;
@@ -128,6 +194,7 @@ const romaFontSize = fontSizeComputed("lyricRomaFontSize");
     background: #24282c;
     border-radius: 12px;
     overflow: hidden;
+    --main-cover-color: 239, 239, 239;
   }
   .lrc-item {
     display: flex;
@@ -157,13 +224,11 @@ const romaFontSize = fontSizeComputed("lyricRomaFontSize");
       }
     }
   }
-  .warning {
-    border-radius: 8px;
-    font-size: 16px;
-    background-color: rgba(255, 255, 255, 0.1);
-    margin-bottom: 4px;
+  .amll-preview {
     width: 100%;
-    box-sizing: border-box;
+    height: 100%;
+    --amll-lp-color: #efefef;
+    --amll-lp-hover-bg-color: rgba(255, 255, 255, 0.08);
   }
 }
 </style>

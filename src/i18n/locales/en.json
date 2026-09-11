@@ -785,6 +785,8 @@
       "show_font_lyrics_animation_tip": "May cause performance issues. Turn off if experiencing lag.",
       "show_lyrics_roma": "Show Romanized Lyrics",
       "show_lyrics_trans": "Show Translated Lyrics",
+      "monet_word_animation": "Word sweep and glow",
+      "monet_long_word_effect": "Enhanced glow for sustained words",
       "renderer": "Lyric style",
       "renderer_default": "Standard",
       "monet_loading": "Loading lyrics…",

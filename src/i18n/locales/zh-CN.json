@@ -785,6 +785,8 @@
       "show_font_lyrics_animation_tip": "可能会造成性能问题，如遇卡顿请关闭",
       "show_lyrics_roma": "显示歌词音译",
       "show_lyrics_trans": "显示歌词翻译",
+      "monet_word_animation": "逐字扫光与辉光",
+      "monet_long_word_effect": "长音辉光增强",
       "renderer": "歌词效果",
       "renderer_default": "普通",
       "monet_loading": "歌词正在加载中…",

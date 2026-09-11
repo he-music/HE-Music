@@ -39,6 +39,7 @@
                 class="monet-glyph"
                 :data-glyph-start="glyph.start"
                 :data-glyph-end="glyph.end"
+                :data-word-duration="word.glyphs.at(-1)!.end - word.glyphs[0].start"
                 :data-text="glyph.text"
                 >{{ glyph.text }}</span
               ></span
@@ -79,6 +80,8 @@ const props = withDefaults(
     lines: MonetLine[];
     clock: { time: Readonly<Ref<number>> };
     playing: boolean;
+    wordAnimation?: boolean;
+    longWordEffect?: boolean;
     loading?: boolean;
     fontSize?: number;
     translationSize?: number;
@@ -95,6 +98,8 @@ const props = withDefaults(
   }>(),
   {
     fontSize: 46,
+    wordAnimation: true,
+    longWordEffect: true,
     translationSize: 22,
     romanizationSize: 18,
     alignPosition: 0.46,
@@ -170,6 +175,8 @@ const { setLineNode, scheduleMeasure } = useMonetMotion({
   entries,
   clock: props.clock,
   running,
+  wordAnimation: () => props.wordAnimation,
+  longWordEffect: () => props.longWordEffect,
   visible,
   reducedMotion,
   alignment: () => props.alignPosition,

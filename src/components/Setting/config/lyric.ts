@@ -240,6 +240,29 @@ export const useLyricSettings = (): SettingConfig => {
             }),
           },
           {
+            key: "showYrcAnimation",
+            label: t("setting.lyrics.monet_word_animation"),
+            type: "switch",
+            show: () => settingStore.lyricRenderer === "monet" && settingStore.showYrc,
+            value: computed({
+              get: () => settingStore.showYrcAnimation,
+              set: (v) => (settingStore.showYrcAnimation = v),
+            }),
+          },
+          {
+            key: "showYrcLongEffect",
+            label: t("setting.lyrics.monet_long_word_effect"),
+            type: "switch",
+            show: () =>
+              settingStore.lyricRenderer === "monet" &&
+              settingStore.showYrc &&
+              settingStore.showYrcAnimation,
+            value: computed({
+              get: () => settingStore.showYrcLongEffect,
+              set: (v) => (settingStore.showYrcLongEffect = v),
+            }),
+          },
+          {
             key: "showTran",
             label: t("setting.lyrics.show_lyrics_trans"),
             type: "switch",

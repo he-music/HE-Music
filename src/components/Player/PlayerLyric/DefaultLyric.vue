@@ -1,6 +1,6 @@
 <template>
   <div
-    :key="`lyric-${musicStore.playSong.id}-${musicStore.playSong.platform}`"
+    :key="preview ? 'preview' : `lyric-${musicStore.playSong.id}-${musicStore.playSong.platform}`"
     :style="{
       '--lrc-size': settingStore.lyricFontSize + 'px',
       '--lrc-tran-size': settingStore.lyricTranFontSize + 'px',
@@ -8,7 +8,7 @@
       '--lrc-bold': lyricFontStyle(settingStore.lyricFont).fontWeight,
       'font-family': lyricFontStyle(settingStore.lyricFont).fontFamily,
       'font-style': lyricFontStyle(settingStore.lyricFont).fontStyle,
-      cursor: statusStore.playerMetaShow ? 'auto' : 'none',
+      cursor: preview || statusStore.playerMetaShow ? 'auto' : 'none',
       ...lyricLangFontStyle(settingStore),
     }"
     :class="[
@@ -17,15 +17,17 @@
       settingStore.lyricsPosition,
       settingStore.lyricsPosition,
       {
-        pure: statusStore.pureLyricMode,
-        'meta-show': statusStore.playerMetaShow,
+        pure: !preview && statusStore.pureLyricMode,
+        'meta-show': preview || statusStore.playerMetaShow,
       },
     ]"
     @mouseleave="lrcAllLeave"
   >
     <div class="lyric-content">
       <Transition name="fade" mode="out-in">
-        <div v-if="statusStore.lyricLoading" class="lyric-loading">歌词正在加载中...</div>
+        <div v-if="!preview && statusStore.lyricLoading" class="lyric-loading">
+          歌词正在加载中...
+        </div>
         <div
           v-else
           ref="lyricScrollContainer"
@@ -42,7 +44,9 @@
               v-if="item.type === 'countdown'"
               class="countdown-line"
               :style="{
-                animationPlayState: statusStore.playStatus ? 'running' : 'paused',
+                animationPlayState: (preview ? preview.playing : statusStore.playStatus)
+                  ? 'running'
+                  : 'paused',
               }"
             >
               <Transition name="fade" mode="out-in">
@@ -118,7 +122,15 @@ import { isElectron } from "@/utils/env";
 import { usePlayer } from "@/utils/player";
 import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
 
+import { type PropType } from "vue";
+import { type SongLyric } from "@/types/lyric";
+
+const emit = defineEmits<{ previewSeek: [time: number] }>();
 const props = defineProps({
+  preview: {
+    type: Object as PropType<{ lyrics: SongLyric; playing: boolean }>,
+    default: undefined,
+  },
   currentTime: {
     type: Number,
     default: 0,
@@ -133,11 +145,12 @@ const player = usePlayer();
 const lyricScrollContainer = ref<HTMLElement | null>(null);
 
 // 是否为逐字歌词模式
-const isYrcMode = computed(() => settingStore.showYrc && musicStore.isHasYrc);
+const lyricData = computed(() => props.preview?.lyrics ?? musicStore.songLyric);
+const isYrcMode = computed(() => settingStore.showYrc && lyricData.value.yrcData.length > 0);
 
 // 获取当前使用的歌词数据
 const currentLyricData = computed(() => {
-  return isYrcMode.value ? musicStore.songLyric.yrcData : musicStore.songLyric.lrcData;
+  return isYrcMode.value ? lyricData.value.yrcData : lyricData.value.lrcData;
 });
 
 /** 处理后的歌词项类型 */
@@ -439,7 +452,7 @@ const getYrcVars = (wordData: LyricWord, lyricIndex: number): CssVars => {
   const currentSeek = props.currentTime;
   const fadeFactor = getYrcFadeFactor(lyricIndex);
   // 判断是否显示
-  const currentLine = musicStore.songLyric.yrcData[lyricIndex];
+  const currentLine = lyricData.value.yrcData[lyricIndex];
   if (!isYrcLineOn(currentLine, lyricIndex)) return {};
   // 计算进度
   const duration = wordData.endTime - wordData.startTime;
@@ -509,12 +522,16 @@ const getLyricLineStyle = (item: ProcessedLyricItem) => {
  * 进度跳转
  */
 const jumpSeek = (time: number) => {
-  if (!time) return;
+  if (!Number.isFinite(time) || time < 0) return;
   // 清除用户滚动状态
   userScrolling.value = false;
   if (userScrollTimeoutId !== null) {
     clearTimeout(userScrollTimeoutId);
     userScrollTimeoutId = null;
+  }
+  if (props.preview) {
+    emit("previewSeek", time);
+    return;
   }
   const offsetMs = statusStore.getSongOffset(musicStore.playSong);
   player.setSeek(time - offsetMs);
@@ -534,7 +551,7 @@ onMounted(() => {
   nextTick().then(() => {
     lyricsScroll(scrollTargetIndex.value);
   });
-  if (isElectron) {
+  if (isElectron && !props.preview) {
     window.electron.ipcRenderer.on("lyricsScroll", () => lyricsScroll(scrollTargetIndex.value));
   }
 });
@@ -550,7 +567,7 @@ onBeforeUnmount(() => {
     clearTimeout(userScrollTimeoutId);
     userScrollTimeoutId = null;
   }
-  if (isElectron) {
+  if (isElectron && !props.preview) {
     window.electron.ipcRenderer.removeAllListeners("lyricsScroll");
   }
 });
