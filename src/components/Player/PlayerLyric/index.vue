@@ -1,8 +1,17 @@
 <template>
-  <div :class="['player-lyric', { monet: settingStore.lyricRenderer === 'monet' }]">
+  <div
+    :class="[
+      'player-lyric',
+      {
+        monet: settingStore.lyricRenderer === 'monet',
+        partita: settingStore.lyricRenderer === 'partita',
+      },
+    ]"
+  >
     <!-- 歌词内容 -->
     <AMLyric v-if="settingStore.lyricRenderer === 'amll'" :currentTime="playSeek" />
     <MonetLyric v-else-if="settingStore.lyricRenderer === 'monet'" :clock="lyricClock" />
+    <PartitaLyric v-else-if="settingStore.lyricRenderer === 'partita'" :clock="lyricClock" />
     <DefaultLyric v-else :currentTime="playSeek" />
     <!-- 歌词菜单 -->
     <n-flex :class="['lyric-menu', { show: statusStore.playerMetaShow }]" justify="center" vertical>
@@ -61,6 +70,7 @@ import { openSetting, openCopyLyrics } from "@/utils/modal";
 import { usePlayer } from "@/utils/player";
 
 const MonetLyric = defineAsyncComponent(() => import("./MonetLyric.vue"));
+const PartitaLyric = defineAsyncComponent(() => import("./PartitaLyric.vue"));
 
 const musicStore = useMusicStore();
 const settingStore = useSettingStore();

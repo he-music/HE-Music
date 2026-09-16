@@ -9,6 +9,7 @@
 ## 第三方登录说明
 
 新用户注册：
+
 - `LinuxDo` level >= 3
 
 ## 📜 版权与授权声明
@@ -59,7 +60,7 @@
 - ➕ 新建歌单及歌单编辑
 - ❤️ 收藏 / 取消收藏歌单或歌手
 - 📝 支持逐字歌词
-- 🔄 歌词滚动以及歌词翻译 [AMLL、folia-莫奈]
+- 🔄 歌词滚动以及歌词翻译 [AMLL、folia-莫奈、folia-云阶]
 - 📹 MV 与视频播放
 - 🎶 音乐频谱显示
 - ⏭️ 音乐渐入渐出
@@ -128,7 +129,6 @@ GitHub Actions 发布构建需要在仓库 `Secrets and variables` 中配置 `VI
   4. **免责声明：** 根据 AGPL-3.0，本项目不提供任何明示或暗示的担保。请详细阅读 [GNU Affero General Public License (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.html) 以了解完整的免责声明内容
   5. **社区参与：** 欢迎社区的参与和贡献，我们鼓励开发者一同改进和维护本项目
   6. **许可证链接：** 请阅读 [GNU Affero General Public License (AGPL-3.0)](https://www.gnu.org/licenses/agpl-3.0.html) 了解更多详情
-
 
 ## 友情链接
 

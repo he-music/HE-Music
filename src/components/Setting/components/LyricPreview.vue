@@ -45,6 +45,24 @@
         @seek="seekPreview"
       />
     </div>
+    <div v-if="settingStore.lyricRenderer === 'partita'" ref="previewRoot" class="monet-preview">
+      <PartitaLyricRail
+        :lines="partitaPreviewLines"
+        :clock="previewClock"
+        :playing="previewVisible && documentVisibility === 'visible'"
+        :word-animation="settingStore.showYrcAnimation"
+        :font-size="settingStore.lyricFontSize"
+        :translation-size="settingStore.lyricTranFontSize"
+        :romanization-size="settingStore.lyricRomaFontSize"
+        :show-translation="settingStore.showTran"
+        :show-romanization="settingStore.showRoma"
+        :show-guide-lines="settingStore.showPartitaGuideLines"
+        :show-upcoming="settingStore.showPartitaUpcoming"
+        :stagger-min="settingStore.partitaStagger * 0.6"
+        :stagger-max="settingStore.partitaStagger * 1.4"
+        @seek="seekPreview"
+      />
+    </div>
     <div v-if="settingStore.lyricRenderer === 'amll'" ref="previewRoot" class="monet-preview">
       <LyricPlayer
         class="amll-preview"
@@ -81,12 +99,16 @@ import { useSettingStore } from "@/stores";
 import { useI18n } from "vue-i18n";
 import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
 import { adaptMonetLines } from "@/components/Monet/model";
+import { adaptPartitaLines } from "@/components/Partita/model";
 
 const DefaultLyric = defineAsyncComponent(
   () => import("@/components/Player/PlayerLyric/DefaultLyric.vue"),
 );
 const LyricPlayer = defineAsyncComponent(() => import("@/components/AMLL/LyricPlayer.vue"));
 const MonetLyricRail = defineAsyncComponent(() => import("@/components/Monet/MonetLyricRail.vue"));
+const PartitaLyricRail = defineAsyncComponent(
+  () => import("@/components/Partita/PartitaLyricRail.vue"),
+);
 const previewTime = shallowRef(0);
 const previewClock = { time: previewTime };
 const previewRoot = ref<HTMLElement | null>(null);
@@ -111,6 +133,7 @@ const previewSource = [
   isDuet: false,
 }));
 const previewLines = computed(() => adaptMonetLines(previewSource, settingStore.showYrc));
+const partitaPreviewLines = computed(() => adaptPartitaLines(previewSource, settingStore.showYrc));
 let previewEpoch = 0;
 function seekPreview(time: number) {
   previewTime.value = time;

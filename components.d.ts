@@ -134,6 +134,8 @@ declare module 'vue' {
     PageSectionList: typeof import('./src/components/Page/PageSectionList.vue')['default']
     PageSectionSkeleton: typeof import('./src/components/Page/PageSectionSkeleton.vue')['default']
     ParseSourceUrl: typeof import('./src/components/Modal/ParseSourceUrl.vue')['default']
+    PartitaLyric: typeof import('./src/components/Player/PlayerLyric/PartitaLyric.vue')['default']
+    PartitaLyricRail: typeof import('./src/components/Partita/PartitaLyricRail.vue')['default']
     PlayerBackground: typeof import('./src/components/Player/PlayerMeta/PlayerBackground.vue')['default']
     PlayerComment: typeof import('./src/components/Player/PlayerComponents/PlayerComment.vue')['default']
     PlayerControl: typeof import('./src/components/Player/PlayerControl.vue')['default']

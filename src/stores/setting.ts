@@ -39,6 +39,9 @@ interface SettingState {
   lyricsPosition: "flex-start" | "center" | "flex-end";
   lyricsScrollOffset: number;
   monetScrollOffset: number;
+  showPartitaGuideLines: boolean;
+  showPartitaUpcoming: boolean;
+  partitaStagger: number;
   downloadPath: string;
   /** 音乐命名格式 */
   fileNameFormat: "title" | "artist-title" | "title-artist";
@@ -173,6 +176,9 @@ export const useSettingStore = defineStore("setting", {
     lyricsPosition: "flex-start", // 歌词位置
     lyricsScrollOffset: 0.25, // 歌词滚动偏移量
     monetScrollOffset: 0.46, // Monet 当前句中心位置，独立于传统滚动歌词
+    showPartitaGuideLines: true, // 云阶是否显示标尺引导线
+    showPartitaUpcoming: true, // 云阶是否显示下一句预告
+    partitaStagger: 32, // 云阶阶梯错落幅度 (px)
     lyricsBlur: false, // 歌词模糊
     lrcMousePause: false, // 鼠标悬停暂停
     enableOnlineLyricsExclude: true, // 在线歌词排除

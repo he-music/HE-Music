@@ -1,0 +1,448 @@
+// Partita (云阶) 专属视觉样式
+// 布局架构、中央 70% 舞台、阶梯标尺与视口底部字幕 Overlay 完全移植自 Folia (chthollyphile, AGPL-3.0)
+
+.partita-rail {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  user-select: none;
+  overflow: hidden;
+  box-sizing: border-box;
+  --partita-active-color: #ffffff;
+  --partita-base-color: rgba(255, 255, 255, 0.65);
+  --partita-guide-color: rgba(255, 255, 255, 0.22);
+  --partita-font-size: 46px;
+
+  &.pure {
+    padding: 0 40px;
+  }
+
+  // =================== 1. 中央主舞台 (约 72% 高度空间) ===================
+  .partita-stage-container {
+    position: relative;
+    width: 100%;
+    height: 72%;
+    max-width: 100%;
+    padding: 0 20px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    animation: partitaFloat 7s ease-in-out infinite;
+    will-change: transform;
+    pointer-events: auto;
+
+    &.pure {
+      max-width: 1280px;
+      padding: 0 48px;
+    }
+  }
+
+  // 单行阶梯容器（具有 1000px 3D 景深透视）
+  .partita-line-wrapper {
+    position: relative;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    perspective: 1000px;
+    cursor: pointer;
+  }
+
+  // 块（Chunk）行
+  .partita-chunk {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+    padding: 6px 18px;
+    margin-bottom: 20px;
+    transition:
+      transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.3s ease;
+    will-change: transform, opacity;
+
+    &.status-waiting {
+      opacity: 0.3;
+      transform: scale(0.9) translateY(10px);
+    }
+
+    &.status-active {
+      opacity: 1;
+      transform: scale(1) translateY(0);
+    }
+
+    &.status-passed {
+      opacity: 0.72;
+      transform: scale(0.98) translateY(0);
+    }
+  }
+
+  // 标尺引导线（Guide Lines）
+  .partita-guide-v,
+  .partita-guide-h {
+    position: absolute;
+    pointer-events: none;
+    background-color: var(--partita-guide-color);
+    transition:
+      transform 0.4s ease-out,
+      background-color 0.3s ease,
+      box-shadow 0.3s ease;
+    z-index: 1;
+  }
+
+  // 左侧标尺线
+  .guide-left {
+    .partita-guide-v {
+      left: -14px;
+      bottom: -18px;
+      width: 1.5px;
+      height: 40px;
+      transform-origin: bottom;
+    }
+    .partita-guide-h {
+      left: -24px;
+      bottom: -10px;
+      width: calc(100% + 48px);
+      height: 1.5px;
+      transform-origin: left;
+    }
+  }
+
+  // 右侧标尺线
+  .guide-right {
+    .partita-guide-v {
+      right: -14px;
+      bottom: -18px;
+      width: 1.5px;
+      height: 40px;
+      transform-origin: bottom;
+    }
+    .partita-guide-h {
+      right: -24px;
+      bottom: -10px;
+      width: calc(100% + 48px);
+      height: 1.5px;
+      transform-origin: right;
+    }
+  }
+
+  .partita-chunk.status-waiting {
+    .partita-guide-v {
+      transform: scaleY(0);
+      opacity: 0;
+    }
+    .partita-guide-h {
+      transform: scaleX(0);
+      opacity: 0;
+    }
+  }
+
+  .partita-chunk.status-active {
+    .partita-guide-v,
+    .partita-guide-h {
+      background-color: var(--partita-active-color);
+      box-shadow: 0 0 12px var(--partita-active-color);
+      transform: scale(1);
+      opacity: 1;
+    }
+  }
+
+  .partita-chunk.status-passed {
+    .partita-guide-v,
+    .partita-guide-h {
+      background-color: rgba(255, 255, 255, 0.22);
+      box-shadow: none;
+      transform: scale(1);
+      opacity: 0.6;
+    }
+  }
+
+  // 词单元（Word）
+  .partita-word-wrap {
+    position: relative;
+    display: inline-block;
+    font-size: var(--partita-font-size);
+    font-weight: 700;
+    line-height: 1.35;
+    margin-right: 0.65em;
+    cursor: pointer;
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    &:last-child {
+      margin-right: 0;
+    }
+
+    // 文字发光层（底层）
+    .partita-glow {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      user-select: none;
+      color: transparent;
+      transition:
+        text-shadow 0.2s ease,
+        opacity 0.3s ease;
+      white-space: nowrap;
+    }
+
+    // 文字主体层（上层）
+    .partita-body {
+      position: relative;
+      z-index: 2;
+      display: block;
+      color: var(--partita-base-color);
+      transition:
+        color 0.25s linear,
+        filter 0.25s ease;
+      white-space: nowrap;
+    }
+
+    &.word-waiting {
+      .partita-body {
+        color: var(--partita-base-color);
+        opacity: 0.45;
+        filter: blur(1px);
+      }
+      .partita-glow {
+        opacity: 0;
+        text-shadow: none;
+      }
+    }
+
+    &.word-active {
+      transform: scale(1.08);
+      .partita-body {
+        color: var(--partita-active-color);
+        opacity: 1;
+        filter: none;
+      }
+      .partita-glow {
+        opacity: 1;
+        text-shadow:
+          0 0 20px var(--partita-active-color),
+          0 0 40px var(--partita-active-color);
+      }
+    }
+
+    &.word-passed {
+      transform: scale(1);
+      .partita-body {
+        color: var(--partita-base-color);
+        opacity: 0.72;
+        filter: none;
+      }
+      .partita-glow {
+        opacity: 0;
+        text-shadow: none;
+      }
+    }
+
+    // 字符级细粒度扫光
+    .grapheme-char {
+      display: inline-block;
+      transition: text-shadow 0.15s ease-out;
+
+      &.char-active {
+        text-shadow:
+          0 0 24px var(--partita-active-color),
+          0 0 44px var(--partita-active-color);
+      }
+    }
+
+    // 副歌扩散波纹（Ripple）
+    .partita-ripple {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 120%;
+      aspect-ratio: 1;
+      transform: translate(-50%, -50%) scale(0.2);
+      border-radius: 50%;
+      border: 1.5px solid var(--partita-active-color);
+      pointer-events: none;
+      animation: partitaRipple 0.6s ease-out forwards;
+      filter: blur(1px);
+      z-index: 1;
+    }
+  }
+
+  // 间奏预热状态
+  .preheat-wrapper {
+    .preheat-line {
+      display: flex;
+      align-items: center;
+      opacity: 0.65;
+    }
+
+    .preheat-text {
+      font-size: calc(var(--partita-font-size) * 0.85);
+      color: rgba(255, 255, 255, 0.85);
+      font-weight: 600;
+    }
+  }
+
+  // 空状态
+  .partita-empty {
+    font-size: 20px;
+    color: rgba(255, 255, 255, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  // =================== 2. 独立底部图层 (靠近底部，对应 Folia Subtitle Overlay) ===================
+  .partita-bottom-overlay {
+    position: absolute;
+    bottom: 28px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+    pointer-events: auto;
+    cursor: pointer;
+
+    .bottom-glow-bg {
+      position: absolute;
+      width: 120%;
+      max-width: 600px;
+      height: 48px;
+      background: radial-gradient(
+        ellipse at center,
+        rgba(0, 0, 0, 0.45) 0%,
+        rgba(0, 0, 0, 0.15) 60%,
+        transparent 100%
+      );
+      filter: blur(12px);
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    .bottom-content {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      max-width: 85%;
+      text-align: center;
+      transition:
+        transform 0.25s ease,
+        opacity 0.25s ease;
+
+      &:hover {
+        transform: translateY(-2px);
+      }
+    }
+
+    // 翻译字幕（优雅居于底部）
+    .bottom-translation {
+      font-size: var(--partita-tran-size, 18px);
+      color: rgba(255, 255, 255, 0.88);
+      line-height: 1.4;
+      font-weight: 500;
+      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+    }
+
+    // 下一句预告（NEXT）
+    .bottom-upcoming {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      opacity: 0.65;
+      filter: blur(0.4px);
+      transition:
+        opacity 0.3s ease,
+        filter 0.3s ease;
+
+      &:hover {
+        opacity: 0.95;
+        filter: none;
+      }
+
+      .upcoming-badge {
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        padding: 2px 7px;
+        border-radius: 4px;
+        background-color: rgba(255, 255, 255, 0.18);
+        color: rgba(255, 255, 255, 0.85);
+        line-height: 1.2;
+      }
+
+      .upcoming-text {
+        font-size: calc(var(--partita-font-size) * 0.52);
+        color: rgba(255, 255, 255, 0.8);
+        font-weight: 600;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+      }
+    }
+  }
+}
+
+// 底部图层淡入淡出动效
+.partita-bottom-fade-enter-active,
+.partita-bottom-fade-leave-active {
+  transition:
+    opacity 0.3s ease,
+    transform 0.3s ease;
+}
+
+.partita-bottom-fade-enter-from,
+.partita-bottom-fade-leave-to {
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+// 主歌词换行动效
+.partita-line-enter-active,
+.partita-line-leave-active {
+  transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+.partita-line-enter-from {
+  opacity: 0;
+  transform: scale(0.92) translateY(20px);
+  filter: blur(8px);
+}
+
+.partita-line-leave-to {
+  opacity: 0;
+  transform: scale(1.04) translateY(-20px);
+  filter: blur(12px);
+}
+
+// 空间浮动呼吸动画
+@keyframes partitaFloat {
+  0%,
+  100% {
+    transform: translateY(0) scale(1);
+  }
+  50% {
+    transform: translateY(-8px) scale(1.008);
+  }
+}
+
+// 副歌波纹扩散动画
+@keyframes partitaRipple {
+  0% {
+    transform: translate(-50%, -50%) scale(0.2);
+    opacity: 0.9;
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.8);
+    opacity: 0;
+  }
+}

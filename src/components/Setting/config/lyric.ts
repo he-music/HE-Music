@@ -106,6 +106,7 @@ export const useLyricSettings = (): SettingConfig => {
               { label: t("setting.lyrics.renderer_default"), value: "default" },
               { label: "AMLL", value: "amll" },
               { label: "Monet", value: "monet" },
+              { label: t("setting.lyrics.renderer_partita"), value: "partita" },
             ],
             value: computed({
               get: () => settingStore.lyricRenderer,
@@ -210,6 +211,7 @@ export const useLyricSettings = (): SettingConfig => {
             label: t("setting.lyrics.lyrics_scroll_position"),
             type: "slider",
             description: t("setting.lyrics.lyrics_scroll_position_tip"),
+            show: () => settingStore.lyricRenderer !== "partita",
             min: 0.1,
             max: 0.9,
             step: 0.05,
@@ -240,29 +242,6 @@ export const useLyricSettings = (): SettingConfig => {
             }),
           },
           {
-            key: "showYrcAnimation",
-            label: t("setting.lyrics.monet_word_animation"),
-            type: "switch",
-            show: () => settingStore.lyricRenderer === "monet" && settingStore.showYrc,
-            value: computed({
-              get: () => settingStore.showYrcAnimation,
-              set: (v) => (settingStore.showYrcAnimation = v),
-            }),
-          },
-          {
-            key: "showYrcLongEffect",
-            label: t("setting.lyrics.monet_long_word_effect"),
-            type: "switch",
-            show: () =>
-              settingStore.lyricRenderer === "monet" &&
-              settingStore.showYrc &&
-              settingStore.showYrcAnimation,
-            value: computed({
-              get: () => settingStore.showYrcLongEffect,
-              set: (v) => (settingStore.showYrcLongEffect = v),
-            }),
-          },
-          {
             key: "showTran",
             label: t("setting.lyrics.show_lyrics_trans"),
             type: "switch",
@@ -280,20 +259,6 @@ export const useLyricSettings = (): SettingConfig => {
               set: (v) => (settingStore.showRoma = v),
             }),
           },
-          // {
-          //   key: "swapTranRoma",
-          //   label: "调换翻译与音译位置",
-          //   type: "switch",
-          //   description: "开启后音译显示在翻译上方",
-          //   value: computed({
-          //     get: () => settingStore.swapTranRoma,
-          //     set: (v) => (settingStore.swapTranRoma = v),
-          //   }),
-          //   forceIf: {
-          //     condition: () => !settingStore.showTran || !settingStore.showRoma,
-          //     forcedValue: false,
-          //   },
-          // },
           {
             key: "lyricsBlur",
             label: t("setting.lyrics.lyrics_blur"),
@@ -307,15 +272,36 @@ export const useLyricSettings = (): SettingConfig => {
         ],
       },
       {
-        title: t("setting.lyrics.content"),
+        title: t("setting.lyrics.renderer_default_settings"),
+        show: () => settingStore.lyricRenderer === "default",
         items: [
           {
-            key: "configExcludeLyric",
-            label: t("setting.lyrics.lyrics_exclude"),
-            type: "button",
-            description: t("setting.lyrics.lyrics_exclude_tip"),
-            buttonLabel: t("common.configuration"),
-            action: openExcludeLyric,
+            key: "lyricsScrollOffset",
+            label: t("setting.lyrics.lyrics_scroll_position"),
+            type: "slider",
+            description: t("setting.lyrics.lyrics_scroll_position_tip"),
+            min: 0.1,
+            max: 0.9,
+            step: 0.05,
+            marks: {
+              0.1: t("setting.lyrics.lyrics_scroll_position_up"),
+              0.9: t("setting.lyrics.lyrics_scroll_position_down"),
+            },
+            formatTooltip: (v) => `${(v * 100).toFixed(0)}%`,
+            value: computed({
+              get: () => settingStore.lyricsScrollOffset,
+              set: (v) => (settingStore.lyricsScrollOffset = v),
+            }),
+          },
+          {
+            key: "lrcMousePause",
+            label: t("setting.lyrics.lrc_mouse_pause"),
+            type: "switch",
+            description: t("setting.lyrics.lrc_mouse_pause_tip"),
+            value: computed({
+              get: () => settingStore.lrcMousePause,
+              set: (v) => (settingStore.lrcMousePause = v),
+            }),
           },
         ],
       },
@@ -324,6 +310,24 @@ export const useLyricSettings = (): SettingConfig => {
         tags: [{ text: "Beta", type: "warning" }],
         show: () => settingStore.lyricRenderer === "amll",
         items: [
+          {
+            key: "lyricsScrollOffset",
+            label: t("setting.lyrics.lyrics_scroll_position"),
+            type: "slider",
+            description: t("setting.lyrics.lyrics_scroll_position_tip"),
+            min: 0.1,
+            max: 0.9,
+            step: 0.05,
+            marks: {
+              0.1: t("setting.lyrics.lyrics_scroll_position_up"),
+              0.9: t("setting.lyrics.lyrics_scroll_position_down"),
+            },
+            formatTooltip: (v) => `${(v * 100).toFixed(0)}%`,
+            value: computed({
+              get: () => settingStore.lyricsScrollOffset,
+              set: (v) => (settingStore.lyricsScrollOffset = v),
+            }),
+          },
           {
             key: "useAMSpring",
             label: t("setting.lyrics.am_lyrics_spring"),
@@ -355,6 +359,123 @@ export const useLyricSettings = (): SettingConfig => {
               get: () => settingStore.AMWordFadeWidth,
               set: (v) => (settingStore.AMWordFadeWidth = v),
             }),
+          },
+        ],
+      },
+      {
+        title: t("setting.lyrics.monet_settings"),
+        show: () => settingStore.lyricRenderer === "monet",
+        items: [
+          {
+            key: "monetScrollOffset",
+            label: t("setting.lyrics.lyrics_scroll_position"),
+            type: "slider",
+            description: t("setting.lyrics.lyrics_scroll_position_tip"),
+            min: 0.1,
+            max: 0.9,
+            step: 0.05,
+            marks: {
+              0.1: t("setting.lyrics.lyrics_scroll_position_up"),
+              0.9: t("setting.lyrics.lyrics_scroll_position_down"),
+            },
+            formatTooltip: (v) => `${(v * 100).toFixed(0)}%`,
+            value: computed({
+              get: () => settingStore.monetScrollOffset,
+              set: (v) => (settingStore.monetScrollOffset = v),
+            }),
+          },
+          {
+            key: "showYrcAnimation",
+            label: t("setting.lyrics.monet_word_animation"),
+            type: "switch",
+            show: () => settingStore.showYrc,
+            value: computed({
+              get: () => settingStore.showYrcAnimation,
+              set: (v) => (settingStore.showYrcAnimation = v),
+            }),
+          },
+          {
+            key: "showYrcLongEffect",
+            label: t("setting.lyrics.monet_long_word_effect"),
+            type: "switch",
+            show: () => settingStore.showYrc && settingStore.showYrcAnimation,
+            value: computed({
+              get: () => settingStore.showYrcLongEffect,
+              set: (v) => (settingStore.showYrcLongEffect = v),
+            }),
+          },
+          {
+            key: "lrcMousePause",
+            label: t("setting.lyrics.lrc_mouse_pause"),
+            type: "switch",
+            description: t("setting.lyrics.lrc_mouse_pause_tip"),
+            value: computed({
+              get: () => settingStore.lrcMousePause,
+              set: (v) => (settingStore.lrcMousePause = v),
+            }),
+          },
+        ],
+      },
+      {
+        title: t("setting.lyrics.partita_settings"),
+        show: () => settingStore.lyricRenderer === "partita",
+        items: [
+          {
+            key: "showPartitaGuideLines",
+            label: t("setting.lyrics.partita_guide_lines"),
+            type: "switch",
+            description: t("setting.lyrics.partita_guide_lines_tip"),
+            value: computed({
+              get: () => settingStore.showPartitaGuideLines,
+              set: (v) => (settingStore.showPartitaGuideLines = v),
+            }),
+          },
+          {
+            key: "showPartitaUpcoming",
+            label: t("setting.lyrics.partita_upcoming"),
+            type: "switch",
+            description: t("setting.lyrics.partita_upcoming_tip"),
+            value: computed({
+              get: () => settingStore.showPartitaUpcoming,
+              set: (v) => (settingStore.showPartitaUpcoming = v),
+            }),
+          },
+          {
+            key: "partitaStagger",
+            label: t("setting.lyrics.partita_stagger"),
+            type: "slider",
+            description: t("setting.lyrics.partita_stagger_tip"),
+            min: 12,
+            max: 64,
+            step: 4,
+            formatTooltip: (v) => `${v}px`,
+            value: computed({
+              get: () => settingStore.partitaStagger,
+              set: (v) => (settingStore.partitaStagger = v),
+            }),
+          },
+          {
+            key: "showYrcAnimation",
+            label: t("setting.lyrics.monet_word_animation"),
+            type: "switch",
+            show: () => settingStore.showYrc,
+            value: computed({
+              get: () => settingStore.showYrcAnimation,
+              set: (v) => (settingStore.showYrcAnimation = v),
+            }),
+          },
+        ],
+      },
+      {
+        title: t("setting.lyrics.content"),
+        items: [
+          {
+            key: "configExcludeLyric",
+            label: t("setting.lyrics.lyrics_exclude"),
+            type: "button",
+            description: t("setting.lyrics.lyrics_exclude_tip"),
+            buttonLabel: t("common.configuration"),
+            action: openExcludeLyric,
           },
         ],
       },

@@ -15,6 +15,9 @@ describe("lyric renderer persistence", () => {
     expect(deserializeLyricSettings('{"lyricRenderer":"monet","useAMLyrics":true}')).toEqual({
       lyricRenderer: "monet",
     });
+    expect(deserializeLyricSettings('{"lyricRenderer":"partita","useAMLyrics":true}')).toEqual({
+      lyricRenderer: "partita",
+    });
     expect(deserializeLyricSettings('{"lyricRenderer":"default","useAMLyrics":true}')).toEqual({
       lyricRenderer: "default",
     });
