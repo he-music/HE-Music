@@ -54,8 +54,8 @@ const lines = computed(() => {
 });
 
 const color = computed(() => {
-  const main = statusStore.songCoverTheme?.main;
-  return main ? `${main.r}, ${main.g}, ${main.b}` : "255, 255, 255";
+  const main = statusStore.playerMainColor;
+  return main ? `${main.r}, ${main.g}, ${main.b}` : "239, 239, 239";
 });
 
 const fontStyle = computed(() => ({

@@ -42,6 +42,10 @@ interface SettingState {
   showPartitaGuideLines: boolean;
   showPartitaUpcoming: boolean;
   partitaStagger: number;
+  classicWordRotation: boolean;
+  classicBreathingFloat: number;
+  classicWordSpacing: number;
+  classicShowUpcoming: boolean;
   downloadPath: string;
   /** 音乐命名格式 */
   fileNameFormat: "title" | "artist-title" | "title-artist";
@@ -179,6 +183,10 @@ export const useSettingStore = defineStore("setting", {
     showPartitaGuideLines: true, // 云阶是否显示标尺引导线
     showPartitaUpcoming: true, // 云阶是否显示下一句预告
     partitaStagger: 32, // 云阶阶梯错落幅度 (px)
+    classicWordRotation: true, // 流光是否启用逐字微旋转
+    classicBreathingFloat: 1.0, // 流光整行呼吸浮动强度倍率
+    classicWordSpacing: 0.7, // 流光单词间距排版倍率
+    classicShowUpcoming: true, // 流光是否显示下一句预告
     lyricsBlur: false, // 歌词模糊
     lrcMousePause: false, // 鼠标悬停暂停
     enableOnlineLyricsExclude: true, // 在线歌词排除

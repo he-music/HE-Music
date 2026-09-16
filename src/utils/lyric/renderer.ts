@@ -1,8 +1,14 @@
 // src/utils/lyric/renderer.ts — 歌词效果选择及旧设置迁移。
-export type LyricRenderer = "default" | "amll" | "monet" | "partita";
+export type LyricRenderer = "default" | "amll" | "monet" | "partita" | "classic";
 
 export function resolveLyricRenderer(value: unknown, legacyAMLL?: unknown): LyricRenderer {
-  if (value === "default" || value === "amll" || value === "monet" || value === "partita")
+  if (
+    value === "default" ||
+    value === "amll" ||
+    value === "monet" ||
+    value === "partita" ||
+    value === "classic"
+  )
     return value;
   return legacyAMLL === true ? "amll" : "default";
 }

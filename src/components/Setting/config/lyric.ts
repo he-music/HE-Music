@@ -105,8 +105,9 @@ export const useLyricSettings = (): SettingConfig => {
             options: [
               { label: t("setting.lyrics.renderer_default"), value: "default" },
               { label: "AMLL", value: "amll" },
-              { label: "Monet", value: "monet" },
+              { label: t("setting.lyrics.renderer_monet"), value: "monet" },
               { label: t("setting.lyrics.renderer_partita"), value: "partita" },
+              { label: t("setting.lyrics.renderer_classic"), value: "classic" },
             ],
             value: computed({
               get: () => settingStore.lyricRenderer,
@@ -452,6 +453,75 @@ export const useLyricSettings = (): SettingConfig => {
             value: computed({
               get: () => settingStore.partitaStagger,
               set: (v) => (settingStore.partitaStagger = v),
+            }),
+          },
+          {
+            key: "showYrcAnimation",
+            label: t("setting.lyrics.monet_word_animation"),
+            type: "switch",
+            show: () => settingStore.showYrc,
+            value: computed({
+              get: () => settingStore.showYrcAnimation,
+              set: (v) => (settingStore.showYrcAnimation = v),
+            }),
+          },
+        ],
+      },
+      {
+        title: t("setting.lyrics.classic_settings"),
+        show: () => settingStore.lyricRenderer === "classic",
+        items: [
+          {
+            key: "classicWordRotation",
+            label: t("setting.lyrics.classic_word_rotation"),
+            type: "switch",
+            description: t("setting.lyrics.classic_word_rotation_tip"),
+            value: computed({
+              get: () => settingStore.classicWordRotation,
+              set: (v) => (settingStore.classicWordRotation = v),
+            }),
+          },
+          {
+            key: "classicBreathingFloat",
+            label: t("setting.lyrics.classic_breathing_float"),
+            type: "slider",
+            description: t("setting.lyrics.classic_breathing_float_tip"),
+            min: 0,
+            max: 2,
+            step: 0.1,
+            marks: {
+              0: t("common.close"),
+              1: "1x",
+              2: "2x",
+            },
+            formatTooltip: (v) => `${(v * 100).toFixed(0)}%`,
+            value: computed({
+              get: () => settingStore.classicBreathingFloat,
+              set: (v) => (settingStore.classicBreathingFloat = v),
+            }),
+          },
+          {
+            key: "classicWordSpacing",
+            label: t("setting.lyrics.classic_word_spacing"),
+            type: "slider",
+            description: t("setting.lyrics.classic_word_spacing_tip"),
+            min: 0.3,
+            max: 1.5,
+            step: 0.05,
+            formatTooltip: (v) => `${(v * 100).toFixed(0)}%`,
+            value: computed({
+              get: () => settingStore.classicWordSpacing,
+              set: (v) => (settingStore.classicWordSpacing = v),
+            }),
+          },
+          {
+            key: "classicShowUpcoming",
+            label: t("setting.lyrics.classic_upcoming"),
+            type: "switch",
+            description: t("setting.lyrics.classic_upcoming_tip"),
+            value: computed({
+              get: () => settingStore.classicShowUpcoming,
+              set: (v) => (settingStore.classicShowUpcoming = v),
             }),
           },
           {

@@ -65,23 +65,51 @@
     padding: 6px 18px;
     margin-bottom: 20px;
     transition:
-      transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-      opacity 0.3s ease;
+      transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.35s ease;
     will-change: transform, opacity;
 
     &.status-waiting {
-      opacity: 0.3;
-      transform: scale(0.9) translateY(10px);
+      opacity: 0 !important;
+      pointer-events: none;
+      visibility: hidden;
+
+      .partita-guide-v {
+        transform: scaleY(0);
+        opacity: 0;
+      }
+      .partita-guide-h {
+        transform: scaleX(0);
+        opacity: 0;
+      }
     }
 
     &.status-active {
       opacity: 1;
-      transform: scale(1) translateY(0);
+      pointer-events: auto;
+      visibility: visible;
+
+      .partita-guide-v,
+      .partita-guide-h {
+        background-color: var(--partita-active-color);
+        box-shadow: 0 0 12px var(--partita-active-color);
+        transform: scale(1);
+        opacity: 1;
+      }
     }
 
     &.status-passed {
-      opacity: 0.72;
-      transform: scale(0.98) translateY(0);
+      opacity: 0.82;
+      pointer-events: auto;
+      visibility: visible;
+
+      .partita-guide-v,
+      .partita-guide-h {
+        background-color: rgba(255, 255, 255, 0.22);
+        box-shadow: none;
+        transform: scale(1);
+        opacity: 0.5;
+      }
     }
   }
 
@@ -92,7 +120,8 @@
     pointer-events: none;
     background-color: var(--partita-guide-color);
     transition:
-      transform 0.4s ease-out,
+      transform 0.4s cubic-bezier(0.25, 1, 0.5, 1),
+      opacity 0.35s ease,
       background-color 0.3s ease,
       box-shadow 0.3s ease;
     z-index: 1;
@@ -134,37 +163,6 @@
     }
   }
 
-  .partita-chunk.status-waiting {
-    .partita-guide-v {
-      transform: scaleY(0);
-      opacity: 0;
-    }
-    .partita-guide-h {
-      transform: scaleX(0);
-      opacity: 0;
-    }
-  }
-
-  .partita-chunk.status-active {
-    .partita-guide-v,
-    .partita-guide-h {
-      background-color: var(--partita-active-color);
-      box-shadow: 0 0 12px var(--partita-active-color);
-      transform: scale(1);
-      opacity: 1;
-    }
-  }
-
-  .partita-chunk.status-passed {
-    .partita-guide-v,
-    .partita-guide-h {
-      background-color: rgba(255, 255, 255, 0.22);
-      box-shadow: none;
-      transform: scale(1);
-      opacity: 0.6;
-    }
-  }
-
   // 词单元（Word）
   .partita-word-wrap {
     position: relative;
@@ -174,7 +172,11 @@
     line-height: 1.35;
     margin-right: 0.65em;
     cursor: pointer;
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transform-origin: center center;
+    transition:
+      transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      opacity 0.28s ease,
+      filter 0.28s ease;
 
     &:last-child {
       margin-right: 0;
@@ -206,10 +208,15 @@
     }
 
     &.word-waiting {
+      opacity: 0 !important;
+      visibility: hidden;
+      pointer-events: none;
+      filter: blur(4px);
+      transform: scale(0.5);
+
       .partita-body {
         color: var(--partita-base-color);
-        opacity: 0.45;
-        filter: blur(1px);
+        opacity: 0;
       }
       .partita-glow {
         opacity: 0;
@@ -218,7 +225,12 @@
     }
 
     &.word-active {
-      transform: scale(1.08);
+      opacity: 1;
+      filter: none;
+      z-index: 5;
+      // 显著弹簧跳跃放大 1.4x！
+      transform: scale(1.4);
+
       .partita-body {
         color: var(--partita-active-color);
         opacity: 1;
@@ -233,7 +245,12 @@
     }
 
     &.word-passed {
+      opacity: 0.82;
+      filter: none;
+      z-index: 1;
+      // 唱毕回缩至 1.0x 并维持清晰
       transform: scale(1);
+
       .partita-body {
         color: var(--partita-base-color);
         opacity: 0.72;
@@ -290,6 +307,40 @@
   }
 
   // 空状态
+  // 关闭逐字动画模式：整行平稳高亮，不逐字弹跳，不扫光
+  &.no-word-animation {
+    .partita-word-wrap {
+      transition:
+        opacity 0.25s ease,
+        color 0.25s ease !important;
+      &.word-waiting {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none;
+      }
+      &.word-active {
+        transform: scale(1) !important;
+        opacity: 1 !important;
+        visibility: visible !important;
+        .partita-body {
+          color: var(--partita-active-color);
+          opacity: 1;
+        }
+        .partita-glow {
+          opacity: 0.5;
+          text-shadow: 0 0 16px var(--partita-active-color);
+        }
+      }
+      &.word-passed {
+        transform: scale(1) !important;
+        opacity: 0.82 !important;
+      }
+    }
+    .partita-ripple {
+      display: none !important;
+    }
+  }
+
   .partita-empty {
     font-size: 20px;
     color: rgba(255, 255, 255, 0.45);

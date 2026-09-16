@@ -1,6 +1,7 @@
 <template>
   <n-card
     id="lyrics-show"
+    ref="previewRoot"
     :content-style="{
       'flex-direction': 'column',
       'align-items': settingStore.lyricsPosition,
@@ -19,13 +20,18 @@
     }"
     class="set-item"
   >
-    <div v-if="settingStore.lyricRenderer === 'monet'" ref="previewRoot" class="monet-preview">
+    <div
+      v-if="settingStore.lyricRenderer === 'monet'"
+      class="monet-preview"
+      :style="{ '--main-cover-color': previewMainColor }"
+    >
       <MonetLyricRail
         :lines="previewLines"
         :clock="previewClock"
         :playing="previewVisible && documentVisibility === 'visible'"
         :word-animation="settingStore.showYrcAnimation"
         :long-word-effect="settingStore.showYrcLongEffect"
+        :color="previewMainColor"
         :text-align="
           settingStore.lyricsPosition === 'center'
             ? 'center'
@@ -45,7 +51,11 @@
         @seek="seekPreview"
       />
     </div>
-    <div v-if="settingStore.lyricRenderer === 'partita'" ref="previewRoot" class="monet-preview">
+    <div
+      v-if="settingStore.lyricRenderer === 'partita'"
+      class="monet-preview"
+      :style="{ '--main-cover-color': previewMainColor }"
+    >
       <PartitaLyricRail
         :lines="partitaPreviewLines"
         :clock="previewClock"
@@ -60,10 +70,41 @@
         :show-upcoming="settingStore.showPartitaUpcoming"
         :stagger-min="settingStore.partitaStagger * 0.6"
         :stagger-max="settingStore.partitaStagger * 1.4"
+        :color="previewMainColor"
         @seek="seekPreview"
       />
     </div>
-    <div v-if="settingStore.lyricRenderer === 'amll'" ref="previewRoot" class="monet-preview">
+    <div
+      v-if="settingStore.lyricRenderer === 'classic'"
+      class="monet-preview"
+      :style="{ '--main-cover-color': previewMainColor }"
+    >
+      <ClassicLyricRail
+        :lines="classicPreviewLines"
+        :clock="previewClock"
+        :playing="previewVisible && documentVisibility === 'visible'"
+        :word-animation="settingStore.showYrcAnimation"
+        :font-size="settingStore.lyricFontSize"
+        :translation-size="settingStore.lyricTranFontSize"
+        :romanization-size="settingStore.lyricRomaFontSize"
+        :show-translation="settingStore.showTran"
+        :show-romanization="settingStore.showRoma"
+        :show-upcoming="settingStore.classicShowUpcoming"
+        :enable-word-rotation="settingStore.classicWordRotation"
+        :breathing-float-multiplier="settingStore.classicBreathingFloat"
+        :word-spacing="settingStore.classicWordSpacing"
+        :main-color="previewMainColor"
+        :accent-color="previewAccentColor"
+        :empty-text="t('setting.lyrics.classic_empty')"
+        :seek-label="t('setting.lyrics.classic_seek')"
+        @seek="seekPreview"
+      />
+    </div>
+    <div
+      v-if="settingStore.lyricRenderer === 'amll'"
+      class="monet-preview"
+      :style="{ '--main-cover-color': previewMainColor }"
+    >
       <LyricPlayer
         class="amll-preview"
         :lyric-lines="amllPreviewLines"
@@ -79,12 +120,17 @@
         :word-fade-width="settingStore.AMWordFadeWidth"
         :style="{
           '--amll-lp-font-size': `${settingStore.lyricFontSize}px`,
+          '--amll-lp-color': `rgb(${previewMainColor})`,
           ...lyricFontStyle(settingStore.lyricFont),
         }"
         @line-click="seekPreview($event.line.getLine().startTime)"
       />
     </div>
-    <div v-if="settingStore.lyricRenderer === 'default'" ref="previewRoot" class="monet-preview">
+    <div
+      v-if="settingStore.lyricRenderer === 'default'"
+      class="monet-preview"
+      :style="{ '--main-cover-color': previewMainColor }"
+    >
       <DefaultLyric
         :current-time="previewTime"
         :preview="defaultPreview"
@@ -95,11 +141,12 @@
 </template>
 
 <script setup lang="ts">
-import { useSettingStore } from "@/stores";
+import { useSettingStore, useStatusStore } from "@/stores";
 import { useI18n } from "vue-i18n";
 import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
 import { adaptMonetLines } from "@/components/Monet/model";
 import { adaptPartitaLines } from "@/components/Partita/model";
+import { adaptClassicLines } from "@/components/Classic/model";
 
 const DefaultLyric = defineAsyncComponent(
   () => import("@/components/Player/PlayerLyric/DefaultLyric.vue"),
@@ -109,6 +156,26 @@ const MonetLyricRail = defineAsyncComponent(() => import("@/components/Monet/Mon
 const PartitaLyricRail = defineAsyncComponent(
   () => import("@/components/Partita/PartitaLyricRail.vue"),
 );
+const ClassicLyricRail = defineAsyncComponent(
+  () => import("@/components/Classic/ClassicLyricRail.vue"),
+);
+const statusStore = useStatusStore();
+const settingStore = useSettingStore();
+const { t } = useI18n();
+
+const previewMainColor = computed(() => {
+  const main = statusStore.playerMainColor;
+  return main ? `${main.r}, ${main.g}, ${main.b}` : "239, 239, 239";
+});
+
+const previewAccentColor = computed(() => {
+  if (settingStore.playerMainColorType === "follow-cover") {
+    const primary = statusStore.songCoverTheme?.light?.primary;
+    if (primary) return `${primary.r}, ${primary.g}, ${primary.b}`;
+  }
+  const main = statusStore.playerMainColor;
+  return main ? `${main.r}, ${main.g}, ${main.b}` : "255, 255, 255";
+});
 const previewTime = shallowRef(0);
 const previewClock = { time: previewTime };
 const previewRoot = ref<HTMLElement | null>(null);
@@ -134,14 +201,13 @@ const previewSource = [
 }));
 const previewLines = computed(() => adaptMonetLines(previewSource, settingStore.showYrc));
 const partitaPreviewLines = computed(() => adaptPartitaLines(previewSource, settingStore.showYrc));
+const classicPreviewLines = computed(() => adaptClassicLines(previewSource, settingStore.showYrc));
 let previewEpoch = 0;
 function seekPreview(time: number) {
   previewTime.value = time;
   previewEpoch = performance.now() - time;
 }
 
-const settingStore = useSettingStore();
-const { t } = useI18n();
 const amllPreviewLines = computed(() =>
   previewSource.map((line) => ({
     ...line,

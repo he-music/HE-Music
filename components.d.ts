@@ -18,6 +18,8 @@ declare module 'vue' {
     BatchList: typeof import('./src/components/Modal/BatchList.vue')['default']
     Captcha: typeof import('./src/components/Modal/Captcha.vue')['default']
     ChangeRate: typeof import('./src/components/Modal/ChangeRate.vue')['default']
+    ClassicLyric: typeof import('./src/components/Player/PlayerLyric/ClassicLyric.vue')['default']
+    ClassicLyricRail: typeof import('./src/components/Classic/ClassicLyricRail.vue')['default']
     CommentList: typeof import('./src/components/List/CommentList.vue')['default']
     CopyLyrics: typeof import('./src/components/Modal/CopyLyrics.vue')['default']
     CountDown: typeof import('./src/components/Player/CountDown.vue')['default']

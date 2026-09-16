@@ -1,7 +1,6 @@
 // Adapted from Folia (chthollyphile), AGPL-3.0: VisualizerPartita / graphemeTiming.
 // https://github.com/chthollyphile/folia-major
 
-import type { LyricLine } from "@applemusic-like-lyrics/lyric";
 import type { PartitaWordToken } from "./cjkSemanticLayout";
 
 export interface PartitaGraphemeTiming {
@@ -65,7 +64,7 @@ const finite = (value: number, fallback: number) => (Number.isFinite(value) ? va
 
 /** 将 AMLL 格式歌词转换为 Partita 行数据模型（时间统一为毫秒） */
 export function adaptPartitaLines(
-  input: LyricLine[],
+  input: any[],
   wordTimed: boolean,
   duration = 0,
 ): PartitaLine[] {
@@ -87,20 +86,28 @@ export function adaptPartitaLines(
         : Math.max(start + 1, nextStart ?? (duration > start ? duration : start + 5000));
 
     const timed = wordTimed && line.words.some((w) => w.endTime > w.startTime);
+    const fullText = line.words.map((w) => w.word || "").join("");
 
-    const words: PartitaWord[] = line.words.map((w) => {
-      const text = w.word || "";
-      const wordStart = finite(w.startTime, start);
-      const wordFinish = Math.max(wordStart, finite(w.endTime, wordStart));
-      return {
-        text,
-        startTime: wordStart,
-        endTime: wordFinish,
-        graphemes: buildWordGraphemeTimings(text, wordStart, wordFinish),
-      };
-    });
-
-    const fullText = words.map((w) => w.text).join("");
+    const words: PartitaWord[] = !wordTimed
+      ? [
+          {
+            text: fullText,
+            startTime: start,
+            endTime: end,
+            graphemes: buildWordGraphemeTimings(fullText, start, end),
+          },
+        ]
+      : line.words.map((w) => {
+          const text = w.word || "";
+          const wordStart = finite(w.startTime, start);
+          const wordFinish = Math.max(wordStart, finite(w.endTime, wordStart));
+          return {
+            text,
+            startTime: wordStart,
+            endTime: wordFinish,
+            graphemes: buildWordGraphemeTimings(text, wordStart, wordFinish),
+          };
+        });
 
     return {
       key: `${index}:${start}`,

@@ -18,6 +18,9 @@ describe("lyric renderer persistence", () => {
     expect(deserializeLyricSettings('{"lyricRenderer":"partita","useAMLyrics":true}')).toEqual({
       lyricRenderer: "partita",
     });
+    expect(deserializeLyricSettings('{"lyricRenderer":"classic","useAMLyrics":true}')).toEqual({
+      lyricRenderer: "classic",
+    });
     expect(deserializeLyricSettings('{"lyricRenderer":"default","useAMLyrics":true}')).toEqual({
       lyricRenderer: "default",
     });

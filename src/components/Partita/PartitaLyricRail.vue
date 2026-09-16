@@ -1,7 +1,7 @@
 <template>
   <div
     ref="railRef"
-    :class="['partita-rail', { pure }]"
+    :class="['partita-rail', { pure, 'no-word-animation': !wordAnimation }]"
     :style="{
       '--partita-active-color': resolvedActiveColor,
       '--partita-font-size': `${resolvedFontSize}px`,
@@ -28,13 +28,7 @@
               `guide-${chunk.guidePosition}`,
               `status-${getChunkStatus(chunk)}`,
             ]"
-            :style="{
-              transform: `translateX(${chunk.config.x}px) rotate(${
-                getChunkStatus(chunk) === 'passed'
-                  ? chunk.config.rotate + chunk.config.passedRotate
-                  : chunk.config.rotate
-              }deg)`,
-            }"
+            :style="getChunkStyle(chunk)"
           >
             <!-- 阶梯标尺引导线 -->
             <template v-if="showGuideLines">
@@ -46,7 +40,7 @@
             <span
               v-for="(word, wordIdx) in chunk.displayWords"
               :key="`${word.text}-${wordIdx}`"
-              :class="['partita-word-wrap', `word-${getWordStatus(word)}`]"
+              :class="['partita-word-wrap', `word-${getWordStatus(word, chunk)}`]"
               @click.stop="onWordClick(word.startTime)"
             >
               <!-- 底层光晕发光层 -->
@@ -122,7 +116,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, type Ref, shallowRef } from "vue";
+import { computed, type CSSProperties, type Ref, shallowRef } from "vue";
 import { useElementSize } from "@vueuse/core";
 import type { PartitaLine, WordPlayStatus } from "./model";
 import { resolvePartitaFrame } from "./model";
@@ -260,8 +254,26 @@ function getChunkStatus(chunk: PartitaChunkData): WordPlayStatus {
   return "active";
 }
 
+// 动态计算 Chunk 阶梯登场几何与弹簧位移（移植自 Folia 原版：waiting 状态向外偏置 40px，scale 0.85）
+function getChunkStyle(chunk: PartitaChunkData): CSSProperties {
+  const status = getChunkStatus(chunk);
+  const isLeft = chunk.guidePosition === "left";
+  const offsetX = status === "waiting" ? chunk.config.x + (isLeft ? -40 : 40) : chunk.config.x;
+  const scale = status === "waiting" ? 0.85 : 1;
+  const rotate =
+    status === "passed" ? chunk.config.rotate + chunk.config.passedRotate : chunk.config.rotate;
+
+  return {
+    transform: `translate3d(${offsetX}px, 0, 0) scale(${scale}) rotate(${rotate}deg)`,
+    marginBottom: `${chunk.config.marginBottom}px`,
+  };
+}
+
 // 计算 Word 状态
-function getWordStatus(word: PartitaWordToken): WordPlayStatus {
+function getWordStatus(word: PartitaWordToken, chunk?: PartitaChunkData): WordPlayStatus {
+  if (props.wordAnimation === false && chunk) {
+    return getChunkStatus(chunk);
+  }
   const time = currentTime.value;
   if (time < word.startTime - 120) return "waiting";
   if (time > word.endTime) return "passed";
