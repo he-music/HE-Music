@@ -683,6 +683,8 @@
       "preview_using_amll": "正在使用 Apple Music-like Lyrics，实际显示效果可能与此处的预览有较大差别"
     },
     "lyrics": {
+      "lrc_mouse_pause": "悬停时暂停歌词滚动",
+      "lrc_mouse_pause_tip": "鼠标悬停在歌词区域时暂停自动滚动，移开后恢复跟随播放进度，不影响音乐播放",
       "am_hide_passed_lines": "隐藏已播放歌词",
       "am_lyrics_spring": "歌词弹簧效果",
       "am_lyrics_spring_tip": "是否使用物理弹簧算法实现歌词动画效果，需要高性能设备",
@@ -849,6 +851,8 @@
       "reset_setting_tip": "重置所有设置，恢复软件默认值"
     },
     "play": {
+      "style": "样式",
+      "background": "背景",
       "audio_setting": "音频设置",
       "auto_hide_player_meta": "播放器元素自动隐藏",
       "auto_hide_player_meta_tip": "鼠标静止一段时间或者离开播放器时自动隐藏控制元素",

@@ -683,6 +683,8 @@
       "preview_using_amll": "Currently using Apple Music-like Lyrics, the actual display may differ significantly from the preview shown here."
     },
     "lyrics": {
+      "lrc_mouse_pause": "Pause Lyric Scrolling on Hover",
+      "lrc_mouse_pause_tip": "Pause automatic scrolling while hovering over the lyrics. Move the pointer away to resume following playback. Music continues playing.",
       "am_hide_passed_lines": "Hide Played Lyrics",
       "am_lyrics_spring": "Lyrics Spring Effect",
       "am_lyrics_spring_tip": "Use physics-based spring algorithm for lyrics animation (requires high-performance device)",
@@ -849,6 +851,8 @@
       "reset_setting_tip": "Reset all settings to default values"
     },
     "play": {
+      "style": "Style",
+      "background": "Background",
       "audio_setting": "Audio Settings",
       "auto_hide_player_meta": "Player meta automatically hidden",
       "auto_hide_player_meta_tip": "Mouse control elements automatically hide when inactive or when the cursor leaves the player.",

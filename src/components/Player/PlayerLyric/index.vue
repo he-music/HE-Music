@@ -62,6 +62,29 @@
       <div class="menu-icon" @click="openSetting('lyrics')">
         <SvgIcon name="Settings" />
       </div>
+      <n-popover
+        v-model:show="styleMenuShow"
+        raw
+        :show-arrow="false"
+        trigger="click"
+        placement="left-end"
+        style="border-radius: 8px"
+      >
+        <template #trigger>
+          <button
+            type="button"
+            class="menu-icon style-button"
+            :aria-label="t('setting.play.style')"
+            :title="t('setting.play.style')"
+            aria-haspopup="dialog"
+            :aria-expanded="styleMenuShow"
+            @click.stop
+          >
+            <SvgIcon name="Palette" />
+          </button>
+        </template>
+        <PlayerStylePanel />
+      </n-popover>
     </n-flex>
   </div>
 </template>
@@ -70,6 +93,8 @@
 import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { openSetting, openCopyLyrics } from "@/utils/modal";
 import { usePlayer } from "@/utils/player";
+import { useI18n } from "vue-i18n";
+import PlayerStylePanel from "../PlayerStylePanel.vue";
 
 const MonetLyric = defineAsyncComponent(() => import("./MonetLyric.vue"));
 const PartitaLyric = defineAsyncComponent(() => import("./PartitaLyric.vue"));
@@ -79,6 +104,8 @@ const musicStore = useMusicStore();
 const settingStore = useSettingStore();
 const statusStore = useStatusStore();
 const player = usePlayer();
+const { t } = useI18n();
+const styleMenuShow = ref(false);
 
 /**
  * 当前歌曲 id
@@ -228,6 +255,24 @@ onBeforeUnmount(() => {
     }
     &:hover {
       background-color: rgba(var(--main-cover-color), 0.28);
+    }
+  }
+  .style-button {
+    width: 42px;
+    height: 42px;
+    border: 0;
+    background: transparent;
+    color: rgb(var(--main-cover-color));
+    flex-shrink: 0;
+    &:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 2px;
+    }
+  }
+  &:focus-within {
+    pointer-events: auto;
+    &.show {
+      opacity: 1;
     }
   }
   .menu-icon {
