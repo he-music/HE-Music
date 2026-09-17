@@ -24,7 +24,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 24px 32px;
+    padding: 16px;
     box-sizing: border-box;
     will-change: transform;
 
@@ -38,9 +38,10 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    justify-content: center;
+    justify-content: safe center;
+    row-gap: 10px;
     width: 100%;
-    max-width: 1080px;
+    max-width: 100%;
     cursor: pointer;
     box-sizing: border-box;
     will-change: transform, opacity, filter;
@@ -71,10 +72,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    white-space: nowrap;
     line-height: 1.25;
     font-size: var(--classic-font-size, 52px);
     font-weight: 700;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
     transform-origin: center center;
     will-change: transform, opacity, filter;
     transition:
@@ -82,26 +85,30 @@
       opacity 0.28s ease,
       filter 0.28s ease;
 
-    // waiting 状态：未唱到的词处于轻度预入场姿态（Folia lighter pre-entry pose，微缩 0.92x、半透明 0.35、轻微虚化）
+    // waiting 状态：未唱到的词完全隐匿（opacity: 0），带 Folia 物理扰动偏移，绝对不提前剧透
     &.status-waiting {
-      opacity: 0.35;
-      visibility: visible;
-      filter: blur(1.5px);
-      transform: translate3d(var(--word-x, 0px), var(--word-y, 0px), 0)
-        scale(calc(var(--word-scale, 1) * 0.92))
-        rotate(calc(var(--word-rotate, 0deg) + 6deg));
+      opacity: 0 !important;
+      visibility: hidden !important;
+      pointer-events: none;
+      filter: blur(10px);
+      transform: translate3d(var(--word-waiting-x, var(--word-x, 0px)), var(--word-waiting-y, var(--word-y, 0px)), 0)
+        scale(0.5)
+        rotate(calc(var(--word-rotate, 0deg) + 20deg));
+      transition:
+        transform 0.4s ease-out,
+        opacity 0.4s ease-out,
+        filter 0.4s ease-out;
 
       .classic-word-body {
-        opacity: 0.45;
-        color: rgb(var(--classic-main-color, 239, 239, 239));
+        opacity: 0 !important;
       }
 
       .classic-word-glow {
-        opacity: 0;
+        opacity: 0 !important;
       }
     }
 
-    // active 状态：弹簧放大 1.4x、跳跃归位、高亮
+    // active 状态：强力弹簧跳跃放大 1.4x、跳跃归位、高亮
     &.status-active {
       opacity: 1;
       visibility: visible;
@@ -109,7 +116,11 @@
       z-index: 2;
       transform: translate3d(var(--word-x, 0px), var(--word-y, 0px), 0)
         scale(calc(var(--word-scale, 1) * 1.4))
-        rotate(calc(var(--word-rotate, 0deg) * 0.3));
+        rotate(var(--word-rotate, 0deg));
+      transition:
+        transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+        opacity 0.1s ease-out,
+        filter 0.12s ease-out;
 
       .classic-word-body {
         color: rgb(var(--classic-accent-color, 255, 255, 255));
@@ -120,7 +131,7 @@
       }
     }
 
-    // passed 状态：保持清晰可读，微旋转与柔和余晖，回缩至 1.0x
+    // passed 状态：保持清晰可读，5秒线性平滑微动漂浮，回缩至 1.0x
     &.status-passed {
       opacity: 0.82;
       visibility: visible;
@@ -128,9 +139,14 @@
       transform: translate3d(var(--word-x, 0px), var(--word-y, 0px), 0)
         scale(var(--word-scale, 1))
         rotate(calc(var(--word-rotate, 0deg) + var(--word-passed-rotate, 0deg)));
+      transition:
+        transform 5s linear, // 严格 1:1 复刻 Folia 的 5s 超慢线性漂浮旋转！
+        opacity 0.5s ease-out,
+        filter 0.5s ease-out;
 
       .classic-word-body {
         color: rgb(var(--classic-main-color, 239, 239, 239));
+        transition: color 0.8s ease-in-out;
       }
     }
   }
@@ -194,13 +210,9 @@
         opacity 0.25s ease,
         color 0.25s ease !important;
       &.status-waiting {
-        opacity: 0.45 !important;
-        visibility: visible !important;
-        transform: translate3d(var(--word-x, 0px), var(--word-y, 0px), 0)
-          scale(var(--word-scale, 1)) !important;
-        .classic-word-body {
-          color: rgb(var(--classic-main-color, 239, 239, 239));
-        }
+        opacity: 0 !important;
+        visibility: hidden !important;
+        pointer-events: none;
       }
       &.status-active {
         transform: translate3d(var(--word-x, 0px), var(--word-y, 0px), 0)
@@ -225,7 +237,7 @@
     }
   }
 
-  // 底部独立沉底图层（移植自 Folia VisualizerSubtitleOverlay）
+  // 底部独立沉底图层（移植自 Folia VisualizerSubtitleOverlay，无背景阴影）
   .classic-bottom-overlay {
     position: absolute;
     bottom: 28px;
@@ -237,21 +249,11 @@
     z-index: 20;
     pointer-events: auto;
     cursor: pointer;
+    box-shadow: none;
+    filter: none;
 
     .bottom-glow-bg {
-      position: absolute;
-      width: 120%;
-      max-width: 600px;
-      height: 48px;
-      background: radial-gradient(
-        ellipse at center,
-        rgba(0, 0, 0, 0.45) 0%,
-        rgba(0, 0, 0, 0.15) 60%,
-        transparent 100%
-      );
-      filter: blur(12px);
-      z-index: -1;
-      pointer-events: none;
+      display: none !important;
     }
 
     .bottom-content {
@@ -270,47 +272,41 @@
       }
     }
 
-    // 翻译字幕
+    // 翻译字幕（纯净无阴影）
     .bottom-translation {
       font-size: var(--classic-tran-size, 18px);
       color: rgba(var(--classic-main-color, 239, 239, 239), 0.88);
       line-height: 1.4;
       font-weight: 500;
-      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+      text-shadow: none;
     }
 
-    // 下一句预告（NEXT）
+    // 下一句预告（对齐 Folia：纯文本轻微模糊预告，无徽章无黑底阴影）
     .bottom-upcoming {
       display: flex;
       align-items: center;
-      gap: 10px;
-      opacity: 0.65;
-      font-size: var(--classic-roma-size, 15px);
-      color: rgba(var(--classic-main-color, 239, 239, 239), 0.8);
-      transition: opacity 0.2s ease;
-
-      &:hover {
-        opacity: 0.95;
-      }
-
-      .upcoming-badge {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        padding: 2px 7px;
-        border-radius: 6px;
-        background: rgba(var(--classic-accent-color, 255, 255, 255), 0.14);
-        color: rgb(var(--classic-accent-color, 255, 255, 255));
-        border: 1px solid rgba(var(--classic-accent-color, 255, 255, 255), 0.25);
-      }
+      justify-content: center;
+      max-width: 800px;
+      margin: 0 auto;
+      text-shadow: none;
 
       .upcoming-text {
+        margin: 0;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        max-width: 480px;
+        filter: blur(1px);
+        font-size: var(--classic-roma-size, 15px);
+        color: rgba(var(--classic-main-color, 239, 239, 239), 0.72);
+        transition: all 0.5s ease;
+
+        &:hover {
+          filter: blur(0px);
+          color: rgba(var(--classic-main-color, 239, 239, 239), 0.95);
+        }
       }
     }
+
   }
 
   // 空白占位等待态
@@ -371,5 +367,36 @@
   .classic-ripple {
     transition: none !important;
     animation: none !important;
+  }
+}
+
+// 移动设备与小屏幕视口适配
+@media (max-width: 768px) {
+  .classic-visualizer {
+    .classic-stage-wrapper {
+      padding: 16px 12px;
+    }
+
+    .classic-line-container {
+      padding: 0 6px;
+    }
+
+    .classic-bottom-overlay {
+      bottom: 14px;
+      left: 8px;
+      right: 8px;
+
+      .bottom-content {
+        max-width: 96%;
+      }
+
+      .bottom-upcoming .upcoming-text {
+        max-width: 260px;
+      }
+    }
+
+    .classic-empty-text {
+      font-size: 16px;
+    }
   }
 }

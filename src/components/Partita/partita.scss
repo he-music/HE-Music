@@ -61,8 +61,11 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    white-space: nowrap;
-    padding: 6px 18px;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    box-sizing: border-box;
+    padding: 6px 14px;
     margin-bottom: 20px;
     transition:
       transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
@@ -167,6 +170,9 @@
   .partita-word-wrap {
     position: relative;
     display: inline-block;
+    max-width: 100%;
+    overflow-wrap: break-word;
+    word-break: break-word;
     font-size: var(--partita-font-size);
     font-weight: 700;
     line-height: 1.35;
@@ -248,8 +254,11 @@
       opacity: 0.82;
       filter: none;
       z-index: 1;
-      // 唱毕回缩至 1.0x 并维持清晰
+      // 唱毕回缩至 1.0x，伴随 5秒超慢线性漂浮微旋
       transform: scale(1);
+      transition:
+        transform 5s linear, // 严格对齐 Folia 的 5s 慢速线性旋转微动
+        opacity 0.5s ease-out;
 
       .partita-body {
         color: var(--partita-base-color);
@@ -360,22 +369,11 @@
     align-items: center;
     z-index: 20;
     pointer-events: auto;
-    cursor: pointer;
+    box-shadow: none;
+    filter: none;
 
     .bottom-glow-bg {
-      position: absolute;
-      width: 120%;
-      max-width: 600px;
-      height: 48px;
-      background: radial-gradient(
-        ellipse at center,
-        rgba(0, 0, 0, 0.45) 0%,
-        rgba(0, 0, 0, 0.15) 60%,
-        transparent 100%
-      );
-      filter: blur(12px);
-      z-index: -1;
-      pointer-events: none;
+      display: none !important;
     }
 
     .bottom-content {
@@ -394,50 +392,40 @@
       }
     }
 
-    // 翻译字幕（优雅居于底部）
+    // 翻译字幕（纯净无阴影）
     .bottom-translation {
       font-size: var(--partita-tran-size, 18px);
       color: rgba(255, 255, 255, 0.88);
       line-height: 1.4;
       font-weight: 500;
-      text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+      text-shadow: none;
     }
 
-    // 下一句预告（NEXT）
+    // 下一句预告（对齐 Folia：纯文本轻微模糊预告，无徽章无黑底阴影）
     .bottom-upcoming {
       display: flex;
       align-items: center;
-      gap: 10px;
-      opacity: 0.65;
-      filter: blur(0.4px);
-      transition:
-        opacity 0.3s ease,
-        filter 0.3s ease;
-
-      &:hover {
-        opacity: 0.95;
-        filter: none;
-      }
-
-      .upcoming-badge {
-        font-size: 11px;
-        font-weight: 800;
-        letter-spacing: 0.08em;
-        padding: 2px 7px;
-        border-radius: 4px;
-        background-color: rgba(255, 255, 255, 0.18);
-        color: rgba(255, 255, 255, 0.85);
-        line-height: 1.2;
-      }
+      justify-content: center;
+      max-width: 800px;
+      margin: 0 auto;
+      text-shadow: none;
 
       .upcoming-text {
-        font-size: calc(var(--partita-font-size) * 0.52);
-        color: rgba(255, 255, 255, 0.8);
-        font-weight: 600;
+        margin: 0;
+        font-size: var(--partita-roma-size, 15px);
+        color: rgba(255, 255, 255, 0.72);
+        font-weight: 500;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+        filter: blur(1px);
+        text-shadow: none;
+        transition: all 0.5s ease;
+
+        &:hover {
+          filter: blur(0px);
+          color: rgba(255, 255, 255, 0.95);
+        }
       }
     }
   }

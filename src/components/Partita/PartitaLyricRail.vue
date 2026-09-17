@@ -100,14 +100,12 @@
           bottomOverlayContent.seekTime !== undefined && onLineClick(bottomOverlayContent.seekTime)
         "
       >
-        <div class="bottom-glow-bg" aria-hidden="true" />
         <div class="bottom-content">
           <div v-if="bottomOverlayContent.type === 'translation'" class="bottom-translation">
             {{ bottomOverlayContent.text }}
           </div>
           <div v-else-if="bottomOverlayContent.type === 'upcoming'" class="bottom-upcoming">
-            <span class="upcoming-badge">NEXT</span>
-            <span class="upcoming-text">{{ bottomOverlayContent.text }}</span>
+            <p class="upcoming-text">{{ bottomOverlayContent.text }}</p>
           </div>
         </div>
       </div>
@@ -212,18 +210,29 @@ const bottomOverlayContent = computed<{
   return null;
 });
 
-// 自适应字号：根据纯歌词模式与短句动态适度缩放，使短句更饱满大气
+// 响应式自适应缩放因子（针对移动端与窄容器 360px ~ 760px 自适应缩放）
+const widthScaleFactor = computed(() => {
+  const w = containerWidth.value;
+  if (!w || w >= 860) return 1.0;
+  return Math.max(0.48, Math.min(1.0, w / 860));
+});
+
+// 自适应字号：根据容器宽度、纯歌词模式与短句动态适度缩放，确保字句饱满且绝不撑破两端
 const resolvedFontSize = computed(() => {
-  let size = props.fontSize;
-  if (props.pure) {
-    size *= 1.18;
+  const w = containerWidth.value || 600;
+  let size = props.fontSize * widthScaleFactor.value;
+  if (props.pure && w >= 900) {
+    size *= 1.15;
   }
   if (activeLine.value) {
     const textLen = activeLine.value.fullText.trim().length;
-    if (textLen > 0 && textLen <= 6) {
-      size *= 1.25;
-    } else if (textLen <= 10) {
-      size *= 1.14;
+    if (textLen > 0 && textLen <= 5 && w >= 700) {
+      size *= 1.18;
+    } else if (textLen > 6 && w < 960) {
+      // 窄屏且文字较长时，根据单行容量限制字号上限，防止阶梯溢出
+      const perChunkLen = Math.max(Math.ceil(textLen / 2), 4);
+      const maxSafeSize = Math.max(20, Math.floor((w - 48) / (perChunkLen * 1.55)));
+      size = Math.min(size, maxSafeSize);
     }
   }
   return Math.round(size);
@@ -232,13 +241,14 @@ const resolvedFontSize = computed(() => {
 // 当前活跃行的排版数据（带缓存）
 const currentLayout = computed<PartitaSequentialLayout | null>(() => {
   if (!activeLine.value) return null;
-  // 依据可用宽度对错位位移自适应拉伸
-  const widthFactor = Math.min(1.5, Math.max(0.9, (containerWidth.value || 600) / 550));
+  const w = containerWidth.value || 600;
+  // 窄屏下收缩错位位移，防止阶梯被推到视口外部
+  const widthFactor = w < 680 ? Math.max(0.4, w / 800) : Math.min(1.2, Math.max(0.8, w / 750));
   return getOrBuildPartitaLayout(activeLine.value, containerHeight.value || 500, {
     showGuideLines: props.showGuideLines,
     useSemanticLayout: true,
-    staggerMin: Math.round(props.staggerMin * widthFactor),
-    staggerMax: Math.round(props.staggerMax * widthFactor),
+    staggerMin: Math.max(8, Math.round(props.staggerMin * widthFactor)),
+    staggerMax: Math.max(16, Math.round(props.staggerMax * widthFactor)),
   });
 });
 

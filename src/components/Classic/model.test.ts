@@ -59,6 +59,17 @@ describe("Classic visualizer model", () => {
     const noRotate = resolveDeterministicWordLayouts(line, { enableWordRotation: false });
     expect(noRotate.wordConfigs[0].rotate).toBe(0);
     expect(noRotate.wordConfigs[0].passedRotate).toBe(0);
+
+    // 针对移动端小屏（如 390px 视口）：强制安全居中并收拢词间距防越界
+    const mobileLayout = resolveDeterministicWordLayouts(
+      line,
+      { enableWordRotation: true },
+      { containerWidth: 390 },
+    );
+    expect(mobileLayout.lineConfig.justifyContent).toBe("center");
+    expect(parseFloat(mobileLayout.wordConfigs[0].marginRight)).toBeLessThan(
+      parseFloat(layout1.wordConfigs[0].marginRight),
+    );
   });
 
   it("resolves word status correctly across time", () => {
@@ -79,14 +90,18 @@ describe("Classic visualizer model", () => {
       { key: "3", text: "C", startTime: 8000, endTime: 9000, words: [], timed: false },
     ];
 
-    // 前奏期展示第 0 句静候
+    // 较长前奏期（>1200ms）返回 -1 展示等待态
+    expect(resolveActiveLineIndex(lines, -500)).toBe(-1);
+    // 临近开唱（<=1200ms）预热第 0 句
     expect(resolveActiveLineIndex(lines, 500)).toBe(0);
     expect(resolveActiveLineIndex(lines, 1500)).toBe(0);
-    // 间奏期刚唱完保持当前句
+    // 间奏期刚唱完（<=1200ms）保持当前句
     expect(resolveActiveLineIndex(lines, 2200)).toBe(0);
-    // 距下一句 <= 1500ms 时预热下一句
+    // 距下一句 <= 1200ms 时预热下一句
     expect(resolveActiveLineIndex(lines, 3000)).toBe(1);
     expect(resolveActiveLineIndex(lines, 4500)).toBe(1);
+    // 较长间奏期（5000 到 8000 之间，在 6300 时）返回 -1 展示等待态
+    expect(resolveActiveLineIndex(lines, 6300)).toBe(-1);
     expect(resolveActiveLineIndex(lines, 8500)).toBe(2);
     // 曲终保持最后一句
     expect(resolveActiveLineIndex(lines, 10000)).toBe(2);

@@ -23,8 +23,9 @@
     <div
       v-if="settingStore.lyricRenderer === 'monet'"
       class="monet-preview"
-      :style="{ '--main-cover-color': previewMainColor }"
+      :style="{ '--main-cover-color': previewMainColor, position: 'relative', overflow: 'hidden' }"
     >
+      <MonetFloatingDecor :color="previewMainColor" />
       <MonetLyricRail
         :lines="previewLines"
         :clock="previewClock"
@@ -153,6 +154,9 @@ const DefaultLyric = defineAsyncComponent(
 );
 const LyricPlayer = defineAsyncComponent(() => import("@/components/AMLL/LyricPlayer.vue"));
 const MonetLyricRail = defineAsyncComponent(() => import("@/components/Monet/MonetLyricRail.vue"));
+const MonetFloatingDecor = defineAsyncComponent(
+  () => import("@/components/Monet/MonetFloatingDecor.vue"),
+);
 const PartitaLyricRail = defineAsyncComponent(
   () => import("@/components/Partita/PartitaLyricRail.vue"),
 );

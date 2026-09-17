@@ -67,21 +67,21 @@ export function deterministicRandom(seed: number, offset: number): number {
 export function resolveDeterministicWordLayouts(
   line: ClassicLine,
   tuning: Partial<ClassicTuning> = {},
+  options?: { containerWidth?: number },
 ): {
   wordConfigs: ClassicWordLayoutConfig[];
   lineConfig: ClassicLineLayoutConfig;
 } {
   const resolvedTuning: ClassicTuning = { ...DEFAULT_CLASSIC_TUNING, ...tuning };
   const seed = line.startTime;
+  const containerW = options?.containerWidth ?? 1000;
+  const isNarrowScreen = containerW < 680;
+  const widthFactor = Math.max(0.5, Math.min(1.0, containerW / 760));
 
-  // 容器对齐确定性轻微随机（保持自然现代海报风）
-  const justifyOptions: ClassicLineLayoutConfig["justifyContent"][] = [
-    "center",
-    "center",
-    "flex-start",
-    "flex-end",
-    "space-around",
-  ];
+  // 容器对齐确定性轻微随机（窄屏移动端强制居中防裁切，宽屏桌面端保持自然海报风）
+  const justifyOptions: ClassicLineLayoutConfig["justifyContent"][] = isNarrowScreen
+    ? ["center"]
+    : ["center", "center", "flex-start", "flex-end", "space-around"];
   const alignOptions: ClassicLineLayoutConfig["alignItems"][] = [
     "center",
     "center",
@@ -95,8 +95,11 @@ export function resolveDeterministicWordLayouts(
     perspective: 1000,
   };
 
-  const baseSpread = 16; // 词级错落散布范围 (px)
-  const baseRotate = resolvedTuning.enableWordRotation ? 6 : 0; // 最大倾斜角度 (度)
+  // 错落散布与旋转：移动设备上按比例收拢，防止字词位移过大飞出边界
+  const baseSpread = Math.round(16 * widthFactor); // 词级错落散布范围 (px)
+  const baseRotate = resolvedTuning.enableWordRotation
+    ? Math.max(2, Math.round(6 * widthFactor))
+    : 0; // 最大倾斜角度 (度)
 
   const wordConfigs: ClassicWordLayoutConfig[] = line.words.map((w, i) => {
     const wordSeed = seed + i * 37;
@@ -107,12 +110,12 @@ export function resolveDeterministicWordLayouts(
       ? (deterministicRandom(wordSeed, 3) - 0.5) * baseRotate * 2
       : 0;
     const passedRotate = resolvedTuning.enableWordRotation
-      ? (deterministicRandom(wordSeed, 8) - 0.5) * 36
+      ? (deterministicRandom(wordSeed, 8) - 0.5) * 36 * widthFactor
       : 0;
 
-    // 根据前后词估算安全 marginRight，防止放大重叠
-    const spacingMultiplier = resolvedTuning.wordSpacing ?? 0.7;
-    const marginPx = Math.max(8, (12 + Math.abs(xVal)) * spacingMultiplier);
+    // 根据前后词估算安全 marginRight，移动端按比例缩减，防止放大重叠与右侧溢出
+    const spacingMultiplier = (resolvedTuning.wordSpacing ?? 0.7) * widthFactor;
+    const marginPx = Math.max(4, (12 + Math.abs(xVal)) * spacingMultiplier);
 
     return {
       id: `${w.text}-${i}-${seed}`,
@@ -160,17 +163,29 @@ export function resolveActiveLineIndex(lines: ClassicLine[], currentTime: number
     }
   }
 
-  // 2. 前奏阶段（时间未到第一句）：直接展示第一句（waiting 态静候）
+  // 2. 前奏阶段（时间未到第一句）：
+  // 若距离第一句很近（<= 1200ms），预热第一句准备开唱；否则返回 -1 展示等待态
   if (currentTime < lines[0].startTime) {
-    return 0;
+    if (lines[0].startTime - currentTime <= 1200) {
+      return 0;
+    }
+    return -1;
   }
 
   // 3. 间奏或曲终：从后往前找已播放完毕的最近行
   for (let i = lines.length - 1; i >= 0; i--) {
     if (currentTime >= lines[i].endTime) {
-      // 若距离下一句很近（<= 1500ms），预热下一句
+      // 若距离下一句很近（<= 1500ms），预热下一句准备开唱
       if (i + 1 < lines.length && lines[i + 1].startTime - currentTime <= 1500) {
         return i + 1;
+      }
+      // 若刚唱完不久（<= 1200ms），保持当前行供回味
+      if (currentTime - lines[i].endTime <= 1200) {
+        return i;
+      }
+      // 间奏较长时返回 -1 展示等待态
+      if (i + 1 < lines.length) {
+        return -1;
       }
       return i;
     }
@@ -246,26 +261,7 @@ export function adaptClassicLines(
       let words: ClassicWord[] = [];
       let fullText = "";
 
-      if (!wordTimed) {
-        // 关闭逐字模式：整行作为一个整体单元，不进行内部切词和字级时间差
-        if (rawWords.length > 0) {
-          fullText = rawWords
-            .map((w: any) => String(w.word ?? w.text ?? w.content ?? ""))
-            .join("");
-        } else {
-          fullText = String(line.content ?? line.text ?? "").trim();
-        }
-        if (fullText) {
-          words = [
-            {
-              text: fullText,
-              startTime: start,
-              endTime: end,
-              graphemes: buildWordGraphemes(fullText, start, end),
-            },
-          ];
-        }
-      } else if (rawWords.length > 0) {
+      if (rawWords.length > 0 && wordTimed) {
         // AMLL 或 YRC 逐字数据
         const tokens: PartitaWordToken[] = rawWords
           .map((w: any) => {
@@ -292,16 +288,58 @@ export function adaptClassicLines(
           graphemes: buildWordGraphemes(token.text, token.startTime, token.endTime),
         }));
       } else {
-        // 普通 LRC 文本
-        fullText = String(line.content ?? line.text ?? "").trim();
+        // 普通歌词或非逐字模式：根据 fullText 智能按语义/空格切词，杜绝整句合并导致的不可换行与溢出
+        if (rawWords.length > 0) {
+          fullText = rawWords
+            .map((w: any) => String(w.word ?? w.text ?? w.content ?? ""))
+            .join("");
+        } else {
+          fullText = String(line.content ?? line.text ?? "").trim();
+        }
+
         if (fullText) {
-          const tokens = fullText.split(/(\s+)/).filter((s: string) => s.length > 0);
+          let rawSegments: string[] = [];
+          if (typeof Intl !== "undefined" && Intl.Segmenter) {
+            try {
+              const seg = new Intl.Segmenter(undefined, { granularity: "word" });
+              rawSegments = Array.from(seg.segment(fullText), (p) => p.segment);
+            } catch {
+              rawSegments = fullText.split(/(\s+)/);
+            }
+          } else {
+            rawSegments = fullText.split(/(\s+)/);
+          }
+
+          // 合并过碎的助词标点，单个词组尽量在 2~6 个字符以内
+          const mergedTokens: string[] = [];
+          let currentChunk = "";
+          for (const s of rawSegments) {
+            if (!s) continue;
+            if (currentChunk.length > 0 && currentChunk.length + s.length > 6 && !/^\s+$/.test(s)) {
+              mergedTokens.push(currentChunk);
+              currentChunk = s;
+            } else {
+              currentChunk += s;
+            }
+          }
+          if (currentChunk) mergedTokens.push(currentChunk);
+
+          const finalTokens = mergedTokens.filter((s) => s.trim().length > 0);
+          const tokensList = finalTokens.length > 0 ? finalTokens : [fullText];
+
           const lineDuration = Math.max(end - start, 500);
-          const step = lineDuration / Math.max(tokens.length, 1);
-          words = tokens.map((token: string, ti: number) => {
-            const wStart = Math.round(start + step * ti);
+          const totalChars = Math.max(fullText.length, 1);
+          let elapsedChars = 0;
+
+          words = tokensList.map((token: string, ti: number) => {
+            const tokenChars = token.length;
+            const wStart = Math.round(start + (lineDuration * elapsedChars) / totalChars);
+            elapsedChars += tokenChars;
             const wEnd =
-              ti === tokens.length - 1 ? end : Math.round(start + step * (ti + 1));
+              ti === tokensList.length - 1
+                ? end
+                : Math.round(start + (lineDuration * elapsedChars) / totalChars);
+
             return {
               text: token,
               startTime: wStart,

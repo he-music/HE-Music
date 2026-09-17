@@ -66,14 +66,12 @@
           bottomOverlayContent.seekTime !== undefined && emit('seek', bottomOverlayContent.seekTime)
         "
       >
-        <div class="bottom-glow-bg" aria-hidden="true" />
         <div class="bottom-content">
           <div v-if="bottomOverlayContent.type === 'translation'" class="bottom-translation">
             {{ bottomOverlayContent.text }}
           </div>
           <div v-else-if="bottomOverlayContent.type === 'upcoming'" class="bottom-upcoming">
-            <span class="upcoming-badge">NEXT</span>
-            <span class="upcoming-text">{{ bottomOverlayContent.text }}</span>
+            <p class="upcoming-text">{{ bottomOverlayContent.text }}</p>
           </div>
         </div>
       </div>
@@ -83,7 +81,7 @@
 
 <script setup lang="ts">
 import { computed, ref, shallowRef, watch, type CSSProperties, type Ref } from "vue";
-import { usePreferredReducedMotion } from "@vueuse/core";
+import { useElementSize, usePreferredReducedMotion } from "@vueuse/core";
 import {
   resolveActiveLineIndex,
   resolveDeterministicWordLayouts,
@@ -141,20 +139,53 @@ const props = withDefaults(
 const emit = defineEmits<{ seek: [time: number] }>();
 
 const rootRef = ref<HTMLElement | null>(null);
+const { width: containerWidth } = useElementSize(rootRef);
 const reducedPreference = usePreferredReducedMotion();
 const reducedMotion = computed(() => reducedPreference.value === "reduce");
+
+// 响应式自适应缩放因子（针对窄视口与移动端 360px ~ 760px 自适应缩放）
+const widthScaleFactor = computed(() => {
+  const w = containerWidth.value;
+  if (!w || w >= 860) return 1.0;
+  return Math.max(0.48, Math.min(1.0, w / 860));
+});
+
+const resolvedFontSize = computed(() => {
+  const w = containerWidth.value || 800;
+  const base = props.fontSize || 48;
+  const scaled = Math.round(base * widthScaleFactor.value);
+
+  // 防溢出保护：当前行字符较多且容器受限时，智能收敛字号，确保绝不撑爆屏幕两端
+  const line = activeLine.value;
+  if (!line) return scaled;
+  const totalChars = line.text?.length || 0;
+  if (totalChars > 6 && w < 960) {
+    const maxCharsPerLine = Math.max(Math.ceil(totalChars / 2), 4);
+    const maxSafeSize = Math.max(22, Math.floor((w - 32) / (maxCharsPerLine * 1.52)));
+    return Math.min(scaled, maxSafeSize);
+  }
+  return scaled;
+});
+
+const resolvedTranSize = computed(() => {
+  return Math.round(props.translationSize * Math.max(0.72, widthScaleFactor.value));
+});
+
+const resolvedRomaSize = computed(() => {
+  return Math.round(props.romanizationSize * Math.max(0.75, widthScaleFactor.value));
+});
 
 // 当前活跃行索引
 const activeIndex = shallowRef(0);
 
-// 活跃行计算：只要有歌词，兜底第一句，绝不空档
+// 活跃行计算：未进入唱词或等待音乐响起时返回 null，展示 emptyText
 const activeLine = computed<ClassicLine | null>(() => {
   if (!props.lines.length) return null;
   const idx = activeIndex.value;
   if (idx >= 0 && idx < props.lines.length) {
     return props.lines[idx];
   }
-  return props.lines[0] || null;
+  return null;
 });
 
 // 下一句待播放的歌词
@@ -200,19 +231,23 @@ const lineConfig = shallowRef<ClassicLineLayoutConfig>({
 // 当前活跃行各词的 waiting / active / passed 状态
 const wordStatuses = ref<ClassicWordStatus[]>([]);
 
-// 监听活跃行变化，重新计算确定性几何与布局
+// 监听活跃行与容器宽度变化，重新计算确定性几何与自适应布局
 watch(
-  [activeLine, () => props.enableWordRotation, () => props.wordSpacing],
-  ([line]) => {
+  [activeLine, containerWidth, () => props.enableWordRotation, () => props.wordSpacing],
+  ([line, w]) => {
     if (!line) {
       wordConfigs.value = [];
       wordStatuses.value = [];
       return;
     }
-    const result = resolveDeterministicWordLayouts(line, {
-      enableWordRotation: props.enableWordRotation,
-      wordSpacing: props.wordSpacing,
-    });
+    const result = resolveDeterministicWordLayouts(
+      line,
+      {
+        enableWordRotation: props.enableWordRotation,
+        wordSpacing: props.wordSpacing,
+      },
+      { containerWidth: w },
+    );
     wordConfigs.value = result.wordConfigs;
     lineConfig.value = result.lineConfig;
     updateWordStatuses(props.clock.time.value);
@@ -255,9 +290,13 @@ watch(
 function getWordStyle(wIdx: number): CSSProperties {
   const cfg = wordConfigs.value[wIdx];
   if (!cfg) return {};
+  const waitingX = Math.round(cfg.x + Math.sin(cfg.y) * 100);
+  const waitingY = Math.round(cfg.y + Math.cos(cfg.x) * 50);
   return {
     "--word-x": `${cfg.x}px`,
     "--word-y": `${cfg.y}px`,
+    "--word-waiting-x": `${waitingX}px`,
+    "--word-waiting-y": `${waitingY}px`,
     "--word-rotate": `${cfg.rotate}deg`,
     "--word-scale": `${cfg.scale}`,
     "--word-passed-rotate": `${cfg.passedRotate}deg`,
@@ -268,8 +307,8 @@ function getWordStyle(wIdx: number): CSSProperties {
 const visualizerStyle = computed(() => ({
   "--classic-main-color": props.mainColor,
   "--classic-accent-color": props.accentColor,
-  "--classic-font-size": `${props.fontSize}px`,
-  "--classic-tran-size": `${props.translationSize}px`,
-  "--classic-roma-size": `${props.romanizationSize}px`,
+  "--classic-font-size": `${resolvedFontSize.value}px`,
+  "--classic-tran-size": `${resolvedTranSize.value}px`,
+  "--classic-roma-size": `${resolvedRomaSize.value}px`,
 }));
 </script>

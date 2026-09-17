@@ -88,26 +88,71 @@ export function adaptPartitaLines(
     const timed = wordTimed && line.words.some((w) => w.endTime > w.startTime);
     const fullText = line.words.map((w) => w.word || "").join("");
 
-    const words: PartitaWord[] = !wordTimed
-      ? [
-          {
-            text: fullText,
-            startTime: start,
-            endTime: end,
-            graphemes: buildWordGraphemeTimings(fullText, start, end),
-          },
-        ]
-      : line.words.map((w) => {
-          const text = w.word || "";
-          const wordStart = finite(w.startTime, start);
-          const wordFinish = Math.max(wordStart, finite(w.endTime, wordStart));
-          return {
-            text,
-            startTime: wordStart,
-            endTime: wordFinish,
-            graphemes: buildWordGraphemeTimings(text, wordStart, wordFinish),
-          };
-        });
+    let words: PartitaWord[] = [];
+    if (!wordTimed) {
+      // 普通歌词或非逐字模式：根据 fullText 智能按语义/空格切词，构建阶梯分块
+      let rawSegments: string[] = [];
+      if (typeof Intl !== "undefined" && Intl.Segmenter) {
+        try {
+          const seg = new Intl.Segmenter(undefined, { granularity: "word" });
+          rawSegments = Array.from(seg.segment(fullText), (p) => p.segment);
+        } catch {
+          rawSegments = fullText.split(/(\s+)/);
+        }
+      } else {
+        rawSegments = fullText.split(/(\s+)/);
+      }
+
+      // 合并过碎的助词标点，单个词组尽量在 2~6 个字符以内
+      const mergedTokens: string[] = [];
+      let currentChunk = "";
+      for (const s of rawSegments) {
+        if (!s) continue;
+        if (currentChunk.length > 0 && currentChunk.length + s.length > 6 && !/^\s+$/.test(s)) {
+          mergedTokens.push(currentChunk);
+          currentChunk = s;
+        } else {
+          currentChunk += s;
+        }
+      }
+      if (currentChunk) mergedTokens.push(currentChunk);
+
+      const finalTokens = mergedTokens.filter((s) => s.trim().length > 0);
+      const tokensList = finalTokens.length > 0 ? finalTokens : [fullText];
+
+      const lineDuration = Math.max(end - start, 500);
+      const totalChars = Math.max(fullText.length, 1);
+      let elapsedChars = 0;
+
+      words = tokensList.map((token: string, ti: number) => {
+        const tokenChars = token.length;
+        const wStart = Math.round(start + (lineDuration * elapsedChars) / totalChars);
+        elapsedChars += tokenChars;
+        const wEnd =
+          ti === tokensList.length - 1
+            ? end
+            : Math.round(start + (lineDuration * elapsedChars) / totalChars);
+
+        return {
+          text: token,
+          startTime: wStart,
+          endTime: wEnd,
+          graphemes: buildWordGraphemeTimings(token, wStart, wEnd),
+        };
+      });
+    } else {
+      words = line.words.map((w) => {
+        const text = w.word || "";
+        const wordStart = finite(w.startTime, start);
+        const wordFinish = Math.max(wordStart, finite(w.endTime, wordStart));
+        return {
+          text,
+          startTime: wordStart,
+          endTime: wordFinish,
+          graphemes: buildWordGraphemeTimings(text, wordStart, wordFinish),
+        };
+      });
+    }
 
     return {
       key: `${index}:${start}`,
