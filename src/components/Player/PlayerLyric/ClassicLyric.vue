@@ -17,9 +17,13 @@
       :breathing-float-multiplier="settingStore.classicBreathingFloat"
       :word-spacing="settingStore.classicWordSpacing"
       :main-color="mainColor"
-      :accent-color="accentColor"
+      :accent-color="mainColor"
       :empty-text="
-        t(statusStore.lyricLoading ? 'setting.lyrics.classic_loading' : 'setting.lyrics.classic_empty')
+        t(
+          statusStore.lyricLoading
+            ? 'setting.lyrics.classic_loading'
+            : 'setting.lyrics.classic_empty',
+        )
       "
       :seek-label="t('setting.lyrics.classic_seek')"
       @seek="seek"
@@ -58,17 +62,6 @@ const lines = computed(() => {
 const mainColor = computed(() => {
   const main = statusStore.playerMainColor;
   return main ? `${main.r}, ${main.g}, ${main.b}` : "239, 239, 239";
-});
-
-const accentColor = computed(() => {
-  if (settingStore.playerMainColorType === "follow-cover") {
-    const primary = statusStore.songCoverTheme?.light?.primary;
-    if (primary) {
-      return `${primary.r}, ${primary.g}, ${primary.b}`;
-    }
-  }
-  const main = statusStore.playerMainColor;
-  return main ? `${main.r}, ${main.g}, ${main.b}` : "255, 255, 255";
 });
 
 const fontStyle = computed(() => ({

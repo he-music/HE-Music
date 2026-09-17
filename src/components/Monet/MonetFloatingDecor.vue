@@ -11,6 +11,7 @@
         '--p-rot': `${p.rotation}deg`,
         animationDuration: `${p.duration}s`,
         animationDelay: `${p.delay}s`,
+        animationPlayState: playing ? 'running' : 'paused',
       }"
     >
       <svg
@@ -42,9 +43,11 @@ import { computed } from "vue";
 const props = withDefaults(
   defineProps<{
     color?: string; // "r, g, b"
+    playing?: boolean;
   }>(),
   {
     color: "239, 239, 239",
+    playing: true,
   },
 );
 
@@ -97,6 +100,12 @@ const particles: FloatingParticle[] = Array.from({ length: PARTICLE_COUNT }, (_,
 
   &.reverse {
     animation-name: floatParticleReverse;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .decor-particle {
+    animation: none !important;
   }
 }
 

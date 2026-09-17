@@ -57,18 +57,19 @@ export const buildPartitaLayoutCacheKey = (
   tuning: Required<PartitaTuningOptions>,
 ): string => {
   const heightBucket = Math.round(containerHeight / 24);
-  return [
+  return JSON.stringify([
     line.key,
     line.startTime,
     line.endTime,
-    line.words.length,
+    line.words.map((word) => [word.text, word.startTime, word.endTime]),
     line.fullText,
+    line.isInterlude ?? false,
     heightBucket,
     tuning.staggerMin,
     tuning.staggerMax,
-    tuning.showGuideLines ? 1 : 0,
-    tuning.useSemanticLayout ? 1 : 0,
-  ].join("|");
+    tuning.showGuideLines,
+    tuning.useSemanticLayout,
+  ]);
 };
 
 /** 计算一整行歌词的分块阶梯布局（确定性算法，根据 startTime 生成稳定排版） */
@@ -77,6 +78,30 @@ export const buildSequentialChunks = (
   containerHeight: number,
   tuning: Required<PartitaTuningOptions> = DEFAULT_PARTITA_TUNING,
 ): PartitaSequentialLayout => {
+  if (line.isInterlude) {
+    return {
+      totalGraphemes: 6,
+      chunks: [
+        {
+          id: line.key,
+          rowIndex: 0,
+          chunkUnits: [],
+          chunkWords: line.words,
+          displayWords: line.words,
+          guidePosition: "left",
+          config: {
+            id: line.key,
+            x: 0,
+            y: 0,
+            rotate: 0,
+            scale: 1,
+            marginBottom: "0px",
+            passedRotate: 0,
+          },
+        },
+      ],
+    };
+  }
   const totalGraphemes = Math.max(line.fullText.replace(/\s+/g, "").length, line.words.length, 1);
 
   // 1. CJK 语义分词与标点粘滞
@@ -178,7 +203,11 @@ export const getOrBuildPartitaLayout = (
 ): PartitaSequentialLayout => {
   const cacheKey = buildPartitaLayoutCacheKey(line, containerHeight, tuning);
   const cached = layoutCache.get(cacheKey);
-  if (cached) return cached;
+  if (cached) {
+    layoutCache.delete(cacheKey);
+    layoutCache.set(cacheKey, cached);
+    return cached;
+  }
 
   const layout = buildSequentialChunks(line, containerHeight, tuning);
   layoutCache.set(cacheKey, layout);

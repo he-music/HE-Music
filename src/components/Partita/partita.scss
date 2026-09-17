@@ -68,7 +68,9 @@
     padding: 6px 14px;
     margin-bottom: 20px;
     transition:
-      transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+      translate 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+      scale 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+      rotate 0.45s ease-out,
       opacity 0.35s ease;
     will-change: transform, opacity;
 
@@ -102,6 +104,11 @@
     }
 
     &.status-passed {
+      transition:
+        translate 0.5s ease-out,
+        scale 0.5s ease-out,
+        rotate 5s linear,
+        opacity 0.5s ease-out;
       opacity: 0.82;
       pointer-events: auto;
       visibility: visible;
@@ -254,10 +261,10 @@
       opacity: 0.82;
       filter: none;
       z-index: 1;
-      // 唱毕回缩至 1.0x，伴随 5秒超慢线性漂浮微旋
+      // 唱毕在半秒内回缩；慢速旋转单独由 Chunk 承担。
       transform: scale(1);
       transition:
-        transform 5s linear, // 严格对齐 Folia 的 5s 慢速线性旋转微动
+        transform 0.5s ease-out,
         opacity 0.5s ease-out;
 
       .partita-body {
@@ -297,6 +304,19 @@
       animation: partitaRipple 0.6s ease-out forwards;
       filter: blur(1px);
       z-index: 1;
+    }
+  }
+
+  // 字形直接订阅时钟，词尾仍可继续衰减，避免整词一起闪亮。
+  &.word-sweep .partita-word-wrap:not(.word-waiting) .partita-glow {
+    opacity: 1;
+    text-shadow: none;
+    transition: none;
+
+    .grapheme-char {
+      text-shadow:
+        0 0 24px var(--partita-active-color),
+        0 0 44px var(--partita-active-color);
     }
   }
 
@@ -401,6 +421,13 @@
       text-shadow: none;
     }
 
+    .bottom-romanization {
+      font-size: var(--partita-roma-size, 15px);
+      color: rgba(255, 255, 255, 0.72);
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
     // 下一句预告（对齐 Folia：纯文本轻微模糊预告，无徽章无黑底阴影）
     .bottom-upcoming {
       display: flex;
@@ -427,6 +454,17 @@
           color: rgba(255, 255, 255, 0.95);
         }
       }
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .partita-rail {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
     }
   }
 }

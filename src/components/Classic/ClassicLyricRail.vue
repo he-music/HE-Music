@@ -2,7 +2,7 @@
   <div
     ref="rootRef"
     class="classic-visualizer"
-    :class="{ 'no-word-animation': !wordAnimation }"
+    :class="{ 'no-word-animation': !animateWords, 'word-sweep': animateWords }"
     :style="visualizerStyle"
     role="region"
     aria-label="Classic Lyrics Rail"
@@ -10,14 +10,22 @@
     <!-- 主舞台区域（中央 70vh 区域） -->
     <div
       class="classic-stage-wrapper"
-      :class="{ breathing: breathingFloatMultiplier > 0 && playing && !reducedMotion }"
+      :class="{ breathing: breathingFloatMultiplier > 0 && !reducedMotion }"
+      :style="{ animationPlayState: playing ? 'running' : 'paused' }"
     >
-      <Transition name="line" mode="out-in">
+      <Transition
+        name="line"
+        @before-enter="prepareLineEnter"
+        @before-leave="prepareLineLeave"
+        @leave-cancelled="restoreLineInteraction"
+        @after-enter="refreshGlow"
+      >
         <!-- 舞台主歌词行：只要有歌词就展示当前句（前奏/间奏期单词呈现静候态） -->
         <div
           v-if="!loading && activeLine"
           :key="activeLine.key"
           class="classic-line-container"
+          :data-transition-mode="resolveClassicTransitionMode(activeLine)"
           :style="{
             justifyContent: lineConfig.justifyContent,
             alignItems: lineConfig.alignItems,
@@ -27,6 +35,8 @@
           tabindex="0"
           :aria-label="`${seekLabel}: ${activeLine.text}`"
           @click="emit('seek', activeLine.startTime)"
+          @keydown.enter.prevent="emit('seek', activeLine.startTime)"
+          @keydown.space.prevent="emit('seek', activeLine.startTime)"
         >
           <div
             v-for="(word, wIdx) in activeLine.words"
@@ -36,12 +46,28 @@
             :style="getWordStyle(wIdx)"
           >
             <!-- 发光层（双层 text-shadow） -->
-            <span class="classic-word-glow" aria-hidden="true">{{ word.text }}</span>
+            <span class="classic-word-glow" aria-hidden="true">
+              <template v-if="animateWords">
+                <span
+                  v-for="(glyph, index) in word.graphemes"
+                  :key="index"
+                  data-stage-glyph
+                  :data-start="glyph.startTime"
+                  :data-end="glyph.endTime"
+                  :data-line-end="activeLine.endTime"
+                  style="opacity: 0"
+                  >{{ glyph.char }}</span
+                >
+              </template>
+              <template v-else>{{ word.text }}</template>
+            </span>
             <!-- 文本主体 -->
             <span class="classic-word-body">{{ word.text }}</span>
             <!-- 副歌水波纹光环 -->
             <span
-              v-if="activeLine.isChorus && wordStatuses[wIdx] === 'active' && !reducedMotion"
+              v-if="
+                activeLine.isChorus && wordStatuses[wIdx] === 'active' && animateWords && playing
+              "
               class="classic-ripple"
               aria-hidden="true"
             />
@@ -61,15 +87,26 @@
         class="classic-bottom-overlay"
         role="button"
         tabindex="0"
-        :aria-label="`${seekLabel}: ${bottomOverlayContent.text}`"
+        :aria-label="`${seekLabel}: ${bottomOverlayContent.text || bottomOverlayContent.romanization}`"
         @click="
+          bottomOverlayContent.seekTime !== undefined && emit('seek', bottomOverlayContent.seekTime)
+        "
+        @keydown.enter.prevent="
+          bottomOverlayContent.seekTime !== undefined && emit('seek', bottomOverlayContent.seekTime)
+        "
+        @keydown.space.prevent="
           bottomOverlayContent.seekTime !== undefined && emit('seek', bottomOverlayContent.seekTime)
         "
       >
         <div class="bottom-content">
-          <div v-if="bottomOverlayContent.type === 'translation'" class="bottom-translation">
-            {{ bottomOverlayContent.text }}
-          </div>
+          <template v-if="bottomOverlayContent.type === 'translation'">
+            <div v-if="bottomOverlayContent.text" class="bottom-translation">
+              {{ bottomOverlayContent.text }}
+            </div>
+            <div v-if="bottomOverlayContent.romanization" class="bottom-romanization">
+              {{ bottomOverlayContent.romanization }}
+            </div>
+          </template>
           <div v-else-if="bottomOverlayContent.type === 'upcoming'" class="bottom-upcoming">
             <p class="upcoming-text">{{ bottomOverlayContent.text }}</p>
           </div>
@@ -86,6 +123,7 @@ import {
   resolveActiveLineIndex,
   resolveDeterministicWordLayouts,
   resolveWordStatus,
+  resolveUpcomingLine,
 } from "./model";
 import type {
   ClassicLine,
@@ -93,6 +131,9 @@ import type {
   ClassicWordLayoutConfig,
   ClassicWordStatus,
 } from "./types";
+import { useStageClock } from "@/components/LyricStage/useStageClock";
+import { useStageGlow } from "@/components/LyricStage/useStageGlow";
+import { resolveClassicTransitionMode, resolveClassicEnterDuration } from "./transition";
 import "./classic.scss";
 
 const props = withDefaults(
@@ -142,6 +183,11 @@ const rootRef = ref<HTMLElement | null>(null);
 const { width: containerWidth } = useElementSize(rootRef);
 const reducedPreference = usePreferredReducedMotion();
 const reducedMotion = computed(() => reducedPreference.value === "reduce");
+const stageTime = useStageClock(() => props.lines, props.clock.time);
+const refreshGlow = useStageGlow(rootRef, props.clock.time);
+const animateWords = computed(
+  () => props.wordAnimation && !!activeLine.value?.timed && !reducedMotion.value,
+);
 
 // 响应式自适应缩放因子（针对窄视口与移动端 360px ~ 760px 自适应缩放）
 const widthScaleFactor = computed(() => {
@@ -189,25 +235,26 @@ const activeLine = computed<ClassicLine | null>(() => {
 });
 
 // 下一句待播放的歌词
-const upcomingLine = computed<ClassicLine | null>(() => {
-  if (!props.lines.length) return null;
-  const idx = activeIndex.value;
-  if (idx < 0) return props.lines[0] || null;
-  return idx + 1 < props.lines.length ? props.lines[idx + 1] : null;
-});
+const upcomingLine = computed(() =>
+  resolveUpcomingLine(props.lines, activeIndex.value, stageTime.value),
+);
 
 // 底部沉底图层内容（优先展示活跃行翻译，唱完或间奏时展示下一句预告）
 const bottomOverlayContent = computed<{
   type: "translation" | "upcoming";
   text: string;
+  romanization?: string;
   seekTime?: number;
 } | null>(() => {
   if (props.loading) return null;
-  if (props.showTranslation && activeLine.value?.translation?.trim()) {
+  const translation = props.showTranslation ? activeLine.value?.translation?.trim() : "";
+  const romanization = props.showRomanization ? activeLine.value?.romanization?.trim() : "";
+  if (translation || romanization) {
     return {
       type: "translation",
-      text: activeLine.value.translation,
-      seekTime: activeLine.value.startTime,
+      text: translation || "",
+      romanization,
+      seekTime: activeLine.value?.startTime,
     };
   }
   if (props.showUpcoming && upcomingLine.value?.text?.trim()) {
@@ -261,14 +308,17 @@ function updateWordStatuses(time: number) {
     wordStatuses.value = [];
     return;
   }
-  if (props.wordAnimation === false) {
-    const lineStatus: ClassicWordStatus =
-      time < line.startTime ? "waiting" : time > line.endTime ? "passed" : "active";
-    wordStatuses.value = line.words.map(() => lineStatus);
-    return;
+  const nextStatuses: ClassicWordStatus[] = !animateWords.value
+    ? line.words.map(() =>
+        time < line.startTime ? "waiting" : time > line.endTime ? "passed" : "active",
+      )
+    : line.words.map((word) => resolveWordStatus(word, time));
+  if (
+    nextStatuses.length !== wordStatuses.value.length ||
+    nextStatuses.some((status, index) => status !== wordStatuses.value[index])
+  ) {
+    wordStatuses.value = nextStatuses;
   }
-  const nextStatuses = line.words.map((w) => resolveWordStatus(w, time));
-  wordStatuses.value = nextStatuses;
 }
 
 function syncTime(time: number) {
@@ -280,12 +330,32 @@ function syncTime(time: number) {
 }
 
 // 订阅时钟与歌词列表变更，立即同步
-watch(props.clock.time, (time) => syncTime(time), { immediate: true });
+watch(stageTime, (time) => syncTime(time), { immediate: true });
+watch(animateWords, () => updateWordStatuses(props.clock.time.value));
 watch(
   () => props.lines,
   () => syncTime(props.clock.time.value),
   { immediate: true },
 );
+
+// 新旧行在同一网格中并行过渡；离场行只保留视觉，不再响应跳转。
+function restoreLineInteraction(element: Element) {
+  (element as HTMLElement).inert = false;
+  element.removeAttribute("aria-hidden");
+}
+
+function prepareLineEnter(element: Element) {
+  restoreLineInteraction(element);
+  const line = activeLine.value;
+  const duration = line ? resolveClassicEnterDuration(line, props.clock.time.value) : 0;
+  (element as HTMLElement).style.setProperty("--line-enter-duration", `${duration}ms`);
+  element.toggleAttribute("data-skip-enter", duration === 0);
+}
+
+function prepareLineLeave(element: Element) {
+  (element as HTMLElement).inert = true;
+  element.setAttribute("aria-hidden", "true");
+}
 
 function getWordStyle(wIdx: number): CSSProperties {
   const cfg = wordConfigs.value[wIdx];
@@ -300,6 +370,7 @@ function getWordStyle(wIdx: number): CSSProperties {
     "--word-rotate": `${cfg.rotate}deg`,
     "--word-scale": `${cfg.scale}`,
     "--word-passed-rotate": `${cfg.passedRotate}deg`,
+    "--word-waiting-rotate": `${props.enableWordRotation ? cfg.rotate + 20 : 0}deg`,
     marginRight: cfg.marginRight,
   } as CSSProperties;
 }
@@ -310,5 +381,6 @@ const visualizerStyle = computed(() => ({
   "--classic-font-size": `${resolvedFontSize.value}px`,
   "--classic-tran-size": `${resolvedTranSize.value}px`,
   "--classic-roma-size": `${resolvedRomaSize.value}px`,
+  "--classic-breathing": props.breathingFloatMultiplier,
 }));
 </script>

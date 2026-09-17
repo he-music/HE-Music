@@ -1,6 +1,7 @@
 // src/components/Classic/model.ts
 // Adapted from Folia (chthollyphile, AGPL-3.0) Visualizer.tsx & graphemeTiming.ts.
 
+import { insertInterludes } from "../LyricStage/interludes";
 import {
   buildPostLyricLayoutUnits,
   buildDisplayWordsFromLayoutUnits,
@@ -75,23 +76,12 @@ export function resolveDeterministicWordLayouts(
   const resolvedTuning: ClassicTuning = { ...DEFAULT_CLASSIC_TUNING, ...tuning };
   const seed = line.startTime;
   const containerW = options?.containerWidth ?? 1000;
-  const isNarrowScreen = containerW < 680;
   const widthFactor = Math.max(0.5, Math.min(1.0, containerW / 760));
 
-  // 容器对齐确定性轻微随机（窄屏移动端强制居中防裁切，宽屏桌面端保持自然海报风）
-  const justifyOptions: ClassicLineLayoutConfig["justifyContent"][] = isNarrowScreen
-    ? ["center"]
-    : ["center", "center", "flex-start", "flex-end", "space-around"];
-  const alignOptions: ClassicLineLayoutConfig["alignItems"][] = [
-    "center",
-    "center",
-    "flex-start",
-    "flex-end",
-  ];
-
+  // 整句始终居中，视觉错落只由下方的词级位移与旋转承担。
   const lineConfig: ClassicLineLayoutConfig = {
-    justifyContent: justifyOptions[Math.floor(Math.abs(seed) % justifyOptions.length)],
-    alignItems: alignOptions[Math.floor(Math.abs(seed * 2) % alignOptions.length)],
+    justifyContent: "center",
+    alignItems: "center",
     perspective: 1000,
   };
 
@@ -103,6 +93,17 @@ export function resolveDeterministicWordLayouts(
 
   const wordConfigs: ClassicWordLayoutConfig[] = line.words.map((w, i) => {
     const wordSeed = seed + i * 37;
+    if (line.isInterlude) {
+      return {
+        id: `${w.text}-${i}-${seed}`,
+        x: 0,
+        y: (deterministicRandom(wordSeed, 2) - 0.5) * 15 * widthFactor,
+        rotate: 0,
+        scale: 1.5,
+        marginRight: i === line.words.length - 1 ? "0px" : `${48 * widthFactor}px`,
+        passedRotate: 0,
+      };
+    }
     const xVal = (deterministicRandom(wordSeed, 1) - 0.5) * baseSpread * 2;
     const yVal = (deterministicRandom(wordSeed, 2) - 0.5) * baseSpread * 2;
     const wordScale = 1.05 + deterministicRandom(wordSeed, 4) * 0.15;
@@ -155,8 +156,8 @@ export function resolveWordStatus(
 export function resolveActiveLineIndex(lines: ClassicLine[], currentTime: number): number {
   if (!lines.length) return -1;
 
-  // 1. 查找是否有正在演唱的行
-  for (let i = 0; i < lines.length; i++) {
+  // 与 Folia 一致：重叠时优先显示最近开始的行，不等待上一句尾音结束。
+  for (let i = lines.length - 1; i >= 0; i--) {
     const line = lines[i];
     if (currentTime >= line.startTime && currentTime < line.endTime) {
       return i;
@@ -194,6 +195,19 @@ export function resolveActiveLineIndex(lines: ClassicLine[], currentTime: number
   return 0;
 }
 
+/** 前奏与间奏都按时间寻找下一句，避免等待态跳回第一句。 */
+export function resolveUpcomingLine(
+  lines: ClassicLine[],
+  activeIndex: number,
+  currentTime: number,
+): ClassicLine | null {
+  const upcoming =
+    activeIndex >= 0
+      ? lines.slice(activeIndex + 1)
+      : lines.filter((line) => line.startTime > currentTime);
+  return upcoming.find((line) => !line.isInterlude) ?? null;
+}
+
 /**
  * 将 HE-Music 原始歌词数据转换为 Classic 标准模型
  * 兼容 AMLL (LyricLine: words[].word, translatedLyric) 和标准网易云/QQ 歌词
@@ -216,18 +230,18 @@ export function adaptClassicLines(
       return Boolean((line.content ?? line.text ?? "").trim());
     })
     .sort(
-      (a, b) =>
-        (a.line.startTime ?? a.line.time ?? 0) - (b.line.startTime ?? b.line.time ?? 0),
+      (a, b) => (a.line.startTime ?? a.line.time ?? 0) - (b.line.startTime ?? b.line.time ?? 0),
     );
 
   if (!sorted.length) return [];
 
-  return sorted
+  const adapted: ClassicLine[] = sorted
     .map(({ line, index }, position) => {
       const start = Math.max(0, line.startTime ?? line.time ?? 0);
-      const nextStart = sorted
+      const nextLine = sorted
         .slice(position + 1)
-        .find((item) => (item.line.startTime ?? item.line.time ?? 0) > start)?.line.startTime;
+        .find((item) => (item.line.startTime ?? item.line.time ?? 0) > start)?.line;
+      const nextStart = nextLine?.startTime ?? nextLine?.time;
 
       // 计算行结束时间
       const rawWords = Array.isArray(line.words) ? line.words : [];
@@ -261,7 +275,7 @@ export function adaptClassicLines(
       let words: ClassicWord[] = [];
       let fullText = "";
 
-      if (rawWords.length > 0 && wordTimed) {
+      if (rawWords.length > 0 && timed) {
         // AMLL 或 YRC 逐字数据
         const tokens: PartitaWordToken[] = rawWords
           .map((w: any) => {
@@ -290,9 +304,7 @@ export function adaptClassicLines(
       } else {
         // 普通歌词或非逐字模式：根据 fullText 智能按语义/空格切词，杜绝整句合并导致的不可换行与溢出
         if (rawWords.length > 0) {
-          fullText = rawWords
-            .map((w: any) => String(w.word ?? w.text ?? w.content ?? ""))
-            .join("");
+          fullText = rawWords.map((w: any) => String(w.word ?? w.text ?? w.content ?? "")).join("");
         } else {
           fullText = String(line.content ?? line.text ?? "").trim();
         }
@@ -327,41 +339,20 @@ export function adaptClassicLines(
           const finalTokens = mergedTokens.filter((s) => s.trim().length > 0);
           const tokensList = finalTokens.length > 0 ? finalTokens : [fullText];
 
-          const lineDuration = Math.max(end - start, 500);
-          const totalChars = Math.max(fullText.length, 1);
-          let elapsedChars = 0;
-
-          words = tokensList.map((token: string, ti: number) => {
-            const tokenChars = token.length;
-            const wStart = Math.round(start + (lineDuration * elapsedChars) / totalChars);
-            elapsedChars += tokenChars;
-            const wEnd =
-              ti === tokensList.length - 1
-                ? end
-                : Math.round(start + (lineDuration * elapsedChars) / totalChars);
-
-            return {
-              text: token,
-              startTime: wStart,
-              endTime: wEnd,
-              graphemes: buildWordGraphemes(token, wStart, wEnd),
-            };
-          });
+          // 分词只服务排版；没有逐字时间时所有词共享整行时间。
+          words = tokensList.map((token: string) => ({
+            text: token,
+            startTime: start,
+            endTime: end,
+            graphemes: [],
+          }));
         }
       }
 
-      const translation = (
-        line.translatedLyric ??
-        line.translation ??
-        line.tran ??
-        ""
-      ).trim() || undefined;
-      const romanization = (
-        line.romanLyric ??
-        line.romanization ??
-        line.roma ??
-        ""
-      ).trim() || undefined;
+      const translation =
+        (line.translatedLyric ?? line.translation ?? line.tran ?? "").trim() || undefined;
+      const romanization =
+        (line.romanLyric ?? line.romanization ?? line.roma ?? "").trim() || undefined;
       const key = `${index}:${start}`;
 
       return {
@@ -373,12 +364,15 @@ export function adaptClassicLines(
         endTime: end,
         words,
         timed: timed && words.length > 0,
-        isChorus: Boolean(
-          line.isChorus || fullText.includes("♪") || fullText.includes(" Chorus "),
-        ),
+        isChorus: Boolean(line.isChorus || fullText.includes("♪") || fullText.includes(" Chorus ")),
       };
     })
     .filter((line) => line.text.length > 0);
+  return insertInterludes<ClassicLine>(
+    adapted,
+    (line) => line,
+    (line) => line,
+  );
 }
 
 /**

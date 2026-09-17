@@ -8,6 +8,7 @@ import {
   resolveActiveLineIndex,
   resolveDeterministicWordLayouts,
   resolveWordStatus,
+  resolveUpcomingLine,
   splitLyricGraphemes,
 } from "./model";
 
@@ -107,6 +108,31 @@ describe("Classic visualizer model", () => {
     expect(resolveActiveLineIndex(lines, 10000)).toBe(2);
   });
 
+  it("switches to the latest started overlapping line without waiting for the old tail", () => {
+    const lines = adaptClassicLines([
+      { content: "上一句", startTime: 1000, endTime: 3400 },
+      { content: "下一句", startTime: 3000, endTime: 5000 },
+    ]);
+    expect(resolveActiveLineIndex(lines, 2999)).toBe(0);
+    expect(resolveActiveLineIndex(lines, 3000)).toBe(1);
+    expect(resolveActiveLineIndex(lines, 3200)).toBe(1);
+    expect(resolveActiveLineIndex(lines, 3400)).toBe(1);
+    // 回拖必须恢复前一句，选行不能依赖上次播放方向。
+    expect(resolveActiveLineIndex(lines, 2500)).toBe(0);
+  });
+
+  it("selects contiguous quick lines exactly at their starts", () => {
+    const lines = adaptClassicLines([
+      { content: "一", startTime: 0, endTime: 2000 },
+      { content: "二", startTime: 2000, endTime: 2150 },
+      { content: "三", startTime: 2150, endTime: 2230 },
+      { content: "四", startTime: 2230, endTime: 4000 },
+    ]);
+    for (const [index, line] of lines.entries()) {
+      expect(resolveActiveLineIndex(lines, line.startTime)).toBe(index);
+    }
+  });
+
   it("adapts AMLL lyric format (words[].word & translatedLyric)", () => {
     const amllLyrics = [
       {
@@ -191,6 +217,30 @@ describe("Classic visualizer model", () => {
     const adaptedYrc = adaptClassicLines(previewSource, true);
     expect(adaptedYrc).toHaveLength(4);
     expect(adaptedYrc[0].words.length).toBe(7);
+  });
+
+  it("keeps the upcoming line ahead during a long interlude", () => {
+    const lines = adaptClassicLines([
+      { content: "第一句", startTime: 1000, endTime: 2000 },
+      { content: "第二句", startTime: 4000, endTime: 5000 },
+      { content: "第三句", startTime: 10000, endTime: 12000 },
+    ]);
+    for (const time of [6500, 7000, 8000]) {
+      const index = resolveActiveLineIndex(lines, time);
+      expect(lines[index].isInterlude).toBe(true);
+      expect(lines[index].text).toBe("......");
+      expect(resolveUpcomingLine(lines, index, time)?.text).toBe("第三句");
+    }
+    expect(resolveUpcomingLine(lines, -1, 0)?.text).toBe("第一句");
+    expect(resolveUpcomingLine(lines, lines.length - 1, 13000)).toBeNull();
+  });
+
+  it("uses the next legacy LRC timestamp when no explicit end exists", () => {
+    const lines = adaptClassicLines([
+      { content: "第一句", time: 1000 },
+      { content: "第二句", time: 2000 },
+    ]);
+    expect(lines[0].endTime).toBe(2000);
   });
 
   it("calculates lyric seek time in exact milliseconds (never in seconds)", () => {

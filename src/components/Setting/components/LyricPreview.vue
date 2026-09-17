@@ -95,7 +95,7 @@
         :breathing-float-multiplier="settingStore.classicBreathingFloat"
         :word-spacing="settingStore.classicWordSpacing"
         :main-color="previewMainColor"
-        :accent-color="previewAccentColor"
+        :accent-color="previewMainColor"
         :empty-text="t('setting.lyrics.classic_empty')"
         :seek-label="t('setting.lyrics.classic_seek')"
         @seek="seekPreview"
@@ -172,14 +172,6 @@ const previewMainColor = computed(() => {
   return main ? `${main.r}, ${main.g}, ${main.b}` : "239, 239, 239";
 });
 
-const previewAccentColor = computed(() => {
-  if (settingStore.playerMainColorType === "follow-cover") {
-    const primary = statusStore.songCoverTheme?.light?.primary;
-    if (primary) return `${primary.r}, ${primary.g}, ${primary.b}`;
-  }
-  const main = statusStore.playerMainColor;
-  return main ? `${main.r}, ${main.g}, ${main.b}` : "255, 255, 255";
-});
 const previewTime = shallowRef(0);
 const previewClock = { time: previewTime };
 const previewRoot = ref<HTMLElement | null>(null);

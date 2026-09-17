@@ -41,6 +41,7 @@ export interface ClassicLine {
   words: ClassicWord[];
   timed: boolean;
   isChorus?: boolean;
+  isInterlude?: boolean;
 }
 
 export type ClassicWordStatus = "waiting" | "active" | "passed";

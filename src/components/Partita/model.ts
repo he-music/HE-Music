@@ -2,6 +2,7 @@
 // https://github.com/chthollyphile/folia-major
 
 import type { PartitaWordToken } from "./cjkSemanticLayout";
+import { insertInterludes } from "../LyricStage/interludes";
 
 export interface PartitaGraphemeTiming {
   char: string;
@@ -25,6 +26,7 @@ export interface PartitaLine {
   background: boolean;
   duet: boolean;
   isChorus?: boolean;
+  isInterlude?: boolean;
 }
 
 export type WordPlayStatus = "waiting" | "active" | "passed";
@@ -63,17 +65,13 @@ export const buildWordGraphemeTimings = (
 const finite = (value: number, fallback: number) => (Number.isFinite(value) ? value : fallback);
 
 /** 将 AMLL 格式歌词转换为 Partita 行数据模型（时间统一为毫秒） */
-export function adaptPartitaLines(
-  input: any[],
-  wordTimed: boolean,
-  duration = 0,
-): PartitaLine[] {
+export function adaptPartitaLines(input: any[], wordTimed: boolean, duration = 0): PartitaLine[] {
   const sorted = input
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.words?.some((word) => word.word?.trim()))
     .sort((a, b) => a.line.startTime - b.line.startTime);
 
-  return sorted.map(({ line, index }, position) => {
+  const adapted: PartitaLine[] = sorted.map(({ line, index }, position) => {
     const start = Math.max(0, finite(line.startTime, 0));
     const nextStart = sorted.slice(position + 1).find((item) => item.line.startTime > start)
       ?.line.startTime;
@@ -89,7 +87,7 @@ export function adaptPartitaLines(
     const fullText = line.words.map((w) => w.word || "").join("");
 
     let words: PartitaWord[] = [];
-    if (!wordTimed) {
+    if (!timed) {
       // 普通歌词或非逐字模式：根据 fullText 智能按语义/空格切词，构建阶梯分块
       let rawSegments: string[] = [];
       if (typeof Intl !== "undefined" && Intl.Segmenter) {
@@ -120,26 +118,13 @@ export function adaptPartitaLines(
       const finalTokens = mergedTokens.filter((s) => s.trim().length > 0);
       const tokensList = finalTokens.length > 0 ? finalTokens : [fullText];
 
-      const lineDuration = Math.max(end - start, 500);
-      const totalChars = Math.max(fullText.length, 1);
-      let elapsedChars = 0;
-
-      words = tokensList.map((token: string, ti: number) => {
-        const tokenChars = token.length;
-        const wStart = Math.round(start + (lineDuration * elapsedChars) / totalChars);
-        elapsedChars += tokenChars;
-        const wEnd =
-          ti === tokensList.length - 1
-            ? end
-            : Math.round(start + (lineDuration * elapsedChars) / totalChars);
-
-        return {
-          text: token,
-          startTime: wStart,
-          endTime: wEnd,
-          graphemes: buildWordGraphemeTimings(token, wStart, wEnd),
-        };
-      });
+      // 分词只服务排版；普通歌词保持整行显示，不生成虚构的逐词时间。
+      words = tokensList.map((token: string) => ({
+        text: token,
+        startTime: start,
+        endTime: end,
+        graphemes: [],
+      }));
     } else {
       words = line.words.map((w) => {
         const text = w.word || "";
@@ -168,6 +153,18 @@ export function adaptPartitaLines(
       isChorus: false, // 可后续结合副歌检测标注
     };
   });
+  return insertInterludes<PartitaLine>(
+    adapted,
+    (line) => line,
+    (line) => ({
+      ...line,
+      fullText: line.text,
+      translation: "",
+      romanization: "",
+      background: false,
+      duet: false,
+    }),
+  );
 }
 
 /** 计算跳转时间，考虑用户偏移量 */
@@ -215,6 +212,8 @@ export function resolvePartitaFrame(lines: PartitaLine[], time: number) {
     activeIndex,
     activeLine: activeIndex >= 0 ? lines[activeIndex] : null,
     upcomingLine:
-      activeIndex >= 0 && activeIndex + 1 < lines.length ? lines[activeIndex + 1] : null,
+      activeIndex >= 0
+        ? (lines.slice(activeIndex + 1).find((line) => !line.isInterlude) ?? null)
+        : (lines.find((line) => line.startTime > time && !line.isInterlude) ?? null),
   };
 }

@@ -1,4 +1,5 @@
 import type { LyricLine } from "@applemusic-like-lyrics/lyric";
+import { insertInterludes } from "../LyricStage/interludes";
 
 // src/components/Monet/model.ts — AMLL 毫秒时间轴到 Monet 歌词轨道的适配。
 export interface MonetGlyph {
@@ -21,6 +22,7 @@ export interface MonetLine {
   romanization: string;
   background: boolean;
   duet: boolean;
+  isInterlude?: boolean;
 }
 export type LineStatus = "active" | "waiting" | "passed";
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
@@ -32,7 +34,7 @@ export function adaptMonetLines(input: LyricLine[], wordTimed: boolean, duration
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.words?.some((word) => word.word?.trim()))
     .sort((a, b) => a.line.startTime - b.line.startTime);
-  return sorted.map(({ line, index }, position) => {
+  const adapted: MonetLine[] = sorted.map(({ line, index }, position) => {
     const start = Math.max(0, finite(line.startTime, 0));
     const nextStart = sorted.slice(position + 1).find((item) => item.line.startTime > start)
       ?.line.startTime;
@@ -70,6 +72,26 @@ export function adaptMonetLines(input: LyricLine[], wordTimed: boolean, duration
       duet: Boolean(line.isDuet),
     };
   });
+  return insertInterludes<MonetLine>(
+    adapted,
+    (line) => ({ startTime: line.start, endTime: line.end }),
+    (line) => ({
+      key: line.key,
+      text: line.text,
+      start: line.startTime,
+      end: line.endTime,
+      words: line.words.map((word) => ({
+        text: word.text,
+        glyphs: [{ text: word.text, start: word.startTime, end: word.endTime }],
+      })),
+      timed: true,
+      isInterlude: true,
+      translation: "",
+      romanization: "",
+      background: false,
+      duet: false,
+    }),
+  );
 }
 
 export function lineStatus(line: MonetLine, time: number): LineStatus {

@@ -21,9 +21,9 @@
     flex: 1;
     min-height: 0;
     width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+    place-items: center;
     padding: 16px;
     box-sizing: border-box;
     will-change: transform;
@@ -31,6 +31,12 @@
     &.breathing {
       animation: classic-breathing 7.5s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
     }
+  }
+
+  // 新旧行占用同一舞台位置，退场不阻塞新句，也不挤动居中布局。
+  .classic-line-container,
+  .classic-empty-text {
+    grid-area: 1 / 1;
   }
 
   // 整行容器
@@ -41,28 +47,67 @@
     justify-content: safe center;
     row-gap: 10px;
     width: 100%;
-    max-width: 100%;
+    max-width: 72rem;
     cursor: pointer;
     box-sizing: border-box;
     will-change: transform, opacity, filter;
-    transition:
-      transform 0.4s cubic-bezier(0.25, 1, 0.5, 1),
-      opacity 0.35s ease-out,
-      filter 0.35s ease-out;
+    --line-enter-duration: 0.3s;
+    --line-exit-duration: 0.3s;
+    --line-enter-opacity: 0;
+    --line-enter-scale: 0.9;
+    --line-enter-blur: 10px;
+    --line-exit-scale: 1.1;
+    --line-exit-blur: 20px;
 
-    &.line-enter-active,
+    // Folia 的短句分档：fast 快速显现，none 无入场遮挡。
+    &[data-transition-mode="fast"] {
+      --line-enter-duration: 0.16s;
+      --line-exit-duration: 0.16s;
+      --line-enter-opacity: 0.35;
+      --line-enter-scale: 0.96;
+      --line-enter-blur: 4px;
+      --line-exit-scale: 1.04;
+      --line-exit-blur: 10px;
+    }
+
+    &[data-transition-mode="none"] {
+      --line-exit-duration: 0.12s;
+      --line-exit-scale: 1.02;
+      --line-exit-blur: 6px;
+    }
+
+    &[data-transition-mode="none"],
+    &[data-skip-enter] {
+      --line-enter-duration: 0s;
+      --line-enter-opacity: 1;
+      --line-enter-scale: 1;
+      --line-enter-blur: 0px;
+    }
+
+    &.line-enter-active {
+      z-index: 1;
+      transition:
+        opacity var(--line-enter-duration) ease-out,
+        transform var(--line-enter-duration) cubic-bezier(0.22, 1, 0.36, 1),
+        filter var(--line-enter-duration) ease-out;
+    }
     &.line-leave-active {
-      transition: all 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+      z-index: 0;
+      pointer-events: none;
+      transition:
+        opacity var(--line-exit-duration) ease-out,
+        transform var(--line-exit-duration) ease-out,
+        filter var(--line-exit-duration) ease-out;
     }
     &.line-enter-from {
-      opacity: 0;
-      transform: scale(0.9) translateY(14px);
-      filter: blur(10px);
+      opacity: var(--line-enter-opacity);
+      transform: scale(var(--line-enter-scale));
+      filter: blur(var(--line-enter-blur));
     }
     &.line-leave-to {
       opacity: 0;
-      transform: scale(1.08) translateY(-14px);
-      filter: blur(16px);
+      transform: scale(var(--line-exit-scale));
+      filter: blur(var(--line-exit-blur));
     }
   }
 
@@ -81,7 +126,9 @@
     transform-origin: center center;
     will-change: transform, opacity, filter;
     transition:
-      transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      translate 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      scale 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+      rotate 0.35s ease-out,
       opacity 0.28s ease,
       filter 0.28s ease;
 
@@ -91,11 +138,13 @@
       visibility: hidden !important;
       pointer-events: none;
       filter: blur(10px);
-      transform: translate3d(var(--word-waiting-x, var(--word-x, 0px)), var(--word-waiting-y, var(--word-y, 0px)), 0)
-        scale(0.5)
-        rotate(calc(var(--word-rotate, 0deg) + 20deg));
+      translate: var(--word-waiting-x, var(--word-x, 0px)) var(--word-waiting-y, var(--word-y, 0px));
+      scale: 0.5;
+      rotate: var(--word-waiting-rotate, 0deg);
       transition:
-        transform 0.4s ease-out,
+        translate 0.4s ease-out,
+        scale 0.4s ease-out,
+        rotate 0.4s ease-out,
         opacity 0.4s ease-out,
         filter 0.4s ease-out;
 
@@ -114,11 +163,13 @@
       visibility: visible;
       filter: blur(0px);
       z-index: 2;
-      transform: translate3d(var(--word-x, 0px), var(--word-y, 0px), 0)
-        scale(calc(var(--word-scale, 1) * 1.4))
-        rotate(var(--word-rotate, 0deg));
+      translate: var(--word-x, 0px) var(--word-y, 0px);
+      scale: calc(var(--word-scale, 1) * 1.4);
+      rotate: var(--word-rotate, 0deg);
       transition:
-        transform 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+        translate 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+        scale 0.18s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+        rotate 0.18s ease-out,
         opacity 0.1s ease-out,
         filter 0.12s ease-out;
 
@@ -136,11 +187,13 @@
       opacity: 0.82;
       visibility: visible;
       filter: blur(0px);
-      transform: translate3d(var(--word-x, 0px), var(--word-y, 0px), 0)
-        scale(var(--word-scale, 1))
-        rotate(calc(var(--word-rotate, 0deg) + var(--word-passed-rotate, 0deg)));
+      translate: var(--word-x, 0px) var(--word-y, 0px);
+      scale: var(--word-scale, 1);
+      rotate: calc(var(--word-rotate, 0deg) + var(--word-passed-rotate, 0deg));
       transition:
-        transform 5s linear, // 严格 1:1 复刻 Folia 的 5s 超慢线性漂浮旋转！
+        translate 0.5s ease-out,
+        scale 0.5s ease-out,
+        rotate 5s linear,
         opacity 0.5s ease-out,
         filter 0.5s ease-out;
 
@@ -171,6 +224,12 @@
     text-shadow:
       0 0 16px rgba(var(--classic-accent-color, 255, 255, 255), 0.85),
       0 0 32px rgba(var(--classic-accent-color, 255, 255, 255), 0.5);
+  }
+
+  // 字形亮度由绝对播放时间驱动，唱完后保留包络衰减。
+  &.word-sweep .classic-word-glow {
+    opacity: 1;
+    transition: none;
   }
 
   // 副歌水波纹扩散光晕
@@ -215,8 +274,9 @@
         pointer-events: none;
       }
       &.status-active {
-        transform: translate3d(var(--word-x, 0px), var(--word-y, 0px), 0)
-          scale(var(--word-scale, 1)) !important;
+        translate: 0 0;
+        scale: 1 !important;
+        rotate: 0deg !important;
         opacity: 1 !important;
         visibility: visible !important;
         .classic-word-body {
@@ -227,8 +287,9 @@
         }
       }
       &.status-passed {
-        transform: translate3d(var(--word-x, 0px), var(--word-y, 0px), 0)
-          scale(var(--word-scale, 1)) !important;
+        translate: 0 0;
+        scale: 1 !important;
+        rotate: 0deg !important;
         opacity: 0.82 !important;
       }
     }
@@ -281,6 +342,13 @@
       text-shadow: none;
     }
 
+    .bottom-romanization {
+      font-size: var(--classic-roma-size, 16px);
+      color: rgba(var(--classic-main-color, 239, 239, 239), 0.72);
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+
     // 下一句预告（对齐 Folia：纯文本轻微模糊预告，无徽章无黑底阴影）
     .bottom-upcoming {
       display: flex;
@@ -306,7 +374,6 @@
         }
       }
     }
-
   }
 
   // 空白占位等待态
@@ -338,10 +405,12 @@
     transform: translateY(0px) scale(1);
   }
   32% {
-    transform: translateY(-12px) scale(1.012);
+    transform: translateY(calc(-12px * var(--classic-breathing, 1)))
+      scale(calc(1 + 0.012 * var(--classic-breathing, 1)));
   }
   68% {
-    transform: translateY(5px) scale(0.995);
+    transform: translateY(calc(5px * var(--classic-breathing, 1)))
+      scale(calc(1 - 0.005 * var(--classic-breathing, 1)));
   }
 }
 

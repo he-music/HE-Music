@@ -1,7 +1,10 @@
 <template>
   <div
     ref="railRef"
-    :class="['partita-rail', { pure, 'no-word-animation': !wordAnimation }]"
+    :class="[
+      'partita-rail',
+      { pure, 'no-word-animation': !animateWords, 'word-sweep': animateWords },
+    ]"
     :style="{
       '--partita-active-color': resolvedActiveColor,
       '--partita-font-size': `${resolvedFontSize}px`,
@@ -10,13 +13,20 @@
     }"
   >
     <!-- 1. 中央主舞台：占视口约 70% 高度，纯粹呈现云阶阶梯错落与引导线 -->
-    <div :class="['partita-stage-container', { pure }]">
-      <Transition name="partita-line" mode="out-in">
+    <div
+      :class="['partita-stage-container', { pure }]"
+      :style="{ animationPlayState: playing ? 'running' : 'paused' }"
+    >
+      <Transition name="partita-line" mode="out-in" @after-enter="refreshGlow">
         <!-- 活跃歌词展示 -->
         <div
           v-if="currentLayout && activeLine"
           :key="activeLine.key"
           class="partita-line-wrapper"
+          role="button"
+          tabindex="0"
+          @keydown.enter.prevent="onLineClick(activeLine.startTime)"
+          @keydown.space.prevent="onLineClick(activeLine.startTime)"
           @click="onLineClick(activeLine.startTime)"
         >
           <!-- 阶梯 Chunks 渲染 -->
@@ -45,14 +55,18 @@
             >
               <!-- 底层光晕发光层 -->
               <span class="partita-glow" aria-hidden="true">
-                <template v-if="wordAnimation && word.text.length > 1">
+                <template v-if="animateWords">
                   <span
-                    v-for="(char, cIdx) in getWordChars(word)"
+                    v-for="(glyph, cIdx) in getWordGraphemes(word)"
                     :key="cIdx"
-                    :class="['grapheme-char', { 'char-active': isCharActive(word, cIdx) }]"
+                    class="grapheme-char"
+                    data-stage-glyph
+                    :data-start="glyph.startTime"
+                    :data-end="glyph.endTime"
+                    :data-line-end="activeLine.endTime"
+                    style="opacity: 0"
+                    >{{ glyph.char }}</span
                   >
-                    {{ char }}
-                  </span>
                 </template>
                 <template v-else>
                   {{ word.text }}
@@ -64,7 +78,9 @@
 
               <!-- 副歌水波纹扩散 -->
               <span
-                v-if="activeLine.isChorus && getWordStatus(word) === 'active'"
+                v-if="
+                  activeLine.isChorus && getWordStatus(word) === 'active' && animateWords && playing
+                "
                 class="partita-ripple"
                 aria-hidden="true"
               />
@@ -96,14 +112,27 @@
       <div
         v-if="bottomOverlayContent"
         class="partita-bottom-overlay"
+        role="button"
+        tabindex="0"
+        @keydown.enter.prevent="
+          bottomOverlayContent.seekTime !== undefined && onLineClick(bottomOverlayContent.seekTime)
+        "
+        @keydown.space.prevent="
+          bottomOverlayContent.seekTime !== undefined && onLineClick(bottomOverlayContent.seekTime)
+        "
         @click="
           bottomOverlayContent.seekTime !== undefined && onLineClick(bottomOverlayContent.seekTime)
         "
       >
         <div class="bottom-content">
-          <div v-if="bottomOverlayContent.type === 'translation'" class="bottom-translation">
-            {{ bottomOverlayContent.text }}
-          </div>
+          <template v-if="bottomOverlayContent.type === 'translation'">
+            <div v-if="bottomOverlayContent.text" class="bottom-translation">
+              {{ bottomOverlayContent.text }}
+            </div>
+            <div v-if="bottomOverlayContent.romanization" class="bottom-romanization">
+              {{ bottomOverlayContent.romanization }}
+            </div>
+          </template>
           <div v-else-if="bottomOverlayContent.type === 'upcoming'" class="bottom-upcoming">
             <p class="upcoming-text">{{ bottomOverlayContent.text }}</p>
           </div>
@@ -115,9 +144,11 @@
 
 <script setup lang="ts">
 import { computed, type CSSProperties, type Ref, shallowRef } from "vue";
-import { useElementSize } from "@vueuse/core";
+import { useElementSize, usePreferredReducedMotion } from "@vueuse/core";
 import type { PartitaLine, WordPlayStatus } from "./model";
-import { resolvePartitaFrame } from "./model";
+import { resolvePartitaFrame, buildWordGraphemeTimings } from "./model";
+import { useStageClock } from "@/components/LyricStage/useStageClock";
+import { useStageGlow } from "@/components/LyricStage/useStageGlow";
 import {
   getOrBuildPartitaLayout,
   type PartitaChunkData,
@@ -180,7 +211,12 @@ const resolvedActiveColor = computed(() => {
 });
 
 // 当前时间（毫秒）
-const currentTime = computed(() => props.clock.time.value);
+const currentTime = useStageClock(() => props.lines, props.clock.time);
+const reducedPreference = usePreferredReducedMotion();
+const animateWords = computed(
+  () => props.wordAnimation && !!activeLine.value?.timed && reducedPreference.value !== "reduce",
+);
+const refreshGlow = useStageGlow(railRef, props.clock.time);
 
 // 解析当前活跃行
 const currentFrame = computed(() => resolvePartitaFrame(props.lines, currentTime.value));
@@ -191,13 +227,17 @@ const upcomingLine = computed(() => currentFrame.value.upcomingLine);
 const bottomOverlayContent = computed<{
   type: "translation" | "upcoming";
   text: string;
+  romanization?: string;
   seekTime?: number;
 } | null>(() => {
-  if (props.showTranslation && activeLine.value?.translation?.trim()) {
+  const translation = props.showTranslation ? activeLine.value?.translation?.trim() : "";
+  const romanization = props.showRomanization ? activeLine.value?.romanization?.trim() : "";
+  if (translation || romanization) {
     return {
       type: "translation",
-      text: activeLine.value.translation,
-      seekTime: activeLine.value.startTime,
+      text: translation || "",
+      romanization,
+      seekTime: activeLine.value?.startTime,
     };
   }
   if (props.showUpcoming && upcomingLine.value?.fullText?.trim()) {
@@ -255,6 +295,13 @@ const currentLayout = computed<PartitaSequentialLayout | null>(() => {
 // 计算 Chunk 状态
 function getChunkStatus(chunk: PartitaChunkData): WordPlayStatus {
   const time = currentTime.value;
+  if (!animateWords.value && activeLine.value) {
+    return time < activeLine.value.startTime
+      ? "waiting"
+      : time > activeLine.value.endTime
+        ? "passed"
+        : "active";
+  }
   if (!chunk.chunkWords || chunk.chunkWords.length === 0) return "waiting";
   const start = chunk.chunkWords[0].startTime;
   const end = chunk.chunkWords[chunk.chunkWords.length - 1].endTime;
@@ -274,14 +321,16 @@ function getChunkStyle(chunk: PartitaChunkData): CSSProperties {
     status === "passed" ? chunk.config.rotate + chunk.config.passedRotate : chunk.config.rotate;
 
   return {
-    transform: `translate3d(${offsetX}px, 0, 0) scale(${scale}) rotate(${rotate}deg)`,
-    marginBottom: `${chunk.config.marginBottom}px`,
+    translate: `${offsetX}px 0`,
+    scale: String(scale),
+    rotate: `${rotate}deg`,
+    marginBottom: chunk.config.marginBottom,
   };
 }
 
 // 计算 Word 状态
 function getWordStatus(word: PartitaWordToken, chunk?: PartitaChunkData): WordPlayStatus {
-  if (props.wordAnimation === false && chunk) {
+  if (!animateWords.value && chunk) {
     return getChunkStatus(chunk);
   }
   const time = currentTime.value;
@@ -290,23 +339,10 @@ function getWordStatus(word: PartitaWordToken, chunk?: PartitaChunkData): WordPl
   return "active";
 }
 
-// 提取词的字符数组
-function getWordChars(word: PartitaWordToken): string[] {
-  return Array.from(word.text);
-}
-
-// 检查某个字符是否正处于扫光高亮时间段
-function isCharActive(word: PartitaWordToken, charIndex: number): boolean {
-  const time = currentTime.value;
-  const chars = getWordChars(word);
-  if (chars.length <= 1) return getWordStatus(word) === "active";
-
-  const duration = Math.max(word.endTime - word.startTime, 50);
-  const charDuration = duration / chars.length;
-  const charStart = word.startTime + charDuration * charIndex;
-  const charEnd = charStart + charDuration;
-
-  return time >= charStart && time <= charEnd;
+// 优先使用模型字形，标点合并后的展示词才补建字形时间。
+function getWordGraphemes(word: PartitaWordToken) {
+  if ("graphemes" in word) return (word as PartitaLine["words"][number]).graphemes;
+  return buildWordGraphemeTimings(word.text, word.startTime, word.endTime);
 }
 
 // 点击跳转
