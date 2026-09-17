@@ -138,24 +138,28 @@
           {{ t("search.more_version") }} ({{ data[index].sublist.length }})
         </n-button>
       </div>
-      <n-collapse-transition
+      <Transition
         v-if="data[index].sublist.length"
-        :show="isExpanded(expandedVersions, index)"
+        name="versions-expand"
         @after-enter="refreshList"
         @after-leave="refreshList"
       >
-        <div class="version-list" @click.stop @dblclick.stop>
-          <SearchSongList
-            :data="data[index].sublist"
-            :keyword="keyword"
-            :allow-full-lyric="allowFullLyric"
-            height="auto"
-            :show-header="false"
-            :show-footer="false"
-            @size-change="refreshList"
-          />
+        <div v-if="isExpanded(expandedVersions, index)" class="versions-expand">
+          <div class="versions-clip">
+            <div class="version-list" @click.stop @dblclick.stop>
+              <SearchSongList
+                :data="data[index].sublist"
+                :keyword="keyword"
+                :allow-full-lyric="allowFullLyric"
+                height="auto"
+                :show-header="false"
+                :show-footer="false"
+                @size-change="refreshList"
+              />
+            </div>
+          </div>
         </div>
-      </n-collapse-transition>
+      </Transition>
     </template>
   </SongList>
 </template>
@@ -332,6 +336,33 @@ const refreshList = () => {
 :deep(.virtual-item:has(> .song-card .song-content.play) > .lyric-search-section) {
   border-color: rgba(var(--primary), 0.58);
   background-color: rgba(var(--primary), 0.28);
+}
+
+.versions-expand {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.versions-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.versions-expand-enter-active,
+.versions-expand-leave-active {
+  transition: grid-template-rows 260ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.versions-expand-enter-from,
+.versions-expand-leave-to {
+  grid-template-rows: 0fr;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .versions-expand-enter-active,
+  .versions-expand-leave-active {
+    transition: none;
+  }
 }
 
 .version-list {

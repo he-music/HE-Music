@@ -1,9 +1,10 @@
 <template>
   <div ref="wrapperRef" class="virtual-scroll-wrapper" :style="{ height: containerHeightStyle }">
-    <n-scrollbar
+    <component
+      :is="isAutoHeight ? 'div' : NScrollbar"
       ref="scrollbarRef"
       class="custom-virtual-list"
-      style="height: 100%"
+      :style="{ height: isAutoHeight ? 'auto' : '100%' }"
       @scroll="handleScroll"
     >
       <!-- 占位空间 -->
@@ -29,7 +30,7 @@
           </div>
         </div>
       </div>
-    </n-scrollbar>
+    </component>
   </div>
 </template>
 
@@ -43,7 +44,7 @@ interface Props {
   itemHeight: number;
   /** 是否开启定高模式（开启后不进行 DOM 测量，性能更佳） */
   itemFixed?: boolean;
-  /** 容器高度 */
+  /** 容器高度；auto 使用最近的外部滚动容器，仍保留虚拟渲染 */
   height: number | string;
   /** 底部内边距 */
   paddingBottom?: number;
@@ -71,6 +72,9 @@ const emit = defineEmits<{
 
 const wrapperRef = ref<HTMLElement | null>(null);
 const scrollbarRef = ref<InstanceType<typeof NScrollbar> | null>(null);
+const isAutoHeight = computed(() => props.height === "auto");
+const externalScrollParent = shallowRef<HTMLElement | null>(null);
+const externalViewportHeight = ref(0);
 
 // 测量外层容器高度
 const { height: containerHeight } = useElementSize(wrapperRef);
@@ -98,18 +102,19 @@ const containerHeightStyle = computed(() => {
 
 // 实际使用的容器高度数值
 const viewportHeight = computed(() => {
+  if (isAutoHeight.value) return externalViewportHeight.value;
   if (typeof props.height === "number") return props.height;
   return containerHeight.value || 0;
 });
 
 // 初始化高度数组
-const initializeHeights = () => {
+const initializeHeights = (reset = false) => {
   if (props.itemFixed) return;
 
   const length = props.items.length;
   // 如果之前已经有数据，尽量复用，否则重置
-  if (itemHeights.value.length !== length) {
-    const oldHeights = itemHeights.value;
+  if (reset || itemHeights.value.length !== length) {
+    const oldHeights = reset ? [] : itemHeights.value;
     itemHeights.value = Array.from({ length }, (_, i) => oldHeights[i] || props.itemHeight);
   }
   updateTops();
@@ -131,6 +136,8 @@ const updateTops = (fromIndex = 0) => {
   }
 
   itemTops.value = tops;
+  // shallowRef 的数组原地更新也需要通知总高度和偏移量重新计算。
+  triggerRef(itemTops);
 };
 
 // 列表总高度
@@ -154,7 +161,7 @@ const calculateVisibleRange = (currentScrollTop: number) => {
   const vHeight = viewportHeight.value;
   if (!vHeight) return; // 容器高度未就绪
 
-  let startIndex = 0;
+  let startIndex = props.items.length - 1;
   let endIndex = 0;
 
   if (props.itemFixed) {
@@ -199,7 +206,7 @@ const calculateVisibleRange = (currentScrollTop: number) => {
   }
 
   // 应用缓冲区
-  const newStart = Math.max(0, startIndex - props.bufferSize);
+  const newStart = Math.min(props.items.length - 1, Math.max(0, startIndex - props.bufferSize));
   const newEnd = Math.min(props.items.length - 1, endIndex + props.bufferSize);
 
   if (newStart !== actualStartIndex.value || newEnd !== actualEndIndex.value) {
@@ -229,11 +236,12 @@ const measureItemHeights = () => {
   if (props.itemFixed) return;
   if (!itemRefs.value.length || props.items.length === 0) return;
 
-  let hasChanges = false;
-  itemRefs.value.forEach((el, index) => {
+  let firstChangedIndex = props.items.length;
+  itemRefs.value.forEach((el) => {
     if (!el) return;
 
-    const actualIndex = actualStartIndex.value + index;
+    // v-for 的 ref 数组顺序不保证与数据顺序一致。
+    const actualIndex = Number(el.dataset.index);
     if (actualIndex < 0 || actualIndex >= props.items.length) return;
 
     try {
@@ -242,25 +250,63 @@ const measureItemHeights = () => {
       // 允许 1px 误差，避免频繁更新
       if (height > 0 && Math.abs(height - itemHeights.value[actualIndex]) > 0.5) {
         itemHeights.value[actualIndex] = height;
-        hasChanges = true;
+        firstChangedIndex = Math.min(firstChangedIndex, actualIndex);
       }
     } catch (error) {
       console.warn("测量项目高度时出错:", error);
     }
   });
 
-  if (hasChanges) {
+  if (firstChangedIndex < props.items.length) {
     triggerRef(itemHeights);
-    updateTops();
+    updateTops(firstChangedIndex);
+    calculateVisibleRange(scrollTop.value);
   }
 };
 
 let rafId: number | null = null;
 let pendingScrollTarget: HTMLElement | null = null;
 
+// auto 模式中，列表以完整占位高度参与页面布局，滚动位置换算为列表内坐标。
+const getExternalOffset = () => {
+  const wrapper = wrapperRef.value;
+  if (!wrapper) return 0;
+  const parent = externalScrollParent.value;
+  return parent
+    ? wrapper.getBoundingClientRect().top -
+        parent.getBoundingClientRect().top -
+        parent.clientTop +
+        parent.scrollTop
+    : wrapper.getBoundingClientRect().top + window.scrollY;
+};
+
+const syncExternalScroll = () => {
+  if (!isAutoHeight.value || !wrapperRef.value?.isConnected) return;
+  const parent = externalScrollParent.value;
+  const offset = getExternalOffset();
+  const parentScrollTop = parent ? parent.scrollTop : window.scrollY;
+  const parentHeight = parent ? parent.clientHeight : window.innerHeight;
+  externalViewportHeight.value = Math.max(0, parentHeight - Math.max(0, offset - parentScrollTop));
+  scrollTop.value = Math.max(0, parentScrollTop - offset);
+  calculateVisibleRange(scrollTop.value);
+};
+
 const processScroll = () => {
   rafId = null;
+  if (isAutoHeight.value) {
+    syncExternalScroll();
+    if (
+      pendingScrollTarget &&
+      viewportHeight.value > 0 &&
+      totalHeight.value - scrollTop.value - viewportHeight.value < 50
+    ) {
+      emit("reachBottom");
+    }
+    pendingScrollTarget = null;
+    return;
+  }
   const target = pendingScrollTarget;
+  pendingScrollTarget = null;
   if (!target) return;
 
   const { scrollTop: st, scrollHeight, clientHeight } = target;
@@ -273,8 +319,13 @@ const processScroll = () => {
   }
 };
 
+const scheduleScroll = () => {
+  if (rafId === null) rafId = requestAnimationFrame(processScroll);
+};
+
 // 处理滚动事件
 const handleScroll = (event: Event) => {
+  if (!wrapperRef.value?.isConnected) return;
   const target = event.target as HTMLElement;
   if (!target) return;
 
@@ -283,10 +334,36 @@ const handleScroll = (event: Event) => {
 
   // 合并多次滚动到一个 rAF
   pendingScrollTarget = target;
-  if (rafId === null) {
-    rafId = requestAnimationFrame(processScroll);
-  }
+  scheduleScroll();
 };
+
+const bindExternalScrollParent = () => {
+  externalScrollParent.value = null;
+  if (!isAutoHeight.value) return;
+  let parent = wrapperRef.value?.parentElement;
+  while (parent && parent !== document.body && parent !== document.documentElement) {
+    if (/(auto|scroll|overlay)/.test(getComputedStyle(parent).overflowY)) {
+      externalScrollParent.value = parent;
+      break;
+    }
+    parent = parent.parentElement;
+  }
+  syncExternalScroll();
+};
+
+useEventListener(externalScrollParent, "scroll", handleScroll, { passive: true });
+useEventListener(
+  window,
+  "scroll",
+  (event) => {
+    if (isAutoHeight.value && !externalScrollParent.value) handleScroll(event);
+  },
+  { passive: true },
+);
+useEventListener(window, "resize", scheduleScroll);
+useResizeObserver([wrapperRef, externalScrollParent], scheduleScroll);
+watch(isAutoHeight, () => nextTick(bindExternalScrollParent));
+watch(totalHeight, scheduleScroll);
 
 // 滚动到指定索引
 const scrollToIndex = (index: number, behavior: ScrollBehavior = "auto") => {
@@ -311,6 +388,11 @@ const scrollToIndex = (index: number, behavior: ScrollBehavior = "auto") => {
 
 // 滚动到指定位置
 const scrollToPosition = (top: number, behavior: ScrollBehavior = "auto") => {
+  if (isAutoHeight.value) {
+    const target = externalScrollParent.value ?? window;
+    target.scrollTo({ top: getExternalOffset() + top, behavior });
+    return;
+  }
   scrollbarRef.value?.scrollTo({
     top,
     behavior,
@@ -319,6 +401,10 @@ const scrollToPosition = (top: number, behavior: ScrollBehavior = "auto") => {
 
 // 获取当前滚动位置
 const getScrollTop = () => {
+  if (isAutoHeight.value) {
+    const parent = externalScrollParent.value;
+    return Math.max(0, (parent ? parent.scrollTop : window.scrollY) - getExternalOffset());
+  }
   return scrollTop.value;
 };
 
@@ -338,27 +424,25 @@ defineExpose({
   refreshMeasurements,
 });
 
-// 防抖高度测量
-const debouncedMeasure = useDebounceFn(measureItemHeights, 50);
+// 按帧合并测量，折叠动画期间也及时更新占位高度，避免后续歌曲突然跳位。
+let measureRafId: number | null = null;
+const scheduleMeasure = () => {
+  if (props.itemFixed || measureRafId !== null) return;
+  measureRafId = requestAnimationFrame(() => {
+    measureRafId = null;
+    measureItemHeights();
+  });
+};
+// 响应窗口换行、异步内容以及详情展开引起的实际行高变化。
+useResizeObserver(itemRefs, scheduleMeasure);
 
-// 监听数据变化
+// 数据替换或行高模式变化时丢弃按索引缓存的旧高度；追加数据时复用已有测量。
 watch(
-  () => props.items,
-  () => {
-    initializeHeights();
+  [() => props.items, () => props.items.length, () => props.itemHeight, () => props.itemFixed],
+  ([items, , height, fixed], [oldItems, , oldHeight, oldFixed]) => {
+    initializeHeights(items !== oldItems || height !== oldHeight || fixed !== oldFixed);
     calculateVisibleRange(scrollTop.value);
-    // 重新测量高度
-    nextTick(debouncedMeasure);
-  },
-  { deep: false },
-);
-
-// 监听数据长度变化
-watch(
-  () => props.items.length,
-  () => {
-    initializeHeights();
-    calculateVisibleRange(scrollTop.value);
+    nextTick(scheduleMeasure);
   },
 );
 
@@ -372,7 +456,7 @@ watch(
   () => [actualStartIndex.value, actualEndIndex.value],
   () => {
     if (!props.itemFixed) {
-      nextTick(debouncedMeasure);
+      nextTick(scheduleMeasure);
     }
   },
   { flush: "post" },
@@ -382,7 +466,8 @@ onMounted(() => {
   initializeHeights();
   // 等待 DOM 渲染和容器尺寸确定
   nextTick(() => {
-    calculateVisibleRange(0);
+    bindExternalScrollParent();
+    calculateVisibleRange(scrollTop.value);
     if (props.defaultScrollIndex) {
       scrollToIndex(props.defaultScrollIndex);
     }
@@ -391,7 +476,13 @@ onMounted(() => {
   });
 });
 
+onActivated(() => nextTick(bindExternalScrollParent));
+onDeactivated(() => {
+  externalScrollParent.value = null;
+});
+
 onUnmounted(() => {
+  if (measureRafId !== null) cancelAnimationFrame(measureRafId);
   if (rafId !== null) {
     cancelAnimationFrame(rafId);
     rafId = null;

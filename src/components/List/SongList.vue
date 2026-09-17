@@ -1,7 +1,12 @@
 <!-- 歌曲列表 - 虚拟列表 -->
 <template>
   <Transition name="fade" mode="out-in">
-    <div v-if="!isEmpty(listData)" ref="songListRef" class="song-list">
+    <div
+      v-if="!isEmpty(listData)"
+      ref="songListRef"
+      class="song-list"
+      :class="{ 'auto-height': height === 'auto' }"
+    >
       <Transition name="fade" mode="out-in">
         <div
           :key="listKey"
@@ -81,7 +86,7 @@
             :item-height="90"
             :item-fixed="false"
             :items="virtualListItems"
-            :height="showHeader ? 'calc(100% - 40px)' : '100%'"
+            :height="height === 'auto' ? 'auto' : showHeader ? 'calc(100% - 40px)' : '100%'"
             :padding-bottom="showFooter ? 80 : 0"
             @scroll="onScroll"
           >
@@ -370,15 +375,15 @@ const { height: songListHeight, stop: stopCalcHeight } = useElementSize(songList
 // 列表滚动
 const onScroll = (e: Event) => {
   emit("scroll", e);
-  const target = e.target as HTMLElement;
-  const top = target.scrollTop;
+  const target = e.target instanceof HTMLElement ? e.target : document.documentElement;
+  const top = props.height === "auto" ? (listRef.value?.getScrollTop() ?? 0) : target.scrollTop;
   scrollTop.value = top;
   scrollIndex.value = Math.floor(top / 90);
 
   // 触底检测
   const scrollHeight = target.scrollHeight;
   const clientHeight = target.clientHeight;
-  if (scrollHeight - top - clientHeight < 100 && !props.loading && props.loadMore) {
+  if (scrollHeight - target.scrollTop - clientHeight < 100 && !props.loading && props.loadMore) {
     emit("reachBottom", e);
   }
 };
@@ -479,6 +484,10 @@ onBeforeUnmount(() => {
   height: 100%;
   border-radius: 12px 0 0 12px;
   overflow: hidden;
+  &.auto-height {
+    height: auto;
+    overflow: visible;
+  }
   .song-card {
     padding-bottom: 12px;
     // padding-right: 4px;
