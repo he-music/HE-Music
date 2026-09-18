@@ -416,10 +416,22 @@ const initFileIpc = (): void => {
         // 保存修改后的元数据
         // Id3v2Settings.forceDefaultVersion = true;
         // Id3v2Settings.defaultVersion = 3;
+        const albumName =
+          typeof songData?.album === "object" && songData?.album
+            ? songData.album.name || "未知专辑"
+            : String(songData?.album || "未知专辑");
+        let performers: string[] = ["未知艺术家"];
+        if (Array.isArray(songData?.artists)) {
+          performers = songData.artists.map((ar: any) =>
+            typeof ar === "object" && ar?.name ? ar.name : String(ar || "未知艺术家"),
+          );
+        } else if (typeof songData?.artists === "string" && songData.artists.trim()) {
+          performers = [songData.artists.trim()];
+        }
         songFile.tag.title = songData?.name || "未知曲目";
-        songFile.tag.album = songData?.album?.name || "未知专辑";
-        songFile.tag.performers = songData?.artists?.map((ar: any) => ar.name) || ["未知艺术家"];
-        songFile.tag.albumArtists = songData?.artists?.map((ar: any) => ar.name) || ["未知艺术家"];
+        songFile.tag.album = albumName;
+        songFile.tag.performers = performers;
+        songFile.tag.albumArtists = performers;
         if (lyric && downloadLyric) songFile.tag.lyrics = lyric;
         if (songCover && downloadCover) songFile.tag.pictures = [songCover];
         // 保存元信息

@@ -113,8 +113,13 @@ class DownloadManager {
           platform?: string;
         },
       ) => {
-        // 校验 ID
-        if (progress.id && progress.id !== song.id && progress.platform === song.platform) return;
+        // 校验 ID 与平台
+        if (
+          (progress.id && progress.id !== song.id) ||
+          (progress.platform && progress.platform !== song.platform)
+        ) {
+          return;
+        }
 
         const { percent, transferredBytes, totalBytes } = progress;
         const transferred = (transferredBytes / 1024 / 1024).toFixed(2) + "MB";
