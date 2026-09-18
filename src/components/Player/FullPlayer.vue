@@ -158,11 +158,7 @@ const instantLyrics = computed(() => {
 });
 
 // 隐藏播放元素
-const {
-  isPending,
-  start: startShow,
-  stop: stopShow,
-} = useTimeoutFn(() => {
+const { start: startShow, stop: stopShow } = useTimeoutFn(() => {
   if (settingStore.autoHidePlayerMeta) {
     statusStore.playerMetaShow = false;
   }
@@ -172,7 +168,8 @@ const {
 const playerMove = useThrottleFn(
   () => {
     statusStore.playerMetaShow = true;
-    if (settingStore.autoHidePlayerMeta && !isPending.value) {
+    if (settingStore.autoHidePlayerMeta) {
+      stopShow();
       startShow();
     }
   },

@@ -149,7 +149,7 @@
             <template #icon>
               <SvgIcon name="FolderPlus" />
             </template>
-            {{ t("local.add_folder") }}}
+            {{ t("local.add_folder") }}
           </n-button>
         </n-flex>
       </template>
@@ -192,7 +192,7 @@ const localPathShow = ref<boolean>(false);
 
 // 列表数据
 const listData = computed<SongInfo[]>(() => {
-  if (searchValue.value && searchData.value.length) return searchData.value;
+  if (searchValue.value.trim()) return searchData.value;
   return localStore.localSongs;
 });
 
@@ -290,7 +290,10 @@ const getAllLocalMusic = debounce(
 // 模糊搜索
 const listSearch = debounce((val: string) => {
   val = val.trim();
-  if (!val || val === "") return;
+  if (!val) {
+    searchData.value = [];
+    return;
+  }
   // 获取搜索结果
   const result = fuzzySearch(val, localStore.localSongs);
   searchData.value = result;

@@ -333,7 +333,6 @@ export const useStatusStore = defineStore("status", {
       "playQuality",
       "selectedQuality",
       "radioMode",
-      "autoClose",
       "eqEnabled",
       "eqBands",
       "eqPreset",
