@@ -34,7 +34,7 @@ router.beforeEach(async (to, from, next) => {
   // console.log("前置守卫", to, from);
   // 进度条
   if (!isElectron && to.path !== from.path) {
-    window.$loadingBar.start();
+    window.$loadingBar?.start();
   }
   const platformStore = usePlatformStore();
   if (!to.meta.offline && !platformStore.platforms.length) {
@@ -42,19 +42,20 @@ router.beforeEach(async (to, from, next) => {
       await platformStore.loadPlatforms();
     } catch (error) {
       console.error(error);
-      if (!isElectron) window.$loadingBar.error();
+      if (!isElectron) window.$loadingBar?.error();
     }
   }
   // 需要登录
   if (to.meta.needLogin && !isLogin()) {
-    if (!isElectron) window.$loadingBar.error();
-    window.$message.warning(t("message.login_required"));
+    if (!isElectron) window.$loadingBar?.error();
+    window.$message?.warning(t("message.login_required"));
     openUserLogin();
+    next(false);
     return;
   }
   // 需要客户端
   else if (to.meta.needApp && !isElectron) {
-    window.$message.warning(t("message.client_only_function"));
+    window.$message?.warning(t("message.client_only_function"));
     next("/403");
     return;
   }
@@ -64,7 +65,7 @@ router.beforeEach(async (to, from, next) => {
 // 后置守卫
 router.afterEach(() => {
   // 进度条
-  window.$loadingBar.finish();
+  window.$loadingBar?.finish();
 
   // 以搜索路由为准同步搜索框，确保所有搜索入口及前进、后退行为一致
   const currentRoute = router.currentRoute.value;
