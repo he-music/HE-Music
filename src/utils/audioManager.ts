@@ -53,6 +53,16 @@ class AudioManager {
   private volume: number = 1;
   /** 事件监听器集合 */
   private eventListeners: Map<string, Set<(e: Event) => void>> = new Map();
+  /** 渐出暂停定时器 */
+  private fadeOutTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** 清理渐出暂停定时器 */
+  private clearFadeOutTimer() {
+    if (this.fadeOutTimer) {
+      clearTimeout(this.fadeOutTimer);
+      this.fadeOutTimer = null;
+    }
+  }
 
   /** 均衡器频段 (10段) */
   private readonly eqFrequencies = [32, 64, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
@@ -126,6 +136,7 @@ class AudioManager {
     url?: string,
     options: { fadeIn?: boolean; fadeDuration?: number; autoPlay?: boolean } = {},
   ) {
+    this.clearFadeOutTimer();
     if (!this.isInitialized) this.init();
 
     // 如果上下文被挂起，则恢复
@@ -169,6 +180,7 @@ class AudioManager {
    * @param options 暂停选项 (fadeOut: 是否渐出, fadeDuration: 渐出时长)
    */
   public pause(options: { fadeOut?: boolean; fadeDuration?: number } = {}) {
+    this.clearFadeOutTimer();
     if (options.fadeOut && this.gainNode && this.audioCtx) {
       const currentTime = this.audioCtx.currentTime;
       // 从当前值线性降低到 0
@@ -176,9 +188,10 @@ class AudioManager {
       this.gainNode.gain.setValueAtTime(this.gainNode.gain.value, currentTime);
       this.gainNode.gain.linearRampToValueAtTime(0, currentTime + (options.fadeDuration || 1));
       // 等待渐出完成后暂停
-      setTimeout(
+      this.fadeOutTimer = setTimeout(
         () => {
           this.audioElement?.pause();
+          this.fadeOutTimer = null;
         },
         (options.fadeDuration || 1) * 1000,
       );
@@ -202,6 +215,7 @@ class AudioManager {
    * 停止播放并将时间重置为 0
    */
   public stop() {
+    this.clearFadeOutTimer();
     if (this.audioElement) {
       this.pause();
       this.audioElement.currentTime = 0;

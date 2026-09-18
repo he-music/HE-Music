@@ -74,19 +74,6 @@ class Player {
     };
     audioManager.on("play", playCallback);
     this.eventCallbacks.set("play", playCallback);
-
-    const canPlayCallback = () => {
-      const playSongData = songManager.getPlaySongData();
-      this.retryInfo = {
-        songId: `${playSongData?.id}-${playSongData?.platform}`,
-        count: 0,
-        total: 0,
-      };
-
-      console.log("▶️ song canplay:", playSongData);
-    };
-    audioManager.on("canplay", canPlayCallback);
-    this.eventCallbacks.set("canplay", canPlayCallback);
     // 暂停
     const pauseCallback = () => {
       const statusStore = useStatusStore();
@@ -178,6 +165,13 @@ class Player {
     const canplayCallback = () => {
       const statusStore = useStatusStore();
       statusStore.playLoading = false;
+      const playSongData = songManager.getPlaySongData();
+      this.retryInfo = {
+        songId: `${playSongData?.id}-${playSongData?.platform}`,
+        count: 0,
+        total: 0,
+      };
+      console.log("▶️ song canplay:", playSongData);
       // 恢复均衡器
       if (isElectron && statusStore.eqEnabled) {
         // 简单恢复 EQ 增益
@@ -189,7 +183,6 @@ class Player {
       // IPC 通知
       if (isElectron) {
         const dataStore = useDataStore();
-        const playSongData = songManager.getPlaySongData();
         window.electron.ipcRenderer.send("play-song-change", songManager.getPlayerInfo());
         window.electron.ipcRenderer.send(
           "like-status-change",
@@ -821,7 +814,7 @@ class Player {
         if (play) await this.play();
       } else {
         // 查找索引（在处理后的列表中查找）
-        statusStore.playIndex = data.findIndex(
+        statusStore.playIndex = processedData.findIndex(
           (item) => item.id === song.id && item.platform === song.platform,
         );
         // 播放
@@ -931,8 +924,8 @@ class Player {
     const isCurrentPlay = statusStore.playIndex === index;
     // 深拷贝，防止影响原数据
     const newPlaylist = cloneDeep(playList);
-    // 若将移除最后一首
-    if (index === playList.length - 1) {
+    // 若移除当前播放且为最后一首
+    if (isCurrentPlay && index === playList.length - 1) {
       statusStore.playIndex = 0;
     }
     // 若为当前播放之后

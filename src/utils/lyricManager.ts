@@ -6,6 +6,7 @@ import { isElectron } from "./env";
 import { isWordLyric, parseLineLyric, parseWordLyric, splitLocalLyrics } from "@/utils/lyric";
 
 class LyricManager {
+  private lyricRequest = 0;
   /**
    * 重置当前歌曲的歌词数据
    * 包括清空歌词数据、重置歌词索引、关闭 TTMLL 歌词等
@@ -129,8 +130,10 @@ class LyricManager {
    * @param path 本地歌词路径（可选）
    */
   public async handleLyric(id: string, platform: string, path?: string) {
+    const musicStore = useMusicStore();
     const statusStore = useStatusStore();
     const settingStore = useSettingStore();
+    const requestId = ++this.lyricRequest;
     try {
       // 歌词加载状态
       statusStore.lyricLoading = true;
@@ -154,12 +157,26 @@ class LyricManager {
           lyricData = this.handleLyricExclude(lyricData);
         }
       }
+      // 校验请求有效性：如果期间发生切歌或发起了新的歌词请求，丢弃旧结果
+      if (
+        requestId !== this.lyricRequest ||
+        musicStore.playSong.id !== id ||
+        musicStore.playSong.platform !== platform
+      ) {
+        return;
+      }
       console.log("最终歌词数据", lyricData);
       this.setFinalLyric(lyricData);
     } catch (error) {
-      console.error("❌ 处理歌词失败:", error);
-      // 重置歌词
-      this.resetSongLyric();
+      if (
+        requestId === this.lyricRequest &&
+        musicStore.playSong.id === id &&
+        musicStore.playSong.platform === platform
+      ) {
+        console.error("❌ 处理歌词失败:", error);
+        // 重置歌词
+        this.resetSongLyric();
+      }
     }
   }
   /**
