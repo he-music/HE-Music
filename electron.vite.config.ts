@@ -124,7 +124,7 @@ export default defineConfig(({ command, mode }) => {
                 "jss-preset-default",
               ],
               // 媒体播放（按需加载）
-              "media-player": ["howler", "hls.js", "plyr"],
+              "media-player": ["hls.js", "plyr"],
               // Markdown 渲染（按需加载）
               markdown: ["marked", "github-markdown-css"],
               // Pixi 歌词特效（按需加载）

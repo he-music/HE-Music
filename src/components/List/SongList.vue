@@ -169,6 +169,9 @@ import VirtualScroll from "@/components/UI/VirtualScroll.vue";
 import type { SongInfo } from "@/types/main.hemusic";
 import { usePlayer } from "@/utils/player";
 import { useI18n } from "vue-i18n";
+import { songEqual } from "@/utils/song";
+
+const collator = new Intl.Collator("zh-CN");
 const props = withDefaults(
   defineProps<{
     /** 列表数据 */
@@ -301,7 +304,7 @@ const listData = computed<SongInfo[]>(() => {
     let result = 0;
     switch (field) {
       case "title":
-        result = a.name.localeCompare(b.name, "zh-CN");
+        result = collator.compare(a.name, b.name);
         break;
       case "artist": {
         const artistA = Array.isArray(a.artists)
@@ -310,13 +313,13 @@ const listData = computed<SongInfo[]>(() => {
         const artistB = Array.isArray(b.artists)
           ? b.artists[0]?.name || ""
           : (b.artists as string) || "";
-        result = artistA.localeCompare(artistB, "zh-CN");
+        result = collator.compare(artistA, artistB);
         break;
       }
       case "album": {
         const albumA = typeof a.album === "string" ? a.album : a.album?.name || "";
         const albumB = typeof b.album === "string" ? b.album : b.album?.name || "";
-        result = albumA.localeCompare(albumB, "zh-CN");
+        result = collator.compare(albumA, albumB);
         break;
       }
       case "duration":
@@ -359,14 +362,14 @@ const virtualListItems = computed<VirtualListItem[]>(() => {
 const listKey = computed(() => {
   // 使用 playListId 作为主要 key
   if (props.playlist?.id) {
-    return `playlist-${props.playlist?.platform}-${props.playlist?.id}-${statusStore.listSortField}-${statusStore.listSortOrder}`;
+    return `playlist-${props.playlist?.platform}-${props.playlist?.id}`;
   }
-  return `list-${props.type}-${statusStore.listSortField}-${statusStore.listSortOrder}`;
+  return `list-${props.type}`;
 });
 
 // 列表是否具有播放歌曲
 const hasPlaySong = computed(() => {
-  return listData.value.findIndex((item) => item.id === musicStore.playSong.id);
+  return listData.value.findIndex((item) => songEqual(item, musicStore.playSong));
 });
 
 // 列表元素高度

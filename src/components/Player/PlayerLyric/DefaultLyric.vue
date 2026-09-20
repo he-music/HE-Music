@@ -261,36 +261,9 @@ const activeLineIndices = computed<number[]>(() => {
   return [];
 });
 
-/** 计算滚动目标索引 */
+/** 计算滚动目标索引（复用活跃行计算结果，避免全量重复遍历） */
 const scrollTargetIndex = computed<number>(() => {
-  const lyrics = currentLyricData.value;
-  if (!lyrics || lyrics.length === 0) return -1;
-  const currentSeek = props.currentTime;
-  // 逐字歌词模式
-  if (isYrcMode.value) {
-    // 找当前时间范围内的行
-    for (let i = 0; i < lyrics.length; i++) {
-      const line = lyrics[i];
-      const start = line.startTime || 0;
-      const end = line.endTime ?? Infinity;
-      if (currentSeek >= start && currentSeek < end) {
-        return i;
-      }
-    }
-    // 没有活跃行，找最近的上一行
-    if (currentSeek > 0) {
-      const next = lyrics.findIndex((v) => (v.startTime || 0) > currentSeek);
-      if (next === -1) return lyrics.length - 1;
-      if (next > 0) return next - 1;
-    }
-    return -1;
-  }
-  // 普通歌词模式
-  const playSeek = currentSeek + 300;
-  const idx = lyrics.findIndex((v) => (v.startTime || 0) > playSeek);
-  if (idx === -1) return lyrics.length - 1;
-  if (idx > 0) return idx - 1;
-  return -1;
+  return activeLineIndices.value[0] ?? -1;
 });
 
 /** 首个高亮行索引 */
@@ -298,9 +271,12 @@ const firstActiveIndex = computed(() => {
   return activeLineIndices.value[0] ?? -1;
 });
 
+/** 活跃行集合，支持 O(1) 快速查询 */
+const activeLineSet = computed(() => new Set(activeLineIndices.value));
+
 /** 判断某行是否高亮 */
 const isLineActive = (index: number): boolean => {
-  return activeLineIndices.value.includes(index);
+  return activeLineSet.value.has(index);
 };
 
 /**

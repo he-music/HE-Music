@@ -29,6 +29,8 @@ class Player {
   };
   /** 存储事件回调函数的引用，用于清理 */
   private eventCallbacks: Map<AudioEventType, (e: Event) => void> = new Map();
+  /** 播放请求递增序号，用于防止快速切歌异步竞态 */
+  private playRequestId = 0;
 
   constructor() {
     // 初始化媒体会话
@@ -137,15 +139,12 @@ class Player {
       // 客户端事件
       if (isElectron) {
         // 歌词变化
-        window.electron.ipcRenderer.send(
-          "play-lyric-change",
-          cloneDeep({
-            lyricIndex,
-            currentTime,
-            songId: musicStore.playSong?.id,
-            songOffset: statusStore.getSongOffset(musicStore.playSong),
-          }),
-        );
+        window.electron.ipcRenderer.send("play-lyric-change", {
+          lyricIndex,
+          currentTime,
+          songId: musicStore.playSong?.id,
+          songOffset: statusStore.getSongOffset(musicStore.playSong),
+        });
         // 进度条
         if (settingStore.showTaskbarProgress) {
           window.electron.ipcRenderer.send("set-bar", progress);
@@ -413,6 +412,7 @@ class Player {
    * @param quality 音质
    */
   public async initPlayer(autoPlay: boolean = true, seek: number = 0, quality: string = "") {
+    const currentRequestId = ++this.playRequestId;
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
     try {
@@ -432,8 +432,10 @@ class Player {
       if (path) {
         try {
           await this.createPlayer(`file://${path}`, autoPlay, seek);
+          if (currentRequestId !== this.playRequestId) return;
           await this.parseLocalMusicInfo(path);
         } catch (err) {
+          if (currentRequestId !== this.playRequestId) return;
           console.error("播放器初始化错误（本地）：", err);
           // createPlayer 内部已触发 handlePlaybackError，这里只记录日志
           // 如果 createPlayer 没有触发错误处理，则手动触发
@@ -457,6 +459,7 @@ class Player {
           console.log("Getting online song url...", id, platform, link);
           playerUrl = await songManager.getOnlineUrl(id, platform, link);
         } catch (err) {
+          if (currentRequestId !== this.playRequestId) return;
           console.error("❌ 获取歌曲地址出错：", err);
           console.log("Getting online song url error:", err);
           // 如果是 AxiosError 的 401 就忽略
@@ -467,14 +470,17 @@ class Player {
           await this.handlePlaybackError(undefined);
           return;
         }
+        if (currentRequestId !== this.playRequestId) return;
         // 有有效 URL 才创建播放器
         if (playerUrl) {
           try {
             await this.createPlayer(playerUrl, autoPlay, seek);
+            if (currentRequestId !== this.playRequestId) return;
             if (quality) {
               window.$message.success(t("message.change_quality_to", { quality }));
             }
           } catch (err) {
+            if (currentRequestId !== this.playRequestId) return;
             console.error("播放器初始化错误（在线）：", err);
             // createPlayer 内部已触发 handlePlaybackError，这里只记录日志
             // 如果 createPlayer 没有触发错误处理，则手动触发
@@ -487,6 +493,7 @@ class Player {
         }
       }
     } catch (err) {
+      if (currentRequestId !== this.playRequestId) return;
       console.error("❌ 初始化音乐播放器出错：", err);
       window.$message.error(t("message.song_play_fail"));
       await this.handlePlaybackError(undefined);

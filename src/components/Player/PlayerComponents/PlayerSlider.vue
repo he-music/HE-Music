@@ -33,6 +33,11 @@ const isDragging = ref(false);
 // 是否显示提示
 const showSliderTooltip = ref(false);
 
+// 节流处理点击/改变进度
+const throttledSeek = useThrottleFn((value: number) => {
+  player.setSeek(value);
+}, 30);
+
 // 实时进度
 const sliderProgress = computed({
   // 获取进度
@@ -45,9 +50,7 @@ const sliderProgress = computed({
       return;
     }
     // 结束或者为点击
-    useThrottleFn((value: number) => {
-      player.setSeek(value);
-    }, 30);
+    throttledSeek(value);
   },
 });
 
