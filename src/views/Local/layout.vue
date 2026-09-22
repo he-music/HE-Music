@@ -263,15 +263,15 @@ const getAllLocalMusic = debounce(
       const listData = songData;
       // 数据是否变化
       const oldLength = localStore.localSongs.length;
-      if (oldLength === 0 && listData.length > 0) {
+      if (showTip) {
+        window.$message.success(t("message.found_local_music_count", { count: listData.length }));
+      } else if (oldLength === 0 && listData.length > 0) {
         window.$message.success(t("message.found_local_music_count", { count: listData.length }));
       } else if (listData.length > oldLength) {
         window.$message.success(
           t("message.added_local_music_count", { count: listData.length - oldLength }),
         );
       }
-      if (showTip)
-        window.$message.success(t("message.found_local_music_count", { count: listData.length }));
       // 保存并更新
       localStore.updateLocalSong(listData);
     } catch (error) {

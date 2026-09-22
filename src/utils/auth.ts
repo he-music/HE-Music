@@ -155,7 +155,9 @@ export const toLikeSong = debounce(
       } else {
         await unlikeSong(id, platform);
         const idx = likeList.findIndex((item) => item.id === id && item.platform === platform);
-        likeList.splice(idx, 1);
+        if (idx !== -1) {
+          likeList.splice(idx, 1);
+        }
         window.$message.success(t("message.my_favorite_music_deleted"));
       }
       dataStore.setUserLikeData("songs", likeList);

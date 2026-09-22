@@ -6,12 +6,11 @@ import {
   BrowserWindow,
   nativeImage,
   nativeTheme,
+  ipcMain,
 } from "electron";
 import { isWin, isLinux, isDev, appName, isMac } from "../utils/config";
 import { join } from "path";
 import { trayLog } from "../logger";
-import { useStore } from "../store";
-import lyricWindow from "../windows/lyric-window";
 import { t } from "../i18n";
 
 // 播放模式
@@ -126,7 +125,7 @@ const createTrayMenu = (win: BrowserWindow): MenuItemConstructorOptions[] => {
       type: "separator",
     },
     {
-      id: "playNext",
+      id: "playPrev",
       label: t("common.previous"),
       icon: showIcon("prev", songValid),
       click: () => win.webContents.send("playPrev"),
@@ -161,14 +160,9 @@ const createTrayMenu = (win: BrowserWindow): MenuItemConstructorOptions[] => {
       icon: showIcon(desktopLyricLock ? "lock" : "unlock"),
       visible: desktopLyricShow,
       click: () => {
-        const store = useStore();
-        // 更新锁定状态
-        store.set("lyric.config", { ...store.get("lyric.config"), isLock: !desktopLyricLock });
-        // 触发窗口更新
-        const config = store.get("lyric.config");
-        const lyricWin = lyricWindow.getWin();
-        if (!lyricWin) return;
-        lyricWin.webContents.send("update-desktop-lyric-option", config);
+        const nextLock = !desktopLyricLock;
+        ipcMain.emit("toggleDesktopLyricLock", null, { lock: nextLock });
+        mainTrayInstance?.setDesktopLyricLock(nextLock);
       },
     },
     {

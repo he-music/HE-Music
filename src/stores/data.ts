@@ -210,6 +210,37 @@ export const useDataStore = defineStore("data", {
       this.originalPlayList = [];
       await musicDB.setItem("originalPlayList", []);
     },
+    // 从原始播放列表中移除歌曲（同步 shuffle 模式下的删除操作）
+    async removeSongFromOriginalList(song: SongInfo): Promise<void> {
+      if (!Array.isArray(this.originalPlayList) || this.originalPlayList.length === 0) return;
+      const filtered = this.originalPlayList.filter(
+        (item) => item.id !== song.id || item.platform !== song.platform,
+      );
+      this.originalPlayList = filtered;
+      await musicDB.setItem("originalPlayList", filtered);
+    },
+    // 向原始播放列表中添加歌曲（同步 shuffle 模式下的添加操作）
+    async addSongToOriginalList(song: SongInfo, currentSong?: SongInfo): Promise<void> {
+      if (!Array.isArray(this.originalPlayList) || this.originalPlayList.length === 0) return;
+      const songSnapshot = createPlaybackSongSnapshot(song);
+      const filtered = this.originalPlayList.filter(
+        (item) => item.id !== song.id || item.platform !== song.platform,
+      );
+      if (currentSong?.id) {
+        const curIdx = filtered.findIndex(
+          (item) => item.id === currentSong.id && item.platform === currentSong.platform,
+        );
+        if (curIdx !== -1) {
+          filtered.splice(curIdx + 1, 0, songSnapshot);
+        } else {
+          filtered.push(songSnapshot);
+        }
+      } else {
+        filtered.push(songSnapshot);
+      }
+      this.originalPlayList = filtered;
+      await musicDB.setItem("originalPlayList", filtered);
+    },
     // 新增下一首播放歌曲
     async setNextPlaySong(song: SongInfo, index: number): Promise<number> {
       const songSnapshot = createPlaybackSongSnapshot(song);

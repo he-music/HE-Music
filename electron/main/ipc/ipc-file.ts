@@ -394,56 +394,84 @@ const initFileIpc = (): void => {
             });
           },
         });
-        if (!downloadMeta || !songData?.cover) return { status: "success" };
-        // 下载封面
-        const coverUrl = songData?.coverSize?.l || songData.cover;
-        const coverDownload = await download(win, coverUrl, {
-          directory: downloadPath,
-          filename: `${fileName}.jpg`,
-          showProgressBar: false,
-        });
-        // 读取歌曲文件
-        let songFile = File.createFromPath(songDownload.getSavePath());
-        // 清除原有标签，防止脏数据（如模拟播放下载时的乱码歌词）
-        songFile.removeTags(TagTypes.AllTags);
-        songFile.save();
-        songFile.dispose();
-        // 重新读取文件以写入新标签
-        // 读取歌曲文件
-        songFile = File.createFromPath(songDownload.getSavePath());
-        // 生成图片信息
-        const songCover = Picture.fromPath(coverDownload.getSavePath());
-        // 保存修改后的元数据
-        // Id3v2Settings.forceDefaultVersion = true;
-        // Id3v2Settings.defaultVersion = 3;
-        const albumName =
-          typeof songData?.album === "object" && songData?.album
-            ? songData.album.name || "未知专辑"
-            : String(songData?.album || "未知专辑");
-        let performers: string[] = ["未知艺术家"];
-        if (Array.isArray(songData?.artists)) {
-          performers = songData.artists.map((ar: any) =>
-            typeof ar === "object" && ar?.name ? ar.name : String(ar || "未知艺术家"),
-          );
-        } else if (typeof songData?.artists === "string" && songData.artists.trim()) {
-          performers = [songData.artists.trim()];
+        let coverDownload: DownloadItem | null = null;
+        try {
+          // 保存同名独立歌词文件
+          if (lyric && saveMetaFile && downloadLyric) {
+            try {
+              const lrcPath = join(downloadPath, `${fileName}.lrc`);
+              await writeFile(lrcPath, lyric, "utf-8");
+            } catch (err) {
+              ipcLog.warn("⚠️ Failed to save .lrc file:", err);
+            }
+          }
+
+          // 若需要封面（内嵌或保存独立文件），且存在封面链接，则尝试下载封面
+          const needCover = (downloadCover && downloadMeta) || saveMetaFile;
+          const coverUrl = songData?.coverSize?.l || songData?.cover;
+          let songCover: Picture | null = null;
+          if (needCover && coverUrl && typeof coverUrl === "string" && coverUrl.startsWith("http")) {
+            try {
+              coverDownload = await download(win, coverUrl, {
+                directory: downloadPath,
+                filename: `${fileName}.jpg`,
+                showProgressBar: false,
+              });
+              if (coverDownload) {
+                songCover = Picture.fromPath(coverDownload.getSavePath());
+              }
+            } catch (err) {
+              ipcLog.warn("⚠️ Failed to download cover:", err);
+            }
+          }
+
+          // 写入音频文件元数据标签
+          if (downloadMeta) {
+            try {
+              const songSavePath = songDownload.getSavePath();
+              let songFile = File.createFromPath(songSavePath);
+              // 清除原有脏标签
+              songFile.removeTags(TagTypes.AllTags);
+              songFile.save();
+              songFile.dispose();
+
+              // 重新读取并写入新元数据
+              songFile = File.createFromPath(songSavePath);
+              const albumName =
+                typeof songData?.album === "object" && songData?.album
+                  ? songData.album.name || "未知专辑"
+                  : String(songData?.album || "未知专辑");
+              let performers: string[] = ["未知艺术家"];
+              if (Array.isArray(songData?.artists)) {
+                performers = songData.artists.map((ar: any) =>
+                  typeof ar === "object" && ar?.name ? ar.name : String(ar || "未知艺术家"),
+                );
+              } else if (typeof songData?.artists === "string" && songData.artists.trim()) {
+                performers = [songData.artists.trim()];
+              }
+              songFile.tag.title = songData?.name || "未知曲目";
+              songFile.tag.album = albumName;
+              songFile.tag.performers = performers;
+              songFile.tag.albumArtists = performers;
+              if (lyric && downloadLyric) songFile.tag.lyrics = lyric;
+              if (songCover && downloadCover) songFile.tag.pictures = [songCover];
+              songFile.save();
+              songFile.dispose();
+            } catch (err) {
+              ipcLog.warn("⚠️ Failed to write audio metadata tags:", err);
+            }
+          }
+        } finally {
+          // 若不需要保留独立封面文件，清理下载的临时封面图片
+          if (coverDownload && !saveMetaFile) {
+            try {
+              await unlink(coverDownload.getSavePath());
+            } catch {
+              /* ignore */
+            }
+          }
         }
-        songFile.tag.title = songData?.name || "未知曲目";
-        songFile.tag.album = albumName;
-        songFile.tag.performers = performers;
-        songFile.tag.albumArtists = performers;
-        if (lyric && downloadLyric) songFile.tag.lyrics = lyric;
-        if (songCover && downloadCover) songFile.tag.pictures = [songCover];
-        // 保存元信息
-        songFile.save();
-        songFile.dispose();
-        // 创建同名歌词文件
-        if (lyric && saveMetaFile && downloadLyric) {
-          const lrcPath = join(downloadPath, `${fileName}.lrc`);
-          await writeFile(lrcPath, lyric, "utf-8");
-        }
-        // 是否删除封面
-        if (!saveMetaFile || !downloadCover) await unlink(coverDownload.getSavePath());
+
         return { status: "success" };
       } catch (error) {
         ipcLog.error("❌ Error downloading file:", error);

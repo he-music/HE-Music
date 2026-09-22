@@ -294,11 +294,20 @@ class Player {
   private updateMediaSessionState(duration: number, currentTime: number) {
     const settingStore = useSettingStore();
     if (!settingStore.smtcOpen) return;
-    if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.setPositionState({
-      duration: msToS(duration),
-      position: msToS(currentTime),
-    });
+    if (!("mediaSession" in navigator) || typeof navigator.mediaSession.setPositionState !== "function") {
+      return;
+    }
+    const durSec = msToS(duration);
+    const posSec = msToS(currentTime);
+    if (!Number.isFinite(durSec) || durSec <= 0 || !Number.isFinite(posSec) || posSec < 0) return;
+    try {
+      navigator.mediaSession.setPositionState({
+        duration: durSec,
+        position: Math.min(posSec, durSec),
+      });
+    } catch {
+      // 忽略部分平台或过渡状态下的 MediaSession 临时异常
+    }
   }
   /**
    * 获取频谱数据
@@ -864,6 +873,9 @@ class Player {
     const songIndex = await dataStore.setNextPlaySong(song, statusStore.playIndex);
     // 播放歌曲
     if (songIndex < 0) return;
+    if (statusStore.playSongMode === "shuffle") {
+      await dataStore.addSongToOriginalList(song, musicStore.playSong);
+    }
     if (play) {
       this.togglePlayIndex(songIndex, true);
     } else {
@@ -927,6 +939,7 @@ class Player {
       this.cleanPlayList();
       return;
     }
+    const targetSong = playList[index];
     // 是否为当前播放歌曲
     const isCurrentPlay = statusStore.playIndex === index;
     // 深拷贝，防止影响原数据
@@ -942,6 +955,9 @@ class Player {
     // 移除指定歌曲
     newPlaylist.splice(index, 1);
     dataStore.setPlayList(newPlaylist);
+    if (statusStore.playSongMode === "shuffle" && targetSong) {
+      dataStore.removeSongFromOriginalList(targetSong);
+    }
     // 若为当前播放
     if (isCurrentPlay) {
       this.initPlayer(statusStore.playStatus);

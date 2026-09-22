@@ -1,7 +1,7 @@
 import { useDataStore, useSettingStore, useShortcutStore, useStatusStore } from "@/stores";
 import { useEventListener } from "@vueuse/core";
 import { openUserAgreement } from "@/utils/modal";
-import { cloneDeep, debounce } from "lodash-es";
+import { cloneDeep } from "lodash-es";
 import { isElectron } from "./env";
 import packageJson from "@/../package.json";
 import { usePlayer } from "@/utils/player";
@@ -69,46 +69,52 @@ const initEventListener = () => {
   useEventListener(window, "keydown", keyDownEvent);
 };
 
-const keyDownEvent = debounce((event: KeyboardEvent) => {
+const keyDownEvent = (event: KeyboardEvent) => {
+  // 忽略长按连发
+  if (event.repeat) return;
+  const target = event.target as HTMLElement | null;
+  // 排除输入框与可编辑元素
+  if (
+    target &&
+    (target.tagName === "INPUT" ||
+      target.tagName === "TEXTAREA" ||
+      target.isContentEditable ||
+      target.closest("input, textarea, [contenteditable='true']"))
+  ) {
+    return;
+  }
   const player = usePlayer();
   const shortcutStore = useShortcutStore();
   const statusStore = useStatusStore();
-  const target = event.target as HTMLElement;
-  // 排除元素
-  const extendsDom = ["input", "textarea"];
-  if (extendsDom.includes(target.tagName.toLowerCase())) return;
-  event.preventDefault();
-  event.stopPropagation();
+
   // 获取按键信息
   const key = event.code;
   const isCtrl = event.ctrlKey || event.metaKey;
   const isShift = event.shiftKey;
   const isAlt = event.altKey;
+
   // 循环注册快捷键
   for (const shortcutKey in shortcutStore.shortcutList) {
     const shortcut = shortcutStore.shortcutList[shortcutKey];
+    if (!shortcut?.shortcut) continue;
     const shortcutParts = shortcut.shortcut.split("+");
-    // 标志位
     let match = true;
-    // 检查是否包含修饰键
     const hasCmdOrCtrl = shortcutParts.includes("CmdOrCtrl");
     const hasShift = shortcutParts.includes("Shift");
     const hasAlt = shortcutParts.includes("Alt");
-    // 检查修饰键匹配
     if (hasCmdOrCtrl && !isCtrl) match = false;
     if (hasShift && !isShift) match = false;
     if (hasAlt && !isAlt) match = false;
-    // 如果快捷键定义中没有修饰键，确保没有按下任何修饰键
     if (!hasCmdOrCtrl && !hasShift && !hasAlt) {
       if (isCtrl || isShift || isAlt) match = false;
     }
-    // 检查实际按键
     const mainKey = shortcutParts.find(
       (part: string) => part !== "CmdOrCtrl" && part !== "Shift" && part !== "Alt",
     );
     if (mainKey !== key) match = false;
-    if (match && shortcutKey) {
-      console.log(shortcutKey, `快捷键触发: ${shortcut.name}`);
+    if (match) {
+      event.preventDefault();
+      event.stopPropagation();
       switch (shortcutKey) {
         case "playOrPause":
           player.playOrPause();
@@ -129,25 +135,23 @@ const keyDownEvent = debounce((event: KeyboardEvent) => {
           player.toggleDesktopLyric();
           break;
         case "openPlayer":
-          // 打开播放界面（任意界面）
           statusStore.showFullPlayer = true;
           break;
         case "closePlayer":
-          // 关闭播放界面（仅在播放界面时）
           if (statusStore.showFullPlayer) {
             statusStore.showFullPlayer = false;
           }
           break;
         case "openPlayList":
-          // 打开播放列表（任意界面）
           statusStore.playListShow = !statusStore.playListShow;
           break;
         default:
           break;
       }
+      break;
     }
   }
-}, 100);
+};
 
 // 版本输出
 const printVersion = async () => {
