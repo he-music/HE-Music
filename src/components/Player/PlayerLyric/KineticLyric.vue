@@ -5,6 +5,7 @@
       :lines="lines"
       :clock="clock"
       :word-animation="settingStore.showYrcAnimation"
+      :jump-granularity="settingStore.kineticJumpGranularity"
       :font-size="settingStore.lyricFontSize"
       :translation-size="settingStore.lyricTranFontSize"
       :romanization-size="settingStore.lyricRomaFontSize"

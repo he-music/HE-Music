@@ -1,3 +1,5 @@
+import { resolveKineticJumpGranularity } from "./kinetic";
+
 // src/utils/lyric/renderer.ts — 歌词效果选择及旧设置迁移。
 export type LyricRenderer = "default" | "amll" | "monet" | "partita" | "classic" | "kinetic";
 
@@ -19,5 +21,10 @@ export function deserializeLyricSettings(serialized: string): Record<string, unk
   const data = JSON.parse(serialized);
   if (!data || typeof data !== "object" || Array.isArray(data)) return {};
   const { useAMLyrics, ...settings } = data;
+  if ("kineticJumpGranularity" in settings) {
+    settings.kineticJumpGranularity = resolveKineticJumpGranularity(
+      settings.kineticJumpGranularity,
+    );
+  }
   return { ...settings, lyricRenderer: resolveLyricRenderer(data.lyricRenderer, useAMLyrics) };
 }

@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { keywords, regexes } from "@/assets/data/exclude";
 import { ThemeColorType } from "@/types/color";
 import { FontStyleSelection } from "@/types/global";
+import type { KineticJumpGranularity } from "@/utils/lyric/kinetic";
 import { deserializeLyricSettings, type LyricRenderer } from "@/utils/lyric/renderer";
 
 interface SettingState {
@@ -46,6 +47,7 @@ interface SettingState {
   classicBreathingFloat: number;
   classicWordSpacing: number;
   classicShowUpcoming: boolean;
+  kineticJumpGranularity: KineticJumpGranularity;
   downloadPath: string;
   /** 音乐命名格式 */
   fileNameFormat: "title" | "artist-title" | "title-artist";
@@ -186,6 +188,7 @@ export const useSettingStore = defineStore("setting", {
     classicWordRotation: true, // 流光是否启用逐字微旋转
     classicBreathingFloat: 1.0, // 流光整行呼吸浮动强度倍率
     classicWordSpacing: 0.7, // 流光单词间距排版倍率
+    kineticJumpGranularity: "auto", // 跃音落点：自动按语言分组，并合并过密跳跃
     classicShowUpcoming: true, // 流光是否显示下一句预告
     lyricsBlur: false, // 歌词模糊
     lrcMousePause: false, // 鼠标悬停暂停

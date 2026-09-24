@@ -7,6 +7,7 @@ import defaultDesktopLyricConfig from "@/assets/data/lyricConfig";
 import { SettingConfig } from "@/types/settings";
 import LyricPreview from "../components/LyricPreview.vue";
 import { t } from "@/i18n";
+import { resolveKineticJumpGranularity } from "@/utils/lyric/kinetic";
 import { usePlayer } from "@/utils/player";
 
 export const useLyricSettings = (): SettingConfig => {
@@ -464,6 +465,27 @@ export const useLyricSettings = (): SettingConfig => {
             value: computed({
               get: () => settingStore.showYrcAnimation,
               set: (v) => (settingStore.showYrcAnimation = v),
+            }),
+          },
+        ],
+      },
+      {
+        title: t("setting.lyrics.kinetic_settings"),
+        show: () => settingStore.lyricRenderer === "kinetic",
+        items: [
+          {
+            key: "kineticJumpGranularity",
+            label: t("setting.lyrics.kinetic_jump_granularity"),
+            type: "select",
+            description: t("setting.lyrics.kinetic_jump_granularity_tip"),
+            options: [
+              { label: t("setting.lyrics.kinetic_jump_auto"), value: "auto" },
+              { label: t("setting.lyrics.kinetic_jump_character"), value: "character" },
+              { label: t("setting.lyrics.kinetic_jump_word"), value: "word" },
+            ],
+            value: computed({
+              get: () => settingStore.kineticJumpGranularity,
+              set: (v) => (settingStore.kineticJumpGranularity = resolveKineticJumpGranularity(v)),
             }),
           },
         ],

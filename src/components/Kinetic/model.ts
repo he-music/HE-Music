@@ -1,10 +1,13 @@
 import type { PartitaLine, PartitaGraphemeTiming } from "../Partita/model";
+import type { KineticJumpGranularity } from "../../utils/lyric/kinetic";
+import { buildKineticJumpGroups } from "./jumpGroups";
 
 export interface KineticGlyph extends PartitaGraphemeTiming {
   x: number;
   y: number;
   width: number;
   rotation: number;
+  rowY: number;
 }
 export interface KineticRow {
   line: PartitaLine;
@@ -51,6 +54,7 @@ export function buildKineticLayout(
   measure: (text: string, size: number) => number,
   options: {
     animate: boolean;
+    jumpGranularity?: KineticJumpGranularity;
     translationSize: number;
     romanizationSize: number;
     showTranslation: boolean;
@@ -112,6 +116,7 @@ export function buildKineticLayout(
           y: baseline + wave * fontSize * 0.22,
           width: glyphWidth,
           rotation: Math.cos(i * 0.65) * 7,
+          rowY: baseline,
         };
         chunk.push(glyph);
         glyphs.push(glyph);
@@ -138,19 +143,23 @@ export function buildKineticLayout(
         row: index,
       });
     if (animated) {
-      for (const [i, glyph] of glyphs.entries()) {
+      for (const glyph of glyphs) {
         if (!glyph.char.trim()) continue;
-        const rowY = glyph.y - Math.sin(i * 0.65) * fontSize * 0.22;
+        const rowY = glyph.rowY;
         if (Math.abs(rowY - lastBaseline) > 1) {
           if (!line.isInterlude) addStop(glyph.startTime, rowY);
           lastBaseline = rowY;
         }
         previousOnset = glyph.startTime;
+      }
+      for (const group of buildKineticJumpGroups(glyphs, options.jumpGranularity ?? "auto")) {
+        const left = Math.min(...group.map((glyph) => glyph.x - glyph.width / 2));
+        const right = Math.max(...group.map((glyph) => glyph.x + glyph.width / 2));
         targets.push({
-          x: glyph.x,
-          y: y + glyph.y - fontSize * 0.85,
-          start: glyph.startTime,
-          end: glyph.endTime,
+          x: (left + right) / 2,
+          y: y + group.reduce((sum, glyph) => sum + glyph.y, 0) / group.length - fontSize * 0.85,
+          start: Math.min(...group.map((glyph) => glyph.startTime)),
+          end: Math.max(...group.map((glyph) => glyph.endTime)),
           animated: true,
         });
       }

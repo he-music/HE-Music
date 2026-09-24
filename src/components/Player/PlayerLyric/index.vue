@@ -97,6 +97,8 @@ import { openSetting, openCopyLyrics } from "@/utils/modal";
 import { usePlayer } from "@/utils/player";
 import { useI18n } from "vue-i18n";
 import PlayerStylePanel from "../PlayerStylePanel.vue";
+import audioManager from "@/utils/audioManager";
+import { useLyricPlaybackClock } from "@/components/LyricStage/useLyricPlaybackClock";
 
 const MonetLyric = defineAsyncComponent(() => import("./MonetLyric.vue"));
 const PartitaLyric = defineAsyncComponent(() => import("./PartitaLyric.vue"));
@@ -115,31 +117,23 @@ const styleMenuShow = ref(false);
  */
 const currentSong = computed(() => musicStore.playSong);
 
-// 实时播放进度
-const playSeek = ref<number>(player.getSeek() + statusStore.getSongOffset(musicStore.playSong));
-// 稳定时钟对象让 Monet 订阅时间，而不让整个歌词组件每帧重渲染。
-const lyricClock = { time: playSeek };
 const documentVisibility = useDocumentVisibility();
-const updateSeek = () => {
-  playSeek.value = player.getSeek() + statusStore.getSongOffset(currentSong.value);
-};
-
-// 暂停时通过状态和偏移变化刷新，播放且窗口可见时才持续采样。
-const { pause: pauseSeek, resume: resumeSeek } = useRafFn(updateSeek, { immediate: false });
-watch(
-  () => [
-    statusStore.playStatus,
-    documentVisibility.value,
-    statusStore.currentTime,
-    statusStore.getSongOffset(currentSong.value),
-  ],
-  () => {
-    updateSeek();
-    if (statusStore.playStatus && documentVisibility.value === "visible") resumeSeek();
-    else pauseSeek();
+const playSeek = useLyricPlaybackClock({
+  playing: () => statusStore.playStatus,
+  visible: () => documentVisibility.value === "visible",
+  identity: () => `${currentSong.value.platform}-${currentSong.value.id}`,
+  offset: () => statusStore.getSongOffset(currentSong.value),
+  readTime: () => player.getSeek(),
+  subscribeSeek: (sample) => {
+    audioManager.on("seeked", sample);
+    audioManager.on("loadedmetadata", sample);
+    return () => {
+      audioManager.off("seeked", sample);
+      audioManager.off("loadedmetadata", sample);
+    };
   },
-  { immediate: true },
-);
+});
+const lyricClock = { time: playSeek };
 
 /**
  * 当前进度偏移值
@@ -178,12 +172,6 @@ const changeOffset = (delta: number) => {
 const resetOffset = () => {
   statusStore.resetSongOffset(currentSong.value);
 };
-
-onMounted(updateSeek);
-
-onBeforeUnmount(() => {
-  pauseSeek();
-});
 </script>
 
 <style lang="scss" scoped>

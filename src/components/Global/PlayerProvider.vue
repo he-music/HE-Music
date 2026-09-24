@@ -27,8 +27,8 @@ const themeOverrides = computed<GlobalThemeOverrides>(() => {
   return {
     common: {
       ...commonBase,
-      textColorBase: coverRGB,
-      textColor1: coverRGB,
+      textColorBase: `rgb(${coverRGB})`,
+      textColor1: `rgb(${coverRGB})`,
       textColor2: toRGBA(coverRGB, 0.82),
       textColor3: toRGBA(coverRGB, 0.52),
       cardColor: toRGBA(coverRGB, 0.2),

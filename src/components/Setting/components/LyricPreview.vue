@@ -84,8 +84,9 @@
       }"
     >
       <KineticLyricRail
-        :lines="partitaPreviewLines"
+        :lines="kineticPreviewLines"
         :clock="previewClock"
+        :jump-granularity="settingStore.kineticJumpGranularity"
         :word-animation="settingStore.showYrcAnimation"
         :font-size="settingStore.lyricFontSize"
         :translation-size="settingStore.lyricTranFontSize"
@@ -222,6 +223,26 @@ const previewSource = [
 }));
 const previewLines = computed(() => adaptMonetLines(previewSource, settingStore.showYrc));
 const partitaPreviewLines = computed(() => adaptPartitaLines(previewSource, settingStore.showYrc));
+const kineticPreviewSource = [
+  "Let the music carry you",
+  "让旋律轻轻流淌",
+  "We sing together tonight",
+  "听见 music 的声音",
+].map((text, index) => ({
+  startTime: index * 4000,
+  endTime: index * 4000 + 3500,
+  words: [{ word: text, startTime: index * 4000, endTime: index * 4000 + 3500 }],
+  translatedLyric: [
+    "让音乐带着你前行",
+    "Let the melody flow gently",
+    "今夜我们一同歌唱",
+    "Hear the sound of music",
+  ][index],
+  romanLyric: ["", "rang xuan lü qing qing liu tang", "", "ting jian music de sheng yin"][index],
+}));
+const kineticPreviewLines = computed(() =>
+  adaptPartitaLines(kineticPreviewSource, settingStore.showYrc),
+);
 const classicPreviewLines = computed(() => adaptClassicLines(previewSource, settingStore.showYrc));
 let previewEpoch = 0;
 function seekPreview(time: number) {

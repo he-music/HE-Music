@@ -30,6 +30,19 @@ describe("lyric renderer persistence", () => {
       lyricRenderer: "kinetic",
     });
   });
+  it.each(["auto", "character", "word"])("persists kinetic jump mode %s", (mode) => {
+    expect(
+      deserializeLyricSettings(
+        JSON.stringify({ lyricRenderer: "kinetic", kineticJumpGranularity: mode }),
+      ),
+    ).toMatchObject({ kineticJumpGranularity: mode });
+  });
+  it("normalizes invalid kinetic jump modes without overwriting missing defaults", () => {
+    expect(deserializeLyricSettings('{"kineticJumpGranularity":"invalid"}')).toMatchObject({
+      kineticJumpGranularity: "auto",
+    });
+    expect(deserializeLyricSettings("{}")).not.toHaveProperty("kineticJumpGranularity");
+  });
   it("falls back from unknown renderers without losing unrelated settings", () => {
     expect(
       deserializeLyricSettings('{"lyricRenderer":"future","useAMLyrics":true,"showRoma":false}'),

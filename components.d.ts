@@ -34,6 +34,7 @@ declare module 'vue' {
     FullPlayer: typeof import('./src/components/Player/FullPlayer.vue')['default']
     FullPlayerMobile: typeof import('./src/components/Player/FullPlayerMobile.vue')['default']
     JumpArtist: typeof import('./src/components/Modal/JumpArtist.vue')['default']
+    KineticDomRail: typeof import('./src/components/Kinetic/KineticDomRail.vue')['default']
     KineticLyric: typeof import('./src/components/Player/PlayerLyric/KineticLyric.vue')['default']
     KineticLyricRail: typeof import('./src/components/Kinetic/KineticLyricRail.vue')['default']
     LocalMusicDirectory: typeof import('./src/components/Modal/Setting/LocalMusicDirectory.vue')['default']
