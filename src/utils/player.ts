@@ -1,3 +1,5 @@
+import { h } from "vue";
+import type { DialogReactive } from "naive-ui";
 import { type PlayModeType } from "@/types/main";
 import { cloneDeep } from "lodash-es";
 import { useMusicStore, useStatusStore, useDataStore, useSettingStore } from "@/stores";
@@ -31,6 +33,9 @@ class Player {
   private eventCallbacks: Map<AudioEventType, (e: Event) => void> = new Map();
   /** 播放请求递增序号，用于防止快速切歌异步竞态 */
   private playRequestId = 0;
+  private playbackAttempt?: { src: string; autoPlay: boolean; seek: number; requestId: number };
+  private httpPlaybackDialog?: DialogReactive;
+  private lastHttpRetrySrc = "";
 
   constructor() {
     // 初始化媒体会话
@@ -116,7 +121,10 @@ class Player {
         originalEvent: Event;
         errorCode: number;
       }>;
-      this.handlePlaybackError(customEvent.detail.errorCode);
+
+      const errorCode = customEvent.detail.errorCode;
+      if (this.offerHttpsRetry(errorCode)) return;
+      this.handlePlaybackError(errorCode);
     };
     audioManager.on("error", errorCallback);
     this.eventCallbacks.set("error", errorCallback);
@@ -192,6 +200,76 @@ class Player {
     audioManager.on("canplay", canplayCallback);
     this.eventCallbacks.set("canplay", canplayCallback);
   }
+  /** HTTP 地址失败时提供 HTTPS 排查入口；媒体错误码无法判断证书是否有效。 */
+  private offerHttpsRetry(errorCode: number): boolean {
+    const attempt = this.playbackAttempt;
+    if (
+      isElectron ||
+      window.location.protocol !== "https:" ||
+      (errorCode !== 2 && errorCode !== 4) ||
+      !attempt ||
+      attempt.requestId !== this.playRequestId ||
+      !/^http:\/\//i.test(attempt.src)
+    ) {
+      return false;
+    }
+    if (this.httpPlaybackDialog) return true;
+    if (this.lastHttpRetrySrc === attempt.src) return false;
+    this.lastHttpRetrySrc = attempt.src;
+    const httpsUrl = new URL(attempt.src);
+    httpsUrl.protocol = "https:";
+    const statusStore = useStatusStore();
+    const seek = Math.max(attempt.seek, this.getSeek());
+    statusStore.playLoading = false;
+    statusStore.playStatus = false;
+    let settled = false;
+    const isCurrent = () => !settled && attempt.requestId === this.playRequestId;
+    const dismiss = () => {
+      if (!isCurrent()) return;
+      settled = true;
+      this.httpPlaybackDialog = undefined;
+      void this.handlePlaybackError(errorCode);
+    };
+    this.httpPlaybackDialog = window.$dialog.warning({
+      title: "音源 HTTPS 访问失败排查",
+      content: () =>
+        h("div", { style: { lineHeight: "1.6" } }, [
+          h(
+            "p",
+            null,
+            "当前 HTTP 音源加载失败，可能与 HTTPS 页面的安全限制有关，也可能是链接过期、网络或格式问题。",
+          ),
+          h(
+            "p",
+            null,
+            "可打开 HTTPS 地址检查。仅在确认音源可信且浏览器允许时，手动处理证书提示，然后返回重试。服务端不支持 HTTPS 时，此操作无法解决。",
+          ),
+          h("p", null, "关闭此提示将继续原有播放错误处理。"),
+        ]),
+      positiveText: "打开 HTTPS 地址",
+      negativeText: "返回后重试",
+      onPositiveClick: () => {
+        if (!isCurrent()) return;
+        window.open(httpsUrl.href, "_blank", "noopener,noreferrer");
+        return false;
+      },
+      onNegativeClick: () => {
+        if (!isCurrent()) return;
+        settled = true;
+        this.httpPlaybackDialog = undefined;
+        void this.createPlayer(httpsUrl.href, attempt.autoPlay, seek).catch((err) => {
+          if (attempt.requestId !== this.playRequestId) return;
+          console.error("HTTPS 重试播放失败:", err);
+          // 媒体 error 事件负责普通错误；没有媒体错误码时补上恢复逻辑。
+          if (audioManager.getErrorCode() === 0) void this.handlePlaybackError();
+        });
+      },
+      onClose: dismiss,
+      onMaskClick: dismiss,
+      onEsc: dismiss,
+    });
+    return true;
+  }
   /**
    * 创建播放器并播放
    * @param src 播放地址
@@ -211,9 +289,12 @@ class Player {
     audioManager.setRate(statusStore.playRate);
     // 播放设备
     if (!settingStore.showSpectrums) this.toggleOutputDevice();
+    const requestId = this.playRequestId;
+    this.playbackAttempt = { src, autoPlay, seek, requestId };
     // 加载并播放
     try {
       await audioManager.play(src, { fadeIn: false, autoPlay });
+      if (requestId !== this.playRequestId) return;
       // 恢复进度
       if (seek && seek > 0) {
         audioManager.seek(seek / 1000);
@@ -294,7 +375,10 @@ class Player {
   private updateMediaSessionState(duration: number, currentTime: number) {
     const settingStore = useSettingStore();
     if (!settingStore.smtcOpen) return;
-    if (!("mediaSession" in navigator) || typeof navigator.mediaSession.setPositionState !== "function") {
+    if (
+      !("mediaSession" in navigator) ||
+      typeof navigator.mediaSession.setPositionState !== "function"
+    ) {
       return;
     }
     const durSec = msToS(duration);
@@ -422,6 +506,9 @@ class Player {
    */
   public async initPlayer(autoPlay: boolean = true, seek: number = 0, quality: string = "") {
     const currentRequestId = ++this.playRequestId;
+    this.httpPlaybackDialog?.destroy();
+    this.httpPlaybackDialog = undefined;
+    this.playbackAttempt = undefined;
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
     try {
@@ -967,6 +1054,10 @@ class Player {
    * 清空播放列表
    */
   public async cleanPlayList() {
+    ++this.playRequestId;
+    this.httpPlaybackDialog?.destroy();
+    this.httpPlaybackDialog = undefined;
+    this.playbackAttempt = undefined;
     const dataStore = useDataStore();
     const statusStore = useStatusStore();
     audioManager.stop();
