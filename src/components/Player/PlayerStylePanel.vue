@@ -94,7 +94,7 @@ const groups = computed(() => [
     label: t("common.lyrics"),
     description: t("setting.lyrics.renderer"),
     value: settingStore.lyricRenderer,
-    options: ["default", "amll", "monet", "partita", "classic"].map((value) => ({
+    options: ["default", "amll", "monet", "partita", "classic", "kinetic"].map((value) => ({
       value,
       label: value === "amll" ? "AMLL" : t(`setting.lyrics.renderer_${value}`),
     })),
@@ -116,8 +116,8 @@ const groups = computed(() => [
     display: grid;
     align-content: start;
     gap: 4px;
-    // 为五个选项预留相同高度，切换 Tab 时保持弹层尺寸和位置稳定。
-    height: 216px;
+    // 为六个歌词选项预留高度，切换 Tab 时保持弹层位置稳定。
+    height: 260px;
     max-height: calc(100dvh - 160px);
     overflow-y: auto;
   }

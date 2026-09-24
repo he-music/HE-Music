@@ -25,6 +25,11 @@ describe("lyric renderer persistence", () => {
       lyricRenderer: "default",
     });
   });
+  it("persists kinetic lyrics across restarts", () => {
+    expect(deserializeLyricSettings('{"lyricRenderer":"kinetic","useAMLyrics":true}')).toEqual({
+      lyricRenderer: "kinetic",
+    });
+  });
   it("falls back from unknown renderers without losing unrelated settings", () => {
     expect(
       deserializeLyricSettings('{"lyricRenderer":"future","useAMLyrics":true,"showRoma":false}'),

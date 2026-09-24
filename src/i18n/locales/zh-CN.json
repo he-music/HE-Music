@@ -792,6 +792,8 @@
       "renderer": "歌词效果",
       "renderer_default": "普通",
       "renderer_monet": "莫奈",
+      "renderer_kinetic": "跃音",
+      "kinetic_resume": "回到当前歌词",
       "renderer_classic": "流光",
       "renderer_partita": "云阶",
       "renderer_default_settings": "普通歌词设置",

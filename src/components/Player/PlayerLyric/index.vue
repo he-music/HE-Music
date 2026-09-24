@@ -5,6 +5,7 @@
       {
         monet: settingStore.lyricRenderer === 'monet',
         partita: settingStore.lyricRenderer === 'partita',
+        kinetic: settingStore.lyricRenderer === 'kinetic',
         classic: settingStore.lyricRenderer === 'classic',
       },
     ]"
@@ -14,6 +15,7 @@
     <MonetLyric v-else-if="settingStore.lyricRenderer === 'monet'" :clock="lyricClock" />
     <PartitaLyric v-else-if="settingStore.lyricRenderer === 'partita'" :clock="lyricClock" />
     <ClassicLyric v-else-if="settingStore.lyricRenderer === 'classic'" :clock="lyricClock" />
+    <KineticLyric v-else-if="settingStore.lyricRenderer === 'kinetic'" :clock="lyricClock" />
     <DefaultLyric v-else :currentTime="playSeek" />
     <!-- 歌词菜单 -->
     <n-flex :class="['lyric-menu', { show: statusStore.playerMetaShow }]" justify="center" vertical>
@@ -98,6 +100,7 @@ import PlayerStylePanel from "../PlayerStylePanel.vue";
 
 const MonetLyric = defineAsyncComponent(() => import("./MonetLyric.vue"));
 const PartitaLyric = defineAsyncComponent(() => import("./PartitaLyric.vue"));
+const KineticLyric = defineAsyncComponent(() => import("./KineticLyric.vue"));
 const ClassicLyric = defineAsyncComponent(() => import("./ClassicLyric.vue"));
 
 const musicStore = useMusicStore();
@@ -201,6 +204,7 @@ onBeforeUnmount(() => {
   );
   &.monet,
   &.partita,
+  &.kinetic,
   &.classic {
     mask: none;
     filter: none;

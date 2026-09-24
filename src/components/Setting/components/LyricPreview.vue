@@ -76,6 +76,28 @@
       />
     </div>
     <div
+      v-if="settingStore.lyricRenderer === 'kinetic'"
+      class="monet-preview"
+      :style="{
+        ...lyricFontStyle(settingStore.lyricFont),
+        '--kinetic-font-weight': lyricFontStyle(settingStore.lyricFont).fontWeight || '700',
+      }"
+    >
+      <KineticLyricRail
+        :lines="partitaPreviewLines"
+        :clock="previewClock"
+        :word-animation="settingStore.showYrcAnimation"
+        :font-size="settingStore.lyricFontSize"
+        :translation-size="settingStore.lyricTranFontSize"
+        :romanization-size="settingStore.lyricRomaFontSize"
+        :show-translation="settingStore.showTran"
+        :show-romanization="settingStore.showRoma"
+        :color="previewMainColor"
+        :resume-text="t('setting.lyrics.kinetic_resume')"
+        @seek="seekPreview"
+      />
+    </div>
+    <div
       v-if="settingStore.lyricRenderer === 'classic'"
       class="monet-preview"
       :style="{ '--main-cover-color': previewMainColor }"
@@ -159,6 +181,9 @@ const MonetFloatingDecor = defineAsyncComponent(
 );
 const PartitaLyricRail = defineAsyncComponent(
   () => import("@/components/Partita/PartitaLyricRail.vue"),
+);
+const KineticLyricRail = defineAsyncComponent(
+  () => import("@/components/Kinetic/KineticLyricRail.vue"),
 );
 const ClassicLyricRail = defineAsyncComponent(
   () => import("@/components/Classic/ClassicLyricRail.vue"),

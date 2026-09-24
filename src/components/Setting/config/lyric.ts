@@ -108,6 +108,7 @@ export const useLyricSettings = (): SettingConfig => {
               { label: t("setting.lyrics.renderer_monet"), value: "monet" },
               { label: t("setting.lyrics.renderer_partita"), value: "partita" },
               { label: t("setting.lyrics.renderer_classic"), value: "classic" },
+              { label: t("setting.lyrics.renderer_kinetic"), value: "kinetic" },
             ],
             value: computed({
               get: () => settingStore.lyricRenderer,
