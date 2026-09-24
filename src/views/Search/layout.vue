@@ -284,6 +284,7 @@ const platformChange = (value: string) => {
 // 路由恢复（浏览器前进/后退）：校验 platform 合法性，不合法则 replace 修正
 onBeforeRouteUpdate((to) => {
   if (to.name !== "search") return;
+  if (!platformStore.platforms.length) return;
   const type = (to.query.type as string) || "comprehensive";
   const platform = (to.query.platform as string) || "";
   const validPlatform = getValidPlatform(type, platform);
@@ -299,6 +300,7 @@ onBeforeRouteUpdate((to) => {
 watch(
   () => platformStore.platforms,
   () => {
+    if (!platformStore.platforms.length) return;
     const validPlatform = getValidPlatform(searchType.value, searchPlatform.value);
     if (validPlatform !== searchPlatform.value) {
       router.replace({

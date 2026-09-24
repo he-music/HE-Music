@@ -20,7 +20,6 @@ import type { TabInfo } from "@/types/main.hemusic";
 import { newSongTabs } from "@/api/song";
 import { usePlatformStore } from "@/stores";
 import NewSongResult from "@/views/NewSong/NewSongResult.vue";
-import { onMounted } from "vue";
 
 const router = useRouter();
 const platformStore = usePlatformStore();
@@ -28,9 +27,6 @@ const platformStore = usePlatformStore();
 const tabs = ref<TabInfo[]>([]);
 const tab_id = ref<string>(router.currentRoute.value.query?.tab_id as string);
 const platform = ref<string>(router.currentRoute.value.query?.platform as string);
-if (!platformStore.platforms.find((p) => p.id === platform.value)) {
-  platform.value = platformStore.platforms[0].id;
-}
 
 const tagChange = (tab_id: string) => {
   router.replace({
@@ -56,9 +52,17 @@ onBeforeRouteUpdate((to) => {
   tab_id.value = to.query.tab_id as string;
 });
 
-onMounted(() => {
-  getTabList();
-});
+watch(
+  () => platformStore.platforms,
+  (platforms) => {
+    if (!platforms.length) return;
+    if (!platforms.some((item) => item.id === platform.value)) {
+      platform.value = platforms[0].id;
+    }
+    void getTabList();
+  },
+  { immediate: true },
+);
 </script>
 
 <style lang="scss" scoped>

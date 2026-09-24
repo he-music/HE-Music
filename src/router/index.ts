@@ -30,21 +30,14 @@ const router: Router = createRouter({
 });
 
 // 前置守卫
-router.beforeEach(async (to, from, next) => {
+router.beforeEach((to, from, next) => {
   // console.log("前置守卫", to, from);
   // 进度条
   if (!isElectron && to.path !== from.path) {
     window.$loadingBar?.start();
   }
   const platformStore = usePlatformStore();
-  if (!to.meta.offline && !platformStore.platforms.length) {
-    try {
-      await platformStore.loadPlatforms();
-    } catch (error) {
-      console.error(error);
-      if (!isElectron) window.$loadingBar?.error();
-    }
-  }
+
   // 需要登录
   if (to.meta.needLogin && !isLogin()) {
     if (!isElectron) window.$loadingBar?.error();
@@ -54,11 +47,20 @@ router.beforeEach(async (to, from, next) => {
     return;
   }
   // 需要客户端
-  else if (to.meta.needApp && !isElectron) {
+  if (to.meta.needApp && !isElectron) {
     window.$message?.warning(t("message.client_only_function"));
     next("/403");
     return;
   }
+
+  // 后台加载平台信息，让主框架先渲染。
+  if (!to.meta.offline && !platformStore.platforms.length) {
+    void platformStore.loadPlatforms().catch((error) => {
+      console.error("加载平台列表失败：", error);
+      if (!isElectron) window.$loadingBar?.error();
+    });
+  }
+
   next();
 });
 

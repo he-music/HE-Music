@@ -1,14 +1,18 @@
-import type { PlatformInfo } from "@/types/main.hemusic";
 import { defineStore } from "pinia";
+import type { PlatformInfo } from "@/types/main.hemusic";
 import { platforms } from "@/api/platform";
 
 interface PlatformData {
   platforms: PlatformInfo[];
+  loading: boolean;
 }
+
+let loadingPlatforms: Promise<void> | null = null;
 
 export const usePlatformStore = defineStore("platform", {
   state: (): PlatformData => ({
     platforms: [],
+    loading: false,
   }),
 
   getters: {
@@ -40,16 +44,27 @@ export const usePlatformStore = defineStore("platform", {
   actions: {
     async loadPlatforms() {
       if (this.platforms.length) return;
-      const res = await platforms();
-      this.platforms = res.list.map((item) => {
-        return {
-          ...item,
-          feature_support_flag: BigInt(item.feature_support_flag),
-          quality_map: Object.fromEntries(
-            item.qualities.map((item) => [item.name, item.description]),
-          ),
-        };
-      });
+      if (loadingPlatforms) return loadingPlatforms;
+
+      this.loading = true;
+      loadingPlatforms = platforms()
+        .then((res) => {
+          this.platforms = res.list.map((item) => {
+            return {
+              ...item,
+              feature_support_flag: BigInt(item.feature_support_flag),
+              quality_map: Object.fromEntries(
+                item.qualities.map((item) => [item.name, item.description]),
+              ),
+            };
+          });
+        })
+        .finally(() => {
+          this.loading = false;
+          loadingPlatforms = null;
+        });
+
+      return loadingPlatforms;
     },
   },
 });
