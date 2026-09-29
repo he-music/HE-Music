@@ -31,9 +31,9 @@
     "postinstall": "electron-builder install-app-deps",
     "build:web": "pnpm run build",
     "build:unpack": "pnpm run build && electron-builder --dir",
-    "build:win": "pnpm run build && electron-builder --win --config electron-builder.config.ts",
-    "build:mac": "pnpm run build && electron-builder --mac --config electron-builder.config.ts",
-    "build:linux": "pnpm run build && electron-builder --linux --config electron-builder.config.ts"
+    "build:win": "pnpm run build && electron-builder --win --config electron-builder.config.ts --publish never",
+    "build:mac": "pnpm run build && electron-builder --mac --config electron-builder.config.ts --publish never",
+    "build:linux": "pnpm run build && electron-builder --linux --config electron-builder.config.ts --publish never"
   },
   "dependencies": {
     "@applemusic-like-lyrics/core": "^0.5.1",

@@ -109,21 +109,16 @@ jobs:
       - name: Build Windows x64 & ARM64 App
         if: runner.os == 'Windows'
         run: pnpm build:win
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build macOS Universal App
         if: runner.os == 'macOS'
         run: pnpm build:mac
         shell: bash
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Build Linux x64 & ARM64 App
         if: runner.os == 'Linux'
         run: pnpm build:linux
         shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       # 合并所有构建
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
@@ -203,6 +198,12 @@ jobs:
 
           # 输出生成的日志内容供 Release 使用
           cat release_notes.md
+      - name: Validate release notes
+        shell: bash
+        run: |
+          test -s release_notes.md
+          echo "Generated release notes:"
+          cat release_notes.md
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -210,7 +211,6 @@ jobs:
       # 创建 GitHub Release 并上传所有产物
       - name: Create GitHub Release and Upload Assets
         uses: softprops/action-gh-release@v2
-        continue-on-error: true
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           body_path: ${{ github.workspace }}/release_notes.md
