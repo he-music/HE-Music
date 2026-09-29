@@ -277,6 +277,19 @@ const songMoreOptions = computed<DropdownOption[]>(() => {
       icon: renderIcon("Video", { size: 18 }),
     },
     {
+      key: "detail",
+      label: t("common.view_detail"),
+      show:
+        !isLocal &&
+        !!song?.id &&
+        platformStore.isFeatureSupport(song.platform, FeatureSupportFlag.GetSongDetail),
+      props: {
+        onClick: () =>
+          router.push({ name: "song", query: { id: song.id, platform: song.platform } }),
+      },
+      icon: renderIcon("Eye", { size: 18 }),
+    },
+    {
       key: "download",
       label: t("common.download_song"),
       show: !isLocal,
