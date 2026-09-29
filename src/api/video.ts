@@ -8,6 +8,14 @@ export const videoDetail = (id: string, platform: string) => {
   });
 };
 
+// MV 推荐流
+export const mvFeeds = (id: string, platform: string, pageIndex: number) => {
+  return requestHemusic({
+    url: "/v1/mv/feeds",
+    params: { id, platform, page_index: pageIndex },
+  });
+};
+
 // 视频地址
 export const videoUrl = (id: number, type: "mv" | "video", r: number) => {
   return request({

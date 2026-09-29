@@ -203,6 +203,9 @@
     "new_album": "新碟上架",
     "new_song": "新歌速递"
   },
+  "video_feed": {
+    "title": "播放列表"
+  },
   "page_section": {
     "empty": "暂无可展示的内容",
     "load_failed": "内容加载失败",

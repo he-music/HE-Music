@@ -203,6 +203,9 @@
     "new_album": "New Releases",
     "new_song": "New Tracks"
   },
+  "video_feed": {
+    "title": "Playlist"
+  },
   "page_section": {
     "empty": "No content available",
     "load_failed": "Couldn't load content",
