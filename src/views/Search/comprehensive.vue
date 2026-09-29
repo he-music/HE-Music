@@ -1,5 +1,10 @@
 <template>
-  <div class="search-type comprehensive-search">
+  <AsyncContent
+    class="search-type comprehensive-search"
+    :failed="failed"
+    :loading="loading"
+    @retry="getSearchResult"
+  >
     <template v-if="loading">
       <div class="section">
         <SongList :data="[]" loading :show-footer="false" />
@@ -193,10 +198,12 @@
         <SvgIcon name="SearchOff" />
       </template>
     </n-empty>
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { useAsyncRequest } from "@/composables/useAsyncRequest";
 import { comprehensiveSearch } from "@/api/search";
 import SongList from "@/components/List/SongList.vue";
 import SearchSongList from "@/components/List/SearchSongList.vue";
@@ -227,8 +234,15 @@ const props = defineProps<{
   platform: string;
 }>();
 
-const loading = ref<boolean>(true);
-const result = ref<ComprehensiveSearchResponse | null>(null);
+const {
+  data: result,
+  loading,
+  failed,
+  retry: getSearchResult,
+  reset,
+} = useAsyncRequest<ComprehensiveSearchResponse>(() =>
+  comprehensiveSearch(props.keyword, props.platform),
+);
 
 // best_match 可能为空，统一收口为空值，避免模板直接读取嵌套字段。
 const bestMatchPrimary = computed(() => result.value?.best_match?.primary ?? null);
@@ -267,16 +281,6 @@ const primaryArtistStats = computed(() => {
     { label: t("common.videos"), value: artist.mv_count },
   ].filter((item) => item.value);
 });
-
-// 获取综合搜索结果
-const getSearchResult = async () => {
-  loading.value = true;
-  try {
-    result.value = await comprehensiveSearch(props.keyword, props.platform);
-  } finally {
-    loading.value = false;
-  }
-};
 
 // resource_type 到 i18n key 的映射
 const getResourceTypeKey = (type: string): string => {
@@ -386,9 +390,7 @@ const viewMore = (type: string) => {
   });
 };
 
-onMounted(() => {
-  getSearchResult();
-});
+watch(() => [props.keyword, props.platform], reset, { immediate: true });
 </script>
 
 <style lang="scss" scoped>

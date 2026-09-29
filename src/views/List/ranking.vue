@@ -1,6 +1,12 @@
 <!-- 歌单列表 -->
 <template>
-  <div :class="['toplist', { small: listScrolling }]">
+  <AsyncContent
+    :class="['toplist', { small: listScrolling }]"
+    :failed="failed"
+    :loading="songLoading"
+    :has-data="!!playlistDetailData"
+    @retry="handleOnlinePlaylist(playlistId, platform)"
+  >
     <Transition name="fade" mode="out-in">
       <div v-if="playlistDetailData" class="detail">
         <div class="cover">
@@ -141,7 +147,8 @@
         :data="playlistDataShow"
         :loading="songLoading"
         :height="songListHeight"
-        load-more
+        :load-more="songHasMore && !failed"
+        :show-footer="!failed"
         disabled-sort
         @scroll="listScroll"
         @reach-bottom="reachBottom"
@@ -158,7 +165,7 @@
         </template>
       </n-empty>
     </Transition>
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
@@ -167,6 +174,7 @@ import { getRanking } from "@/api/playlist";
 import { coverLoaded, fuzzySearch, renderIcon } from "@/utils/helper";
 import { renderToolbar } from "@/utils/meta";
 import { debounce } from "lodash-es";
+import AsyncContent from "@/components/Page/AsyncContent.vue";
 import { useStatusStore } from "@/stores";
 import { openBatchList } from "@/utils/modal";
 import { usePlayer } from "@/utils/player";
@@ -183,7 +191,10 @@ const statusStore = useStatusStore();
 // 搜索数据
 const songHasMore = ref<boolean>(false);
 const songLoading = ref<boolean>(false);
-const songPageIndex = ref<number>(1);
+const songPageIndex = ref<number>(0);
+const failed = ref(false);
+let requestGeneration = 0;
+let lastId = "";
 
 // 歌单数据
 const playlistData = shallowRef<SongInfo[]>([]);
@@ -237,6 +248,11 @@ const moreOptions = computed<DropdownOption[]>(() => [
 // 获取歌单基础信息
 const getTopDetail = async (id: string, platform: string, refresh: boolean = false) => {
   if (!id || !platform) return;
+  requestGeneration++;
+  songLoading.value = false;
+  songPageIndex.value = 0;
+  lastId = "";
+  failed.value = false;
   // 设置加载状态
   loading.value = true;
   // 清空数据
@@ -251,24 +267,34 @@ const resetPlaylistData = () => {
   playlistDetailData.value = null;
   playlistData.value = [];
   listScrolling.value = false;
-  songPageIndex.value = 1;
+  songPageIndex.value = 0;
   songLoading.value = false;
   songHasMore.value = false;
 };
 
 // 获取在线歌单
 const handleOnlinePlaylist = async (id: string, platform: string) => {
+  if (songLoading.value) return;
+  const generation = requestGeneration;
+  const targetPage = songPageIndex.value + 1;
   songLoading.value = true;
-  // 获取歌单详情
-  const detail = await getRanking(id, platform, songPageIndex.value, 100);
-  if (songPageIndex.value == 1) {
-    playlistDetailData.value = detail;
-    playlistData.value = [];
+  failed.value = false;
+  try {
+    const detail = await getRanking(id, platform, targetPage, 100, lastId);
+    if (generation !== requestGeneration) return;
+    if (targetPage === 1) playlistDetailData.value = detail;
+    playlistData.value = targetPage === 1 ? detail.songs : [...playlistData.value, ...detail.songs];
+    songPageIndex.value = targetPage;
+    lastId = detail.last_id || "";
+    songHasMore.value = detail.has_more;
+  } catch {
+    if (generation === requestGeneration) failed.value = true;
+  } finally {
+    if (generation === requestGeneration) {
+      loading.value = false;
+      songLoading.value = false;
+    }
   }
-  playlistData.value = playlistData.value?.concat(detail.songs);
-  songHasMore.value = detail.has_more;
-  loading.value = false;
-  songLoading.value = false;
 };
 
 // 列表滚动
@@ -321,12 +347,7 @@ const listSearch = debounce((val: string) => {
 
 // 列表触底
 const reachBottom = () => {
-  if (songHasMore.value) {
-    songPageIndex.value++;
-    handleOnlinePlaylist(playlistId.value, platform.value);
-  } else {
-    songLoading.value = false;
-  }
+  if (songHasMore.value && !failed.value) handleOnlinePlaylist(playlistId.value, platform.value);
 };
 
 onBeforeRouteUpdate((to) => {
@@ -355,7 +376,10 @@ onActivated(() => {
 });
 
 onDeactivated(() => loadingMsgShow(false));
-onUnmounted(() => loadingMsgShow(false));
+onUnmounted(() => {
+  requestGeneration++;
+  loadingMsgShow(false);
+});
 onMounted(() => getTopDetail(playlistId.value, platform.value));
 </script>
 

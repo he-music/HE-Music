@@ -1,15 +1,21 @@
 <template>
-  <div class="search-type" style="height: auto">
-    <!--    <Transition name="fade" mode="out-in">-->
+  <AsyncContent
+    class="search-type"
+    :failed="failed"
+    :loading="loading"
+    :has-data="!!data.length"
+    @retry="retry"
+  >
     <SongList
-      :data="resultData"
+      :data="data"
       :loading="loading"
-      load-more
+      :load-more="hasMore && !failed"
+      :show-footer="!failed"
       disabled-sort
       :height="songListHeight"
-      @reach-bottom="reachBottom"
+      @reach-bottom="loadMore"
     />
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
@@ -17,47 +23,14 @@ import { newSongs } from "@/api/song";
 import SongList from "@/components/List/SongList.vue";
 import { useStatusStore } from "@/stores";
 import type { SongInfo } from "@/types/main.hemusic";
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { usePagedRequest } from "@/composables/usePagedRequest";
 
-const props = defineProps<{
-  tab_id: string;
-  platform: string;
-}>();
-
+const props = defineProps<{ tab_id: string; platform: string }>();
 const statusStore = useStatusStore();
-
-// 搜索数据
-const hasMore = ref<boolean>(true);
-const loading = ref<boolean>(true);
-const pageIndex = ref<number>(1);
-const resultData = ref<SongInfo[]>([]);
-
-// 获取搜索结果
-const getNewSongs = async () => {
-  // 获取数据
-  loading.value = true;
-  const result = await newSongs(props.platform, props.tab_id, pageIndex.value);
-  // 是否还有
-  hasMore.value = result?.has_more;
-  // 处理数据
-  resultData.value = resultData.value?.concat(result?.list);
-  loading.value = false;
-};
-
-// 列表触底
-const reachBottom = () => {
-  if (hasMore.value) {
-    pageIndex.value++;
-    getNewSongs();
-  } else {
-    loading.value = false;
-  }
-};
-onMounted(() => {
-  getNewSongs();
-});
-
-// 列表高度
-const songListHeight = computed(() => {
-  return statusStore.mainContentHeight - 50;
-});
+const { data, loading, failed, hasMore, loadMore, retry, reset } = usePagedRequest<SongInfo>(
+  (page) => newSongs(props.platform, props.tab_id, page),
+);
+const songListHeight = computed(() => statusStore.mainContentHeight - 50);
+watch(() => [props.tab_id, props.platform], reset, { immediate: true });
 </script>

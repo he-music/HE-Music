@@ -1,115 +1,117 @@
 <template>
   <div :key="artistId" :class="['artist', { small: listScrolling }]">
-    <Transition name="fade" mode="out-in">
-      <div v-if="artistDetailData" class="detail">
-        <div class="cover">
-          <n-image
-            :src="artistDetailData.cover"
-            :previewed-img-props="{ style: { borderRadius: '8px' } }"
-            :preview-src="artistDetailData.cover"
-            :render-toolbar="renderToolbar"
-            show-toolbar-tooltip
-            class="cover-img"
-            @load="coverLoaded"
-          >
-            <template #placeholder>
-              <div class="cover-loading">
-                <img src="/images/artist.jpg?asset" class="loading-img" alt="loading-img" />
-              </div>
-            </template>
-          </n-image>
-          <!-- 封面背板 -->
-          <n-image class="cover-shadow" preview-disabled :src="artistDetailData.cover" />
-        </div>
-        <div class="data">
-          <div class="name text-hidden">
-            <n-text class="name-text">
-              {{ artistDetailData.name || t("common.unknown_artist") }}
-            </n-text>
-            <n-text v-if="artistDetailData?.alias" class="name-alias" depth="3">
-              {{ artistDetailData.alias || t("common.unknown_artist") }}
-            </n-text>
-          </div>
-          <n-collapse-transition :show="!listScrolling" class="collapse">
-            <!-- 信息 -->
-            <n-flex class="meta">
-              <div
-                class="item"
-                @click="router.push({ name: 'artist-songs', query: { id: artistId, platform } })"
-              >
-                <SvgIcon name="Music" :depth="3" />
-                <n-text>{{ artistDetailData.song_count || 0 }}</n-text>
-              </div>
-              <div
-                class="item"
-                @click="router.push({ name: 'artist-albums', query: { id: artistId, platform } })"
-              >
-                <SvgIcon name="Album" :depth="3" />
-                <n-text>{{ artistDetailData.album_count || 0 }}</n-text>
-              </div>
-              <div
-                class="item"
-                @click="router.push({ name: 'artist-videos', query: { id: artistId, platform } })"
-              >
-                <SvgIcon name="Video" :depth="3" />
-                <n-text>{{ artistDetailData.mv_count || 0 }}</n-text>
-              </div>
-            </n-flex>
-            <!-- 简介 -->
-            <n-text
-              v-if="artistDetailData.description"
-              class="description text-hidden"
-              @click="openDescModal(artistDetailData.description)"
+    <AsyncContent :failed="detailFailed" :loading="detailLoading" @retry="retryDetail">
+      <Transition name="fade" mode="out-in">
+        <div v-if="artistDetailData" class="detail">
+          <div class="cover">
+            <n-image
+              :src="artistDetailData.cover"
+              :previewed-img-props="{ style: { borderRadius: '8px' } }"
+              :preview-src="artistDetailData.cover"
+              :render-toolbar="renderToolbar"
+              show-toolbar-tooltip
+              class="cover-img"
+              @load="coverLoaded"
             >
-              {{ artistDetailData.description }}
-            </n-text>
-          </n-collapse-transition>
-          <n-flex class="menu" justify="space-between">
-            <n-flex class="left" align="flex-end">
-              <n-button
-                :focusable="false"
-                type="primary"
-                strong
-                secondary
-                round
-                @click="playAllSongs"
+              <template #placeholder>
+                <div class="cover-loading">
+                  <img src="/images/artist.jpg?asset" class="loading-img" alt="loading-img" />
+                </div>
+              </template>
+            </n-image>
+            <!-- 封面背板 -->
+            <n-image class="cover-shadow" preview-disabled :src="artistDetailData.cover" />
+          </div>
+          <div class="data">
+            <div class="name text-hidden">
+              <n-text class="name-text">
+                {{ artistDetailData.name || t("common.unknown_artist") }}
+              </n-text>
+              <n-text v-if="artistDetailData?.alias" class="name-alias" depth="3">
+                {{ artistDetailData.alias || t("common.unknown_artist") }}
+              </n-text>
+            </div>
+            <n-collapse-transition :show="!listScrolling" class="collapse">
+              <!-- 信息 -->
+              <n-flex class="meta">
+                <div
+                  class="item"
+                  @click="router.push({ name: 'artist-songs', query: { id: artistId, platform } })"
+                >
+                  <SvgIcon name="Music" :depth="3" />
+                  <n-text>{{ artistDetailData.song_count || 0 }}</n-text>
+                </div>
+                <div
+                  class="item"
+                  @click="router.push({ name: 'artist-albums', query: { id: artistId, platform } })"
+                >
+                  <SvgIcon name="Album" :depth="3" />
+                  <n-text>{{ artistDetailData.album_count || 0 }}</n-text>
+                </div>
+                <div
+                  class="item"
+                  @click="router.push({ name: 'artist-videos', query: { id: artistId, platform } })"
+                >
+                  <SvgIcon name="Video" :depth="3" />
+                  <n-text>{{ artistDetailData.mv_count || 0 }}</n-text>
+                </div>
+              </n-flex>
+              <!-- 简介 -->
+              <n-text
+                v-if="artistDetailData.description"
+                class="description text-hidden"
+                @click="openDescModal(artistDetailData.description)"
               >
-                <template #icon>
-                  <SvgIcon name="Play" />
-                </template>
-                {{ t("common.play") }}
-              </n-button>
-              <n-button
-                :focusable="false"
-                strong
-                secondary
-                round
-                @click="toLikeArtist(artistDetailData, !isLikeArtist)"
-              >
-                <template #icon>
-                  <SvgIcon :name="isLikeArtist ? 'Favorite' : 'FavoriteBorder'" />
-                </template>
-                {{ isLikeArtist ? t("common.cancel_collect") : t("common.collect") }}
-              </n-button>
-              <!-- 更多 -->
-              <n-dropdown :options="moreOptions" trigger="click" placement="bottom-start">
-                <n-button :focusable="false" class="more" circle strong secondary>
+                {{ artistDetailData.description }}
+              </n-text>
+            </n-collapse-transition>
+            <n-flex class="menu" justify="space-between">
+              <n-flex class="left" align="flex-end">
+                <n-button
+                  :focusable="false"
+                  type="primary"
+                  strong
+                  secondary
+                  round
+                  @click="playAllSongs"
+                >
                   <template #icon>
-                    <SvgIcon name="List" />
+                    <SvgIcon name="Play" />
                   </template>
+                  {{ t("common.play") }}
                 </n-button>
-              </n-dropdown>
+                <n-button
+                  :focusable="false"
+                  strong
+                  secondary
+                  round
+                  @click="toLikeArtist(artistDetailData, !isLikeArtist)"
+                >
+                  <template #icon>
+                    <SvgIcon :name="isLikeArtist ? 'Favorite' : 'FavoriteBorder'" />
+                  </template>
+                  {{ isLikeArtist ? t("common.cancel_collect") : t("common.collect") }}
+                </n-button>
+                <!-- 更多 -->
+                <n-dropdown :options="moreOptions" trigger="click" placement="bottom-start">
+                  <n-button :focusable="false" class="more" circle strong secondary>
+                    <template #icon>
+                      <SvgIcon name="List" />
+                    </template>
+                  </n-button>
+                </n-dropdown>
+              </n-flex>
             </n-flex>
-          </n-flex>
+          </div>
         </div>
-      </div>
-      <div v-else class="detail">
-        <n-skeleton class="cover" />
-        <div class="data">
-          <n-skeleton :repeat="4" text />
+        <div v-else class="detail">
+          <n-skeleton class="cover" />
+          <div class="data">
+            <n-skeleton :repeat="4" text />
+          </div>
         </div>
-      </div>
-    </Transition>
+      </Transition>
+    </AsyncContent>
     <!-- 标签页 -->
     <n-tabs v-model:value="artistType" class="tabs" type="segment" @update:value="tabChange">
       <n-tab name="artist-songs">
@@ -150,6 +152,8 @@
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { useAsyncRequest } from "@/composables/useAsyncRequest";
 import { copyData, coverLoaded, renderIcon } from "@/utils/helper";
 import { renderToolbar } from "@/utils/meta";
 import { artistDetail } from "@/api/artist";
@@ -174,14 +178,28 @@ const platformStore = usePlatformStore();
 const componentRef = ref<InstanceType<typeof ArtistSongs> | null>(null);
 
 // 歌手 ID
-const artistId = computed<string>(() => router.currentRoute.value.query.id as string);
-const platform = computed<string>(() => router.currentRoute.value.query.platform as string);
+const artistId = computed<string>((previous) =>
+  router.currentRoute.value.matched.some((record) => record.name === "artist")
+    ? (router.currentRoute.value.query.id as string)
+    : previous || "",
+);
+const platform = computed<string>((previous) =>
+  router.currentRoute.value.matched.some((record) => record.name === "artist")
+    ? (router.currentRoute.value.query.platform as string)
+    : previous || "",
+);
 
 // 歌手分类
 const artistType = ref<string>((router.currentRoute.value?.name as string) || "artist-songs");
 
 // 歌手数据
-const artistDetailData = ref<ArtistInfo | null>(null);
+const {
+  data: artistDetailData,
+  loading: detailLoading,
+  failed: detailFailed,
+  retry: retryDetail,
+  reset: resetDetail,
+} = useAsyncRequest<ArtistInfo>(() => artistDetail(artistId.value, platform.value));
 
 // 列表是否滚动
 const listScrolling = ref<boolean>(false);
@@ -223,19 +241,6 @@ const isLikeArtist = computed(() => {
   );
 });
 
-// 获取歌手详情
-const getArtistDetail = async (id: string, platform: string) => {
-  try {
-    if (!id || !platform) return;
-    listScrolling.value = false;
-    artistDetailData.value = null;
-    artistDetailData.value = await artistDetail(id, platform);
-  } catch (error) {
-    console.error("Error getting artist detail:", error);
-    window.$message.error(t("message.get_artist_detail_fail"));
-  }
-};
-
 // Tabs 改变
 const tabChange = (value: string) => {
   router.push({
@@ -264,14 +269,16 @@ onBeforeRouteUpdate((to) => {
   listScrolling.value = false;
   if (to.matched[1]?.name !== "artist") return;
   artistType.value = to.name as string;
-  const id = to.query.id as string;
-  const pt = to.query.platform as string;
-  if ((id && id !== artistId.value) || (pt && pt !== platform.value)) {
-    getArtistDetail(id, pt);
-  }
 });
 
-onMounted(() => getArtistDetail(artistId.value, platform.value));
+watch(
+  () => [artistId.value, platform.value],
+  () => {
+    listScrolling.value = false;
+    if (artistId.value && platform.value) resetDetail();
+  },
+  { immediate: true },
+);
 </script>
 
 <style lang="scss" scoped>

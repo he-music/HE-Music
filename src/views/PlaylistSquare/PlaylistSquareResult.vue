@@ -1,5 +1,11 @@
 <template>
-  <div class="discover-playlists">
+  <AsyncContent
+    class="discover-playlists"
+    :failed="failed"
+    :loading="loading"
+    :has-data="!!playlistData.length"
+    @retry="retry"
+  >
     <n-flex justify="space-between" align="center" class="menu">
       <!-- 分类 -->
       <n-button
@@ -34,10 +40,9 @@
       <!--      </Transition>-->
     </n-flex>
     <PlaylistList
-      v-if="playlistCount > 0"
       :data="playlistData"
       :loading="loading"
-      :load-more="hasMore"
+      :load-more="hasMore && !failed"
       @load-more="loadMore"
     />
     <!-- 分类选择 -->
@@ -88,10 +93,12 @@
         </n-tab-pane>
       </n-tabs>
     </n-modal>
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { usePagedRequest } from "@/composables/usePagedRequest";
 import { useDataStore } from "@/stores";
 import type { PlaylistInfo, CategoryInfo } from "@/types/main.hemusic";
 import PlaylistList from "@/components/List/PlaylistList.vue";
@@ -109,115 +116,36 @@ const emit = defineEmits<{
   change: [string];
 }>();
 
-const group_name = ref<string>("");
-
 const dataStore = useDataStore();
-
-const catChangeShow = ref<boolean>(false);
-
-const currentTag = ref<CategoryInfo>();
-
-// 歌单数据
-const hasMore = ref<boolean>(true);
-const loading = ref<boolean>(true);
-const playlistPageIndex = ref<number>(1);
-const playlistCount = ref<number>(1);
-const playlistData = ref<PlaylistInfo[]>([]);
-const last_id = ref<string>("");
-
-// 获取歌单数据
-const getAllCatlistPlaylist = async () => {
-  if (!currentTag.value) {
-    return;
-  }
-  // 获取数据
-  loading.value = true;
-  const result = await categoryPlaylists(
-    currentTag.value.id,
-    props.platform,
-    playlistPageIndex.value,
-    30,
-    last_id.value,
-  );
-  // 是否还有
-  hasMore.value = result.has_more;
-  last_id.value = result.last_id;
-  // 处理数据
-  playlistData.value = playlistData.value?.concat(result.list);
-  playlistCount.value = playlistData.value.length;
-  loading.value = false;
+const catChangeShow = ref(false);
+const findTag = (platform: string, categoryId?: string) => {
+  const tags = (dataStore.playlistCategories[platform] || []).flatMap((group) => group.categories);
+  return tags.find((tag) => tag.id === categoryId) || tags[0];
 };
+const currentTag = computed(() => findTag(props.platform, props.category_id));
 
-// 加载更多
-const loadMore = () => {
-  playlistPageIndex.value++;
-  getAllCatlistPlaylist();
-};
+const {
+  data: playlistData,
+  loading,
+  failed,
+  hasMore,
+  loadMore,
+  retry,
+  reset,
+} = usePagedRequest<PlaylistInfo>(async (page, cursor) => {
+  const platform = props.platform;
+  const categoryId = props.category_id;
+  if (page === 1) await dataStore.getPlaylistCategories(platform);
+  const tag = findTag(platform, categoryId);
+  if (!tag) return { list: [], has_more: false };
+  return categoryPlaylists(tag.id, platform, page, 30, cursor);
+});
 
-// 分类切换
 const changeTag = (tag: CategoryInfo) => {
   catChangeShow.value = false;
   emit("change", tag.id);
 };
-
-watch(
-  () => props.category_id,
-  async (to) => {
-    [group_name.value, currentTag.value] = findTag(to || "");
-    resetData();
-    await getAllCatlistPlaylist();
-  },
-);
-
-const resetData = () => {
-  playlistData.value = [];
-  playlistPageIndex.value = 1;
-  last_id.value = "";
-};
-
-// watch(()=> props.tag_id,(to)=>{
-//   console.log('tag_id',to)
-//   let found:TagInfo = null
-//   if (to){
-//     for (let catDatumKey in dataStore.catData[props.platform]) {
-//       found = dataStore.catData[props.platform][catDatumKey].tag_list.find((item)=>item.id === to)
-//       if (found){
-//         break
-//       }
-//     }
-//   }
-//   if (found){
-//     currentTag.value = found;
-//   }else{
-//     currentTag.value = dataStore.catData[props.platform][0]?.tag_list[0];
-//   }
-// })
-
-const findTag = (tag_id: string): [string, CategoryInfo] => {
-  if (tag_id) {
-    for (let catDatumKey in dataStore.playlistCategories[props.platform]) {
-      const found = dataStore.playlistCategories[props.platform][catDatumKey].categories.find(
-        (item) => item.id === tag_id,
-      );
-      if (found) {
-        return [dataStore.playlistCategories[props.platform][catDatumKey].name, found];
-      }
-    }
-  }
-
-  return [
-    dataStore.playlistCategories[props.platform][0]?.name,
-    dataStore.playlistCategories[props.platform][0]?.categories[0],
-  ];
-};
-
-onMounted(async () => {
-  await dataStore.getPlaylistCategories(props.platform);
-
-  [group_name.value, currentTag.value] = findTag(props.category_id || "");
-  // 获取歌单
-  await getAllCatlistPlaylist();
-});
+watch(() => [props.platform, props.category_id], reset, { immediate: true });
 </script>
 
 <style lang="scss" scoped>

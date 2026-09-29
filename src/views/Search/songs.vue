@@ -1,12 +1,19 @@
 <template>
-  <div class="search-type" style="height: auto">
+  <AsyncContent
+    class="search-type"
+    :failed="failed"
+    :loading="loading"
+    :has-data="!!searchResultData.length"
+    @retry="retry"
+  >
     <!--    <Transition name="fade" mode="out-in">-->
     <SearchSongList
       v-if="searchResultData.length || loading"
       :data="searchResultData"
       :keyword="keyword"
       :loading="loading"
-      load-more
+      :load-more="hasMore && !failed"
+      :show-footer="!failed"
       :height="songListHeight"
       @reach-bottom="reachBottom"
       :show-header="!isSmall"
@@ -22,10 +29,12 @@
       </template>
     </n-empty>
     <!--    </Transition>-->
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { usePagedRequest } from "@/composables/usePagedRequest";
 import { searchSong } from "@/api/search";
 import SearchSongList from "@/components/List/SearchSongList.vue";
 import { useStatusStore } from "@/stores";
@@ -42,34 +51,16 @@ const props = defineProps<{
 
 const statusStore = useStatusStore();
 
-// 搜索数据
-const hasMore = ref<boolean>(true);
-const loading = ref<boolean>(true);
-const searchPage = ref<number>(1);
-const searchResultData = ref<SearchSongInfo[]>([]);
-
-// 获取搜索结果
-const getSearchResult = async () => {
-  loading.value = true;
-  try {
-    const result = await searchSong(props.keyword, 30, searchPage.value, props.platform);
-    hasMore.value = result.has_more;
-    searchResultData.value = searchResultData.value.concat(result.list);
-  } finally {
-    loading.value = false;
-  }
-};
-
-// 列表触底
-const reachBottom = () => {
-  if (!hasMore.value || loading.value) return;
-  searchPage.value++;
-  getSearchResult();
-};
-
-onMounted(() => {
-  getSearchResult();
-});
+const {
+  data: searchResultData,
+  loading,
+  failed,
+  hasMore,
+  loadMore: reachBottom,
+  retry,
+  reset,
+} = usePagedRequest<SearchSongInfo>((page) => searchSong(props.keyword, 30, page, props.platform));
+watch(() => [props.keyword, props.platform], reset, { immediate: true });
 
 // 列表高度
 const songListHeight = computed(() => {

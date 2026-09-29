@@ -1,6 +1,14 @@
 <template>
-  <div class="new-song">
-    <n-tabs v-model:value="tab_id" class="tabs" type="bar" animated @update:value="tagChange">
+  <AsyncContent class="new-song" :failed="failed" :loading="loading" @retry="retry">
+    <n-skeleton v-if="loading" height="40px" />
+    <n-tabs
+      v-else
+      v-model:value="tab_id"
+      class="tabs"
+      type="bar"
+      animated
+      @update:value="tagChange"
+    >
       <n-tab-pane
         v-for="tab in tabs"
         :key="`new-song-${tab.platform}-${tab.id}`"
@@ -8,13 +16,15 @@
         :tab="tab.name"
         display-directive="show:lazy"
       >
-        <NewSongResult :platform="tab.platform" :tab_id="tab_id" />
+        <NewSongResult :platform="tab.platform" :tab_id="tab.id" />
       </n-tab-pane>
     </n-tabs>
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { useAsyncRequest } from "@/composables/useAsyncRequest";
 import type { TabInfo } from "@/types/main.hemusic";
 
 import { newSongTabs } from "@/api/song";
@@ -24,7 +34,6 @@ import NewSongResult from "@/views/NewSong/NewSongResult.vue";
 const router = useRouter();
 const platformStore = usePlatformStore();
 
-const tabs = ref<TabInfo[]>([]);
 const tab_id = ref<string>(router.currentRoute.value.query?.tab_id as string);
 const platform = ref<string>(router.currentRoute.value.query?.platform as string);
 
@@ -37,14 +46,19 @@ const tagChange = (tab_id: string) => {
     },
   });
 };
-const getTabList = async () => {
+const {
+  data: tabs,
+  loading,
+  failed,
+  retry,
+  reset: getTabList,
+} = useAsyncRequest<TabInfo[]>(async () => {
   const result = await newSongTabs(platform.value);
-  const tab = result.list.find((item) => item.id === tab_id.value);
-  if (!tab) {
-    tab_id.value = result.list[0].id;
-  }
-  tabs.value = result.list;
-};
+  return result.list;
+});
+watch(tabs, (items) => {
+  if (!items?.some((item) => item.id === tab_id.value)) tab_id.value = items?.[0]?.id || "";
+});
 
 // 参数变化
 onBeforeRouteUpdate((to) => {

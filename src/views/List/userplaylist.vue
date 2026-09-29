@@ -1,169 +1,183 @@
 <!-- 歌单列表 -->
 <template>
   <div :class="['playlist', { small: listScrolling }]">
-    <Transition name="fade" mode="out-in">
-      <div v-if="playlistDetailData" class="detail">
-        <div class="cover">
-          <n-image
-            :src="playlistDetailData.cover"
-            :previewed-img-props="{ style: { borderRadius: '8px' } }"
-            :preview-src="playlistDetailData.cover"
-            :render-toolbar="renderToolbar"
-            show-toolbar-tooltip
-            class="cover-img"
-            @load="coverLoaded"
-          >
-            <template #placeholder>
-              <div class="cover-loading">
-                <img src="/images/album.jpg?asset" class="loading-img" alt="loading-img" />
-              </div>
-            </template>
-          </n-image>
-          <!-- 封面背板 -->
-          <n-image class="cover-shadow" preview-disabled :src="playlistDetailData.cover" />
-          <!-- 遮罩 -->
-          <div class="cover-mask" />
-        </div>
-        <div class="data">
-          <n-h2 class="name text-hidden">
-            {{
-              playlistDetailData.is_default == 1
-                ? t("playlist.my_favorite_music")
-                : playlistDetailData.name || t("common.unknown_playlist")
-            }}
-          </n-h2>
-          <n-collapse-transition :show="!listScrolling" class="collapse">
-            <!-- 简介 -->
-            <n-text
-              v-if="playlistDetailData.description || t('playlist.empty_description')"
-              class="description text-hidden"
-              @click="
-                openDescModal(playlistDetailData.description || t('playlist.empty_description'))
-              "
+    <AsyncContent :failed="detailFailed" :loading="loading" @retry="getPlaylistDetail(playlistId)">
+      <Transition name="fade" mode="out-in">
+        <div v-if="playlistDetailData" class="detail">
+          <div class="cover">
+            <n-image
+              :src="playlistDetailData.cover"
+              :previewed-img-props="{ style: { borderRadius: '8px' } }"
+              :preview-src="playlistDetailData.cover"
+              :render-toolbar="renderToolbar"
+              show-toolbar-tooltip
+              class="cover-img"
+              @load="coverLoaded"
             >
-              {{ playlistDetailData.description || t("playlist.empty_description") }}
-            </n-text>
-            <!-- 信息 -->
-            <n-flex class="meta">
-              <div class="item">
-                <SvgIcon name="Person" :depth="3" />
-                <n-text>{{ playlistDetailData.creator || t("common.unknown_user") }}</n-text>
-              </div>
-              <div class="item">
-                <SvgIcon name="Music" :depth="3" />
-                <n-text>{{ playlistDetailData.song_count || 0 }}</n-text>
-              </div>
-              <!--              <div v-if="playlistDetailData.updateTime" class="item">-->
-              <!--                <SvgIcon name="Update" :depth="3" />-->
-              <!--                <n-text>{{ formatTimestamp(playlistDetailData.updateTime) }}</n-text>-->
-              <!--              </div>-->
-              <div v-if="playlistDetailData.created_at" class="item">
-                <SvgIcon name="Time" :depth="3" />
-                <n-text>{{ formatTimestamp(Number(playlistDetailData.created_at) * 1000) }}</n-text>
-              </div>
-            </n-flex>
-          </n-collapse-transition>
-          <n-flex class="menu" justify="space-between">
-            <n-flex class="left" align="flex-end">
-              <n-button
-                :focusable="false"
-                :disabled="songLoading"
-                :loading="songLoading"
-                type="primary"
-                strong
-                secondary
-                round
-                @click="playAllSongs"
+              <template #placeholder>
+                <div class="cover-loading">
+                  <img src="/images/album.jpg?asset" class="loading-img" alt="loading-img" />
+                </div>
+              </template>
+            </n-image>
+            <!-- 封面背板 -->
+            <n-image class="cover-shadow" preview-disabled :src="playlistDetailData.cover" />
+            <!-- 遮罩 -->
+            <div class="cover-mask" />
+          </div>
+          <div class="data">
+            <n-h2 class="name text-hidden">
+              {{
+                playlistDetailData.is_default == 1
+                  ? t("playlist.my_favorite_music")
+                  : playlistDetailData.name || t("common.unknown_playlist")
+              }}
+            </n-h2>
+            <n-collapse-transition :show="!listScrolling" class="collapse">
+              <!-- 简介 -->
+              <n-text
+                v-if="playlistDetailData.description || t('playlist.empty_description')"
+                class="description text-hidden"
+                @click="
+                  openDescModal(playlistDetailData.description || t('playlist.empty_description'))
+                "
               >
-                <template #icon>
-                  <SvgIcon name="Play" />
-                </template>
-                {{
-                  songLoading
-                    ? `${t("common.loading")}... (${
-                        playlistData.length === Number(playlistDetailData.song_count)
-                          ? 0
-                          : playlistData.length
-                      }/${playlistDetailData.song_count})`
-                    : t("common.play")
-                }}
-              </n-button>
-              <n-button :focusable="false" strong secondary round @click="updatePlaylist">
-                <template #icon>
-                  <SvgIcon name="EditNote" />
-                </template>
-                {{ t("common.edit") }}
-              </n-button>
-              <!-- 更多 -->
-              <n-dropdown :options="moreOptions" trigger="click" placement="bottom-start">
-                <n-button :focusable="false" class="more" circle strong secondary>
+                {{ playlistDetailData.description || t("playlist.empty_description") }}
+              </n-text>
+              <!-- 信息 -->
+              <n-flex class="meta">
+                <div class="item">
+                  <SvgIcon name="Person" :depth="3" />
+                  <n-text>{{ playlistDetailData.creator || t("common.unknown_user") }}</n-text>
+                </div>
+                <div class="item">
+                  <SvgIcon name="Music" :depth="3" />
+                  <n-text>{{ playlistDetailData.song_count || 0 }}</n-text>
+                </div>
+                <!--              <div v-if="playlistDetailData.updateTime" class="item">-->
+                <!--                <SvgIcon name="Update" :depth="3" />-->
+                <!--                <n-text>{{ formatTimestamp(playlistDetailData.updateTime) }}</n-text>-->
+                <!--              </div>-->
+                <div v-if="playlistDetailData.created_at" class="item">
+                  <SvgIcon name="Time" :depth="3" />
+                  <n-text>{{
+                    formatTimestamp(Number(playlistDetailData.created_at) * 1000)
+                  }}</n-text>
+                </div>
+              </n-flex>
+            </n-collapse-transition>
+            <n-flex class="menu" justify="space-between">
+              <n-flex class="left" align="flex-end">
+                <n-button
+                  :focusable="false"
+                  :disabled="songLoading"
+                  :loading="songLoading"
+                  type="primary"
+                  strong
+                  secondary
+                  round
+                  @click="playAllSongs"
+                >
                   <template #icon>
-                    <SvgIcon name="List" />
+                    <SvgIcon name="Play" />
                   </template>
+                  {{
+                    songLoading
+                      ? `${t("common.loading")}... (${
+                          playlistData.length === Number(playlistDetailData.song_count)
+                            ? 0
+                            : playlistData.length
+                        }/${playlistDetailData.song_count})`
+                      : t("common.play")
+                  }}
                 </n-button>
-              </n-dropdown>
+                <n-button :focusable="false" strong secondary round @click="updatePlaylist">
+                  <template #icon>
+                    <SvgIcon name="EditNote" />
+                  </template>
+                  {{ t("common.edit") }}
+                </n-button>
+                <!-- 更多 -->
+                <n-dropdown :options="moreOptions" trigger="click" placement="bottom-start">
+                  <n-button :focusable="false" class="more" circle strong secondary>
+                    <template #icon>
+                      <SvgIcon name="List" />
+                    </template>
+                  </n-button>
+                </n-dropdown>
+              </n-flex>
+              <n-flex class="right">
+                <!-- 模糊搜索 -->
+                <n-input
+                  v-if="playlistData?.length"
+                  v-model:value="searchValue"
+                  :input-props="{ autocomplete: 'off' }"
+                  class="search"
+                  :placeholder="t('search.fuzzy_search')"
+                  clearable
+                  round
+                  @input="listSearch"
+                >
+                  <template #prefix>
+                    <SvgIcon name="Search" />
+                  </template>
+                </n-input>
+              </n-flex>
             </n-flex>
-            <n-flex class="right">
-              <!-- 模糊搜索 -->
-              <n-input
-                v-if="playlistData?.length"
-                v-model:value="searchValue"
-                :input-props="{ autocomplete: 'off' }"
-                class="search"
-                :placeholder="t('search.fuzzy_search')"
-                clearable
-                round
-                @input="listSearch"
-              >
-                <template #prefix>
-                  <SvgIcon name="Search" />
-                </template>
-              </n-input>
-            </n-flex>
-          </n-flex>
+          </div>
         </div>
-      </div>
-      <div v-else class="detail">
-        <n-skeleton class="cover" />
-        <div class="data">
-          <n-skeleton :repeat="4" text />
+        <div v-else class="detail">
+          <n-skeleton class="cover" />
+          <div class="data">
+            <n-skeleton :repeat="4" text />
+          </div>
         </div>
-      </div>
-    </Transition>
-    <Transition name="fade" mode="out-in">
-      <SongList
-        v-if="!searchValue || searchData?.length"
-        :data="playlistDataShow"
-        :loading="songLoading"
-        :height="songListHeight"
-        :disabled-sort="songHasMore"
-        load-more
-        :playlist="{
-          id: playlistId,
-          platform: '',
-          type: 'user-playlist',
-        }"
-        @scroll="listScroll"
-        @remove-song="removeSong"
-        :double-click-action="searchData?.length ? 'add' : 'all'"
-        @reach-bottom="reachBottom"
-        :keep-offset="isSamePlaylist"
-      />
-      <n-empty
-        v-else
-        :description="t('search.no_song_result', { keyword: searchValue })"
-        style="margin-top: 60px"
-        size="large"
-      >
-        <template #icon>
-          <SvgIcon name="SearchOff" />
-        </template>
-      </n-empty>
-    </Transition>
+      </Transition>
+    </AsyncContent>
+    <AsyncContent
+      v-if="playlistDetailData"
+      :failed="songFailed"
+      :loading="songLoading"
+      :has-data="!!playlistData.length"
+      @retry="handleSongs(playlistId)"
+    >
+      <Transition name="fade" mode="out-in">
+        <SongList
+          v-if="!searchValue || searchData?.length"
+          :data="playlistDataShow"
+          :loading="songLoading"
+          :height="songListHeight"
+          :disabled-sort="songHasMore"
+          :load-more="songHasMore && !songFailed"
+          :show-footer="!songFailed"
+          :playlist="{
+            id: playlistId,
+            platform: '',
+            type: 'user-playlist',
+          }"
+          @scroll="listScroll"
+          @remove-song="removeSong"
+          :double-click-action="searchData?.length ? 'add' : 'all'"
+          @reach-bottom="reachBottom"
+          :keep-offset="isSamePlaylist"
+        />
+        <n-empty
+          v-else
+          :description="t('search.no_song_result', { keyword: searchValue })"
+          style="margin-top: 60px"
+          size="large"
+        >
+          <template #icon>
+            <SvgIcon name="SearchOff" />
+          </template>
+        </n-empty>
+      </Transition>
+    </AsyncContent>
   </div>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
 import type { DropdownOption, MessageReactive } from "naive-ui";
 
 import { coverLoaded, fuzzySearch, renderIcon } from "@/utils/helper";
@@ -210,7 +224,10 @@ const loadingMsg = ref<MessageReactive | null>(null);
 // 搜索数据
 const songHasMore = ref<boolean>(false);
 const songLoading = ref<boolean>(false);
-const songPageIndex = ref<number>(1);
+const songPageIndex = ref<number>(0);
+const detailFailed = ref(false);
+const songFailed = ref(false);
+let requestGeneration = 0;
 
 // 列表是否滚动
 const listScrolling = ref<boolean>(false);
@@ -249,61 +266,54 @@ const moreOptions = computed<DropdownOption[]>(() => [
   },
 ]);
 
-// 获取歌单基础信息
 const getPlaylistDetail = async (id: string, refresh: boolean = false) => {
   if (!id) return;
-  // 设置加载状态
+  const generation = ++requestGeneration;
   loading.value = true;
   songLoading.value = true;
-  // 清空数据
+  detailFailed.value = false;
+  songFailed.value = false;
   clearInput();
-  if (!refresh) resetPlaylistData();
-  // 判断是否为本地歌单，本地歌单 ID 为 16 位
-  const isLocal = id.toString().length === 16;
-  // 本地歌单
-  if (isLocal) handleLocalPlaylist(id);
-  // 在线歌单
-  else await handleOnlinePlaylist(id);
-};
-
-// 重置歌单数据
-const resetPlaylistData = () => {
-  playlistDetailData.value = null;
-  playlistData.value = [];
-  listScrolling.value = false;
-  songPageIndex.value = 1;
-};
-
-// 获取本地歌单
-const handleLocalPlaylist = (id: string) => {
-  console.log(id);
-};
-
-// 获取在线歌单
-const handleOnlinePlaylist = async (id: string) => {
-  // 获取歌单详情
-  const detail = await getUserPlaylistDetail(id);
-  playlistDetailData.value = detail;
-  loading.value = false;
-  // 默认歌单
-  if (detail.is_default === 1) {
-    await dataStore.setUserLikeData("songs", detail.song_ids);
-  }
-  await handleSongs(id);
-};
-
-// 获取在线歌单
-const handleSongs = async (id: string) => {
-  songLoading.value = true;
-  // 获取歌单详情
-  const { list, has_more } = await listUserPlaylistSongs(id, songPageIndex.value, 1000);
-  if (songPageIndex.value == 1) {
+  if (!refresh) {
+    playlistDetailData.value = null;
     playlistData.value = [];
+    listScrolling.value = false;
   }
-  playlistData.value = playlistData.value?.concat(list);
-  songHasMore.value = has_more;
-  loading.value = false;
-  songLoading.value = false;
+  songPageIndex.value = 0;
+  songHasMore.value = false;
+  try {
+    const detail = await getUserPlaylistDetail(id);
+    if (generation !== requestGeneration) return;
+    playlistDetailData.value = detail;
+    if (detail.is_default === 1) await dataStore.setUserLikeData("songs", detail.song_ids);
+  } catch {
+    if (generation === requestGeneration) detailFailed.value = true;
+  } finally {
+    if (generation === requestGeneration) {
+      loading.value = false;
+      songLoading.value = false;
+    }
+  }
+  if (generation === requestGeneration && !detailFailed.value) await handleSongs(id);
+};
+
+const handleSongs = async (id: string) => {
+  if (songLoading.value) return;
+  const generation = requestGeneration;
+  const targetPage = songPageIndex.value + 1;
+  songLoading.value = true;
+  songFailed.value = false;
+  try {
+    const { list, has_more } = await listUserPlaylistSongs(id, targetPage, 1000);
+    if (generation !== requestGeneration) return;
+    playlistData.value = targetPage === 1 ? list : [...playlistData.value, ...list];
+    songPageIndex.value = targetPage;
+    songHasMore.value = has_more;
+  } catch {
+    if (generation === requestGeneration) songFailed.value = true;
+  } finally {
+    if (generation === requestGeneration) songLoading.value = false;
+  }
 };
 
 // 列表滚动
@@ -338,6 +348,7 @@ const loadingMsgShow = (show: boolean = true, count?: number) => {
 // 播放全部歌曲
 const playAllSongs = debounce(async () => {
   await loadAllSongs();
+  if (songFailed.value || songLoading.value) return;
   if (!playlistDetailData.value || !playlistData.value?.length) return;
   await player.updatePlayList(playlistData.value, undefined, {
     id: playlistDetailData.value?.id,
@@ -347,19 +358,14 @@ const playAllSongs = debounce(async () => {
 }, 300);
 
 const loadAllSongs = async () => {
-  for (; songHasMore.value; ) {
+  for (; songHasMore.value && !songFailed.value && !songLoading.value; ) {
     await reachBottom();
   }
 };
 
 // 列表触底
 const reachBottom = async () => {
-  if (songHasMore.value) {
-    songPageIndex.value++;
-    await handleSongs(playlistId.value);
-  } else {
-    songLoading.value = false;
-  }
+  if (songHasMore.value && !songFailed.value) await handleSongs(playlistId.value);
 };
 
 // 模糊搜索
@@ -434,7 +440,10 @@ onActivated(() => {
 });
 
 onDeactivated(() => loadingMsgShow(false));
-onUnmounted(() => loadingMsgShow(false));
+onUnmounted(() => {
+  requestGeneration++;
+  loadingMsgShow(false);
+});
 onMounted(() => getPlaylistDetail(playlistId.value));
 </script>
 

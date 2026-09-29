@@ -1,5 +1,11 @@
 <template>
-  <div class="discover-artists">
+  <AsyncContent
+    class="discover-artists"
+    :failed="failed"
+    :loading="loading"
+    :has-data="!!artistsData.length"
+    @retry="retry"
+  >
     <div v-if="dataStore.artistFilters[platform]" class="menu">
       <n-flex v-for="tab in dataStore.artistFilters[platform]" :key="tab.id" class="category">
         <n-tag
@@ -25,14 +31,16 @@
     <ArtistList
       :data="artistsData"
       :loading="loading"
-      :load-more="hasMore"
+      :load-more="hasMore && !failed"
       hidden-item
       @load-more="loadMore"
     />
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { usePagedRequest } from "@/composables/usePagedRequest";
 import { filterArtists } from "@/api/artist";
 import type { ArtistInfo } from "@/types/main.hemusic";
 import { useDataStore } from "@/stores";
@@ -42,56 +50,42 @@ const props = defineProps<{
 }>();
 const dataStore = useDataStore();
 
-const filters = ref({});
-
-// 歌手数据
-const hasMore = ref<boolean>(true);
-const loading = ref<boolean>(true);
-const artistsPageIndex = ref<number>(1);
-const artistsData = ref<ArtistInfo[]>([]);
-
-// 获取歌手数据
-const getArtistListData = async () => {
-  // 获取数据
-  loading.value = true;
-  const result = await filterArtists(props.platform, artistsPageIndex.value, 50, filters.value);
-  // 是否还有
-  hasMore.value = result?.has_more;
-  artistsData.value = artistsData.value?.concat(result.list);
-  loading.value = false;
-};
-
-// 参数变化
-const artistQueryChange = (tabId: string, value: string) => {
-  filters.value[tabId] = value;
-  artistsPageIndex.value = 1;
-  loading.value = true;
-  artistsData.value = [];
-  getArtistListData();
-};
-
-// 加载更多
-const loadMore = () => {
-  artistsPageIndex.value++;
-  getArtistListData();
-};
-
-// 参数变化
-// onBeforeRouteUpdate((to) => {
-//   // 获取歌单
-//   loading.value = true;
-//   artistsData.value = [];
-//   getArtistListData();
-// });
-
-onMounted(async () => {
-  await dataStore.getArtistFilters(props.platform);
-  dataStore.artistFilters[props.platform]?.forEach((tab) => {
-    filters.value[tab.id] = tab.options[0]?.value;
-  });
-
-  await getArtistListData();
+const filters = ref<Record<string, string>>({});
+const {
+  data: artistsData,
+  loading,
+  failed,
+  hasMore,
+  loadMore,
+  retry,
+  reset,
+} = usePagedRequest<ArtistInfo>(async (page) => {
+  const platform = props.platform;
+  const selected = filters.value;
+  const query = { ...selected };
+  if (page === 1) {
+    await dataStore.getArtistFilters(platform);
+    dataStore.artistFilters[platform]?.forEach((tab) => {
+      query[tab.id] ??= tab.options[0]?.value;
+    });
+    if (platform === props.platform && selected === filters.value) filters.value = query;
+  }
+  return filterArtists(platform, page, 50, query);
 });
+
+const artistQueryChange = (tabId: string, value: string) => {
+  filters.value = { ...filters.value, [tabId]: value };
+  reset();
+};
+
+watch(
+  () => props.platform,
+  () => {
+    filters.value = {};
+    reset();
+  },
+  { immediate: true },
+);
 </script>
 
 <style lang="scss" scoped>

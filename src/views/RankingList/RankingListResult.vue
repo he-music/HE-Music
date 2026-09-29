@@ -1,5 +1,5 @@
 <template>
-  <div class="toplists">
+  <AsyncContent class="toplists" :failed="failed" :loading="loading" @retry="retry">
     <Transition name="fade" mode="out-in">
       <div v-if="!loading" class="official-list">
         <div v-for="(item, idx) in topListData || []" :key="idx">
@@ -11,33 +11,27 @@
       </div>
       <RankingList v-else :data="[]" loading :loading-num="12" />
     </Transition>
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { useAsyncRequest } from "@/composables/useAsyncRequest";
 import type { RankingInfo } from "@/types/main.hemusic";
 import { listRankings } from "@/api/playlist";
 const props = defineProps<{
   platform: string;
 }>();
 
-const loading = ref<boolean>(true);
-
-// 排行榜数据
-const topListData = ref<
-  {
-    name: string;
-    rankings: RankingInfo[];
-  }[]
->();
-
-// 获取排行榜数据
-const getTopPlaylistData = async () => {
-  loading.value = true;
+const {
+  data: topListData,
+  loading,
+  failed,
+  retry,
+  reset,
+} = useAsyncRequest<{ name: string; rankings: RankingInfo[] }[]>(async () => {
   const { groups = [] } = await listRankings(props.platform);
-  topListData.value = groups;
-  loading.value = false;
-};
-
-onMounted(getTopPlaylistData);
+  return groups;
+});
+watch(() => props.platform, reset, { immediate: true });
 </script>

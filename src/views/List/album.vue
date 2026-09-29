@@ -1,6 +1,12 @@
 <!-- 专辑列表 -->
 <template>
-  <div :class="['album', { small: listScrolling }]">
+  <AsyncContent
+    :class="['album', { small: listScrolling }]"
+    :failed="failed"
+    :loading="loading"
+    :has-data="!!albumDetailData"
+    @retry="getAlbumDetail(albumId, platform, true)"
+  >
     <Transition name="fade" mode="out-in">
       <div v-if="albumDetailData" class="detail">
         <div class="cover">
@@ -164,10 +170,11 @@
         </template>
       </n-empty>
     </Transition>
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
 import { albumDetail } from "@/api/album";
 import { copyData, coverLoaded, fuzzySearch, getShareUrl, renderIcon } from "@/utils/helper";
 import { renderToolbar } from "@/utils/meta";
@@ -197,6 +204,8 @@ const isActivated = ref<boolean>(false);
 
 // 专辑数据
 const loading = ref<boolean>(true);
+const failed = ref(false);
+let requestGeneration = 0;
 const albumData = shallowRef<SongInfo[]>([]);
 const albumDetailData = ref<AlbumInfo | null>(null);
 
@@ -284,22 +293,25 @@ const moreOptions = computed<DropdownOption[]>(() => [
 // 获取专辑基础信息
 const getAlbumDetail = async (id: string, platform: string, refresh: boolean = false) => {
   if (!id || !platform) return;
+  const generation = ++requestGeneration;
   loading.value = true;
+  failed.value = false;
   // 清空数据
   clearInput();
   if (!refresh) {
     albumData.value = [];
     albumDetailData.value = null;
   }
-  // 获取专辑详情
-  albumDetail(id, platform)
-    .then((detail) => {
-      albumDetailData.value = detail;
-      albumData.value = detail.songs;
-    })
-    .finally(() => {
-      loading.value = false;
-    });
+  try {
+    const detail = await albumDetail(id, platform);
+    if (generation !== requestGeneration) return;
+    albumDetailData.value = detail;
+    albumData.value = detail.songs;
+  } catch {
+    if (generation === requestGeneration) failed.value = true;
+  } finally {
+    if (generation === requestGeneration) loading.value = false;
+  }
 };
 
 // 列表滚动
@@ -349,6 +361,7 @@ onDeactivated(() => {
   listScrolling.value = false;
 });
 
+onUnmounted(() => requestGeneration++);
 onMounted(() => {
   getAlbumDetail(albumId.value, platform.value);
 });

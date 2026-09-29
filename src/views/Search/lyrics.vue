@@ -1,5 +1,11 @@
 <template>
-  <div class="search-type" style="height: auto">
+  <AsyncContent
+    class="search-type"
+    :failed="failed"
+    :loading="loading"
+    :has-data="!!searchResultData.length"
+    @retry="retry"
+  >
     <SearchSongList
       v-if="searchResultData.length || loading"
       :data="searchResultData"
@@ -8,7 +14,8 @@
       :height="songListHeight"
       :show-header="!isSmall"
       allow-full-lyric
-      load-more
+      :load-more="hasMore && !failed"
+      :show-footer="!failed"
       @reach-bottom="reachBottom"
     />
     <n-empty
@@ -21,10 +28,12 @@
         <SvgIcon name="SearchOff" />
       </template>
     </n-empty>
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { usePagedRequest } from "@/composables/usePagedRequest";
 import { searchLyricSong } from "@/api/search";
 import SearchSongList from "@/components/List/SearchSongList.vue";
 import { useStatusStore } from "@/stores";
@@ -40,34 +49,23 @@ const props = defineProps<{
 const { t } = useI18n();
 const { isSmall } = useMobile();
 const statusStore = useStatusStore();
-const hasMore = ref(true);
-const loading = ref(true);
-const searchPage = ref(1);
-const searchResultData = ref<SearchSongInfo[]>([]);
-
-const getSearchResult = async () => {
-  loading.value = true;
-  try {
-    const result = await searchLyricSong({
-      platform: props.platform,
-      key: props.keyword,
-      page_index: searchPage.value,
-      page_size: 30,
-    });
-    hasMore.value = result.has_more;
-    searchResultData.value = searchResultData.value.concat(result.list);
-  } finally {
-    loading.value = false;
-  }
-};
-
-const reachBottom = () => {
-  if (!hasMore.value || loading.value) return;
-  searchPage.value++;
-  getSearchResult();
-};
+const {
+  data: searchResultData,
+  loading,
+  failed,
+  hasMore,
+  loadMore: reachBottom,
+  retry,
+  reset,
+} = usePagedRequest<SearchSongInfo>((page) =>
+  searchLyricSong({
+    platform: props.platform,
+    key: props.keyword,
+    page_index: page,
+    page_size: 30,
+  }),
+);
+watch(() => [props.keyword, props.platform], reset, { immediate: true });
 
 const songListHeight = computed(() => statusStore.mainContentHeight - 175);
-
-onMounted(getSearchResult);
 </script>

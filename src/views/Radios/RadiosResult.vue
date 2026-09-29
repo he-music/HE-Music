@@ -1,5 +1,5 @@
 <template>
-  <div class="radio">
+  <AsyncContent class="radio" :failed="failed" :loading="loading" @retry="retry">
     <n-tabs v-if="!loading" v-model:value="tabValue" class="tabs" type="card" animated>
       <n-tab-pane
         v-for="tab in radioListData"
@@ -22,13 +22,15 @@
         <RadioList :data="[]" loading />
       </div>
     </div>
-  </div>
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { useAsyncRequest } from "@/composables/useAsyncRequest";
 import type { RadioInfo } from "@/types/main.hemusic";
 
-import { onMounted, watch } from "vue";
+import { watch } from "vue";
 import { listRadios } from "@/api/radio";
 import RadioList from "@/components/List/RadioList.vue";
 const props = defineProps<{
@@ -36,17 +38,18 @@ const props = defineProps<{
 }>();
 
 const route = useRoute();
-const loading = ref<boolean>(true);
+const {
+  data: radioListData,
+  loading,
+  failed,
+  retry,
+  reset,
+} = useAsyncRequest<{ name: string; radios: RadioInfo[] }[]>(async () => {
+  const result = await listRadios(props.platform);
+  return result.groups || [];
+});
 
 const tabValue = ref<string>("");
-
-// 排行榜数据
-const radioListData = ref<
-  {
-    name: string;
-    radios: RadioInfo[];
-  }[]
->();
 
 const selectRadioGroup = () => {
   const targetRadioId = route.query.radio_id as string;
@@ -62,17 +65,8 @@ const selectRadioGroup = () => {
   tabValue.value = targetGroup?.name || radioGroups[0]?.name || "";
 };
 
-const getRadioList = async () => {
-  loading.value = true;
-  const result = await listRadios(props.platform);
-  radioListData.value = result.groups || [];
-  loading.value = false;
-  selectRadioGroup();
-};
-
-onMounted(() => {
-  getRadioList();
-});
+watch(() => props.platform, reset, { immediate: true });
+watch(radioListData, selectRadioGroup);
 
 watch(
   () => route.query.radio_id,

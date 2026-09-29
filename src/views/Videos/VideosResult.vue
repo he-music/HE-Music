@@ -1,5 +1,11 @@
 <template>
-  <div class="discover-mvs">
+  <AsyncContent
+    class="discover-mvs"
+    :failed="failed"
+    :loading="loading"
+    :has-data="!!videosData.length"
+    @retry="retry"
+  >
     <div v-if="dataStore.mvFilters[platform]" class="menu">
       <n-flex v-for="tab in dataStore.mvFilters[platform]" :key="tab.id" class="category">
         <n-tag
@@ -22,11 +28,18 @@
         <n-skeleton v-for="i in 10" :key="'tag2-' + i" text :width="50" :height="30" round />
       </n-flex>
     </div>
-    <VideoList :data="videosData" :loading="loading" :load-more="hasMore" @load-more="loadMore" />
-  </div>
+    <VideoList
+      :data="videosData"
+      :loading="loading"
+      :load-more="hasMore && !failed"
+      @load-more="loadMore"
+    />
+  </AsyncContent>
 </template>
 
 <script setup lang="ts">
+import AsyncContent from "@/components/Page/AsyncContent.vue";
+import { usePagedRequest } from "@/composables/usePagedRequest";
 import type { MVInfo } from "@/types/main.hemusic";
 import { useDataStore } from "@/stores";
 import { filterMVs } from "@/api/video";
@@ -36,47 +49,41 @@ const props = defineProps<{
 }>();
 const dataStore = useDataStore();
 
-const filters = ref({});
-
-// 歌手数据
-const hasMore = ref<boolean>(true);
-const loading = ref<boolean>(true);
-const pageIndex = ref<number>(1);
-const videosData = ref<MVInfo[]>([]);
-
-// 获取歌手数据
-const getListData = async () => {
-  // 获取数据
-  loading.value = true;
-  const result = await filterMVs(props.platform, pageIndex.value, 50, filters.value);
-  // 是否还有
-  hasMore.value = result?.has_more;
-  videosData.value = videosData.value?.concat(result.list);
-  loading.value = false;
-};
-
-// 参数变化
-const queryChange = (tabId: string, value: string) => {
-  filters.value[tabId] = value;
-  pageIndex.value = 1;
-  loading.value = true;
-  videosData.value = [];
-  getListData();
-};
-
-// 加载更多
-const loadMore = () => {
-  pageIndex.value++;
-  getListData();
-};
-
-onMounted(async () => {
-  await dataStore.getMVFilters(props.platform);
-  dataStore.mvFilters[props.platform]?.forEach((tab) => {
-    filters.value[tab.id] = tab.options[0]?.value;
-  });
-  await getListData();
+const filters = ref<Record<string, string>>({});
+const {
+  data: videosData,
+  loading,
+  failed,
+  hasMore,
+  loadMore,
+  retry,
+  reset,
+} = usePagedRequest<MVInfo>(async (page) => {
+  const platform = props.platform;
+  const selected = filters.value;
+  const query = { ...selected };
+  if (page === 1) {
+    await dataStore.getMVFilters(platform);
+    dataStore.mvFilters[platform]?.forEach((tab) => {
+      query[tab.id] ??= tab.options[0]?.value;
+    });
+    if (platform === props.platform && selected === filters.value) filters.value = query;
+  }
+  return filterMVs(platform, page, 50, query);
 });
+
+const queryChange = (tabId: string, value: string) => {
+  filters.value = { ...filters.value, [tabId]: value };
+  reset();
+};
+watch(
+  () => props.platform,
+  () => {
+    filters.value = {};
+    reset();
+  },
+  { immediate: true },
+);
 </script>
 
 <style lang="scss" scoped>
