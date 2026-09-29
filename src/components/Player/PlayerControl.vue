@@ -86,9 +86,9 @@
           </div>
           <!-- 进度条 -->
           <div class="slider">
-            <span>{{ msToTime(statusStore.currentTime) }}</span>
+            <PlayerTime />
             <PlayerSlider class="player" :show-tooltip="false" />
-            <span>{{ msToTime(statusStore.duration) }}</span>
+            <PlayerTime duration />
           </div>
         </div>
         <n-flex class="right" align="center" justify="end">
@@ -101,7 +101,7 @@
 
 <script setup lang="ts">
 import { useDataStore, useMusicStore, useStatusStore, usePlatformStore } from "@/stores";
-import { msToTime } from "@/utils/time";
+import PlayerTime from "./PlayerComponents/PlayerTime.vue";
 import { openDownloadSong, openPlaylistAdd } from "@/utils/modal";
 import { toLikeSong } from "@/utils/auth";
 import { usePlayer } from "@/utils/player";

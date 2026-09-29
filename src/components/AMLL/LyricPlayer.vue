@@ -101,6 +101,10 @@ const props = defineProps({
    * 设置当前播放进度，单位为毫秒且**必须是整数**，此时将会更新内部的歌词进度信息
    * 内部会根据调用间隔和播放进度自动决定如何滚动和显示歌词，所以这个的调用频率越快越准确越好
    */
+  clock: {
+    type: Object as PropType<{ time: Readonly<Ref<number>> }>,
+    default: undefined,
+  },
   currentTime: {
     type: Number,
     default: 0,
@@ -285,7 +289,8 @@ watchEffect(() => {
 
 // 当前播放时间
 watchEffect(() => {
-  if (props.currentTime !== undefined) playerRef.value?.setCurrentTime(props.currentTime);
+  const time = props.clock?.time.value ?? props.currentTime;
+  playerRef.value?.setCurrentTime(Math.floor(time));
 });
 
 // 渐变宽度

@@ -164,8 +164,8 @@
             vertical
           >
             <div class="time">
-              <n-text depth="2">{{ msToTime(statusStore.currentTime) }}</n-text>
-              <n-text depth="2">{{ msToTime(statusStore.duration) }}</n-text>
+              <n-text depth="2"><PlayerTime /></n-text>
+              <n-text depth="2"><PlayerTime duration /></n-text>
             </div>
             <!-- 定时关闭 -->
             <n-tag
@@ -198,7 +198,8 @@ import {
   useSettingStore,
   useStatusStore,
 } from "@/stores";
-import { msToTime, convertSecondsToTime } from "@/utils/time";
+import { convertSecondsToTime } from "@/utils/time";
+import PlayerTime from "./PlayerComponents/PlayerTime.vue";
 import { renderIcon, coverLoaded } from "@/utils/helper";
 import { toLikeSong } from "@/utils/auth";
 import {

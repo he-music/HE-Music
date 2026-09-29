@@ -21,7 +21,7 @@
         v-else
         ref="lyricPlayerRef"
         :lyricLines="amLyricsData"
-        :currentTime="currentTime"
+        :clock="clock"
         :playing="statusStore.playStatus"
         :enableSpring="settingStore.useAMSpring"
         :enableScale="settingStore.useAMSpring"
@@ -53,12 +53,9 @@ import { usePlayer } from "@/utils/player";
 import { cloneDeep } from "lodash-es";
 import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
 
-defineProps({
-  currentTime: {
-    type: Number,
-    default: 0,
-  },
-});
+import type { Ref } from "vue";
+
+defineProps<{ clock: { time: Readonly<Ref<number>> } }>();
 
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();

@@ -11,12 +11,12 @@
     ]"
   >
     <!-- 歌词内容 -->
-    <AMLyric v-if="settingStore.lyricRenderer === 'amll'" :currentTime="playSeek" />
+    <AMLyric v-if="settingStore.lyricRenderer === 'amll'" :clock="lyricClock" />
     <MonetLyric v-else-if="settingStore.lyricRenderer === 'monet'" :clock="lyricClock" />
     <PartitaLyric v-else-if="settingStore.lyricRenderer === 'partita'" :clock="lyricClock" />
     <ClassicLyric v-else-if="settingStore.lyricRenderer === 'classic'" :clock="lyricClock" />
     <KineticLyric v-else-if="settingStore.lyricRenderer === 'kinetic'" :clock="lyricClock" />
-    <DefaultLyric v-else :currentTime="playSeek" />
+    <DefaultLyric v-else :clock="lyricClock" />
     <!-- 歌词菜单 -->
     <n-flex :class="['lyric-menu', { show: statusStore.playerMetaShow }]" justify="center" vertical>
       <div class="menu-icon" @click="openCopyLyrics">

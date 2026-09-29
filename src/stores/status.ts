@@ -2,7 +2,7 @@ import { defineStore } from "pinia";
 import type { ColorScheme, PlayModeType, RGB, SortField, SortOrder } from "@/types/main";
 import { CommentConfig, SongInfo } from "@/types/main.hemusic";
 
-interface StatusState {
+export interface StatusState {
   menuCollapsed: boolean;
   searchFocus: boolean;
   searchInputValue: string;
@@ -309,33 +309,6 @@ export const useStatusStore = defineStore("status", {
       return state.themeBackgroundMode === "image" || state.themeBackgroundMode === "video";
     },
   },
-  // 持久化
-  persist: {
-    key: "status-store",
-    storage: localStorage,
-    pick: [
-      "menuCollapsed",
-      "duration",
-      "currentTimeOffsetMap",
-      "pureLyricMode",
-      "playIndex",
-      "playRate",
-      "playVolume",
-      "playVolumeMute",
-      "playSongMode",
-      "songCoverTheme",
-      "listSortField",
-      "listSortOrder",
-      "showDesktopLyric",
-      "playQuality",
-      "selectedQuality",
-      "radioMode",
-      "eqEnabled",
-      "eqBands",
-      "eqPreset",
-      "themeBackgroundMode",
-      "backgroundConfig",
-      "commentConfig",
-    ],
-  },
+  // 由 persistStatus 插件按字段监听，避免播放进度触发全量持久化订阅。
+  persist: false,
 });

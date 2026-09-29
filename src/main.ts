@@ -3,6 +3,7 @@ import App from "./App.vue";
 // pinia
 import { createPinia } from "pinia";
 import piniaPluginPersistedstate from "pinia-plugin-persistedstate";
+import { persistStatus } from "@/stores/persistStatus";
 // vue-dompurify-html
 import VueDOMPurifyHTML from "vue-dompurify-html";
 // go-captcha
@@ -23,6 +24,7 @@ const app = createApp(App);
 // pinia
 const pinia = createPinia();
 pinia.use(piniaPluginPersistedstate);
+pinia.use(persistStatus);
 app.use(pinia);
 // router
 app.use(router);

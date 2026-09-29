@@ -50,11 +50,11 @@
               }"
             >
               <Transition name="fade" mode="out-in">
-                <div v-if="isCountdownVisible(item)" class="count-down">
+                <div v-if="visibleCountdowns.has(item)" class="count-down">
                   <div
                     v-for="i in 3"
                     :key="i"
-                    :style="{ opacity: getPointOpacity(item, i - 1) }"
+                    :ref="(el) => setCountdownNode(el, item, i - 1)"
                     class="point"
                   />
                 </div>
@@ -78,7 +78,7 @@
                       'content-text': true,
                       'end-with-space': text.word.endsWith(' '),
                     }"
-                    :style="getYrcVars(text, item.originalIndex)"
+                    :ref="(el) => setWordNode(el, item.originalIndex, textIndex)"
                   >
                     <span class="yrc-word" :lang="getLyricLanguage(text.word)">
                       {{ text.word }}
@@ -122,13 +122,17 @@ import { isElectron } from "@/utils/env";
 import { usePlayer } from "@/utils/player";
 import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
 
-import { type PropType } from "vue";
+import { type ComponentPublicInstance, type PropType, type Ref } from "vue";
 import { type SongLyric } from "@/types/lyric";
 
 const emit = defineEmits<{ previewSeek: [time: number] }>();
 const props = defineProps({
   preview: {
     type: Object as PropType<{ lyrics: SongLyric; playing: boolean }>,
+    default: undefined,
+  },
+  clock: {
+    type: Object as PropType<{ time: Readonly<Ref<number>> }>,
     default: undefined,
   },
   currentTime: {
@@ -142,6 +146,7 @@ const statusStore = useStatusStore();
 const settingStore = useSettingStore();
 const player = usePlayer();
 
+const playbackTime = computed(() => props.clock?.time.value ?? props.currentTime);
 const lyricScrollContainer = ref<HTMLElement | null>(null);
 
 // 是否为逐字歌词模式
@@ -202,16 +207,24 @@ const processedLyrics = computed<ProcessedLyricItem[]>(() => {
   return result;
 });
 
-/** 倒计时是否可见 */
-const isCountdownVisible = (item: ProcessedLyricItem): boolean => {
-  if (item.type !== "countdown") return false;
-  // 计算实时时间 - 0.5s 是否小于开始 + 持续时间
-  return props.currentTime + 500 < item.startTime + item.duration;
-};
+/** 倒计时显示状态不变时保留集合引用，避免逐帧触发结构更新。 */
+const visibleCountdowns = computed<Set<ProcessedLyricItem>>((previous) => {
+  const visible = new Set(
+    processedLyrics.value.filter(
+      (item) =>
+        item.type === "countdown" && playbackTime.value + 500 < item.startTime + item.duration,
+    ),
+  );
+  return previous &&
+    previous.size === visible.size &&
+    [...visible].every((item) => previous.has(item))
+    ? previous
+    : visible;
+});
 
 /** 判断当前是否处于倒计时期间 */
 const isInCountdown = computed(() => {
-  const currentSeek = props.currentTime;
+  const currentSeek = playbackTime.value;
   for (const item of processedLyrics.value) {
     if (item.type === "countdown") {
       // 在倒计时时间范围内
@@ -224,11 +237,11 @@ const isInCountdown = computed(() => {
 });
 
 /** 计算当前活跃的歌词行索引列表 */
-const activeLineIndices = computed<number[]>(() => {
+const resolveActiveLineIndices = (): number[] => {
   if (isInCountdown.value) return [];
   const lyrics = currentLyricData.value;
   if (!lyrics || lyrics.length === 0) return [];
-  const currentSeek = props.currentTime;
+  const currentSeek = playbackTime.value;
   const activeCandidates: number[] = [];
   // 逐字歌词模式
   if (isYrcMode.value) {
@@ -259,6 +272,15 @@ const activeLineIndices = computed<number[]>(() => {
   if (idx === -1) return [lyrics.length - 1];
   if (idx > 0) return [idx - 1];
   return [];
+};
+
+const activeLineIndices = computed<number[]>((previous) => {
+  const next = resolveActiveLineIndices();
+  return previous &&
+    previous.length === next.length &&
+    next.every((line, i) => line === previous[i])
+    ? previous
+    : next;
 });
 
 /** 计算滚动目标索引（复用活跃行计算结果，避免全量重复遍历） */
@@ -284,10 +306,10 @@ const isLineActive = (index: number): boolean => {
  * @param item 倒计时项
  * @param index 圆点索引
  */
-const getPointOpacity = (item: ProcessedLyricItem, index: number): number => {
+const getPointOpacity = (item: ProcessedLyricItem, index: number, seek: number): number => {
   if (item.type !== "countdown") return 0;
   const perPointTime = item.duration / 3;
-  const currentTime = props.currentTime - item.startTime;
+  const currentTime = seek - item.startTime;
   if (currentTime <= 0) return 0;
   if (currentTime < perPointTime * (index + 1)) {
     const percentage = (currentTime - perPointTime * index) / perPointTime;
@@ -405,6 +427,7 @@ const YRC_LINE_FADE_MS = 250;
 /** 淡入淡出行索引 */
 const yrcFadingLineIndex = ref<number | null>(null);
 /** 淡入淡出结束时间 */
+let fadeTimeout: ReturnType<typeof setTimeout> | undefined;
 const yrcFadingUntilAt = ref<number>(0);
 
 /**
@@ -424,8 +447,7 @@ const getYrcFadeFactor = (index: number): number => {
  * @param wordData 逐字歌词数据
  * @param lyricIndex 歌词行索引
  */
-const getYrcVars = (wordData: LyricWord, lyricIndex: number): CssVars => {
-  const currentSeek = props.currentTime;
+const getYrcVars = (wordData: LyricWord, lyricIndex: number, currentSeek: number): CssVars => {
   const fadeFactor = getYrcFadeFactor(lyricIndex);
   // 判断是否显示
   const currentLine = lyricData.value.yrcData[lyricIndex];
@@ -514,12 +536,79 @@ const jumpSeek = (time: number) => {
   player.play();
 };
 
+// 逐帧仅更新活跃/淡出行的样式，不让时间进入模板渲染依赖。
+type TemplateNode = Element | ComponentPublicInstance | null;
+const wordNodes = new Map<number, Map<number, HTMLElement>>();
+const countdownNodes = new Map<ProcessedLyricItem, Map<number, HTMLElement>>();
+let paintedLines = new Set<number>();
+
+function setWordNode(node: TemplateNode, line: number, word: number) {
+  if (node instanceof HTMLElement) {
+    let words = wordNodes.get(line);
+    if (!words) wordNodes.set(line, (words = new Map()));
+    words.set(word, node);
+  } else {
+    const words = wordNodes.get(line);
+    words?.delete(word);
+    if (!words?.size) wordNodes.delete(line);
+  }
+}
+
+function setCountdownNode(node: TemplateNode, item: ProcessedLyricItem, point: number) {
+  if (node instanceof HTMLElement) {
+    let points = countdownNodes.get(item);
+    if (!points) countdownNodes.set(item, (points = new Map()));
+    points.set(point, node);
+  } else {
+    const points = countdownNodes.get(item);
+    points?.delete(point);
+    if (!points?.size) countdownNodes.delete(item);
+  }
+}
+
+function updateAnimatedStyles() {
+  // 即使当前没有活跃行，也保持时钟订阅，保证跳转与倒计时更新。
+  const time = playbackTime.value;
+  const next = new Set(isYrcMode.value ? activeLineIndices.value : []);
+  if (isYrcMode.value && yrcFadingLineIndex.value !== null) next.add(yrcFadingLineIndex.value);
+  for (const line of new Set([...paintedLines, ...next])) {
+    const words = lyricData.value.yrcData[line]?.words;
+    wordNodes.get(line)?.forEach((node, index) => {
+      const style = next.has(line) && words?.[index] ? getYrcVars(words[index], line, time) : {};
+      for (const name of [
+        "--yrc-mask-x",
+        "--yrc-opacity",
+        "--yrc-bright-alpha",
+        "--yrc-dark-alpha",
+      ] as const) {
+        const value = style[name];
+        if (value === undefined) node.style.removeProperty(name);
+        else node.style.setProperty(name, value);
+      }
+    });
+  }
+  paintedLines = next;
+  countdownNodes.forEach((points, item) => {
+    points.forEach((node, index) => {
+      node.style.opacity = String(getPointOpacity(item, index, time));
+    });
+  });
+}
+
+watchPostEffect(updateAnimatedStyles);
+onUpdated(updateAnimatedStyles);
+
 // 监听歌词滚动
 watch(scrollTargetIndex, (val, oldVal) => {
   lyricsScroll(val);
   if (typeof oldVal === "number" && oldVal >= 0 && oldVal !== val) {
+    clearTimeout(fadeTimeout);
     yrcFadingLineIndex.value = oldVal;
     yrcFadingUntilAt.value = Date.now() + YRC_LINE_FADE_MS;
+    fadeTimeout = setTimeout(() => {
+      yrcFadingLineIndex.value = null;
+      yrcFadingUntilAt.value = 0;
+    }, YRC_LINE_FADE_MS);
   }
 });
 
@@ -533,6 +622,9 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  clearTimeout(fadeTimeout);
+  wordNodes.clear();
+  countdownNodes.clear();
   // 清理滚动动画
   if (scrollAnimationId !== null) {
     cancelAnimationFrame(scrollAnimationId);

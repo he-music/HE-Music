@@ -65,9 +65,9 @@
           <MobileSongQualityMenu ref="mobileSongQualityMenuRef" />
           <!-- 进度条 -->
           <div class="progress-section">
-            <span class="time">{{ msToTime(statusStore.currentTime) }}</span>
+            <PlayerTime class="time" />
             <PlayerSlider class="player" :show-tooltip="false" />
-            <span class="time">{{ msToTime(statusStore.duration) }}</span>
+            <PlayerTime class="time" duration />
           </div>
 
           <!-- 主控制按钮 -->
@@ -159,7 +159,7 @@ import { useSwipe } from "@vueuse/core";
 import { useMusicStore, useStatusStore, useDataStore } from "@/stores";
 import { toLikeSong } from "@/utils/auth";
 import { usePlayer } from "@/utils/player";
-import { msToTime } from "@/utils/time";
+import PlayerTime from "./PlayerComponents/PlayerTime.vue";
 import MobilePlayerSongMenu from "@/components/Menu/MobilePlayerSongMenu.vue";
 import MobileSongQualityMenu from "@/components/Menu/MobileSongQualityMenu.vue";
 

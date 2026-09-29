@@ -132,7 +132,7 @@
       <LyricPlayer
         class="amll-preview"
         :lyric-lines="amllPreviewLines"
-        :current-time="Math.floor(previewTime)"
+        :clock="previewClock"
         :playing="previewActive"
         :disabled="!previewActive"
         :enable-spring="settingStore.useAMSpring"
@@ -155,11 +155,7 @@
       class="monet-preview"
       :style="{ '--main-cover-color': previewMainColor }"
     >
-      <DefaultLyric
-        :current-time="previewTime"
-        :preview="defaultPreview"
-        @preview-seek="seekPreview"
-      />
+      <DefaultLyric :clock="previewClock" :preview="defaultPreview" @preview-seek="seekPreview" />
     </div>
   </n-card>
 </template>
