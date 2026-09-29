@@ -1,6 +1,21 @@
 <!-- 视频 -->
 <template>
-  <div class="video">
+  <div
+    ref="videoRoot"
+    class="video"
+    :class="{ immersive }"
+    :role="immersive ? 'dialog' : undefined"
+    :aria-modal="immersive ? true : undefined"
+    :aria-label="immersive ? t('video_feed.immersive') : undefined"
+    :style="immersive ? { position: 'fixed', height: '100dvh' } : undefined"
+    tabindex="-1"
+    @keydown="onVideoKeydown"
+  >
+    <div class="view-toolbar">
+      <n-button ref="modeButton" @click="toggleImmersive">{{
+        t(immersive ? "video_feed.exit_immersive" : "video_feed.immersive")
+      }}</n-button>
+    </div>
     <div class="video-layout" :class="{ 'with-feed': canLoadFeeds }">
       <!-- 视频信息 -->
       <Transition name="fade" mode="out-in">
@@ -30,7 +45,7 @@
         </div>
       </Transition>
       <!-- 视频播放器 -->
-      <div class="player">
+      <div ref="gestureSurface" class="player" :class="{ 'gesture-active': gesturesEnabled }">
         <div ref="playerHost" />
         <n-select
           v-if="hlsQualities.length"
@@ -50,6 +65,23 @@
             }}</n-button>
           </template>
         </div>
+      </div>
+      <div v-if="immersive" class="video-actions">
+        <n-button :disabled="!canPrevious || videoLoading" @click="changeVideo(-1)">{{
+          t("video_feed.previous")
+        }}</n-button>
+        <n-button
+          :disabled="!canNext || videoLoading || navigating"
+          :loading="navigating"
+          @click="changeVideo(1)"
+          >{{ t("video_feed.next") }}</n-button
+        >
+        <n-button v-if="supportsComments" @click="commentsOpen = true">{{
+          t("video_feed.view_comments")
+        }}</n-button>
+        <span class="navigation-hint" role="status">{{
+          navigationMessage || t("video_feed.gesture_hint")
+        }}</span>
       </div>
       <aside v-if="canLoadFeeds" class="feed-panel">
         <div class="feed-header">
@@ -157,38 +189,42 @@
         </div>
       </Transition>
       <!-- 评论 -->
-      <div
-        v-if="platformStore.isFeatureSupport(videoPlatform, FeatureSupportFlag.GetCommentList)"
+      <VideoComments
+        v-if="supportsComments && !immersive"
         class="comment"
+        :data="commentData"
+        :loading="commentLoading"
+        :failed="commentFailed"
+        :has-more="commentHasMore"
+        :total="commentTotalCount"
+        :sort="commentType"
+        @sort="changeCommentType"
+        @retry="getCommentData(videoId, videoPlatform, false)"
+        @more="loadMoreComment"
+        @sub="loadSubMore"
+      />
+      <n-drawer
+        v-model:show="commentsOpen"
+        :placement="narrowScreen ? 'bottom' : 'right'"
+        :width="420"
+        height="60dvh"
+        :z-index="3100"
       >
-        <n-flex class="title" justify="space-between">
-          <n-h3 prefix="bar">
-            {{ t("common.comment") }}
-            <n-text v-if="commentTotalCount > 0" class="num" depth="3">
-              {{ commentTotalCount }}
-            </n-text>
-          </n-h3>
-          <n-flex class="tag">
-            <n-tag
-              v-for="(item, key, index) in commentText"
-              :key="index"
-              :bordered="false"
-              :type="key === commentType ? 'primary' : 'default'"
-              round
-              @click="changeCommentType(key)"
-            >
-              {{ item }}
-            </n-tag>
-          </n-flex>
-        </n-flex>
-        <CommentList
-          :data="commentData"
-          :loading="commentLoading"
-          :load-more="commentHasMore"
-          @load-more="loadMoreComment"
-          @load-sub-more="loadSubMore"
-        />
-      </div>
+        <n-drawer-content :title="t('common.comment')" closable>
+          <VideoComments
+            :data="commentData"
+            :loading="commentLoading"
+            :failed="commentFailed"
+            :has-more="commentHasMore"
+            :total="commentTotalCount"
+            :sort="commentType"
+            @sort="changeCommentType"
+            @retry="getCommentData(videoId, videoPlatform, false)"
+            @more="loadMoreComment"
+            @sub="loadSubMore"
+          />
+        </n-drawer-content>
+      </n-drawer>
     </div>
   </div>
 </template>
@@ -206,6 +242,10 @@ import { FeatureSupportFlag } from "@/api/platform";
 import { useI18n } from "vue-i18n";
 import { useVideoFeed } from "@/composables/useVideoFeed";
 import { createVideoPlayback } from "@/utils/videoPlayback";
+import { createVideoDetailCache } from "@/utils/videoDetailCache";
+import { useVideoGestures } from "@/composables/useVideoGestures";
+import VideoComments from "@/components/Video/VideoComments.vue";
+import { useMediaQuery } from "@vueuse/core";
 
 const { t, n } = useI18n();
 
@@ -229,7 +269,8 @@ const commentData = ref<CommentInfo[]>([]);
 const commentType = ref<"hot" | "new">("hot");
 const commentPage = ref<number>(1);
 const commentHasMore = ref<boolean>(true);
-const commentText = computed(() => ({ hot: t("common.hottest"), new: t("common.newest") }));
+const commentFailed = ref(false);
+let commentRequest = 0;
 const commentLastId = ref<string>("");
 const commentTotalCount = ref<number>(0);
 
@@ -306,14 +347,131 @@ const hlsQualityOptions = computed(() => [
   ...hlsQualities.value.map((quality) => ({ label: `${quality}p`, value: quality })),
 ]);
 
+const detailCache = createVideoDetailCache(videoDetail);
+const immersive = ref(false);
+const commentsOpen = ref(false);
+const narrowScreen = useMediaQuery("(max-width: 760px)");
+const videoRoot = ref<HTMLElement | null>(null);
+const gestureSurface = ref<HTMLElement | null>(null);
+const modeButton = ref<{ $el: HTMLButtonElement } | null>(null);
+const supportsComments = computed(() =>
+  platformStore.isFeatureSupport(videoPlatform.value, FeatureSupportFlag.GetCommentList),
+);
+const navigating = ref(false);
+const navigationMessage = ref("");
+const currentIndex = computed(() =>
+  feedItems.value.findIndex(
+    (item) => item.id === videoId.value && item.platform === videoPlatform.value,
+  ),
+);
+const canPrevious = computed(() => currentIndex.value > 0);
+const canNext = computed(
+  () =>
+    currentIndex.value >= 0 &&
+    (currentIndex.value + 1 < feedItems.value.length ||
+      feedHasMore.value ||
+      feedFailed.value ||
+      feedLoading.value),
+);
+const gesturesEnabled = computed(
+  () => immersive.value && !commentsOpen.value && canLoadFeeds.value,
+);
+useVideoGestures(gestureSurface, gesturesEnabled, (direction) => {
+  void changeVideo(direction);
+});
+
+const toggleImmersive = async () => {
+  immersive.value = !immersive.value;
+  commentsOpen.value = false;
+  await nextTick();
+  if (immersive.value) videoRoot.value?.focus();
+  else modeButton.value?.$el?.focus();
+};
+const changeVideo = async (direction: -1 | 1) => {
+  if (videoLoading.value || navigating.value || commentsOpen.value) return;
+  if ((direction === -1 && !canPrevious.value) || (direction === 1 && !canNext.value)) return;
+  navigating.value = true;
+  navigationMessage.value = "";
+  const index = currentIndex.value;
+  const identity = `${videoPlatform.value}:${videoId.value}`;
+  try {
+    if (direction === 1 && index + 1 >= feedItems.value.length) await loadMvFeeds();
+    if (identity !== `${videoPlatform.value}:${videoId.value}`) return;
+    const next = feedItems.value[index + direction];
+    if (next)
+      await router.replace({ name: "video", query: { id: next.id, platform: next.platform } });
+    else
+      navigationMessage.value = t(
+        feedFailed.value ? "page_section.load_failed" : "video_feed.no_next",
+      );
+  } finally {
+    navigating.value = false;
+  }
+};
+const onVideoKeydown = (event: KeyboardEvent) => {
+  if (!immersive.value || commentsOpen.value || document.fullscreenElement) return;
+  if (event.key === "Tab") {
+    const targets = Array.from(
+      videoRoot.value?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex="0"]',
+      ) || [],
+    ).filter((element) => element.getClientRects().length > 0);
+    const first = targets[0];
+    const last = targets[targets.length - 1];
+    if (
+      event.shiftKey &&
+      (document.activeElement === first || document.activeElement === videoRoot.value)
+    ) {
+      event.preventDefault();
+      last?.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first?.focus();
+    }
+    return;
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    event.stopPropagation();
+    void toggleImmersive();
+    return;
+  }
+  if (
+    event.target instanceof Element &&
+    event.target.closest("input,button,select,textarea,[contenteditable],.plyr__controls")
+  )
+    return;
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    event.stopPropagation();
+    void changeVideo(event.key === "ArrowDown" ? 1 : -1);
+  }
+};
+watch([immersive, currentIndex, () => feedItems.value.length], () => {
+  if (!immersive.value || currentIndex.value < 0) return;
+  const next = feedItems.value[currentIndex.value + 1];
+  if (next) void detailCache.get(next.id, next.platform).catch(() => {});
+  if (currentIndex.value >= feedItems.value.length - 2 && feedHasMore.value && !feedFailed.value)
+    void loadMvFeeds();
+});
+
 const getVideoData = async (id: string, platform: string) => {
   if (!id || !platform || !playerHost.value) return;
   const request = ++videoRequest;
+  commentRequest++;
+  commentData.value = [];
+  commentPage.value = 1;
+  commentLastId.value = "";
+  commentTotalCount.value = 0;
+  commentLoading.value = false;
+  commentFailed.value = false;
+  commentHasMore.value = false;
+  navigationMessage.value = "";
   playback?.pause();
   videoLoading.value = true;
   videoFailed.value = false;
   try {
-    const result: MVInfo = await videoDetail(id, platform);
+    const result = await detailCache.get(id, platform);
     if (request !== videoRequest) return;
     videoData.value = { ...result, id, platform };
     const sources = (result.links || []).map((item) => ({
@@ -328,6 +486,7 @@ const getVideoData = async (id: string, platform: string) => {
       () => player.pause(),
       () => {
         videoFailed.value = true;
+        detailCache.clear();
       },
       (qualities) => {
         hlsQualities.value = qualities;
@@ -340,7 +499,10 @@ const getVideoData = async (id: string, platform: string) => {
     }
   } catch (error) {
     if (request !== videoRequest) return;
-    videoFailed.value = true;
+    if (request === videoRequest) {
+      videoFailed.value = true;
+      detailCache.clear();
+    }
     console.error("Error getting video data:", error);
   } finally {
     if (request === videoRequest) videoLoading.value = false;
@@ -349,24 +511,31 @@ const getVideoData = async (id: string, platform: string) => {
 
 // 获取评论数据
 const getCommentData = async (id: string, platform: string, clean: boolean = true) => {
+  if (commentLoading.value && !clean) return;
+  const request = ++commentRequest;
+  const page = clean ? 1 : commentPage.value;
   try {
     if (!id || !platform) return;
     commentLoading.value = true;
+    commentFailed.value = false;
     if (clean) {
       commentData.value = [];
       commentPage.value = 1;
+      commentLastId.value = "";
     }
     // 获取评论
     const result = await getComment(
       id,
-      videoPlatform.value,
+      platform,
       "mv",
-      commentPage.value,
+      page,
       20,
       commentLastId.value,
       commentType.value === "hot",
     );
 
+    if (request !== commentRequest) return;
+    commentPage.value = page + 1;
     for (let item of result.list) {
       item.sub_has_more = item.reply_count > 0 && item.reply_count > item.sub_comments.length;
       item.sub_loading = false;
@@ -382,14 +551,16 @@ const getCommentData = async (id: string, platform: string, clean: boolean = tru
     commentLastId.value = result.last_id;
     commentLoading.value = false;
   } catch (error) {
+    if (request !== commentRequest) return;
+    commentFailed.value = true;
     console.error("Error getting comment data:", error);
-    window.$message.error(t("message.get_comment_data_fail"));
+  } finally {
+    if (request === commentRequest) commentLoading.value = false;
   }
 };
 
 // 加载更多评论
 const loadMoreComment = () => {
-  commentPage.value++;
   if (commentHasMore.value) getCommentData(videoId.value, videoPlatform.value, false);
 };
 
@@ -439,6 +610,8 @@ watch([videoId, videoPlatform], ([id, platform], previous) => {
 onUnmounted(() => {
   closeMusic(false);
   videoRequest++;
+  commentRequest++;
+  detailCache.clear();
   playback?.destroy();
 });
 
@@ -478,6 +651,105 @@ onMounted(() => {
           font-size: 18px;
           margin-right: 6px;
         }
+      }
+    }
+  }
+  .view-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 12px 0;
+  }
+  .video-actions {
+    grid-area: actions;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding-top: 12px;
+  }
+  .navigation-hint {
+    font-size: 12px;
+    opacity: 0.7;
+  }
+  &.immersive {
+    position: fixed;
+    inset: 0;
+    z-index: 3000;
+    width: 100%;
+    height: 100dvh;
+    box-sizing: border-box;
+    background: var(--background-hex);
+    padding: max(12px, env(safe-area-inset-top)) 20px max(12px, env(safe-area-inset-bottom));
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    container-type: normal;
+    .view-toolbar {
+      flex: 0 0 auto;
+    }
+    .video-layout,
+    .video-layout.with-feed {
+      flex: 1;
+      min-height: 0;
+      grid-template-columns: minmax(0, 1fr);
+      grid-template-areas: "player" "actions" "info";
+      grid-template-rows: minmax(0, 1fr) auto auto;
+    }
+    .feed-panel,
+    .desc {
+      display: none;
+    }
+    .info {
+      height: auto;
+      margin: 12px 0 0;
+      .name {
+        font-size: 20px;
+      }
+    }
+    .player {
+      height: 100%;
+      min-height: 0;
+      background: #000;
+      :deep(.plyr) {
+        max-height: none;
+        height: 100%;
+      }
+      :deep(.plyr__video-wrapper) {
+        height: 100%;
+        aspect-ratio: auto !important;
+      }
+      :deep(video) {
+        height: 100%;
+        object-fit: contain;
+      }
+      > div:first-child {
+        height: 100%;
+      }
+      &.gesture-active {
+        touch-action: pan-x;
+      }
+      :deep(.plyr__video-wrapper) {
+        transform: translateY(var(--swipe-y, 0px));
+      }
+    }
+    .hls-quality {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      z-index: 2;
+    }
+    @media (max-width: 760px) {
+      padding-left: 8px;
+      padding-right: 8px;
+      .navigation-hint {
+        flex-basis: 100%;
+      }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .player :deep(.plyr__video-wrapper) {
+        transform: none;
       }
     }
   }

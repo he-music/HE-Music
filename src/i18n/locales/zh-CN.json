@@ -204,7 +204,14 @@
     "new_song": "新歌速递"
   },
   "video_feed": {
-    "title": "播放列表"
+    "title": "播放列表",
+    "immersive": "沉浸观看",
+    "exit_immersive": "退出沉浸",
+    "previous": "上一个",
+    "next": "下一个",
+    "view_comments": "查看评论",
+    "gesture_hint": "在画面上滚动或上下滑动切换，也可使用 ↑ ↓；Esc 退出",
+    "no_next": "暂无下一个视频"
   },
   "page_section": {
     "empty": "暂无可展示的内容",

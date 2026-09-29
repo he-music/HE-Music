@@ -204,7 +204,14 @@
     "new_song": "New Tracks"
   },
   "video_feed": {
-    "title": "Playlist"
+    "title": "Playlist",
+    "immersive": "Immersive view",
+    "exit_immersive": "Exit immersive view",
+    "previous": "Previous",
+    "next": "Next",
+    "view_comments": "View comments",
+    "gesture_hint": "Scroll or swipe on the video, or use ↑ ↓ to switch; Esc to exit",
+    "no_next": "No next video available"
   },
   "page_section": {
     "empty": "No content available",

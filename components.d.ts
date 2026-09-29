@@ -192,6 +192,7 @@ declare module 'vue' {
     UpdateUserPassword: typeof import('./src/components/Modal/UpdateUserPassword.vue')['default']
     User: typeof import('./src/components/Layout/User.vue')['default']
     UserAgreement: typeof import('./src/components/Modal/UserAgreement.vue')['default']
+    VideoComments: typeof import('./src/components/Video/VideoComments.vue')['default']
     VideoList: typeof import('./src/components/List/VideoList.vue')['default']
     VirtualScroll: typeof import('./src/components/UI/VirtualScroll.vue')['default']
   }
