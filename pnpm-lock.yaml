@@ -18,6 +18,9 @@ importers:
       '@applemusic-like-lyrics/lyric':
         specifier: ^1.0.1
         version: 1.0.1
+      '@cap.js/widget':
+        specifier: 0.1.57
+        version: 0.1.57
       '@electron-toolkit/preload':
         specifier: ^3.0.2
         version: 3.0.2(electron@37.7.1)
@@ -369,6 +372,9 @@ packages:
 
   '@borewit/text-codec@0.2.0':
     resolution: {integrity: sha512-X999CKBxGwX8wW+4gFibsbiNdwqmdQEXmUejIWaIqdrHBgS5ARIOOeyiQbHjP9G58xVEPcuvP6VwwH3A0OFTOA==}
+
+  '@cap.js/widget@0.1.57':
+    resolution: {integrity: sha512-IgWepPHHsn1FcB5msL/TQtZZixGm9KAp7rpNbDmdo/i10EhDA74TlMU9zbZ6H8wwcCtlond/m+pAcLr1RiQ1og==}
 
   '@css-render/plugin-bem@0.15.14':
     resolution: {integrity: sha512-QK513CJ7yEQxm/P3EwsI+d+ha8kSOcjGvD6SevM41neEMxdULE+18iuQK6tEChAWMOQNQPLG/Rw3Khb69r5neg==}
@@ -4837,6 +4843,8 @@ snapshots:
   '@borewit/text-codec@0.1.1': {}
 
   '@borewit/text-codec@0.2.0': {}
+
+  '@cap.js/widget@0.1.57': {}
 
   '@css-render/plugin-bem@0.15.14(css-render@0.15.14)':
     dependencies:

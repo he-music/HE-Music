@@ -42,6 +42,7 @@
 
 <script setup lang="ts">
 import type { FormInst, FormRules } from "naive-ui";
+import axios from "axios";
 import { accountLogin } from "@/api/login";
 import { useFormRule } from "@/utils/rules";
 import { debounce } from "lodash-es";
@@ -80,18 +81,19 @@ const login = debounce(async (e: MouseEvent) => {
 
   if (loading.value) return;
   loading.value = true;
-  // 登录
-  accountLogin(
-    formData.value.username as string,
-    formData.value.password as string,
-    await getDeviceInfo(),
-  )
-    .then((loginResult) => {
-      emit("saveLogin", loginResult, "password");
-    })
-    .finally(() => {
-      loading.value = false;
-    });
+  try {
+    const deviceInfo = await getDeviceInfo();
+    const loginResult = await accountLogin(
+      formData.value.username,
+      formData.value.password,
+      deviceInfo,
+    );
+    emit("saveLogin", loginResult, "password");
+  } catch (error) {
+    if (!axios.isAxiosError(error)) window.$message.error(t("modal.login_failed"));
+  } finally {
+    loading.value = false;
+  }
 
   // if (loginResult.code !== 200) {
   //   window.$message.error("登录失败，请重试");

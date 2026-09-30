@@ -10,6 +10,7 @@ export const API_URL = String(import.meta.env["VITE_API_URL"]);
 // 全局地址
 const baseURL: string = String(isDev ? "/api/netease" : import.meta.env["VITE_NETEASE_API_URL"]);
 const REFRESH_TOKEN_URL = "/v1/auth/token/refresh";
+type CaptchaRetryConfig = AxiosRequestConfig & { _captchaRetried?: boolean };
 
 // Token 刷新并发保护
 let isRefreshing = false;
@@ -168,33 +169,35 @@ serverHemusic.interceptors.response.use(
           return Promise.reject(error);
         }
       }
-      case 403:
-        console.error("禁止访问：", response.status, response.statusText);
-        if (response && (response.data as { reason?: string }).reason === "CAPTCHA_REQUIRED") {
-          const { metadata } = response.data as { metadata: { scene: string; meta: string } };
-          // 等待验证码验证
-          const captchaSuccess = await openCaptcha(Number(metadata.scene), metadata.meta);
-
-          if (captchaSuccess) {
-            console.log("验证码验证成功，自动重试原请求");
-            // 重新发送原始请求
-            const originalConfig = error.config;
-            if (originalConfig) {
+      case 403: {
+        const reason = (response?.data as { reason?: string } | undefined)?.reason;
+        const captchaConfig = config as CaptchaRetryConfig | undefined;
+        const isLoginRequest = captchaConfig?.url?.includes("/v1/user/login");
+        if (reason === "CAPTCHA_REQUIRED" && isLoginRequest && !captchaConfig?._captchaRetried) {
+          const metadata = response?.data as {
+            metadata?: { scene?: string; meta?: string };
+          };
+          const scene = Number(metadata.metadata?.scene);
+          const meta = metadata.metadata?.meta;
+          if (Number.isFinite(scene) && meta && captchaConfig) {
+            const captchaTicket = await openCaptcha(scene, meta);
+            if (captchaTicket) {
+              captchaConfig._captchaRetried = true;
+              const loginData =
+                typeof captchaConfig.data === "string"
+                  ? (JSON.parse(captchaConfig.data) as Record<string, unknown>)
+                  : { ...(captchaConfig.data as Record<string, unknown>) };
+              captchaConfig.data = { ...loginData, captcha_ticket: captchaTicket };
               try {
-                return await serverHemusic.request(originalConfig); // 返回重试成功的响应
+                return await serverHemusic.request(captchaConfig);
               } catch (retryError) {
-                console.error("重试请求失败：", retryError);
                 return Promise.reject(retryError);
               }
             }
-          } else {
-            console.log("验证码验证失败或取消");
           }
         }
-
-        console.log("结束了吗");
-        // 执行禁止访问的处理逻辑
         break;
+      }
       case 404:
         console.error("未找到资源：", response.status, response.statusText);
         // 执行未找到资源的处理逻辑

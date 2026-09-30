@@ -344,9 +344,15 @@ export const openParseSourceUrl = async () => {
   });
 };
 
-export const openCaptcha = async (scene: number, meta: string): Promise<boolean> => {
+export const openCaptcha = async (scene: number, meta: string): Promise<string | null> => {
   const { default: Captcha } = await import("@/components/Modal/Captcha.vue");
   return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ticket: string | null) => {
+      if (settled) return;
+      settled = true;
+      resolve(ticket);
+    };
     const modal = window.$modal.create({
       preset: "card",
       transformOrigin: "center",
@@ -358,15 +364,13 @@ export const openCaptcha = async (scene: number, meta: string): Promise<boolean>
         return h(Captcha, {
           scene,
           meta,
-          onSuccess: () => {
+          onSuccess: (ticket: string) => {
             modal.destroy();
-            resolve(true); // 验证成功
+            finish(ticket);
           },
         });
       },
-      onClose: () => {
-        resolve(false); // 关闭弹窗，验证失败
-      },
+      onClose: () => finish(null),
     });
   });
 };
