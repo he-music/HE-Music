@@ -392,7 +392,7 @@ const clearBackgroundImage = async () => {
   gap: 12px;
   .set-item {
     border-radius: 8px;
-    :deep(.n-card__content) {
+    :deep(.n-card-content) {
       display: flex;
       align-items: center;
       justify-content: space-between;

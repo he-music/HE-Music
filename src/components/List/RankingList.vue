@@ -247,7 +247,7 @@ const playList = debounce(
     height: 160px;
     border-radius: 12px;
     cursor: pointer;
-    :deep(.n-card__content) {
+    :deep(.n-card-content) {
       height: 100%;
       padding: 16px;
     }

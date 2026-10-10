@@ -198,6 +198,7 @@ const changeGlobalTheme = () => {
             Switch: { railColorActive: toRGBA(primaryRGB, 0.8) },
             Input: {
               color: toRGBA(primaryRGB, 0.1),
+              colorHover: toRGBA(primaryRGB, 0.1),
               colorFocus: colors.surface,
               placeholderColor: colors.primary58,
               border: `1px solid ${toRGBA(primaryRGB, 0.1)}`,

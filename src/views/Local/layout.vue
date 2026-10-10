@@ -102,6 +102,7 @@
       v-model:show="localPathShow"
       :close-on-esc="false"
       :mask-closable="false"
+      close-focusable
       preset="card"
       :title="t('local.manage_local_music_folder')"
       transform-origin="center"

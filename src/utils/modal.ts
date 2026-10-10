@@ -255,6 +255,7 @@ export const openSetting = async (type: SettingType = "general", scrollTo?: stri
     autoFocus: false,
     maskClosable: false,
     closeOnEsc: false,
+    closeFocusable: true,
     bordered: true,
     class: "main-setting",
     onClose: () => {
@@ -486,15 +487,15 @@ export const openThemeConfig = async () => {
 
 /** 打开本地音乐目录管理弹窗 */
 export const openLocalMusicDirectoryModal = async () => {
-  const { default: LocalMusicDirectory } = await import(
-    "@/components/Modal/Setting/LocalMusicDirectory.vue"
-  );
+  const { default: LocalMusicDirectory } =
+    await import("@/components/Modal/Setting/LocalMusicDirectory.vue");
   window.$modal.create({
     preset: "card",
     transformOrigin: "center",
     autoFocus: false,
     maskClosable: false,
     closeOnEsc: false,
+    closeFocusable: true,
     style: { width: "600px" },
     title: t("local.manage_local_music_folder"),
     content: () => {

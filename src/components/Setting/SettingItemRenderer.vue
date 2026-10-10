@@ -364,7 +364,7 @@ const activeActions = computed(() => {
     pointer-events: none;
   }
 }
-:deep(.n-card__content) {
+:deep(.n-card-content) {
   display: flex;
   flex-direction: row;
   align-items: center;

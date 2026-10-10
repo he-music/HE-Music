@@ -108,7 +108,7 @@ const handleAlbumClick = () => {
   width: 100%;
   min-height: 120px;
   border-radius: 12px;
-  :deep(.n-card__content) {
+  :deep(.n-card-content) {
     padding: 16px;
     display: flex;
     align-items: center;

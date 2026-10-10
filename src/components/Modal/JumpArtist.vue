@@ -136,7 +136,7 @@ onMounted(getArtistData);
     &:last-child {
       margin-bottom: 0;
     }
-    .n-card__content {
+    .n-card-content {
       padding: 12px 16px;
       display: flex;
       align-items: center;

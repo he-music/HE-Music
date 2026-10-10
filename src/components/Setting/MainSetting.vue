@@ -448,7 +448,7 @@ onMounted(() => {
     padding: 20px;
     z-index: 1;
   }
-  .n-card__content {
+  .n-card-content {
     padding: 0;
     .setting-type {
       transition: opacity 0.2s ease-in-out;
@@ -482,7 +482,7 @@ onMounted(() => {
       &:last-child {
         margin-bottom: 0;
       }
-      .n-card__content {
+      .n-card-content {
         display: flex;
         flex-direction: row;
         align-items: center;

@@ -256,7 +256,7 @@ onMounted(getUpdateData);
 }
 .mobile-client {
   border-color: rgba(var(--primary), 0.28);
-  :deep(.n-card__content) {
+  :deep(.n-card-content) {
     gap: 16px;
   }
   .mobile-client-info {
@@ -285,11 +285,11 @@ onMounted(getUpdateData);
       font-size: 12px;
     }
   }
-  :deep(.n-card__content > .n-button) {
+  :deep(.n-card-content > .n-button) {
     flex-shrink: 0;
   }
   @media (max-width: 520px) {
-    :deep(.n-card__content) {
+    :deep(.n-card-content) {
       align-items: stretch;
       flex-direction: column;
     }
@@ -299,7 +299,7 @@ onMounted(getUpdateData);
   }
 }
 .update-data {
-  :deep(.n-card__content) {
+  :deep(.n-card-content) {
     flex-direction: column !important;
     align-items: normal !important;
   }
@@ -320,7 +320,7 @@ onMounted(getUpdateData);
     max-width: 200px;
     border-radius: 8px;
     cursor: pointer;
-    :deep(.n-card__content) {
+    :deep(.n-card-content) {
       display: flex;
       align-items: center;
       padding: 12px;
