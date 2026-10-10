@@ -15,6 +15,11 @@ import initIpc from "./ipc";
 import { initI18n } from "./i18n";
 import { trySendCustomProtocol } from "./utils/protocol";
 
+// 桌面歌词依赖 X11 的全局坐标、置顶和非激活显示；保留用户显式后端选择。
+if (process.platform === "linux" && !app.commandLine.hasSwitch("ozone-platform")) {
+  app.commandLine.appendSwitch("ozone-platform", "x11");
+}
+
 // 屏蔽报错
 process.env.ELECTRON_DISABLE_SECURITY_WARNINGS = "true";
 

@@ -69,6 +69,12 @@
 - 📱 移动端简单适配
 - 🌐 `i18n` 支持
 
+## 🖥️ 桌面运行环境
+
+- 客户端使用 Electron 44，macOS 最低要求为 macOS 13。
+- Linux 默认使用 X11 后端；在 Wayland 会话中需要安装并启用 XWayland，以支持桌面歌词的全局坐标、置顶和非激活显示。
+- 启动时显式指定 `--ozone-platform=wayland` 或其他后端会保留该选择；原生 Wayland 下上述桌面歌词能力受 Electron/窗口管理器限制。
+
 ## ⚙️ 本地部署
 
 1. 本地部署需要用到 `Node.js`。可前往 [Node.js 官网](https://nodejs.org/zh-cn/) 下载安装包，请安装 Node.js 24 LTS，最低为 24.12.0（版本见 `.nvmrc`，使用 nvm 时可执行 `nvm install && nvm use`）

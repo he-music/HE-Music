@@ -1,6 +1,6 @@
 import { app, BrowserWindow, DownloadItem, dialog, ipcMain, shell } from "electron";
-import { basename, isAbsolute, join, relative, resolve } from "path";
-import { access, mkdir, readFile, stat, unlink, writeFile } from "fs/promises";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "path";
+import { access, mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from "fs/promises";
 import { getFileID, getFileMD5, parseFile } from "../utils/helper";
 import { File, Picture, TagTypes } from "node-taglib-sharp";
 import { ipcLog } from "../logger";
@@ -8,6 +8,7 @@ import { download } from "electron-dl";
 import { Options as GlobOptions } from "fast-glob/out/settings";
 import FastGlob from "fast-glob";
 import { t } from "../i18n";
+import { tmpdir } from "os";
 
 /**
  * 文件相关 IPC
@@ -351,8 +352,8 @@ const initFileIpc = (): void => {
         if (!win) return { status: "error", message: "Window not found" };
         // 获取配置
         const {
-          fileName,
-          fileType,
+          fileName: requestedFileName,
+          fileType: requestedFileType,
           path,
           lyric,
           downloadMeta,
@@ -362,6 +363,10 @@ const initFileIpc = (): void => {
           songData,
           overwrite,
         } = options;
+        // electron-dl 5 拒绝路径分隔符和 NUL；在主进程边界清洗所有下载入口。
+        const fileName =
+          requestedFileName.replace(/[<>:"/\\|?*]|\p{Cc}/gu, "").trim() || "未知文件名";
+        const fileType = requestedFileType.replace(/[<>:"/\\|?*]|\p{Cc}/gu, "") || "mp3";
         // 规范化路径
         const downloadPath = resolve(path);
         // 检查文件夹是否存在
@@ -385,6 +390,7 @@ const initFileIpc = (): void => {
         const songDownload = await download(win, url, {
           directory: downloadPath,
           filename: `${fileName}.${fileType}`,
+          overwrite,
           showProgressBar: false,
           onProgress: (progress) => {
             win.webContents.send("download-progress", {
@@ -394,12 +400,15 @@ const initFileIpc = (): void => {
             });
           },
         });
-        let coverDownload: DownloadItem | null = null;
+        const songSavePath = songDownload.getSavePath();
+        const songDirectory = dirname(songSavePath);
+        const songBaseName = basename(songSavePath, extname(songSavePath));
+        let coverTempDirectory: string | undefined;
         try {
           // 保存同名独立歌词文件
           if (lyric && saveMetaFile && downloadLyric) {
             try {
-              const lrcPath = join(downloadPath, `${fileName}.lrc`);
+              const lrcPath = join(songDirectory, `${songBaseName}.lrc`);
               await writeFile(lrcPath, lyric, "utf-8");
             } catch (err) {
               ipcLog.warn("⚠️ Failed to save .lrc file:", err);
@@ -410,11 +419,21 @@ const initFileIpc = (): void => {
           const needCover = (downloadCover && downloadMeta) || saveMetaFile;
           const coverUrl = songData?.coverSize?.l || songData?.cover;
           let songCover: Picture | null = null;
-          if (needCover && coverUrl && typeof coverUrl === "string" && coverUrl.startsWith("http")) {
+          if (
+            needCover &&
+            coverUrl &&
+            typeof coverUrl === "string" &&
+            coverUrl.startsWith("http")
+          ) {
             try {
-              coverDownload = await download(win, coverUrl, {
-                directory: downloadPath,
-                filename: `${fileName}.jpg`,
+              if (!saveMetaFile) {
+                coverTempDirectory = await mkdtemp(join(tmpdir(), "he-music-cover-"));
+              }
+              const coverDownload = await download(win, coverUrl, {
+                directory: coverTempDirectory || songDirectory,
+                filename: `${songBaseName}.jpg`,
+                // 独立侧车沿用原有覆盖语义；临时封面只写入本次专有目录。
+                overwrite: true,
                 showProgressBar: false,
               });
               if (coverDownload) {
@@ -428,7 +447,6 @@ const initFileIpc = (): void => {
           // 写入音频文件元数据标签
           if (downloadMeta) {
             try {
-              const songSavePath = songDownload.getSavePath();
               let songFile = File.createFromPath(songSavePath);
               // 清除原有脏标签
               songFile.removeTags(TagTypes.AllTags);
@@ -462,10 +480,10 @@ const initFileIpc = (): void => {
             }
           }
         } finally {
-          // 若不需要保留独立封面文件，清理下载的临时封面图片
-          if (coverDownload && !saveMetaFile) {
+          // 包括下载或标签写入失败，仅清理本次创建的临时目录。
+          if (coverTempDirectory) {
             try {
-              await unlink(coverDownload.getSavePath());
+              await rm(coverTempDirectory, { recursive: true, force: true });
             } catch {
               /* ignore */
             }
