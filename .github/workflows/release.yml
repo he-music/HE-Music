@@ -6,9 +6,6 @@ on:
       - v* # 只在 tag v* 时触发
   workflow_dispatch:
 
-env:
-  NODE_VERSION: 22.x
-
 jobs:
   # ===================================================================
   #  并行构建所有平台和架构
@@ -36,7 +33,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .nvmrc
       # 清理旧的构建产物
       - name: Clean workspace on Windows
         if: runner.os == 'Windows'

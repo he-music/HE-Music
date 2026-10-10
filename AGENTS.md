@@ -6,7 +6,7 @@
 
 - HE-Music 是基于 SPlayer 修改的音乐播放器，支持网页端和 Electron 桌面端，运行时需要配套的后端服务。
 - 技术栈：Vue 3、TypeScript、Vue Router、Pinia、Naive UI、Sass、Electron 和 electron-vite。
-- 使用 pnpm 管理依赖，以 `package.json` 的 `packageManager` 字段为准；当前为 `pnpm@10.28.1`，Node.js 要求为 20 或以上。
+- 使用 pnpm 管理依赖，以 `package.json` 的 `packageManager` 字段为准；当前为 `pnpm@10.28.1`，Node.js 统一使用 24 LTS，最低为 24.12.0（版本见 `.nvmrc`）。
 - 修改业务前阅读 `CONTEXT.md`，沿用其中的页面、内容模型和歌词展示术语。
 
 ## 目录职责

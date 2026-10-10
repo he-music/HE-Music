@@ -88,7 +88,7 @@ const statusStore = useStatusStore();
 const settingStore = useSettingStore();
 const platformStore = usePlatformStore();
 
-const searchHotData = ref<any>([]);
+const searchHotData = ref<string[]>([]);
 
 // 是否展示
 const isShow = computed(() => {

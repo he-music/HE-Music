@@ -71,11 +71,11 @@
 
 ## ⚙️ 本地部署
 
-1. 本地部署需要用到 `Node.js`。可前往 [Node.js 官网](https://nodejs.org/zh-cn/) 下载安装包，请下载最新稳定版
+1. 本地部署需要用到 `Node.js`。可前往 [Node.js 官网](https://nodejs.org/zh-cn/) 下载安装包，请安装 Node.js 24 LTS，最低为 24.12.0（版本见 `.nvmrc`，使用 nvm 时可执行 `nvm install && nvm use`）
 2. 安装 pnpm
 
    ```bash
-   npm install pnpm -g
+   npm install pnpm@10.28.1 -g
    ```
 
 3. 克隆仓库并拉取至本地，此处不再赘述
