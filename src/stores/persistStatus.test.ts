@@ -1,7 +1,6 @@
 import { createApp, nextTick } from "vue";
 import persistedstate from "pinia-plugin-persistedstate";
 import { afterEach, expect, it, vi } from "vitest";
-import { persistStatus } from "./persistStatus";
 
 const disposers: (() => void)[] = [];
 afterEach(() => {
@@ -10,9 +9,12 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-async function fixture(saved?: string) {
+async function fixture(saved?: string, memoryLastSeek = true) {
   const values = new Map<string, string>();
   if (saved !== undefined) values.set("status-store", saved);
+  if (!memoryLastSeek) {
+    values.set("setting-store", JSON.stringify({ memoryLastSeek: false }));
+  }
   const storage = {
     getItem: vi.fn((key: string) => values.get(key) ?? null),
     setItem: vi.fn((key: string, value: string) => {
@@ -21,16 +23,21 @@ async function fixture(saved?: string) {
   };
   // Pinia 开发工具也会读取 localStorage，必须在导入 Pinia 前提供浏览器存储。
   vi.stubGlobal("localStorage", storage);
+  // 设置 store 的 storage 在模块加载时绑定，每次模拟独立启动时重新加载。
+  vi.resetModules();
+  const { persistStatus } = await import("./persistStatus");
+  const { useSettingStore } = await import("./setting");
   const { createPinia, disposePinia, defineStore } = await import("pinia");
   const { useStatusStore } = await import("./status");
   const pinia = createPinia().use(persistedstate).use(persistStatus);
   createApp({}).use(pinia);
   const store = useStatusStore(pinia);
+  const settingStore = useSettingStore(pinia);
   disposers.push(() => disposePinia(pinia));
-  return { store, storage, values, pinia, defineStore };
+  return { store, settingStore, storage, values, pinia, defineStore };
 }
 
-it("高频无关状态变化不触发持久化、序列化或存储读取", async () => {
+it("歌词、频谱等高频无关状态变化不触发持久化、序列化或存储读取", async () => {
   const { store, storage } = await fixture();
   store.duration = 10000;
   await nextTick();
@@ -38,15 +45,14 @@ it("高频无关状态变化不触发持久化、序列化或存储读取", asyn
   storage.setItem.mockClear();
   const serialize = vi.spyOn(JSON, "stringify");
   const persist = vi.spyOn(store, "$persist");
-  for (let currentTime = 16; currentTime < 1000; currentTime += 16) {
+  for (let frame = 16; frame < 1000; frame += 16) {
     store.$patch({
-      currentTime,
       duration: 10000,
-      progress: currentTime / 100,
-      lyricIndex: Math.floor(currentTime / 100),
+      progress: frame / 100,
+      lyricIndex: Math.floor(frame / 100),
       playStatus: true,
-      spectrumsData: [currentTime],
-      autoClose: { remainTime: currentTime },
+      spectrumsData: [frame],
+      autoClose: { remainTime: frame },
     });
     await nextTick();
   }
@@ -58,14 +64,111 @@ it("高频无关状态变化不触发持久化、序列化或存储读取", asyn
 
 it("恢复原有存储键和字段，忽略非持久化字段且不在初始化时回写", async () => {
   const { store, storage } = await fixture(
-    JSON.stringify({ playVolume: 0.8, backgroundConfig: { scale: 1.5 }, currentTime: 9000 }),
+    JSON.stringify({
+      playVolume: 0.8,
+      backgroundConfig: { scale: 1.5 },
+      currentTime: 9000,
+      progress: 90,
+      lyricIndex: 10,
+    }),
   );
   await nextTick();
   expect(store.playVolume).toBe(0.8);
   expect(store.backgroundConfig.scale).toBe(1.5);
   expect(store.backgroundConfig.blur).toBe(0);
+  expect(store.currentTime).toBe(9000);
+  expect(store.progress).toBe(0);
+  expect(store.lyricIndex).toBe(-1);
+  expect(storage.setItem).not.toHaveBeenCalled();
+});
+
+it("同一秒内不重复保存，跨秒和回拖保存最新进度并可在重启后恢复", async () => {
+  const { store, storage, values } = await fixture();
+  const serialize = vi.spyOn(JSON, "stringify");
+  store.currentTime = 9123;
+  await nextTick();
+  expect(storage.setItem).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(9123);
+
+  for (const currentTime of [9250, 9500, 9750, 9999]) {
+    store.currentTime = currentTime;
+    await nextTick();
+  }
+  expect(storage.setItem).toHaveBeenCalledTimes(1);
+  expect(serialize).toHaveBeenCalledTimes(1);
+
+  store.currentTime = 10001;
+  await nextTick();
+  expect(storage.setItem).toHaveBeenCalledTimes(2);
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(10001);
+
+  store.currentTime = 9876;
+  await nextTick();
+  expect(storage.setItem).toHaveBeenCalledTimes(3);
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(9876);
+
+  const saved = values.get("status-store");
+  store.$dispose();
+  const restored = await fixture(saved);
+  await nextTick();
+  expect(restored.store.currentTime).toBe(9876);
+  expect(restored.storage.setItem).not.toHaveBeenCalled();
+});
+
+it("关闭记忆位置时不恢复旧进度，进度变化不序列化或写入，其他设置照常保存", async () => {
+  const { store, storage, values } = await fixture(JSON.stringify({ currentTime: 9000 }), false);
+  await nextTick();
   expect(store.currentTime).toBe(0);
   expect(storage.setItem).not.toHaveBeenCalled();
+
+  storage.getItem.mockClear();
+  const serialize = vi.spyOn(JSON, "stringify");
+  for (let currentTime = 250; currentTime <= 10000; currentTime += 250) {
+    store.currentTime = currentTime;
+    await nextTick();
+  }
+  expect(serialize).not.toHaveBeenCalled();
+  expect(storage.setItem).not.toHaveBeenCalled();
+  expect(storage.getItem).not.toHaveBeenCalled();
+
+  store.playVolume = 0.8;
+  await nextTick();
+  expect(storage.setItem).toHaveBeenCalledTimes(1);
+  expect(JSON.parse(values.get("status-store")!).playVolume).toBe(0.8);
+  expect(JSON.parse(values.get("status-store")!)).not.toHaveProperty("currentTime");
+
+  store.$persist();
+  expect(JSON.parse(values.get("status-store")!)).not.toHaveProperty("currentTime");
+});
+
+it("切换记忆位置开关会更新快照，重新开启后按秒保存当前进度", async () => {
+  const { store, settingStore, storage, values } = await fixture();
+  const statusWrites = () => storage.setItem.mock.calls.filter(([key]) => key === "status-store");
+  store.currentTime = 9123;
+  await nextTick();
+  expect(statusWrites()).toHaveLength(1);
+
+  settingStore.memoryLastSeek = false;
+  await nextTick();
+  expect(statusWrites()).toHaveLength(2);
+  expect(JSON.parse(values.get("status-store")!)).not.toHaveProperty("currentTime");
+
+  store.currentTime = 15000;
+  await nextTick();
+  expect(statusWrites()).toHaveLength(2);
+
+  settingStore.memoryLastSeek = true;
+  await nextTick();
+  expect(statusWrites()).toHaveLength(3);
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(15000);
+
+  store.currentTime = 15999;
+  await nextTick();
+  expect(statusWrites()).toHaveLength(3);
+  store.currentTime = 16000;
+  await nextTick();
+  expect(statusWrites()).toHaveLength(4);
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(16000);
 });
 
 it("业务字段、嵌套对象和数组变化各保存一次，同步批量修改合并保存", async () => {
@@ -104,7 +207,7 @@ it("清空存储后可显式保存，显式恢复和重置仍然正常", async (
   store.$hydrate();
   await nextTick();
   expect(store.playVolume).toBe(0.3);
-  expect(store.currentTime).toBe(0);
+  expect(store.currentTime).toBe(999);
   store.$reset();
   await nextTick();
   expect(JSON.parse(values.get("status-store")!).playVolume).toBe(0.7);
