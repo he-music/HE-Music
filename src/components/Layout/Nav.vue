@@ -20,8 +20,6 @@
     <n-flex :wrap="false" justify="end" class="nav-main">
       <!-- 搜索 -->
       <SearchInp />
-      <!-- 可拖拽 -->
-      <div v-if="isDesktop" class="nav-drag" />
 
       <n-flex align="center">
         <!-- 用户 -->
@@ -319,11 +317,6 @@ onUnmounted(() => {
     align-items: center;
     height: 100%;
     margin-left: 12px;
-    .nav-drag {
-      flex: 1;
-      width: 100%;
-      height: 100%;
-    }
   }
   .client-control {
     .divider {
