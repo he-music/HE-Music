@@ -374,7 +374,7 @@ const refreshList = () => {
 :deep(.n-highlight__mark) {
   color: var(--primary-hex);
   background-color: transparent;
-  font-weight: 600;
+  font-weight: inherit;
 }
 
 @media (max-width: 512px) {

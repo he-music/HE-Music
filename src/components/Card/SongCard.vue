@@ -508,7 +508,7 @@ const quality = getQuality(song.value) as {
   :deep(.n-highlight__mark) {
     color: var(--primary-hex);
     background-color: transparent;
-    font-weight: 600;
+    font-weight: inherit;
   }
 }
 </style>
