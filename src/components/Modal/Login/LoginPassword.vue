@@ -1,6 +1,16 @@
 <template>
   <div class="login-phone">
-    <n-form ref="formRef" :model="formData" :rules="formRules" class="phone-form">
+    <n-form
+      ref="formRef"
+      :model="formData"
+      :rules="formRules"
+      class="phone-form"
+      novalidate
+      @submit.prevent="login"
+      @keydown.capture="handleFormKeydown"
+      @keyup.capture="resetKeyboardSubmitGuard"
+      @pointerdown.capture="resetKeyboardSubmitGuard"
+    >
       <n-form-item :label="t('common.username')" path="username">
         <n-input
           v-model:value="formData.username"
@@ -32,7 +42,7 @@
         </n-input>
       </n-form-item>
       <n-form-item :show-label="false">
-        <n-button :loading="loading" class="login" type="primary" @click.stop="login">
+        <n-button :loading="loading" class="login" type="primary" attr-type="submit">
           {{ t("common.login") }}
         </n-button>
       </n-form-item>
@@ -45,7 +55,6 @@ import type { FormInst, FormRules } from "naive-ui";
 import axios from "axios";
 import { accountLogin } from "@/api/login";
 import { useFormRule } from "@/utils/rules";
-import { debounce } from "lodash-es";
 import { LoginType } from "@/types/main";
 import { useI18n } from "vue-i18n";
 import { getDeviceInfo } from "@/utils/device";
@@ -73,15 +82,28 @@ const formRules = computed<FormRules>(() => ({
   password: passwordRule,
 }));
 
-// 登录
-const login = debounce(async (e: MouseEvent) => {
-  e.preventDefault();
-  // 验证输入
-  await formRef.value?.validate();
+// 只拦截当前按键引起的提交，保留输入法确认候选词的默认行为
+let ignoreKeyboardSubmit = false;
+const handleFormKeydown = (event: KeyboardEvent) => {
+  ignoreKeyboardSubmit =
+    event.key === "Enter" && (event.isComposing || event.keyCode === 229 || event.repeat);
+  if (event.key === "Enter" && event.repeat) event.preventDefault();
+};
+const resetKeyboardSubmitGuard = () => {
+  ignoreKeyboardSubmit = false;
+};
 
-  if (loading.value) return;
+// 按钮点击和回车共用表单提交入口
+const login = async () => {
+  if (ignoreKeyboardSubmit || loading.value || !formRef.value) return;
   loading.value = true;
   try {
+    try {
+      await formRef.value.validate();
+    } catch {
+      // 校验失败由表单展示字段错误，不发送登录请求
+      return;
+    }
     const deviceInfo = await getDeviceInfo();
     const loginResult = await accountLogin(
       formData.value.username,
@@ -94,21 +116,7 @@ const login = debounce(async (e: MouseEvent) => {
   } finally {
     loading.value = false;
   }
-
-  // if (loginResult.code !== 200) {
-  //   window.$message.error("登录失败，请重试");
-  //   return;
-  // }
-  // 是否含有 MUSIC_U
-  // if (loginResult.cookie && loginResult.cookie.includes("MUSIC_U")) {
-  //   // 去除 HTTPOnly
-  //   loginResult.cookie = loginResult.cookie.replaceAll(" HTTPOnly", "");
-  //   // 储存登录信息
-  //   emit("saveLogin", loginResult, "phone");
-  // } else {
-  //   window.$message.error("登录出错，请重试");
-  // }
-}, 300);
+};
 </script>
 
 <style lang="scss" scoped>
