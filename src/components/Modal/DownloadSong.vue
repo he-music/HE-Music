@@ -51,7 +51,7 @@
         {{ t("common.cancel") }}
       </n-button>
       <n-button :loading="loading" type="primary" :disabled="!canDownload" @click="download">
-        {{ t("download.add") }}
+        {{ t(isElectron ? "download.add" : "common.download_song") }}
       </n-button>
     </n-flex>
   </div>
@@ -103,10 +103,23 @@ const download = async () => {
     window.$message.warning(t("message.please_set_download_path"));
     return;
   }
-  if (!props.song) return;
-  await downloadManager.addDownload(props.song, songLevelChosen.value);
-  window.$message.success(t("message.download_added"));
-  emit("close");
+  if (!props.song || loading.value) return;
+  loading.value = true;
+  try {
+    if (isElectron) {
+      await downloadManager.addDownload(props.song, songLevelChosen.value);
+      window.$message.success(t("message.download_added"));
+    } else {
+      const result = await downloadManager.downloadInBrowser(props.song, songLevelChosen.value);
+      if (!result.success) {
+        window.$message.error(result.message || t("message.download_fail"));
+        return;
+      }
+    }
+    emit("close");
+  } finally {
+    loading.value = false;
+  }
 };
 </script>
 

@@ -52,6 +52,7 @@ class DownloadManager {
    * @param quality 音质
    */
   public async addDownload(song: SongInfo, quality: string) {
+    if (!isElectron) return;
     const dataStore = useDataStore();
 
     // 检查是否已存在
@@ -67,6 +68,11 @@ class DownloadManager {
 
     // 开始处理队列
     this.processQueue();
+  }
+
+  /** 网页端直接交给浏览器下载，不创建下载任务或进入队列。 */
+  public async downloadInBrowser(song: SongInfo, quality: string) {
+    return this.processDownload({ song, quality });
   }
 
   /**
@@ -309,6 +315,7 @@ class DownloadManager {
    * @param song 歌曲
    */
   public retryDownload(song: SongInfo) {
+    if (!isElectron) return;
     const dataStore = useDataStore();
     const task = dataStore.downloadingSongs.find((item) => songEqual(item.song, song));
     if (!task) return;
@@ -332,6 +339,7 @@ class DownloadManager {
    * 重试所有下载任务
    */
   public retryAllDownloads() {
+    if (!isElectron) return;
     const dataStore = useDataStore();
     const songsToRetry = dataStore.downloadingSongs.map((item) => item.song);
 

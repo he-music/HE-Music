@@ -17,6 +17,7 @@ import { songEqual } from "@/utils/song";
 import { usePlayer } from "@/utils/player";
 import songManager from "@/utils/songManager";
 import { getSizeCover } from "@/utils/format";
+import { isElectron } from "@/utils/env";
 
 /** 歌曲菜单 */
 export const useSongMenu = () => {
@@ -85,8 +86,9 @@ export const useSongMenu = () => {
     const isCurrent = statusStore.playIndex === index;
     // 是否为用户歌单
     const isUserPlaylist = !!(playlist?.id && playlist?.type === "user-playlist");
-    // 是否正在下载或下载失败
-    const isDownloading = dataStore.downloadingSongs.some((item) => songEqual(song, item.song));
+    // 仅桌面端使用下载管理状态
+    const isDownloading =
+      isElectron && dataStore.downloadingSongs.some((item) => songEqual(song, item.song));
 
     return [
       {
@@ -307,8 +309,9 @@ export const useSongMenu = () => {
     const albumId = (typeof song?.album == "object" && song?.album.id) || null;
     const { artist, album } = songManager.getPlayerInfoObj(song) || {};
     const isLocal = !!song?.path;
-    // 是否正在下载或下载失败
-    const isDownloading = dataStore.downloadingSongs.some((item) => songEqual(song, item.song));
+    // 仅桌面端使用下载管理状态
+    const isDownloading =
+      isElectron && dataStore.downloadingSongs.some((item) => songEqual(song, item.song));
 
     return [
       {
