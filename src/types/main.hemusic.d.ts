@@ -113,9 +113,26 @@ export interface LyricInfo {
   roma: string;
 }
 
-export interface SongMetadata {
-  language: string;
-  publish_time: number;
+/** 歌曲详情中由后端格式化的展示字段，按响应顺序呈现。 */
+export interface SongDetailField {
+  label: string;
+  value: string;
+}
+
+/** 歌曲详情的关联资源区块，与其他页面的 PageSection 独立。 */
+export interface SongDetailSection {
+  resource_type: string;
+  title: string;
+  songs?: SongInfo[] | null;
+  albums?: AlbumInfo[] | null;
+  mvs?: MVInfo[] | null;
+  playlists?: PlaylistInfo[] | null;
+}
+
+export interface GetSongDetailResponse {
+  song: SongInfo;
+  fields?: SongDetailField[] | null;
+  sections?: SongDetailSection[] | null;
 }
 
 export interface MVInfo extends CoverType {

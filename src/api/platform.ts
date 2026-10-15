@@ -67,11 +67,11 @@ export const FeatureSupportFlag = {
   FeatureSupportListFilterMVs: 1n << 43n, // 获取筛选后的MV列表
 
   GetSongDetail: 1n << 44n, // 获取歌曲详情
-  ListSongRelations: 1n << 45n, // 获取歌曲相关推荐
 
-  ListMVFeeds: 1n << 46n, // 获取MV信息流
-  GetSearchDefault: 1n << 47n, //搜索默认词
-  FeatureSupportSearchLyricSong: 1n << 48n, // 根据歌词内容搜索歌曲
+  ListMVFeeds: 1n << 45n, // 获取MV信息流
+  GetSearchDefault: 1n << 46n, // 搜索默认词
+  FeatureSupportSearchLyricSong: 1n << 47n, // 根据歌词内容搜索歌曲
+  FeatureSupportSearchLyric: 1n << 48n, // 搜索歌词
 };
 
 // 获取发现页面

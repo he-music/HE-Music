@@ -34,22 +34,10 @@
               </n-button>
             </n-dropdown>
           </div>
-          <div class="meta-list">
-            <div class="meta-item">
-              <span class="label">{{ t("common.platform") }}</span>
-              <span class="value">{{ platformName }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="label">{{ t("common.publish_time") }}</span>
-              <span class="value">{{ publishTimeText }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="label">{{ t("common.language") }}</span>
-              <span class="value">{{ metadata?.language || "-" }}</span>
-            </div>
-            <div class="meta-item">
-              <span class="label">{{ t("common.duration") }}</span>
-              <span class="value">{{ secondsToTime(songData.duration) }}</span>
+          <div v-if="fields.length" class="meta-list">
+            <div v-for="(field, index) in fields" :key="index" class="meta-item">
+              <span class="label">{{ field.label }}</span>
+              <span class="value">{{ field.value }}</span>
             </div>
           </div>
         </div>
@@ -59,54 +47,17 @@
       </div>
     </Transition>
 
-    <n-flex v-if="supportSongRelations" vertical :size="20" class="sections">
-      <section v-if="similarSongs.length" class="section">
-        <n-h3 prefix="bar">{{ t("common.similar_songs") }}</n-h3>
-        <SongList
-          :data="similarSongs"
-          :loading="relationsLoading"
-          height="auto"
-          :show-footer="false"
-          :disabled-sort="true"
-        />
-      </section>
-
-      <section v-if="otherVersionSongs.length" class="section">
-        <n-h3 prefix="bar">{{ t("common.other_versions") }}</n-h3>
-        <SongList
-          :data="otherVersionSongs"
-          :loading="relationsLoading"
-          height="auto"
-          :show-footer="false"
-          :disabled-sort="true"
-          hidden-album
-        />
-      </section>
-
-      <section v-if="relatedPlaylists.length" class="section">
-        <n-h3 prefix="bar">{{ t("common.related_playlists") }}</n-h3>
-        <PlaylistList :data="relatedPlaylists" />
-      </section>
-
-      <section v-if="relatedMvs.length" class="section">
-        <n-h3 prefix="bar">{{ t("common.related_videos") }}</n-h3>
-        <VideoList :data="relatedMvs" />
-      </section>
-    </n-flex>
+    <SongDetailSections v-if="sections.length" class="sections" :sections="sections" />
   </div>
 </template>
 
 <script setup lang="ts">
 import type { DropdownOption } from "naive-ui";
-import { songDetail, songRelations } from "@/api/song";
-import type { MVInfo, PlaylistInfo, SongInfo, SongMetadata } from "@/types/main.hemusic";
 import SongDataCard from "@/components/Card/SongDataCard.vue";
-import SongList from "@/components/List/SongList.vue";
-import PlaylistList from "@/components/List/PlaylistList.vue";
-import VideoList from "@/components/List/VideoList.vue";
+import SongDetailSections from "@/components/Song/SongDetailSections.vue";
+import { useSongDetail } from "@/composables/useSongDetail";
 import { FeatureSupportFlag } from "@/api/platform";
 import { useDataStore, usePlatformStore, useStatusStore } from "@/stores";
-import { secondsToTime, formatTimestamp } from "@/utils/time";
 import { usePlayer } from "@/utils/player";
 import { toLikeSong } from "@/utils/auth";
 import { buildSourceUrl } from "@/api/source";
@@ -127,26 +78,14 @@ const routeName = computed(() => String(router.currentRoute.value.name || ""));
 const songId = computed<string>(() => String(router.currentRoute.value.query.id || ""));
 const platform = computed<string>(() => String(router.currentRoute.value.query.platform || ""));
 
-const relationsLoading = ref<boolean>(true);
-const songData = ref<SongInfo | null>(null);
-const metadata = ref<SongMetadata | null>(null);
-const similarSongs = ref<SongInfo[]>([]);
-const otherVersionSongs = ref<SongInfo[]>([]);
-const relatedPlaylists = ref<PlaylistInfo[]>([]);
-const relatedMvs = ref<MVInfo[]>([]);
-
-const platformName = computed(() => {
-  return platformStore.getPlatformInfo(platform.value)?.name || platform.value || "-";
-});
-
-const supportSongRelations = computed(() => {
-  if (!platform.value) return false;
-  return platformStore.isFeatureSupport(platform.value, FeatureSupportFlag.ListSongRelations);
-});
-
-const publishTimeText = computed(() => {
-  if (!metadata.value?.publish_time) return "-";
-  return formatTimestamp(Number(metadata.value.publish_time) * 1000);
+const detailEnabled = computed(() => routeName.value === "song");
+const {
+  song: songData,
+  fields,
+  sections,
+} = useSongDetail(songId, platform, detailEnabled, (error) => {
+  console.error("Error getting song detail:", error);
+  window.$message.error(t("message.get_song_detail_fail"));
 });
 
 const hasMv = computed(() => {
@@ -280,66 +219,11 @@ const openComment = () => {
   router.push({ name: "comment" });
 };
 
-const getSongDetail = async () => {
-  try {
-    if (routeName.value !== "song" || !songId.value || !platform.value) return;
-    const result = await songDetail(songId.value, platform.value);
-    if (result.song?.path) {
-      window.$message.warning(t("message.local_song_not_support_operation"));
-      router.replace({ name: "discover" });
-      return;
-    }
-    songData.value = result.song;
-    metadata.value = result.metadata;
-  } catch (error) {
-    console.error("Error getting song detail:", error);
-    window.$message.error(t("message.get_song_detail_fail"));
-  } finally {
-  }
-};
-
-const getSongRelations = async () => {
-  try {
-    if (routeName.value !== "song" || !songId.value || !platform.value) return;
-    relationsLoading.value = true;
-    const result = await songRelations(songId.value, platform.value);
-    similarSongs.value = result.similar_songs || [];
-    otherVersionSongs.value = result.other_version_songs || [];
-    relatedPlaylists.value = result.related_playlists || [];
-    relatedMvs.value = result.related_mvs || [];
-  } catch (error) {
-    console.error("Error getting song relations:", error);
-    window.$message.error(t("message.get_song_relations_fail"));
-  } finally {
-    relationsLoading.value = false;
-  }
-};
-
-const loadSongPage = async () => {
-  if (routeName.value !== "song") return;
-  songData.value = null;
-  metadata.value = null;
-  similarSongs.value = [];
-  otherVersionSongs.value = [];
-  relatedPlaylists.value = [];
-  relatedMvs.value = [];
-
-  if (!supportSongRelations.value) {
-    relationsLoading.value = false;
-    await getSongDetail();
-    return;
-  }
-
-  await Promise.all([getSongDetail(), getSongRelations()]);
-};
-
-watch(
-  [routeName, songId, platform],
-  () => {
-    loadSongPage();
-  },
-  { immediate: true },
-);
+watch(songData, (song) => {
+  if (!song?.path) return;
+  window.$message.warning(t("message.local_song_not_support_operation"));
+  router.replace({ name: "discover" });
+});
 </script>
 
 <style lang="scss" scoped>
@@ -402,10 +286,6 @@ watch(
 
   .sections {
     width: 100%;
-  }
-
-  .section {
-    min-width: 0;
   }
 }
 </style>

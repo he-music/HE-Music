@@ -332,7 +332,6 @@
     "get_comment_data_fail": "获取评论数据失败",
     "get_local_music_meta_fail": "获取本地歌曲元信息失败",
     "get_song_detail_fail": "获取歌曲详情失败",
-    "get_song_relations_fail": "获取歌曲关联数据失败",
     "get_url_fail": "获取链接失败",
     "get_video_data_fail": "获取视频数据失败",
     "get_web_font_fail": "获取字体列表失败，请检查相关权限",

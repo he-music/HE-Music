@@ -332,7 +332,6 @@
     "get_comment_data_fail": "Failed to get comment data",
     "get_local_music_meta_fail": "Failed to get local track metadata",
     "get_song_detail_fail": "Failed to get song detail",
-    "get_song_relations_fail": "Failed to get song relations",
     "get_url_fail": "Failed to get link",
     "get_video_data_fail": "Failed to get video data",
     "get_web_font_fail": "Failed to retrieve the font list. Please check the relevant permissions.",

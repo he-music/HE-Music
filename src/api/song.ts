@@ -1,18 +1,6 @@
 import request, { API_URL, requestHemusic } from "@/utils/request";
 import { isElectron } from "@/utils/env";
-import type { MVInfo, PlaylistInfo, SongInfo, SongMetadata } from "@/types/main.hemusic";
-
-export interface SongDetailResponse {
-  song: SongInfo;
-  metadata: SongMetadata;
-}
-
-export interface SongRelationsResponse {
-  similar_songs: SongInfo[];
-  related_playlists: PlaylistInfo[];
-  related_mvs: MVInfo[];
-  other_version_songs: SongInfo[];
-}
+import type { GetSongDetailResponse } from "@/types/main.hemusic";
 
 // 获取歌曲 URL
 export const songUrl = (
@@ -126,17 +114,9 @@ export const songInfo = (platform: string, id: string) => {
 };
 
 // 获取歌曲详情
-export const songDetail = (id: string, platform: string): Promise<SongDetailResponse> => {
+export const songDetail = (id: string, platform: string): Promise<GetSongDetailResponse> => {
   return requestHemusic({
     url: "/v1/song/detail",
-    params: { id, platform },
-  });
-};
-
-// 获取歌曲关联数据
-export const songRelations = (id: string, platform: string): Promise<SongRelationsResponse> => {
-  return requestHemusic({
-    url: "/v1/song/relations",
     params: { id, platform },
   });
 };
