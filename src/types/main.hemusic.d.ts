@@ -149,6 +149,7 @@ export interface SongDetailSection {
   albums?: AlbumInfo[] | null;
   mvs?: MVInfo[] | null;
   playlists?: PlaylistInfo[] | null;
+  sheet_music?: SheetMusicInfo[] | null;
 }
 
 export interface GetSongDetailResponse {

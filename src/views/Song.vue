@@ -47,7 +47,14 @@
       </div>
     </Transition>
 
-    <SongDetailSections v-if="sections.length" class="sections" :sections="sections" />
+    <SongDetailSections
+      v-if="songData && sections.length"
+      class="sections"
+      :sections="sections"
+      :song="songData"
+      :can-list-sheet-music="canListSheetMusic"
+      @more-sheet-music="openSheetMusic"
+    />
   </div>
 </template>
 

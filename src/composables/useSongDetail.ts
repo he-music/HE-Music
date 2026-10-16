@@ -23,6 +23,8 @@ export function useSongDetail(
           return !!section.mvs?.length;
         case "playlist":
           return !!section.playlists?.length;
+        case "sheet_music":
+          return !!section.sheet_music?.length;
         default:
           return false;
       }

@@ -119,6 +119,11 @@ describe("歌曲详情", () => {
         { resource_type: "playlist", title: "相关歌单", playlists: [playlist] },
         { resource_type: "album", title: "收录专辑", albums: [album] },
         { resource_type: "mv", title: "音乐视频", mvs: [mv] },
+        {
+          resource_type: "sheet_music",
+          title: "相关曲谱",
+          sheet_music: [{ id: "9007199254740993", title: "钢琴谱" }],
+        },
         section("其他版本", "another-version", "netease"),
       ],
     };
@@ -166,8 +171,9 @@ describe("歌曲详情", () => {
     const skipped: SongDetailSection[] = [
       { resource_type: "future", title: "未知资源", songs: [song("unknown")] },
       { resource_type: "song", title: "无歌曲", albums: [album] },
+      { resource_type: "sheet_music", title: "无曲谱", songs: [song("wrong-field")] },
     ];
-    for (const resource_type of ["song", "album", "mv", "playlist"]) {
+    for (const resource_type of ["song", "album", "mv", "playlist", "sheet_music"]) {
       for (const empty of [undefined, null, []]) {
         skipped.push({
           resource_type,
@@ -176,6 +182,7 @@ describe("歌曲详情", () => {
           albums: empty,
           mvs: empty,
           playlists: empty,
+          sheet_music: empty,
         });
       }
     }

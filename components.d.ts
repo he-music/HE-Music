@@ -174,6 +174,7 @@ declare module 'vue' {
     SearchSuggest: typeof import('./src/components/Search/SearchSuggest.vue')['default']
     SettingItemRenderer: typeof import('./src/components/Setting/SettingItemRenderer.vue')['default']
     SettingSearch: typeof import('./src/components/Setting/SettingSearch.vue')['default']
+    SheetMusicList: typeof import('./src/components/List/SheetMusicList.vue')['default']
     SheetMusicPageSkeleton: typeof import('./src/components/SheetMusic/SheetMusicPageSkeleton.vue')['default']
     SheetMusicReader: typeof import('./src/components/SheetMusic/SheetMusicReader.vue')['default']
     SheetMusicSkeleton: typeof import('./src/components/SheetMusic/SheetMusicSkeleton.vue')['default']
