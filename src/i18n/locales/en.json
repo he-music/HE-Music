@@ -235,7 +235,7 @@
     "detail_not_supported": "This platform doesn't support sheet music details yet",
     "resource_unavailable": "Sheet music pages are currently unavailable",
     "image_failed": "Couldn't load this sheet music image",
-    "original_key": "Original key: {key}",
+    "original_key": "{key}",
     "bpm": "Tempo: {bpm} BPM",
     "page_count": "{count} pages",
     "page": "Page {page}"

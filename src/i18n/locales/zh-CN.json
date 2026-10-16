@@ -235,9 +235,9 @@
     "detail_not_supported": "当前平台暂不支持查看曲谱详情",
     "resource_unavailable": "曲谱资源暂不可用",
     "image_failed": "曲谱图片加载失败",
-    "original_key": "原调：{key}",
+    "original_key": "{key}调",
     "bpm": "速度：{bpm} BPM",
-    "page_count": "共 {count} 页",
+    "page_count": "{count}页",
     "page": "第 {page} 页"
   },
   "page_section": {

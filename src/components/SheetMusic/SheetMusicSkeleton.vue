@@ -8,14 +8,17 @@
   >
     <div v-if="layout === 'list'" class="list-skeleton" aria-hidden="true">
       <div v-for="item in 3" :key="item" class="list-item">
-        <n-skeleton class="cover" width="80px" height="108px" />
+        <n-skeleton class="cover" width="64px" height="88px" />
         <div class="list-info">
           <n-skeleton text width="60%" height="24px" />
-          <n-skeleton text width="38%" height="16px" />
           <div class="tags">
             <n-skeleton v-for="tag in 3" :key="tag" width="48px" height="22px" />
           </div>
-          <n-skeleton text width="46%" height="16px" />
+          <div class="list-facts">
+            <n-skeleton text width="28px" height="20px" />
+            <span>·</span>
+            <n-skeleton text width="32px" height="20px" />
+          </div>
         </div>
       </div>
     </div>
@@ -57,9 +60,9 @@ const { t } = useI18n();
   }
   .list-item {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: 16px;
-    padding: 16px;
+    padding: 12px 16px;
     border: 1px solid rgba(var(--primary), 0.08);
     border-radius: 8px;
   }
@@ -83,6 +86,13 @@ const { t } = useI18n();
   }
   .tags {
     margin-top: 4px;
+  }
+  .list-facts {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 4px;
+    font-size: 13px;
   }
   .metadata {
     margin-bottom: 16px;

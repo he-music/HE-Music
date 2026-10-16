@@ -12,9 +12,6 @@
           <n-text strong class="sheet-title">{{
             sheet.title || sheet.song_name || t("sheet_music.untitled")
           }}</n-text>
-          <n-text v-if="sheet.uploader" depth="3" class="uploader">
-            {{ t("sheet_music.uploader", { name: sheet.uploader }) }}
-          </n-text>
           <span v-if="metadata(sheet).length" class="metadata">
             <n-tag
               v-for="(tag, index) in metadata(sheet)"
@@ -29,7 +26,18 @@
             class="sheet-facts"
           >
             <n-text v-if="sheet.original_key?.trim()" depth="2">
-              {{ t("sheet_music.original_key", { key: sheet.original_key }) }}
+              {{
+                t("sheet_music.original_key", {
+                  key: sheet.original_key.trim().replace(/调$/, "").trim(),
+                })
+              }}
+            </n-text>
+            <n-text
+              v-if="sheet.original_key?.trim() && (sheet.page_count ?? 0) > 0"
+              depth="3"
+              aria-hidden="true"
+            >
+              ·
             </n-text>
             <n-text v-if="(sheet.page_count ?? 0) > 0" depth="2">
               {{ t("sheet_music.page_count", { count: sheet.page_count }) }}
@@ -90,10 +98,10 @@ const metadata = (sheet: SheetMusicInfo): string[] =>
 }
 .sheet-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 16px;
   width: 100%;
-  padding: 16px;
+  padding: 12px 16px;
   border: 0;
   border-radius: 12px;
   background: transparent;
@@ -110,8 +118,8 @@ const metadata = (sheet: SheetMusicInfo): string[] =>
   }
 }
 .cover {
-  width: 80px;
-  height: 108px;
+  width: 64px;
+  height: 88px;
   flex-shrink: 0;
   object-fit: cover;
   border-radius: 6px;
@@ -127,9 +135,6 @@ const metadata = (sheet: SheetMusicInfo): string[] =>
   font-size: 17px;
   line-height: 1.5;
 }
-.uploader {
-  font-size: 13px;
-}
 .metadata {
   display: flex;
   flex-wrap: wrap;
@@ -139,7 +144,7 @@ const metadata = (sheet: SheetMusicInfo): string[] =>
 .sheet-facts {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px 24px;
+  gap: 4px 6px;
   font-size: 13px;
   margin-top: 4px;
 }
