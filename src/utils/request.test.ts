@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const createServer = () => ({
@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     axiosCreate: vi.fn(),
     clearUserData: vi.fn(),
     openUserLogin: vi.fn(),
+    messageError: vi.fn(),
     refreshTokenApi: vi.fn(),
     dataStore: {
       userLoginStatus: true,
@@ -61,6 +62,7 @@ describe("HE Music Token 刷新", () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.clearAllMocks();
+    vi.stubGlobal("window", { $message: { error: mocks.messageError } });
     mocks.axiosCreate
       .mockReturnValueOnce(mocks.neteaseServer)
       .mockReturnValueOnce(mocks.hemusicServer);
@@ -72,6 +74,33 @@ describe("HE Music Token 刷新", () => {
 
     await import("@/utils/request");
     handleResponseError = mocks.hemusicServer.interceptors.response.use.mock.calls[0][1];
+  });
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("由界面处理曲谱请求错误时不重复显示通用错误消息", async () => {
+    const error = {
+      ...createHttpError(501, "NotImplemented", "/v1/song/sheet-music"),
+      config: { ...createHttpError(501).config, skipErrorMessage: true },
+    };
+    await expect(handleResponseError(error)).rejects.toBe(error);
+    expect(mocks.messageError).not.toHaveBeenCalled();
+  });
+
+  it("普通请求继续显示通用错误消息", async () => {
+    const error = createHttpError(500, "INTERNAL_ERROR");
+    await expect(handleResponseError(error)).rejects.toBe(error);
+    expect(mocks.messageError).toHaveBeenCalledWith("Request failed");
+  });
+
+  it("曲谱请求即使关闭通用提示，401 仍走登录处理", async () => {
+    mocks.dataStore.refreshToken = "";
+    const error = {
+      ...createHttpError(401),
+      config: { ...createHttpError(401).config, skipErrorMessage: true },
+    };
+    await expect(handleResponseError(error)).rejects.toBe(error);
+    expect(mocks.openUserLogin).toHaveBeenCalledOnce();
   });
 
   it("refresh token 无效时清空登录信息并打开登录弹窗", async () => {

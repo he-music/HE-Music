@@ -38,6 +38,21 @@ router.beforeEach((to, from, next) => {
   }
   const platformStore = usePlatformStore();
 
+  // 曲谱页面的必填参数每次导航都校验，覆盖同一路由仅修改 query 的情况。
+  if (to.name === "song-sheet-music" || to.name === "sheet-music") {
+    const required =
+      to.name === "sheet-music" ? ["platform", "song_id", "id"] : ["platform", "song_id"];
+    if (
+      required.some((key) => {
+        const value = to.query[key];
+        return typeof value !== "string" || !value.trim();
+      })
+    ) {
+      next({ name: "403" });
+      return;
+    }
+  }
+
   // 需要登录
   if (to.meta.needLogin && !isLogin()) {
     if (!isElectron) window.$loadingBar?.error();

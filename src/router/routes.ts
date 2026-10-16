@@ -155,6 +155,18 @@ const appRoutes: Array<RouteRecordRaw> = [
     },
     component: () => import("@/views/Song.vue"),
   },
+  // 歌曲曲谱列表
+  {
+    path: "/song/sheet-musics",
+    name: "song-sheet-music",
+    component: () => import("@/views/SheetMusic/List.vue"),
+  },
+  // 曲谱详情，可直接访问与刷新，独立携带原歌曲 ID。
+  {
+    path: "/sheet-music",
+    name: "sheet-music",
+    component: () => import("@/views/SheetMusic/Detail.vue"),
+  },
   // 专辑
   {
     path: "/album",

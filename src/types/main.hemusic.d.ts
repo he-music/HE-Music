@@ -21,6 +21,28 @@ export interface PlatformInfo {
   quality_map: Map<string, string>;
 }
 
+/** 列表与详情共用；列表可能只返回部分展示字段。所有资源 ID 保持字符串。 */
+export interface SheetMusicInfo {
+  id: string;
+  title?: string;
+  song_name?: string;
+  uploader?: string;
+  instruments?: string[];
+  notation_types?: string[];
+  arrangement_type?: string;
+  difficulty?: string;
+  original_key?: string;
+  bpm?: number;
+  cover?: string;
+  page_urls?: string[];
+  page_count?: number;
+  platform?: string;
+}
+
+export interface ListSongSheetMusicResponse {
+  list?: SheetMusicInfo[] | null;
+}
+
 export interface PlatformQuality {
   name: string;
   description: string;

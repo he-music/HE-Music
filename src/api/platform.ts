@@ -72,6 +72,9 @@ export const FeatureSupportFlag = {
   GetSearchDefault: 1n << 46n, // 搜索默认词
   FeatureSupportSearchLyricSong: 1n << 47n, // 根据歌词内容搜索歌曲
   FeatureSupportSearchLyric: 1n << 48n, // 搜索歌词
+
+  FeatureSupportListSheetMusic: 1n << 49n, // 获取歌曲曲谱列表
+  FeatureSupportGetSheetMusic: 1n << 50n, // 获取曲谱详情
 };
 
 // 获取发现页面

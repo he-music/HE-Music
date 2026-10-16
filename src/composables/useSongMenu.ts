@@ -28,6 +28,23 @@ export const useSongMenu = () => {
   const player = usePlayer();
   const { t } = useI18n();
 
+  const openSheetMusic = (song: SongInfo) => {
+    if (
+      song.path ||
+      !platformStore.isFeatureSupport(
+        song.platform,
+        FeatureSupportFlag.FeatureSupportListSheetMusic,
+      )
+    ) {
+      return;
+    }
+    statusStore.showFullPlayer = false;
+    router.push({
+      name: "song-sheet-music",
+      query: { platform: song.platform, song_id: song.id, song_name: song.name },
+    });
+  };
+
   const deleteLocalSong = (song: SongInfo, emit: (event: "removeSong", args: any[]) => void) => {
     if (!song.path) return;
     window.$dialog.warning({
@@ -137,6 +154,18 @@ export const useSongMenu = () => {
             router.push({ name: "song", query: { id: song.id, platform: song.platform } }),
         },
         icon: renderIcon("Eye", { size: 18 }),
+      },
+      {
+        key: "sheet-music",
+        label: t("sheet_music.view"),
+        show:
+          !isLocal &&
+          platformStore.isFeatureSupport(
+            song.platform,
+            FeatureSupportFlag.FeatureSupportListSheetMusic,
+          ),
+        props: { onClick: () => openSheetMusic(song) },
+        icon: renderIcon("Music", { size: 18 }),
       },
       {
         key: "comment",
@@ -369,6 +398,18 @@ export const useSongMenu = () => {
         },
         icon: renderIcon("Eye", { size: 18 }),
         hideFullPlayer: true,
+      },
+      {
+        key: "sheet-music",
+        label: t("sheet_music.view"),
+        show:
+          !isLocal &&
+          platformStore.isFeatureSupport(
+            song.platform,
+            FeatureSupportFlag.FeatureSupportListSheetMusic,
+          ),
+        props: { onClick: () => openSheetMusic(song) },
+        icon: renderIcon("Music", { size: 18 }),
       },
       {
         key: "comment",

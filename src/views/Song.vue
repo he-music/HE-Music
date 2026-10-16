@@ -88,6 +88,28 @@ const {
   window.$message.error(t("message.get_song_detail_fail"));
 });
 
+const openSheetMusic = () => {
+  if (!songData.value || !canListSheetMusic.value) return;
+  router.push({
+    name: "song-sheet-music",
+    query: {
+      platform: songData.value.platform,
+      song_id: songData.value.id,
+      song_name: songData.value.name,
+    },
+  });
+};
+
+const canListSheetMusic = computed(
+  () =>
+    !!songData.value &&
+    !songData.value.path &&
+    platformStore.isFeatureSupport(
+      songData.value.platform,
+      FeatureSupportFlag.FeatureSupportListSheetMusic,
+    ),
+);
+
 const hasMv = computed(() => {
   return !!songData.value?.mv_id && songData.value.mv_id !== "0";
 });
@@ -130,6 +152,13 @@ const moreOptions = computed<DropdownOption[]>(() => [
       onClick: () => songData.value && openDownloadSong(songData.value),
     },
     icon: renderIcon("Download", { size: 18 }),
+  },
+  {
+    key: "sheet-music",
+    label: t("sheet_music.view"),
+    show: canListSheetMusic.value,
+    props: { onClick: openSheetMusic },
+    icon: renderIcon("Music", { size: 18 }),
   },
   {
     key: "comment",

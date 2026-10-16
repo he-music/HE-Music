@@ -12,6 +12,9 @@ const baseURL: string = String(isDev ? "/api/netease" : import.meta.env["VITE_NE
 const REFRESH_TOKEN_URL = "/v1/auth/token/refresh";
 type CaptchaRetryConfig = AxiosRequestConfig & { _captchaRetried?: boolean };
 
+/** 由页面展示可重试错误状态时，避免再弹出重复的通用错误。鉴权处理仍走统一流程。 */
+export type HemusicRequestConfig = AxiosRequestConfig & { skipErrorMessage?: boolean };
+
 // Token 刷新并发保护
 let isRefreshing = false;
 let pendingQueue: Array<{
@@ -211,9 +214,11 @@ serverHemusic.interceptors.response.use(
         console.error("未处理的错误：", error.message);
     }
 
-    window.$message.error(
-      (response && (response.data as { message?: string }).message) || error.message,
-    );
+    if (!(config as HemusicRequestConfig | undefined)?.skipErrorMessage) {
+      window.$message.error(
+        (response && (response.data as { message?: string }).message) || error.message,
+      );
+    }
     return Promise.reject(error);
   },
 );
@@ -225,7 +230,7 @@ const request = async (config: AxiosRequestConfig): Promise<any> => {
   return data as any;
 };
 
-export const requestHemusic = async (config: AxiosRequestConfig): Promise<any> => {
+export const requestHemusic = async (config: HemusicRequestConfig): Promise<any> => {
   // 返回请求数据
   const { data } = await serverHemusic.request(config);
   return data as any;

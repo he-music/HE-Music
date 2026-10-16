@@ -12,6 +12,8 @@ const flags = [
   [FeatureSupportFlag.GetSearchDefault, 70368744177664],
   [FeatureSupportFlag.FeatureSupportSearchLyricSong, 140737488355328],
   [FeatureSupportFlag.FeatureSupportSearchLyric, 281474976710656],
+  [FeatureSupportFlag.FeatureSupportListSheetMusic, 562949953421312],
+  [FeatureSupportFlag.FeatureSupportGetSheetMusic, 1125899906842624],
 ] as const;
 const platformResponse = (feature_support_flag: number) => ({
   list: [
@@ -52,7 +54,7 @@ describe("平台高位功能标记", () => {
     expect(store.isFeatureSupport("missing", flag)).toBe(false);
   });
 
-  it.each([0, 8796093022208, 123145302310912, 545357767376896])(
+  it.each([0, 8796093022208, 123145302310912, 545357767376896, 1688849860263938])(
     "混合高位和全零功能标记不串位：%s",
     async (numericFlag) => {
       expect(Number.isSafeInteger(numericFlag)).toBe(true);
