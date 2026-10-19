@@ -4,6 +4,7 @@ import { type SongLyric } from "@/types/lyric";
 import { type LyricLine } from "@applemusic-like-lyrics/lyric";
 import { isElectron } from "./env";
 import { isWordLyric, parseLineLyric, parseWordLyric, splitLocalLyrics } from "@/utils/lyric";
+import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 
 class LyricManager {
   private lyricRequest = 0;
@@ -197,37 +198,10 @@ class LyricManager {
     const lyrics = useYrc ? musicStore.songLyric.yrcData : musicStore.songLyric.lrcData;
     // 无歌词时
     if (!lyrics || !lyrics.length) return -1;
-    // 获取开始时间和结束时间
-    const getStart = (v: LyricLine) => v.startTime || 0;
-    const getEnd = (v: LyricLine) => v.endTime ?? Infinity;
-    // 普通歌词：保持原有计算方式
-    if (!useYrc) {
-      const idx = lyrics.findIndex((v) => getStart(v) >= playSeek);
-      return idx === -1 ? lyrics.length - 1 : idx - 1;
-    }
-    // TTML / YRC（支持对唱重叠）
-    // 在第一句之前
-    if (playSeek < getStart(lyrics[0])) return -1;
-    // 计算在播放进度下处于激活区间的句子集合 activeIndices（[time, endTime)）
-    const activeIndices: number[] = [];
-    for (let i = 0; i < lyrics.length; i++) {
-      const start = getStart(lyrics[i]);
-      const end = getEnd(lyrics[i]);
-      if (playSeek >= start && playSeek < end) {
-        activeIndices.push(i);
-      }
-    }
-    // 不在任何区间 → 找最近的上一句
-    if (activeIndices.length === 0) {
-      const next = lyrics.findIndex((v) => getStart(v) > playSeek);
-      return next === -1 ? lyrics.length - 1 : next - 1;
-    }
-    // 1 句激活 → 直接返回
-    if (activeIndices.length === 1) return activeIndices[0];
-    // 多句激活（对唱）
-    const keepCount = activeIndices.length >= 3 ? 3 : 2;
-    const concurrent = activeIndices.slice(-keepCount);
-    return concurrent[0]; // 保持上一句（重叠时不跳）
+    if (!useYrc) return findLyricBoundary(lyrics, playSeek, true) - 1;
+    if (playSeek < (lyrics[0].startTime || 0)) return -1;
+    const active = getActiveLyricIndices(lyrics, playSeek, 3);
+    return active[0] ?? findLyricBoundary(lyrics, playSeek) - 1;
   }
 }
 

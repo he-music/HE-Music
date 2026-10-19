@@ -132,7 +132,6 @@
                 :placeholder="t('search.fuzzy_search')"
                 clearable
                 round
-                @input="listSearch"
               >
                 <template #prefix>
                   <SvgIcon name="Search" />
@@ -176,7 +175,8 @@
 <script setup lang="ts">
 import AsyncContent from "@/components/Page/AsyncContent.vue";
 import { albumDetail } from "@/api/album";
-import { copyData, coverLoaded, fuzzySearch, getShareUrl, renderIcon } from "@/utils/helper";
+import { copyData, coverLoaded, getShareUrl, renderIcon } from "@/utils/helper";
+import { useSongSearch } from "@/composables/useSongSearch";
 import { renderToolbar } from "@/utils/meta";
 import { useDataStore, usePlatformStore, useStatusStore } from "@/stores";
 import { debounce } from "lodash-es";
@@ -211,7 +211,7 @@ const albumDetailData = ref<AlbumInfo | null>(null);
 
 // 模糊搜索数据
 const searchValue = ref<string>("");
-const searchData = ref<SongInfo[]>([]);
+const searchData = useSongSearch(() => albumData.value, searchValue);
 
 // 专辑 ID
 const albumId = computed<string>(() => router.currentRoute.value.query.id as string);
@@ -324,22 +324,12 @@ const listScroll = (e: Event) => {
 // 清除输入
 const clearInput = () => {
   searchValue.value = "";
-  searchData.value = [];
 };
 
 // 播放全部歌曲
 const playAllSongs = debounce(() => {
   if (!albumDetailData.value || !albumData.value?.length) return;
   player.updatePlayList(albumData.value);
-}, 300);
-
-// 模糊搜索
-const listSearch = debounce((val: string) => {
-  val = val.trim();
-  if (!val || val === "") return;
-  // 获取搜索结果
-  const result = fuzzySearch(val, albumData.value);
-  searchData.value = result;
 }, 300);
 
 onBeforeRouteUpdate((to) => {

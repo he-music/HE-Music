@@ -153,7 +153,6 @@
                   :placeholder="t('search.fuzzy_search')"
                   clearable
                   round
-                  @input="listSearch"
                 >
                   <template #prefix>
                     <SvgIcon name="Search" />
@@ -216,7 +215,8 @@
 import AsyncContent from "@/components/Page/AsyncContent.vue";
 import type { DropdownOption, MessageReactive } from "naive-ui";
 import { playlistDetail, playlistSongs } from "@/api/playlist";
-import { copyData, coverLoaded, fuzzySearch, getShareUrl, renderIcon } from "@/utils/helper";
+import { copyData, coverLoaded, getShareUrl, renderIcon } from "@/utils/helper";
+import { useSongSearch } from "@/composables/useSongSearch";
 import { renderToolbar } from "@/utils/meta";
 import { toLikePlaylist } from "@/utils/auth";
 import { debounce } from "lodash-es";
@@ -243,7 +243,7 @@ const playlistDetailData = ref<PlaylistInfo | null>(null);
 
 // 模糊搜索数据
 const searchValue = ref<string>("");
-const searchData = ref<SongInfo[]>([]);
+const searchData = useSongSearch(() => playlistData.value, searchValue);
 
 // 歌单 ID
 const oldPlaylistId = ref<string>("");
@@ -405,7 +405,6 @@ const listScroll = (e: Event) => {
 // 清除输入
 const clearInput = () => {
   searchValue.value = "";
-  searchData.value = [];
 };
 
 // 加载提示
@@ -437,18 +436,10 @@ const playAllSongs = debounce(async () => {
 }, 300);
 
 const loadAllSongs = async () => {
-  for (; songHasMore.value && !songFailed.value && !songLoading.value; ) {
+  for (; songHasMore.value && !songFailed.value && !songLoading.value;) {
     await reachBottom();
   }
 };
-
-// 模糊搜索
-const listSearch = debounce((val: string) => {
-  val = val.trim();
-  if (!val || val === "") return;
-  // 获取搜索结果
-  searchData.value = fuzzySearch(val, playlistData.value);
-}, 300);
 
 // 列表触底
 const reachBottom = async () => {

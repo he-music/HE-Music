@@ -64,7 +64,6 @@
           :placeholder="t('search.fuzzy_search')"
           clearable
           round
-          @input="listSearch"
         >
           <template #prefix>
             <SvgIcon name="Search" />
@@ -162,7 +161,8 @@
 import type { DropdownOption, MessageReactive } from "naive-ui";
 import { useLocalStore, useSettingStore } from "@/stores";
 import { debounce, flattenDeep, uniqBy } from "lodash-es";
-import { changeLocalPath, fuzzySearch, renderIcon } from "@/utils/helper";
+import { changeLocalPath, renderIcon } from "@/utils/helper";
+import { useSongSearch } from "@/composables/useSongSearch";
 import { openBatchList } from "@/utils/modal";
 import { usePlayer } from "@/utils/player";
 import type { SongInfo } from "@/types/main.hemusic";
@@ -185,7 +185,7 @@ const localType = ref<string>((router.currentRoute.value?.name as string) || "lo
 
 // 模糊搜索数据
 const searchValue = ref<string>("");
-const searchData = ref<SongInfo[]>([]);
+const searchData = useSongSearch(() => localStore.localSongs, searchValue);
 
 // 目录管理
 const defaultMusicPath = ref<string>("");
@@ -287,18 +287,6 @@ const getAllLocalMusic = debounce(
   300,
   { leading: true, trailing: false },
 );
-
-// 模糊搜索
-const listSearch = debounce((val: string) => {
-  val = val.trim();
-  if (!val) {
-    searchData.value = [];
-    return;
-  }
-  // 获取搜索结果
-  const result = fuzzySearch(val, localStore.localSongs);
-  searchData.value = result;
-}, 300);
 
 localEventBus.on(() => getAllLocalMusic());
 

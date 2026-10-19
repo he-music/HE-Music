@@ -121,6 +121,7 @@ import { getLyricLanguage } from "@/utils/format";
 import { isElectron } from "@/utils/env";
 import { usePlayer } from "@/utils/player";
 import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
+import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 
 import { type ComponentPublicInstance, type PropType, type Ref } from "vue";
 import { type SongLyric } from "@/types/lyric";
@@ -242,36 +243,15 @@ const resolveActiveLineIndices = (): number[] => {
   const lyrics = currentLyricData.value;
   if (!lyrics || lyrics.length === 0) return [];
   const currentSeek = playbackTime.value;
-  const activeCandidates: number[] = [];
-  // 逐字歌词模式
   if (isYrcMode.value) {
-    for (let i = 0; i < lyrics.length; i++) {
-      const line = lyrics[i];
-      const start = line.startTime || 0;
-      const end = line.endTime ?? Infinity;
-      // 检查当前时间是否在该行的时间范围内
-      if (currentSeek >= start && currentSeek < end) {
-        activeCandidates.push(i);
-      }
-    }
-    // 最多保留3行
-    if (activeCandidates.length > 3) {
-      return activeCandidates.slice(-3);
-    }
-    // 如果没有活跃行，找最近的上一行（用于间奏等情况）
-    if (activeCandidates.length === 0 && currentSeek > 0) {
-      const next = lyrics.findIndex((v) => (v.startTime || 0) > currentSeek);
-      if (next === -1) return [lyrics.length - 1];
-      if (next > 0) return [next - 1];
-    }
-    return activeCandidates;
+    const active = getActiveLyricIndices(lyrics, currentSeek, 3);
+    if (active.length || currentSeek <= 0) return active;
+    const previous = findLyricBoundary(lyrics, currentSeek) - 1;
+    return previous >= 0 ? [previous] : [];
   }
-  // 普通歌词模式：找到下一行之前的行
-  const playSeek = currentSeek + 300; // 提前量
-  const idx = lyrics.findIndex((v) => (v.startTime || 0) > playSeek);
-  if (idx === -1) return [lyrics.length - 1];
-  if (idx > 0) return [idx - 1];
-  return [];
+  // 普通歌词保留原有的 300ms 提前量和严格大于边界。
+  const previous = findLyricBoundary(lyrics, currentSeek + 300) - 1;
+  return previous >= 0 ? [previous] : [];
 };
 
 const activeLineIndices = computed<number[]>((previous) => {

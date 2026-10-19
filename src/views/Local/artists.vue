@@ -2,9 +2,9 @@
   <div class="local-artists">
     <n-scrollbar class="artist-list">
       <n-card
-        v-for="(item, key, index) in artistData"
+        v-for="[key, item] in artistData"
         :id="key"
-        :key="index"
+        :key="key"
         :class="['artist-item', { choose: chooseArtist === key }]"
         @click="chooseArtist = key"
       >
@@ -20,7 +20,7 @@
     <Transition name="fade" mode="out-in">
       <SongList
         :key="chooseArtist"
-        :data="chooseArtist ? artistData[chooseArtist] : []"
+        :data="selectedSongs"
         :loading="true"
         :hidden-cover="!settingStore.showLocalCover"
       />
@@ -30,7 +30,7 @@
 
 <script setup lang="ts">
 import { useSettingStore } from "@/stores";
-import { isArray, some } from "lodash-es";
+import { groupSongs, splitArtistNames } from "@/utils/songGroup";
 import type { SongInfo } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
@@ -41,47 +41,18 @@ const settingStore = useSettingStore();
 
 // 歌手数据
 const chooseArtist = ref<string>("");
-const artistData = computed<Record<string, SongInfo[]>>(() => formatArtistsList(props.data));
+const artistData = computed(() =>
+  groupSongs(props.data, (song) => splitArtistNames(song.artists, settingStore.localSeparators)),
+);
+const selectedSongs = computed(() => artistData.value.get(chooseArtist.value) ?? []);
 
-// 区分歌手数据
-const formatArtistsList = (
-  data: SongInfo[],
-  separators: string[] = settingStore.localSeparators,
-): Record<string, SongInfo[]> => {
-  const allArtists = data.reduce(
-    (acc, song) => {
-      // 歌手信息
-      let artists = isArray(song.artists) ? song.artists : [song.artists];
-      // 分割歌手
-      separators.forEach((separator) => {
-        artists = artists.flatMap((artist: any) =>
-          typeof artist === "string" ? artist.split(separator) : [artist],
-        );
-      });
-      // 遍历歌手
-      artists.forEach((artist: any) => {
-        if (!artist) return;
-        // 获取歌手名称
-        const artistName = typeof artist === "string" ? artist.trim() : artist.name;
-        // 若还无歌手分类，初始化为空数组
-        if (!acc[artistName]) acc[artistName] = [];
-        // 去重
-        if (!some(acc[artistName], { id: song.id })) acc[artistName].push(song);
-      });
-      return acc;
-    },
-    {} as Record<string, SongInfo[]>,
-  );
-  // 按字母顺序排序
-  const sortedArtists = Object.keys(allArtists).sort((a, b) => a.localeCompare(b));
-  const sortedAllArtists: Record<string, SongInfo[]> = {};
-  sortedArtists.forEach((artist) => {
-    sortedAllArtists[artist] = allArtists[artist];
-  });
-  // 默认选中
-  chooseArtist.value = sortedArtists[0];
-  return sortedAllArtists;
-};
+watch(
+  artistData,
+  (groups) => {
+    if (!groups.has(chooseArtist.value)) chooseArtist.value = groups.keys().next().value ?? "";
+  },
+  { immediate: true },
+);
 
 watch(
   () => chooseArtist.value,

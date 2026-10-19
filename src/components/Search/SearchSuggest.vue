@@ -51,6 +51,7 @@
 import { searchSuggest } from "@/api/search";
 import { usePlatformStore, useStatusStore } from "@/stores";
 import { FeatureSupportFlag } from "@/api/platform";
+import { useSearchSuggestions } from "@/composables/useSearchSuggestions";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
 
@@ -62,27 +63,23 @@ const statusStore = useStatusStore();
 const platformStore = usePlatformStore();
 
 // 搜索建议数据
-const searchSuggestData = ref<string[]>([]);
+const suggestionPlatform = computed(
+  () =>
+    platformStore.platforms.find(
+      (item) =>
+        item.feature_support_flag & FeatureSupportFlag.GetSearchSuggest && item.status === 1,
+    )?.id,
+);
+const searchSuggestData = useSearchSuggestions(
+  () => statusStore.searchInputValue,
+  suggestionPlatform,
+  searchSuggest,
+);
 const searchSuggestHeights = ref<number>(0);
 
 // 搜索建议元素
 const directSearchRef = ref<HTMLElement | null>(null);
 const searchSuggestRef = ref<HTMLElement | null>(null);
-
-// 获取搜索建议
-const getSearchSuggest = async (keywords: string) => {
-  searchSuggestData.value = [];
-  const platform = platformStore.platforms.find(
-    (item) => item.feature_support_flag & FeatureSupportFlag.GetSearchSuggest && item.status === 1,
-  );
-  if (!platform) {
-    return;
-  }
-  const result = await searchSuggest(keywords, platform?.id || "");
-  searchSuggestData.value = result.keys;
-  // 计算高度
-  nextTick(calcSearchSuggestHeights);
-};
 
 // 计算高度
 const calcSearchSuggestHeights = () => {
@@ -100,15 +97,7 @@ const calcSearchSuggestHeights = () => {
   }
 };
 
-// 搜索框改变
-watchDebounced(
-  () => statusStore.searchInputValue,
-  (val) => {
-    if (!val || val === "") return;
-    getSearchSuggest(val);
-  },
-  { debounce: 300 },
-);
+watch(searchSuggestData, calcSearchSuggestHeights, { flush: "post" });
 </script>
 
 <style lang="scss" scoped>

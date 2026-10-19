@@ -2,9 +2,9 @@
   <div class="local-albums">
     <n-scrollbar class="album-list">
       <n-card
-        v-for="(item, key, index) in albumData"
+        v-for="[key, item] in albumData"
         :id="key"
-        :key="index"
+        :key="key"
         :class="['album-item', { choose: chooseAlbum === key }]"
         @click="chooseAlbum = key"
       >
@@ -29,18 +29,13 @@
       </n-card>
     </n-scrollbar>
     <Transition name="fade" mode="out-in">
-      <SongList
-        :key="chooseAlbum"
-        :data="chooseAlbum ? albumData[chooseAlbum] : []"
-        :loading="true"
-        hidden-cover
-      />
+      <SongList :key="chooseAlbum" :data="selectedSongs" :loading="true" hidden-cover />
     </Transition>
   </div>
 </template>
 
 <script setup lang="ts">
-import { some } from "lodash-es";
+import { groupSongs } from "@/utils/songGroup";
 import blob from "@/utils/blob";
 import type { SongInfo } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
@@ -50,44 +45,31 @@ const props = defineProps<{ data: SongInfo[] }>();
 
 // 专辑数据
 const chooseAlbum = ref<string>("");
-const albumData = computed<Record<string, SongInfo[]>>(() => formatArtistsList(props.data));
+const albumData = computed(() =>
+  groupSongs(props.data, (song) => [
+    typeof song.album === "string" ? song.album.trim() : song.album.name,
+  ]),
+);
+const selectedSongs = computed(() => albumData.value.get(chooseAlbum.value) ?? []);
 
-// 区分专辑数据
-const formatArtistsList = (data: SongInfo[]): Record<string, SongInfo[]> => {
-  const allAlbums = data.reduce(
-    (acc, song) => {
-      // 专辑信息
-      const albumName = typeof song.album === "string" ? song.album.trim() : song.album.name;
-      // 若还无专辑分类，初始化为空数组
-      if (!acc[albumName]) acc[albumName] = [];
-      // 去重
-      if (!some(acc[albumName], { id: song.id })) acc[albumName].push(song);
-      return acc;
-    },
-    {} as Record<string, SongInfo[]>,
-  );
-  // 按字母顺序排序
-  const sortedAlbums = Object.keys(allAlbums).sort((a, b) => a.localeCompare(b));
-  // 创建排序后的专辑对象
-  const sortedAllAlbums: Record<string, SongInfo[]> = {};
-  sortedAlbums.forEach((album) => {
-    sortedAllAlbums[album] = allAlbums[album];
-  });
-  // 默认选中
-  chooseAlbum.value = sortedAlbums[0];
-  return sortedAllAlbums;
-};
+watch(
+  albumData,
+  (groups) => {
+    if (!groups.has(chooseAlbum.value)) chooseAlbum.value = groups.keys().next().value ?? "";
+  },
+  { immediate: true },
+);
 
 // 加载专辑封面
 const loadAlbumCover = async (show: boolean, key: string) => {
   if (!show) return;
-  const path = albumData.value?.[key]?.[0]?.path;
-  if (!path) return;
-  const coverData = await window.electron.ipcRenderer.invoke("get-music-cover", path);
+  const song = albumData.value.get(key)?.[0];
+  if (!song?.path) return;
+  const coverData = await window.electron.ipcRenderer.invoke("get-music-cover", song.path);
   if (!coverData) return;
   const { data, format } = coverData;
-  const blobURL = blob.createBlobURL(data, format, path);
-  if (blobURL) albumData.value[key][0].cover = blobURL;
+  const blobURL = blob.createBlobURL(data, format, song.path);
+  if (blobURL) song.cover = blobURL;
 };
 
 watch(

@@ -124,7 +124,6 @@
                 :placeholder="t('search.fuzzy_search')"
                 clearable
                 round
-                @input="listSearch"
               >
                 <template #prefix>
                   <SvgIcon name="Search" />
@@ -171,7 +170,8 @@
 <script setup lang="ts">
 import type { DropdownOption, MessageReactive } from "naive-ui";
 import { getRanking } from "@/api/playlist";
-import { coverLoaded, fuzzySearch, renderIcon } from "@/utils/helper";
+import { coverLoaded, renderIcon } from "@/utils/helper";
+import { useSongSearch } from "@/composables/useSongSearch";
 import { renderToolbar } from "@/utils/meta";
 import { debounce } from "lodash-es";
 import AsyncContent from "@/components/Page/AsyncContent.vue";
@@ -202,7 +202,7 @@ const playlistDetailData = ref<RankingInfo | null>(null);
 
 // 模糊搜索数据
 const searchValue = ref<string>("");
-const searchData = ref<SongInfo[]>([]);
+const searchData = useSongSearch(() => playlistData.value, searchValue);
 
 // 歌单 ID
 const oldPlaylistId = ref<string>("");
@@ -307,7 +307,6 @@ const listScroll = (e: Event) => {
 // 清除输入
 const clearInput = () => {
   searchValue.value = "";
-  searchData.value = [];
 };
 
 // 加载提示
@@ -334,15 +333,6 @@ const playAllSongs = debounce(() => {
     platform: playlistDetailData.value?.platform,
     type: "top",
   });
-}, 300);
-
-// 模糊搜索
-const listSearch = debounce((val: string) => {
-  val = val.trim();
-  if (!val || val === "") return;
-  // 获取搜索结果
-  const result = fuzzySearch(val, playlistData.value);
-  searchData.value = result;
 }, 300);
 
 // 列表触底

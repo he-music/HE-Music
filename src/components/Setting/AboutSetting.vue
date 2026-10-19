@@ -137,7 +137,8 @@
 
 <script setup lang="ts">
 import type { UpdateLogType } from "@/types/main";
-import { getUpdateLog, openLink } from "@/utils/helper";
+import { openLink } from "@/utils/helper";
+import { getUpdateLog } from "@/utils/updateLog";
 import { debounce } from "lodash-es";
 import { useStatusStore } from "@/stores";
 import "github-markdown-css/github-markdown.css";

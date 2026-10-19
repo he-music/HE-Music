@@ -7,11 +7,11 @@
           {{ t("modal.jump_string_artist_warning") }}
         </n-alert>
         <n-card
-          v-for="(item, index) in artistData"
-          :key="index"
+          v-for="item in artistData"
+          :key="item.id"
           class="ar-item"
           hoverable
-          @click="jumpArtist(item.id, platform)"
+          @click="jumpArtist(item.id, artistPlatform)"
         >
           <n-avatar :src="'/images/artist.jpg?asset'" class="cover" round />
           <n-text class="name">
@@ -20,7 +20,8 @@
         </n-card>
       </div>
       <div v-else class="ar-list">
-        <n-skeleton class="ar-item" :repeat="2" text />
+        <n-skeleton v-if="loading" class="ar-item" :repeat="2" text />
+        <n-empty v-else />
       </div>
     </Transition>
   </div>
@@ -30,7 +31,7 @@
 import type { SongInfo, SongInfoArtistInfo } from "@/types/main.hemusic";
 import { usePlatformStore, useSettingStore } from "@/stores";
 import { searchResultHemusic } from "@/api/search";
-import { uniq } from "lodash-es";
+import { splitArtistNames } from "@/utils/songGroup";
 import { FeatureSupportFlag } from "@/api/platform";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
@@ -50,68 +51,55 @@ const emit = defineEmits<{
 const router = useRouter();
 
 const artistData = ref<SongInfoArtistInfo[]>([]);
+const loading = ref(true);
+const artistPlatform = computed(
+  () =>
+    props.platform ||
+    platformStore.platforms.find(
+      (item) => item.feature_support_flag & FeatureSupportFlag.SearchSinger && item.status === 1,
+    )?.id ||
+    "",
+);
 
-// 获取歌手信息
-const getArtistData = async () => {
-  if (!props.artist) return;
-  // 写入歌手信息
-  const setArtistData = (data: any, name: string) => {
-    if (!data) return;
-    const filteredData = data
-      .filter((ar: any) => ar.name === name)
-      .map((ar: any) => ({
-        id: ar.id,
-        name: ar.name,
-      }));
-    artistData.value.push(...filteredData);
-  };
+watch(
+  [() => props.artist, artistPlatform, () => settingStore.localSeparators],
+  async ([artist, platform], _, onCleanup) => {
+    let active = true;
+    onCleanup(() => (active = false));
+    artistData.value = [];
+    loading.value = true;
+    if (Array.isArray(artist)) {
+      artistData.value = artist;
+      loading.value = false;
+      return;
+    }
+    const names = splitArtistNames(artist, settingStore.localSeparators);
+    if (!platform || names.length === 0) {
+      loading.value = false;
+      return;
+    }
 
-  const platform = platformStore.platforms.find(
-    (p) => p.feature_support_flag & FeatureSupportFlag.SearchSinger && p.status === 1,
-  );
-  if (typeof props.artist === "string") {
-    let artists: string[] = [];
-    // 是否有分割符
-    const hasSeparator = settingStore.localSeparators.some((separator) =>
-      (props.artist as string).includes(separator),
-    );
-    if (!hasSeparator) {
-      const name = (props.artist as string).trim();
-      const result = await searchResultHemusic(
-        name,
-        10,
-        1,
-        props.platform || platform?.id || "",
-        "artist",
-      );
-      setArtistData(result.list, name);
-    } else {
-      // 遍历分割符，并分割歌手名字
-      settingStore.localSeparators.forEach((separator) => {
-        artists = artists.concat((props.artist as string).split(separator));
-      });
-      // 去重
-      artists = uniq(
-        artists
-          .map((artist) => artist.trim())
-          .filter((artist) => artist && artist !== props.artist),
-      );
-      // 获取歌手信息
-      artists.map(async (name) => {
-        const result = await searchResultHemusic(
+    const results = await Promise.allSettled(
+      names.map(async (name) => {
+        const result: { list: SongInfoArtistInfo[] } = await searchResultHemusic(
           name,
           10,
           1,
-          props.platform || platform?.id || "",
+          platform,
           "artist",
         );
-        setArtistData(result.list, name);
-      });
-    }
-  } else if (Array.isArray(props.artist)) {
-    artistData.value = props.artist;
-  }
-};
+        return result.list.filter((item) => item.name === name);
+      }),
+    );
+    if (!active) return;
+    const artists = results.flatMap((result) =>
+      result.status === "fulfilled" ? result.value : [],
+    );
+    artistData.value = [...new Map(artists.map((item) => [item.id, item])).values()];
+    loading.value = false;
+  },
+  { immediate: true },
+);
 
 // 跳转至歌手
 const jumpArtist = (id: string, platform: string) => {
@@ -119,8 +107,6 @@ const jumpArtist = (id: string, platform: string) => {
   emit("close");
   router.push({ name: "artist", query: { id, platform } });
 };
-
-onMounted(getArtistData);
 </script>
 
 <style lang="scss" scoped>

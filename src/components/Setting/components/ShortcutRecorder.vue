@@ -35,7 +35,6 @@
 <script setup lang="ts">
 import { useShortcutStore } from "@/stores";
 import { formatForGlobalShortcut } from "@/utils/helper";
-import { includes, some } from "lodash-es";
 import { ref, computed } from "vue";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
@@ -161,11 +160,10 @@ const onBlur = async () => {
 };
 
 // 快捷键是否重复
-const isRepeat = (shortcut: string): boolean => {
-  return some(Object.values(shortcutStore.shortcutList), (item) => {
-    return includes([item.shortcut, item.globalShortcut], shortcut);
-  });
-};
+const isRepeat = (shortcut: string): boolean =>
+  Object.values(shortcutStore.shortcutList).some((item) =>
+    [item.shortcut, item.globalShortcut].includes(shortcut),
+  );
 
 // 是否被占用
 const checkRegistered = async (shortcut: string) => {

@@ -88,7 +88,6 @@
               clearable
               round
               class="search"
-              @input="listSearch"
             >
               <template #prefix>
                 <SvgIcon name="Search" />
@@ -140,10 +139,9 @@ import { getRecommendSongList } from "@/api/page";
 import SongList from "@/components/List/SongList.vue";
 import SvgIcon from "@/components/Global/SvgIcon.vue";
 import type { RecommendSongListInfo } from "@/types/page";
-import { fuzzySearch } from "@/utils/helper";
+import { useSongSearch } from "@/composables/useSongSearch";
 import { openBatchList } from "@/utils/modal";
 import { usePlayer } from "@/utils/player";
-import { debounce } from "lodash-es";
 import { useI18n } from "vue-i18n";
 
 const route = useRoute();
@@ -153,7 +151,7 @@ const info = shallowRef<RecommendSongListInfo | null>(null);
 const loadError = ref(false);
 const playLoading = ref(false);
 const searchValue = ref("");
-const searchData = shallowRef<RecommendSongListInfo["songs"]>([]);
+const searchData = useSongSearch(() => info.value?.songs ?? [], searchValue);
 let requestSequence = 0;
 
 const platform = computed(() => String(route.query.platform || ""));
@@ -170,7 +168,6 @@ const loadSongList = async () => {
   info.value = null;
   loadError.value = false;
   searchValue.value = "";
-  searchData.value = [];
   try {
     const result = await getRecommendSongList(platform.value, targetId.value);
     if (sequence === requestSequence) info.value = result;
@@ -179,11 +176,6 @@ const loadSongList = async () => {
     console.error("Error getting recommend song list:", error);
   }
 };
-
-const listSearch = debounce((value: string) => {
-  const keyword = value.trim();
-  searchData.value = keyword && info.value ? fuzzySearch(keyword, info.value.songs) : [];
-}, 300);
 
 const playAllSongs = async () => {
   if (!info.value?.songs.length || playLoading.value) return;

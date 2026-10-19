@@ -1,18 +1,10 @@
-import type { UpdateLogType } from "@/types/main";
 import { NTooltip, SelectOption } from "naive-ui";
 import { h, VNode } from "vue";
 import { useClipboard } from "@vueuse/core";
-import { getCacheData } from "./cache";
-import { updateLog } from "@/api/other";
-import { isEmpty } from "lodash-es";
-import { convertToLocalTime } from "./time";
 import { useSettingStore } from "@/stores";
-import { marked } from "marked";
 import SvgIcon from "@/components/Global/SvgIcon.vue";
-import type { SongInfo } from "@/types/main.hemusic";
 import { t } from "@/i18n";
 import { isElectron } from "@/utils/env";
-import Fuse from "fuse.js";
 import { API_URL } from "@/utils/request";
 
 type AnyObject = { [key: string]: any };
@@ -57,32 +49,6 @@ export const renderOption = ({ node, option }: { node: VNode; option: SelectOpti
       default: () => option.label,
     },
   );
-
-// 模糊搜索
-export const fuzzySearch = (keyword: string, data: SongInfo[]): SongInfo[] => {
-  try {
-    if (!keyword || !data || !Array.isArray(data)) return [];
-
-    const fuse = new Fuse(data, {
-      // 针对歌曲可读字段进行索引
-      keys: [
-        { name: "name", weight: 0.5 },
-        { name: "id", weight: 0.2 },
-        { name: "artists", weight: 0.15 },
-        { name: "artists.name", weight: 0.15 },
-        { name: "album", weight: 0.1 },
-        { name: "album.name", weight: 0.1 },
-      ],
-      threshold: 0.35, // 0 精确匹配 ~ 1 完全模糊
-      ignoreLocation: true, // 不要求关键词位置接近
-    });
-
-    return fuse.search(keyword).map((result) => result.item);
-  } catch (error) {
-    console.error("模糊搜索出现错误：", error);
-    return [];
-  }
-};
 
 /**
  * 将 32 位 ARGB 颜色值转换为 24 位 RGB 颜色值
@@ -207,23 +173,6 @@ export const formatForGlobalShortcut = (shortcut: string): string => {
       return part;
     })
     .join("+");
-};
-
-// 获取更新日志
-export const getUpdateLog = async (): Promise<UpdateLogType[]> => {
-  const result = await getCacheData(updateLog, { key: "updateLog", time: 10 });
-  console.log(result);
-  if (!result || isEmpty(result)) return [];
-  const updateLogs = await Promise.all(
-    result.map(async (v: any) => ({
-      version: v.tag_name,
-      changelog: v.body ? await marked(v.body) : "",
-      time: convertToLocalTime(v.published_at),
-      url: v.html_url,
-      prerelease: v.prerelease,
-    })),
-  );
-  return updateLogs;
 };
 
 /**

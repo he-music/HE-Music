@@ -17,7 +17,7 @@ export const searchHot = (platform: string) => {
 };
 
 // 搜索建议
-export const searchSuggest = (keywords: string, platform: string) => {
+export const searchSuggest = (keywords: string, platform: string): Promise<{ keys: string[] }> => {
   return requestHemusic({
     url: `/v1/search/suggest`,
     params: {
