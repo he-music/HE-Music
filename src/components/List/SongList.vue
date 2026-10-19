@@ -93,6 +93,7 @@
             <template #default="{ item, index }">
               <SongCard
                 v-if="item.type === 'song'"
+                v-touch-context-menu="item.data"
                 :song="item.data"
                 :index="index"
                 :hiddenCover="hiddenCover"
@@ -279,6 +280,7 @@ const songListMenuRef = ref<InstanceType<typeof SongListMenu> | null>(null);
 const mobileSongMenuRef = ref<InstanceType<typeof MobileSongMenu> | null>(null);
 
 const handleShowMenu = (e: MouseEvent, song: SongInfo, index: number) => {
+  e.preventDefault();
   if (isSmallScreen.value) {
     mobileSongMenuRef.value?.open(song, index, props.playlist);
   } else {
@@ -337,8 +339,7 @@ const listData = computed<SongInfo[]>(() => {
 
 // 虚拟列表项类型
 type VirtualListItem =
-  | { type: "song"; data: SongInfo; key: string }
-  | { type: "footer"; data: null; key: string };
+  { type: "song"; data: SongInfo; key: string } | { type: "footer"; data: null; key: string };
 
 // 虚拟列表数据（包含歌曲和 footer）
 const virtualListItems = computed<VirtualListItem[]>(() => {

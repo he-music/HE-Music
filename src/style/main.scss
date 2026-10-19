@@ -11,6 +11,14 @@
   }
 }
 
+// 仅在应用菜单入口禁用 iOS 图片预览和文本长按菜单。
+.touch-context-menu,
+.touch-context-menu * {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
 :root {
   // 图片模式
   &.image {

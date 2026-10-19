@@ -11,6 +11,7 @@
       >
         <n-gi v-for="item in listRankings" :key="`${item.platform}-${item.id}`">
           <n-card
+            v-touch-context-menu="item"
             class="ranking-row-card"
             @click="goDetail(item)"
             @contextmenu="coverMenuRef?.openDropdown($event, item, 'ranking')"
@@ -72,6 +73,7 @@
       >
         <n-gi v-for="item in gridRankings" :key="`${item.platform}-${item.id}`">
           <div
+            v-touch-context-menu="item"
             class="cover-item"
             @click="goDetail(item)"
             @contextmenu="coverMenuRef?.openDropdown($event, item, 'ranking')"

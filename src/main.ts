@@ -12,6 +12,7 @@ import GoCaptcha from "go-captcha-vue";
 import router from "@/router";
 // 自定义指令
 import { debounceDirective, throttleDirective, visibleDirective } from "@/utils/instruction";
+import { touchContextMenuDirective } from "@/utils/touchContextMenu";
 // ipc
 import initIpc from "@/utils/initIpc";
 import i18n from "@/i18n";
@@ -38,6 +39,7 @@ app.use(i18n);
 app.directive("debounce", debounceDirective);
 app.directive("throttle", throttleDirective);
 app.directive("visible", visibleDirective);
+app.directive("touch-context-menu", touchContextMenuDirective);
 // app
 app.mount("#app");
 

@@ -5,6 +5,7 @@
         <div
           v-for="(item, index) in data"
           :key="index"
+          v-touch-context-menu="item"
           class="cover-item"
           @click="goDetail(item)"
           @contextmenu="coverMenuRef?.openDropdown($event, item, 'album')"
