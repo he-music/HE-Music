@@ -422,13 +422,15 @@ onMounted(() => {
       display: flex;
       flex-direction: column;
       flex: 1;
+      min-width: 0;
       padding-right: 60px;
       :deep(.n-skeleton) {
         margin-bottom: 12px;
         border-radius: 8px;
         height: 32px;
       }
-      :deep(.n-ellipsis) {
+      :deep(.n-ellipsis),
+      .description {
         margin-bottom: 8px;
         cursor: pointer;
       }
@@ -443,6 +445,7 @@ onMounted(() => {
       .collapse {
         position: absolute;
         left: 0;
+        right: 60px;
         top: 60px;
         margin-bottom: 12px;
       }

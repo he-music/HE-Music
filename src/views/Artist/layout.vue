@@ -1,6 +1,11 @@
 <template>
   <div :key="artistId" :class="['artist', { small: listScrolling }]">
-    <AsyncContent :failed="detailFailed" :loading="detailLoading" @retry="retryDetail">
+    <AsyncContent
+      class="artist-header"
+      :failed="detailFailed"
+      :loading="detailLoading"
+      @retry="retryDetail"
+    >
       <Transition name="fade" mode="out-in">
         <div v-if="artistDetailData" class="detail">
           <div class="cover">
@@ -286,13 +291,16 @@ watch(
   display: flex;
   flex-direction: column;
   height: 100%;
+  .artist-header {
+    flex-shrink: 0;
+    z-index: 1;
+  }
   .detail {
     display: flex;
     height: 240px;
     width: 100%;
     padding: 12px 0 30px 0;
     will-change: height, opacity;
-    z-index: 1;
     transition:
       height 0.3s,
       opacity 0.3s;
@@ -347,6 +355,7 @@ watch(
       display: flex;
       flex-direction: column;
       flex: 1;
+      min-width: 0;
       padding-right: 60px;
       :deep(.n-skeleton) {
         height: 30px;
@@ -358,7 +367,7 @@ watch(
           height: 40px;
         }
       }
-      :deep(.n-ellipsis) {
+      .description {
         margin-bottom: 8px;
         padding-left: 4px;
         cursor: pointer;
@@ -389,6 +398,8 @@ watch(
       .collapse {
         position: absolute;
         top: 48px;
+        left: 0;
+        right: 60px;
         margin: 8px 0;
       }
       .meta {
