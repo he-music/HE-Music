@@ -4,6 +4,28 @@ const LONG_PRESS_DELAY = 450;
 const MOVE_TOLERANCE = 10;
 const GHOST_EVENT_DELAY = 800;
 
+interface TouchContextMenuGesture {
+  id: number;
+  source: HTMLElement;
+  ignoreUntil: number;
+}
+
+const menuGestures = new WeakMap<EventTarget, TouchContextMenuGesture>();
+
+/** 菜单的外部关闭入口应忽略打开它的长按收尾，包含兼容鼠标松手。 */
+export const shouldIgnoreTouchContextMenuOutside = (event: Event): boolean => {
+  const target = event.target as Node | null;
+  if (!target) return false;
+  const gesture = menuGestures.get(target.ownerDocument ?? target);
+  if (!gesture || Date.now() >= gesture.ignoreUntil) return false;
+  if (event.type === "touchend") {
+    return Array.from((event as TouchEvent).changedTouches).some(
+      (touch) => touch.identifier === gesture.id,
+    );
+  }
+  return event.type === "mouseup" && gesture.source.contains(target);
+};
+
 /** 为已有 contextmenu 入口补充触屏长按，不阻止正常点击和滚动。 */
 export const bindTouchContextMenu = (el: HTMLElement) => {
   const doc = el.ownerDocument;
@@ -14,12 +36,23 @@ export const bindTouchContextMenu = (el: HTMLElement) => {
   let ignoreNativeUntil = 0;
   let ignoreClickUntil = 0;
 
+  let menuGesture: TouchContextMenuGesture | undefined;
+  let menuGestureTimer: ReturnType<typeof setTimeout> | undefined;
+
+  const clearMenuGesture = () => {
+    if (menuGestureTimer !== undefined) clearTimeout(menuGestureTimer);
+    menuGestureTimer = undefined;
+    if (menuGestures.get(doc) === menuGesture) menuGestures.delete(doc);
+    menuGesture = undefined;
+    doc.removeEventListener("touchstart", clearMenuGesture, true);
+  };
+
   const cancelPending = () => {
     if (timer !== undefined) clearTimeout(timer);
     timer = undefined;
   };
 
-  const cancel = () => {
+  const cancelTouch = () => {
     cancelPending();
     touch = undefined;
     doc.removeEventListener("touchstart", onAdditionalTouch, true);
@@ -27,6 +60,11 @@ export const bindTouchContextMenu = (el: HTMLElement) => {
     doc.removeEventListener("touchend", onEnd, true);
     doc.removeEventListener("touchcancel", onCancel, true);
     doc.removeEventListener("scroll", onCancel, true);
+  };
+
+  const cancel = () => {
+    cancelTouch();
+    clearMenuGesture();
   };
 
   const onAdditionalTouch = (event: TouchEvent) => {
@@ -46,13 +84,25 @@ export const bindTouchContextMenu = (el: HTMLElement) => {
   };
 
   const onEnd = (event: Event) => {
+    const touchId = touch?.id;
+    if (
+      event.type === "touchend" &&
+      touchId !== undefined &&
+      !Array.from((event as TouchEvent).changedTouches).some((item) => item.identifier === touchId)
+    ) {
+      return;
+    }
     ignoreNativeUntil = Date.now() + GHOST_EVENT_DELAY;
     if (longPressed) {
       // 阻止长按松手后合成的 click，避免播放、跳转或触发卡片内按钮。
       if (event.cancelable) event.preventDefault();
       ignoreClickUntil = Date.now() + GHOST_EVENT_DELAY;
+      if (menuGesture) {
+        menuGesture.ignoreUntil = ignoreClickUntil;
+        menuGestureTimer = setTimeout(clearMenuGesture, GHOST_EVENT_DELAY);
+      }
     }
-    cancel();
+    cancelTouch();
   };
 
   const onCancel = (event: Event) => {
@@ -79,6 +129,10 @@ export const bindTouchContextMenu = (el: HTMLElement) => {
       timer = undefined;
       if (!touch) return;
       longPressed = true;
+      // clickoutside 在 window 捕获阶段执行，必须在派发菜单前记录所属手势。
+      menuGesture = { id: touch.id, source: el, ignoreUntil: Infinity };
+      menuGestures.set(doc, menuGesture);
+      doc.addEventListener("touchstart", clearMenuGesture, { passive: true, capture: true });
       ignoreClickUntil = Date.now() + GHOST_EVENT_DELAY;
       dispatching = true;
       try {

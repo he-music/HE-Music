@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { bindTouchContextMenu } from "./touchContextMenu";
+import { bindTouchContextMenu, shouldIgnoreTouchContextMenuOutside } from "./touchContextMenu";
 
 class TestMouseEvent extends Event {
   readonly clientX: number;
@@ -18,9 +18,10 @@ const point = (clientX = 40, clientY = 80, identifier = 1) => ({
   identifier,
 });
 
-const touchEvent = (type: string, touches = [point()]) => {
+const touchEvent = (type: string, touches = [point()], changedTouches = [point()]) => {
   const event = new Event(type, { cancelable: true });
   Object.defineProperty(event, "touches", { value: touches });
+  Object.defineProperty(event, "changedTouches", { value: changedTouches });
   return event;
 };
 
@@ -30,6 +31,7 @@ const setup = () => {
   const el = Object.assign(new EventTarget(), {
     ownerDocument: doc,
     classList: { add: vi.fn(), remove: vi.fn() },
+    contains: (target: EventTarget | null) => target === el,
   }) as unknown as HTMLElement;
   const binding = bindTouchContextMenu(el);
   const open = vi.fn();
@@ -97,6 +99,73 @@ describe("触屏长按菜单", () => {
     doc.dispatchEvent(touchEvent("touchend", []));
     el.dispatchEvent(new MouseEvent("click"));
     expect(click).toHaveBeenCalledOnce();
+  });
+
+  it("菜单先于 document 捕获监听处理松手时，忽略开启菜单的 touchend", () => {
+    const { el, doc, open } = setup();
+    const outside = vi.fn();
+    doc.addEventListener("touchend", (event) => {
+      if (!shouldIgnoreTouchContextMenuOutside(event)) outside();
+    });
+    el.dispatchEvent(touchEvent("touchstart"));
+    vi.advanceTimersByTime(1500);
+    doc.dispatchEvent(touchEvent("touchend", []));
+    expect(open).toHaveBeenCalledOnce();
+    expect(outside).not.toHaveBeenCalled();
+
+    // 下一次触摸发生在卡片外，仍能立即关闭菜单。
+    doc.dispatchEvent(touchEvent("touchstart"));
+    doc.dispatchEvent(touchEvent("touchend", []));
+    expect(outside).toHaveBeenCalledOnce();
+  });
+
+  it("忽略长按后的兼容鼠标松手，下一次主动触摸不受保护时间影响", () => {
+    const { el, doc } = setup();
+    const ignored: boolean[] = [];
+    el.addEventListener("mouseup", (event) => {
+      ignored.push(shouldIgnoreTouchContextMenuOutside(event));
+    });
+    el.dispatchEvent(touchEvent("touchstart"));
+    vi.advanceTimersByTime(450);
+    doc.dispatchEvent(touchEvent("touchend", []));
+    el.dispatchEvent(new MouseEvent("mouseup"));
+    doc.dispatchEvent(touchEvent("touchstart"));
+    el.dispatchEvent(new MouseEvent("mouseup"));
+    expect(ignored).toEqual([true, false]);
+  });
+
+  it("不忽略其他手指的松手，并在保护时间结束后恢复鼠标事件", () => {
+    const { el, doc } = setup();
+    const ignored: boolean[] = [];
+    doc.addEventListener("touchend", (event) => {
+      ignored.push(shouldIgnoreTouchContextMenuOutside(event));
+    });
+    el.addEventListener("mouseup", (event) => {
+      ignored.push(shouldIgnoreTouchContextMenuOutside(event));
+    });
+    el.dispatchEvent(touchEvent("touchstart"));
+    vi.advanceTimersByTime(450);
+    doc.dispatchEvent(touchEvent("touchend", [point()], [point(100, 100, 2)]));
+    doc.dispatchEvent(touchEvent("touchend", []));
+    el.dispatchEvent(new MouseEvent("mouseup"));
+    vi.advanceTimersByTime(800);
+    el.dispatchEvent(new MouseEvent("mouseup"));
+    expect(ignored).toEqual([false, true, true, false]);
+  });
+
+  it.each(["cancel", "dispose"] as const)("%s 时清理已开启长按的外部事件保护", (method) => {
+    const { el, doc, binding } = setup();
+    el.dispatchEvent(touchEvent("touchstart"));
+    vi.advanceTimersByTime(450);
+    doc.dispatchEvent(touchEvent("touchend", []));
+    binding[method]();
+    expect(vi.getTimerCount()).toBe(0);
+    const outside = vi.fn();
+    doc.addEventListener("touchend", (event) => {
+      if (!shouldIgnoreTouchContextMenuOutside(event)) outside();
+    });
+    doc.dispatchEvent(touchEvent("touchend", []));
+    expect(outside).toHaveBeenCalledOnce();
   });
 
   it("长按打开菜单后发生滚动，延迟松手仍不会误点击", () => {

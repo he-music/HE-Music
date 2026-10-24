@@ -10,7 +10,7 @@
     trigger="manual"
     size="large"
     @select="dropdownShow = false"
-    @clickoutside="dropdownShow = false"
+    @clickoutside="!shouldIgnoreTouchContextMenuOutside($event) && (dropdownShow = false)"
   />
 </template>
 
@@ -22,6 +22,7 @@ import { useSongMenu } from "@/composables/useSongMenu";
 import SImage from "@/components/UI/s-image.vue";
 import songManager from "@/utils/songManager";
 import { getSizeCover } from "@/utils/format";
+import { shouldIgnoreTouchContextMenuOutside } from "@/utils/touchContextMenu";
 const { t } = useI18n();
 
 const emit = defineEmits<{ removeSong: [index: SongInfo[]] }>();

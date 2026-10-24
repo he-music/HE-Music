@@ -8,7 +8,7 @@
     placement="bottom-start"
     trigger="manual"
     @select="dropdownShow = false"
-    @clickoutside="dropdownShow = false"
+    @clickoutside="!shouldIgnoreTouchContextMenuOutside($event) && (dropdownShow = false)"
   />
 </template>
 
@@ -18,6 +18,7 @@ import { copyData, renderIcon } from "@/utils/helper";
 import { useMusicStore, useStatusStore } from "@/stores";
 import type { CoverType } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
+import { shouldIgnoreTouchContextMenuOutside } from "@/utils/touchContextMenu";
 const { t } = useI18n();
 
 const emit = defineEmits<{
