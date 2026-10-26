@@ -98,10 +98,6 @@ jobs:
       # - name: Install Snapcraft
       #   if: runner.os == 'Linux'
       #   uses: samuelmeuli/action-snapcraft@v2
-      # 尝试修复权限问题
-      - name: Fix Permission
-        if: runner.os == 'Linux'
-        run: chmod +x ./node_modules/app-builder-bin/linux/x64/app-builder
       # 构建 Electron App
       - name: Build Windows x64 & ARM64 App
         if: runner.os == 'Windows'
