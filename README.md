@@ -75,6 +75,28 @@
 - Linux 默认使用 X11 后端；在 Wayland 会话中需要安装并启用 XWayland，以支持桌面歌词的全局坐标、置顶和非激活显示。
 - 启动时显式指定 `--ozone-platform=wayland` 或其他后端会保留该选择；原生 Wayland 下上述桌面歌词能力受 Electron/窗口管理器限制。
 
+## mygo 桌面迁移候选
+
+迁移分支使用固定 mygo / mygo-runtime 和 Go 1.27.3，保留独立 Web 构建。普通 mygo 包不携带 Node/Electron，也不启动旧网易或解灰 Node 服务；Node 24 仅用于前端开发与构建工具。现有 `pnpm dev` 仍是旧 Electron 命令，mygo 使用 `pnpm run dev:desktop`，普通 macOS 候选位于 `build/mygo/darwin-arm64/HE-Music.app`。完整迁移状态见[迁移计划](docs/plans/mygo-migration.md)。
+
+- 系统媒体复用 `smtcOpen`（默认开启），可反复关闭/开启。原生 provider 接管时避免页面 Web MediaSession 重复发布；Web/Electron 保留既有 navigator 能力及兼容保护。
+- 在线歌曲支持播放、暂停、上一首、下一首和跳转（包括 0），事件校验当前壳代际、曲目与版本；无歌和本地歌曲不接受原生播放命令。发布实际倍速与必要的播放/暂停、曲目、跳转状态，系统自行推进位置，不按进度/歌词时钟持续 IPC。
+- 防休眠复用 `preventSleep`（默认关闭），mygo 仅有实际 provider 时显示开关。用户显式开启且长期壳 Ready 时持有 display lease；关闭、退出或 context 撤销后释放，与播放状态和系统媒体开关独立。
+- mygo 原生系统媒体 Artwork 已接入受限 PNG/JPEG 加载，复用当前在线歌曲封面；异步取消和曲目/版本校验避免迟到封面覆盖新歌，缺图或 CORS 失败仅清封面、不阻断播放，Web/Electron 保留原行为。真实跨 origin 图片、普通打包 origin、真实账号/可闻音乐、OS 封面/媒体按键/面板及显示器阻睡眠效果仍需人工验收；Windows 构建和运行全部延后，见[统一实测清单](docs/plans/mygo-windows-checklist.md)。
+- mygo 设置 JSON 导入/导出已接入临时文件会话，只处理播放器设置与快捷键，并验证字段、取消、迟到结果及存储失败；页面所有权 P1 已修复并通过真实 SFC 回归。普通 Web/macOS 构建已通过，但三轮 WK 文件探针均停在初始弹层准备，尚无原生导入/导出端到端通过证据。目录授权仅当前会话有效，本地音乐、下载和持久授权未因此开放，详见迁移计划。
+
+以下为历史 macOS 合成探针命令（Node 24.22.1、Go 1.27.3，PATH 按本机安装调整）。`PathUserData` 只隔离 Go 应用目录，不能证明独立 WK 存储；新的 WK 场景应先采用并核对私有数据存储配置，见[原生探针说明](desktop/README.md)。
+
+```sh
+task_probe_output="$(mktemp -d /tmp/hemusic-system-media-probe.XXXXXX)"
+PATH=/Users/wangjian/.govm/go/bin:$PATH \
+  GOFLAGS='-tags=nativeprobe,mediaprobe' \
+  HE_MUSIC_NATIVE_PROBE=1 HE_MUSIC_NATIVE_PROBE_OUTPUT="$task_probe_output" \
+  mise exec node@24.22.1 -- pnpm run dev:desktop
+```
+
+探针使用随机 loopback origin 和临时应用数据目录（不等于独立 WK profile），先禁用媒体、防休眠与全局快捷键，再显式开启合成 fixture；自产 PNG 通过实际 typed session/API 附图，检查 NowPlaying 模块图像字节/hash、Rate 新版本保留和关闭后不再 showing，退出前 Clear/off/release 并清理临时资源。运行期间不要写源码、生成绑定、格式化或构建，防止 Vite reload 污染证据。`result.json` 的模块快照、API 计数、程序定向 callback 和合成 Player 入口仅证明调用/生命周期，不证明 OS 封面显示、真实系统按键或屏幕休眠效果；不得用它控制其他应用。
+
 ## ⚙️ 本地部署
 
 1. 本地部署需要用到 `Node.js`。可前往 [Node.js 官网](https://nodejs.org/zh-cn/) 下载安装包，请安装 Node.js 24 LTS，最低为 24.12.0（版本见 `.nvmrc`，使用 nvm 时可执行 `nvm install && nvm use`）

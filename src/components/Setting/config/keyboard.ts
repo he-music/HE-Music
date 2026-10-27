@@ -4,22 +4,12 @@ import ShortcutRecorder from "../components/ShortcutRecorder.vue";
 import { snakeCase } from "lodash-es";
 import { t } from "@/i18n";
 import { SettingConfig, SettingItem } from "@/types/settings";
-import { isElectron } from "@/utils/env";
+import { platform } from "@/platform";
 
 export const useKeyboardSettings = (): SettingConfig => {
   const shortcutStore = useShortcutStore();
 
-  const updateGlobalOpen = async (val: boolean) => {
-    if (val) {
-      await shortcutStore.registerAllShortcuts();
-    } else {
-      window.electron.ipcRenderer.send("unregister-all-shortcut");
-      // 清除状态
-      for (const key in shortcutStore.shortcutList) {
-        shortcutStore.shortcutList[key as keyof typeof shortcutStore.shortcutList].isRegistered =
-          false;
-      }
-    }
+  const updateGlobalOpen = (val: boolean) => {
     shortcutStore.globalOpen = val;
   };
 
@@ -37,18 +27,19 @@ export const useKeyboardSettings = (): SettingConfig => {
 
   // 页面快捷键的 Key
   const pageShortcutKeys = Object.keys(shortcutStore.shortcutList).filter(
-    (shortcut) => !isElectron || shortcutStore.shortcutList[shortcut].isPageShortcut,
+    (shortcut) =>
+      !platform.shortcuts || !platform.shortcuts.actions.some((action) => action === shortcut),
   );
   // 全局快捷键的 Key
-  const globalShortcutKeys = Object.keys(shortcutStore.shortcutList).filter(
-    (shortcut) => isElectron && !shortcutStore.shortcutList[shortcut].isPageShortcut,
+  const globalShortcutKeys = Object.keys(shortcutStore.shortcutList).filter((shortcut) =>
+    platform.shortcuts?.actions.some((action) => action === shortcut),
   );
 
   return {
     groups: [
       {
         title: t("setting.shortcut.global_shortcut"),
-        show: isElectron,
+        show: Boolean(platform.shortcuts),
         items: [
           {
             key: "globalOpen",
@@ -63,7 +54,7 @@ export const useKeyboardSettings = (): SettingConfig => {
         ],
       },
       {
-        show: isElectron,
+        show: Boolean(platform.shortcuts),
         title: t("setting.shortcut.global_shortcut"),
         items: createShortcutItems(globalShortcutKeys, true),
       },

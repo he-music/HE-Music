@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
     openUserLogin: vi.fn(),
     messageError: vi.fn(),
     refreshTokenApi: vi.fn(),
+    openCaptcha: vi.fn(),
     dataStore: {
       userLoginStatus: true,
       token: "access-token",
@@ -41,7 +42,7 @@ vi.mock("@/stores", () => ({
 }));
 vi.mock("@/utils/auth", () => ({ isLogin: () => true }));
 vi.mock("@/utils/modal", () => ({
-  openCaptcha: vi.fn(),
+  openCaptcha: mocks.openCaptcha,
   openUserLogin: mocks.openUserLogin,
 }));
 vi.mock("@/api/auth", () => ({ refreshTokenApi: mocks.refreshTokenApi }));
@@ -136,5 +137,76 @@ describe("HE Music Token 刷新", () => {
 
     expect(mocks.clearUserData).not.toHaveBeenCalled();
     expect(mocks.openUserLogin).not.toHaveBeenCalled();
+  });
+
+  it("并发 401 只刷新一次，并分别携带新令牌重试原请求", async () => {
+    const first = createHttpError(401, undefined, "/v1/page/one");
+    const second = createHttpError(401, undefined, "/v1/page/two");
+    const firstResponse = { data: { id: "one" } };
+    const secondResponse = { data: { id: "two" } };
+    let resolveRefresh!: (result: {
+      access_token: string;
+      refresh_token: string;
+      expires_at: number;
+    }) => void;
+    mocks.refreshTokenApi.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRefresh = resolve;
+      }),
+    );
+    mocks.hemusicServer.request.mockImplementation(async (config) =>
+      config === first.config ? firstResponse : secondResponse,
+    );
+    const firstRun = handleResponseError(first);
+    const secondRun = handleResponseError(second);
+    await vi.waitFor(() => expect(mocks.refreshTokenApi).toHaveBeenCalledOnce());
+    resolveRefresh({
+      access_token: "renewed-access",
+      refresh_token: "renewed-refresh",
+      expires_at: 2_000_000_000,
+    });
+    expect(await Promise.all([firstRun, secondRun])).toEqual([firstResponse, secondResponse]);
+    expect(mocks.refreshTokenApi).toHaveBeenCalledOnce();
+    expect(mocks.hemusicServer.request).toHaveBeenCalledTimes(2);
+    expect(mocks.hemusicServer.request).toHaveBeenCalledWith(first.config);
+    expect(mocks.hemusicServer.request).toHaveBeenCalledWith(second.config);
+    for (const error of [first, second]) {
+      expect(error.config.headers.set).toHaveBeenCalledExactlyOnceWith(
+        "Authorization",
+        "Bearer renewed-access",
+      );
+    }
+    expect(mocks.clearUserData).not.toHaveBeenCalled();
+    expect(mocks.openUserLogin).not.toHaveBeenCalled();
+    expect(mocks.openCaptcha).not.toHaveBeenCalled();
+  });
+
+  it("密码验证码重试保留登录字段，只取得一次票据且不重复请求", async () => {
+    const base = createHttpError(403, "CAPTCHA_REQUIRED", "/v1/user/login");
+    const credentials = { username: "synthetic-user", password: "synthetic-password" };
+    const error = {
+      ...base,
+      config: { ...base.config, data: JSON.stringify(credentials) },
+      response: {
+        ...base.response,
+        data: {
+          reason: "CAPTCHA_REQUIRED",
+          metadata: { scene: "1", meta: "synthetic-captcha-meta" },
+        },
+      },
+    };
+    const response = { data: { access_token: "synthetic-access" } };
+    mocks.openCaptcha.mockResolvedValueOnce("synthetic-ticket");
+    mocks.hemusicServer.request.mockResolvedValueOnce(response);
+    expect(await handleResponseError(error)).toBe(response);
+    expect(mocks.openCaptcha).toHaveBeenCalledExactlyOnceWith(1, "synthetic-captcha-meta");
+    expect(mocks.hemusicServer.request).toHaveBeenCalledExactlyOnceWith(error.config);
+    expect(error.config.data).toEqual({ ...credentials, captcha_ticket: "synthetic-ticket" });
+    expect(mocks.refreshTokenApi).not.toHaveBeenCalled();
+    expect(mocks.clearUserData).not.toHaveBeenCalled();
+    expect(mocks.openUserLogin).not.toHaveBeenCalled();
+    await expect(handleResponseError(error)).rejects.toBe(error);
+    expect(mocks.openCaptcha).toHaveBeenCalledOnce();
+    expect(mocks.hemusicServer.request).toHaveBeenCalledOnce();
   });
 });

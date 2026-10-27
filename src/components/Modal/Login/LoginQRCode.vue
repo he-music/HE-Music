@@ -26,33 +26,19 @@
 
 <script setup lang="ts">
 import { createQrLoginSession, exchangeQrLoginResult, getQrLoginSessionStatus } from "@/api/auth";
-import { LoginType } from "@/types/main";
-import { isElectron, isLinux, isMac, isWin } from "@/utils/env";
+import type { LoginResult } from "@/utils/login";
+import { createQrLoginFlow, type QrLoginStatus, type QrLoginView } from "@/utils/qrLogin";
+import { platform } from "@/platform";
 import { useI18n } from "vue-i18n";
 import { getDeviceInfo } from "@/utils/device";
 import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
 
 const { t } = useI18n();
-
-const props = defineProps<{
-  pause?: boolean;
-}>();
-
-const emit = defineEmits<{
-  saveLogin: [any, LoginType];
-}>();
-
-type QrLoginStatus =
-  | "idle"
-  | "creating"
-  | "pending"
-  | "scanned"
-  | "confirmed"
-  | "success"
-  | "expired"
-  | "cancelled"
-  | "failure";
-
+const props = defineProps<{ pause?: boolean }>();
+const emit = defineEmits<{ saveLogin: [LoginResult] }>();
+const view = shallowRef<QrLoginView>({ content: "", status: "idle" });
+const qrContent = computed(() => view.value.content);
+const qrStatus = computed(() => view.value.status);
 const qrCodeTip: Record<QrLoginStatus, string> = {
   idle: "modal.qr_login_idle",
   creating: "modal.qr_login_creating",
@@ -64,219 +50,43 @@ const qrCodeTip: Record<QrLoginStatus, string> = {
   cancelled: "modal.qr_login_cancelled",
   failure: "modal.qr_login_failure",
 };
-
-const defaultCheckIntervalMs = 2000;
-const qrContent = ref("");
-const sessionId = ref("");
-const resultToken = ref("");
-const expireAt = ref(0);
-const userHint = ref("");
-const checkIntervalMs = ref(defaultCheckIntervalMs);
-const qrStatus = ref<QrLoginStatus>("idle");
-const isExchanging = ref(false);
-
-let pollTimer: ReturnType<typeof setTimeout> | null = null;
-
-const normalizeQrStatus = (
-  status: string | undefined,
-  fallback: QrLoginStatus = "failure",
-): QrLoginStatus => {
-  switch (status) {
-    case "pending":
-    case "scanned":
-    case "confirmed":
-    case "success":
-    case "expired":
-    case "cancelled":
-      return status;
-    default:
-      return fallback;
-  }
-};
-
-const clearPollTimer = () => {
-  if (!pollTimer) return;
-  clearTimeout(pollTimer);
-  pollTimer = null;
-};
-
-const scheduleNextPoll = () => {
-  clearPollTimer();
-  if (props.pause || !sessionId.value) return;
-  pollTimer = setTimeout(() => {
-    void fetchQrStatus();
-  }, checkIntervalMs.value);
-};
-
-// 提示文本
-const qrTipText = computed(() => {
-  const tip = qrCodeTip[qrStatus.value];
-  if (tip) return t(tip);
-  return userHint.value;
-});
-
+const qrTipText = computed(() => t(qrCodeTip[qrStatus.value]));
 const qrClientName = () => {
-  if (!isElectron) return "HE Music Web";
-  if (isMac) return "HE Music MacOS";
-  if (isWin) return "HE Music Windows";
-  if (isLinux) return "HE Music Linux";
+  if (platform.kind === "web") return "HE Music Web";
+  if (platform.os === "darwin") return "HE Music MacOS";
+  if (platform.os === "win32") return "HE Music Windows";
+  if (platform.os === "linux") return "HE Music Linux";
   return "HE Music Desktop";
 };
-
-const refreshQrSession = async () => {
-  if (props.pause) return;
-  try {
-    clearPollTimer();
-    qrStatus.value = "creating";
-    userHint.value = "";
-    const result = await createQrLoginSession({
+const flow = createQrLoginFlow({
+  async create() {
+    // 后端兼容字段：未确认后端支持 mygo 的 client_type 枚举。
+    return createQrLoginSession({
       client_type: "electron_vue",
       client_name: qrClientName(),
       scene: "desktop_login",
       device_info: await getDeviceInfo(),
     });
-
-    sessionId.value = result.session_id;
-    resultToken.value = result.result_token;
-    qrContent.value = result.qr_content;
-    expireAt.value = result.expires_at;
-    checkIntervalMs.value = Math.max(result.check_interval || 2, 1) * 1000;
-    qrStatus.value = normalizeQrStatus(result.status, "pending");
-
-    if (qrStatus.value === "confirmed") {
-      await exchangeQrResult();
-      return;
-    }
-
-    if (qrStatus.value === "pending" || qrStatus.value === "scanned") {
-      scheduleNextPoll();
-    }
-  } catch (error) {
-    clearPollTimer();
-    qrStatus.value = "failure";
-    userHint.value = "";
-    console.error("二维码获取失败：", error);
-    window.$message.error(t("modal.qr_login_create_failed"));
-  }
-};
-
-const exchangeQrResult = async () => {
-  if (!sessionId.value || !resultToken.value || isExchanging.value) return;
-
-  try {
-    clearPollTimer();
-    isExchanging.value = true;
-    qrStatus.value = "confirmed";
-
-    const result = await exchangeQrLoginResult({
-      session_id: sessionId.value,
-      result_token: resultToken.value,
-    });
-
-    qrStatus.value = normalizeQrStatus(result.status, "failure");
-    expireAt.value = result.expires_at;
-    userHint.value = "";
-
-    if (result.status === "success" && result.access_token) {
-      qrStatus.value = "success";
-      emit(
-        "saveLogin",
-        {
-          token: result.access_token,
-          refresh_token: result.refresh_token,
-          expires_at: result.expires_at,
-        },
-        "qr",
-      );
-      return;
-    }
-
-    if (qrStatus.value === "pending" || qrStatus.value === "scanned") {
-      scheduleNextPoll();
-      return;
-    }
-
-    if (qrStatus.value === "expired" || qrStatus.value === "cancelled") {
-      await refreshQrSession();
-      return;
-    }
-
-    qrStatus.value = "failure";
-    window.$message.error(t("modal.qr_login_exchange_failed"));
-  } catch (error) {
-    qrStatus.value = "failure";
-    console.error("二维码登录结果兑换失败：", error);
-    window.$message.error(t("modal.qr_login_exchange_failed"));
-  } finally {
-    isExchanging.value = false;
-  }
-};
-
-const fetchQrStatus = async () => {
-  if (!sessionId.value || props.pause) return;
-
-  try {
-    const result = await getQrLoginSessionStatus(sessionId.value);
-    qrStatus.value = normalizeQrStatus(result.status, "pending");
-    userHint.value = result.user_hint || "";
-    expireAt.value = result.expires_at;
-    checkIntervalMs.value = Math.max(result.check_interval || 2, 1) * 1000;
-
-    if (qrStatus.value === "confirmed") {
-      await exchangeQrResult();
-      return;
-    }
-
-    if (qrStatus.value === "pending" || qrStatus.value === "scanned") {
-      scheduleNextPoll();
-      return;
-    }
-
-    if (qrStatus.value === "expired" || qrStatus.value === "cancelled") {
-      await refreshQrSession();
-      return;
-    }
-  } catch (error) {
-    clearPollTimer();
-    qrStatus.value = "failure";
-    console.error("二维码状态检查失败：", error);
-    window.$message.error(t("modal.qr_login_status_failed"));
-  }
-};
-
+  },
+  status: getQrLoginSessionStatus,
+  exchange: (session_id, result_token) => exchangeQrLoginResult({ session_id, result_token }),
+  update: (next) => {
+    view.value = next;
+  },
+  accept: (result) => emit("saveLogin", result),
+  onError: (key) => window.$message.error(t(key)),
+});
 watch(
   () => props.pause,
   (pause) => {
-    if (pause) {
-      clearPollTimer();
-      return;
-    }
-
-    if (sessionId.value && (qrStatus.value === "pending" || qrStatus.value === "scanned")) {
-      scheduleNextPoll();
-      return;
-    }
-
-    if (
-      !sessionId.value ||
-      qrStatus.value === "idle" ||
-      qrStatus.value === "expired" ||
-      qrStatus.value === "cancelled" ||
-      qrStatus.value === "failure"
-    ) {
-      void refreshQrSession();
-    }
+    if (pause) flow.stop();
+    else void flow.start();
   },
-  { immediate: false },
 );
-
 onMounted(() => {
-  void refreshQrSession();
+  if (!props.pause) void flow.start();
 });
-
-onBeforeUnmount(() => {
-  clearPollTimer();
-});
+onBeforeUnmount(flow.stop);
 </script>
 
 <style lang="scss" scoped>

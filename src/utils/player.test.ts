@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
     seek: vi.fn(),
     getErrorCode: vi.fn(),
     currentTime: 0,
+    src: "",
+    paused: true,
   },
   status: { playLoading: false, playStatus: false, playVolume: 1, playRate: 1 },
   song: { id: "a", platform: "test", name: "A" },
@@ -31,10 +33,11 @@ vi.mock("./songManager", () => ({
   default: {
     getPlaySongData: () => mocks.song,
     getCoverColor: mocks.cover,
+    getOnlineUrl: vi.fn().mockResolvedValue("https://audio.example/next.mp3"),
   },
 }));
 vi.mock("./lyricManager", () => ({ default: { handleLyric: mocks.lyrics } }));
-vi.mock("./env", () => ({ isElectron: false }));
+vi.mock("./env", () => ({ isElectron: false, hasNativeSystemMedia: false }));
 vi.mock("./helper", () => ({ shuffleArray: vi.fn() }));
 vi.mock("./time", () => ({ calculateProgress: vi.fn(), msToS: vi.fn() }));
 vi.mock("./blob", () => ({ default: {} }));
@@ -50,6 +53,10 @@ beforeEach(async () => {
   vi.clearAllMocks();
   mocks.callbacks.clear();
   mocks.audio.currentTime = 0;
+  mocks.audio.src = "";
+  mocks.audio.paused = true;
+  mocks.status.playLoading = false;
+  mocks.status.playStatus = false;
   mocks.audio.play.mockReset().mockResolvedValue(undefined);
   mocks.audio.getErrorCode.mockReturnValue(4);
   mocks.audio.on.mockImplementation((name, callback) => mocks.callbacks.set(name, callback));
@@ -174,5 +181,54 @@ describe("HTTP playback recovery", () => {
     await pending;
     expect(mocks.lyrics).not.toHaveBeenCalled();
     expect(mocks.audio.seek).not.toHaveBeenCalled();
+  });
+});
+
+describe("unsupported desktop startup capabilities", () => {
+  it("ignores desktop lyric actions without an Electron bridge", () => {
+    expect(() => player.toggleDesktopLyric()).not.toThrow();
+    expect(() => player.setDesktopLyricShow(true)).not.toThrow();
+    expect(mocks.status).not.toHaveProperty("showDesktopLyric");
+  });
+
+  it("does not open a persisted local song without desktop support", async () => {
+    const originalSong = { ...mocks.song };
+    Object.assign(mocks.song, { path: "/music/old.mp3" });
+    try {
+      const create = vi.spyOn(player, "createPlayer");
+      mocks.status.playLoading = true;
+      mocks.status.playStatus = true;
+      await player.initPlayer();
+      expect(create).not.toHaveBeenCalled();
+      expect(mocks.status.playLoading).toBe(false);
+      expect(mocks.status.playStatus).toBe(false);
+    } finally {
+      Reflect.deleteProperty(mocks.song, "path");
+      Object.assign(mocks.song, originalSong);
+    }
+  });
+
+  it("does not resume stale online audio after selecting an unsupported local song", async () => {
+    const originalSong = { ...mocks.song };
+    mocks.audio.src = "https://audio.example/previous.mp3";
+    Object.assign(mocks.song, { path: "/music/old.mp3" });
+    try {
+      await player.initPlayer();
+      await player.playOrPause();
+      expect(mocks.audio.play).not.toHaveBeenCalled();
+      expect(mocks.status.playStatus).toBe(false);
+
+      Reflect.deleteProperty(mocks.song, "path");
+      Object.assign(mocks.song, originalSong);
+      vi.spyOn(player, "selectPlayQuality").mockReturnValue({ name: "standard" });
+      await player.initPlayer();
+      expect(mocks.audio.play).toHaveBeenLastCalledWith("https://audio.example/next.mp3", {
+        fadeIn: false,
+        autoPlay: true,
+      });
+    } finally {
+      Reflect.deleteProperty(mocks.song, "path");
+      Object.assign(mocks.song, originalSong);
+    }
   });
 });

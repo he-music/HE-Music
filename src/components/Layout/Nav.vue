@@ -58,7 +58,11 @@
       </n-flex>
     </n-flex>
     <!-- 客户端控制 -->
-    <n-flex v-if="isElectron && !isMac && !isSmallScreen" align="center" class="client-control">
+    <n-flex
+      v-if="isElectron && platform.capabilities.windowControls && !isMac && !isSmallScreen"
+      align="center"
+      class="client-control"
+    >
       <n-divider class="divider" vertical />
       <n-button :focusable="false" :title="t('nav.minimize')" tertiary circle @click="min">
         <template #icon>
@@ -107,7 +111,13 @@
             </template>
             {{ t("common.close") }}
           </n-button>
-          <n-button type="primary" strong secondary @click="hideOrClose('hide')">
+          <n-button
+            v-if="platform.capabilities.tray"
+            type="primary"
+            strong
+            secondary
+            @click="hideOrClose('hide')"
+          >
             <template #icon>
               <SvgIcon name="WindowHide" />
             </template>
@@ -124,6 +134,7 @@ import type { DropdownOption } from "naive-ui";
 import { useSettingStore } from "@/stores";
 import { openLink, renderIcon } from "@/utils/helper";
 import { isDev, isElectron, isMac } from "@/utils/env";
+import { platform } from "@/platform";
 import { openParseSourceUrl, openSetting, openThemeConfig } from "@/utils/modal";
 import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
 import { useI18n } from "vue-i18n";
@@ -131,6 +142,7 @@ import { ref, onMounted, onUnmounted } from "vue";
 import { useMobile } from "@/composables/useMobile";
 import Menu from "@/components/Layout/Menu.vue";
 import Logo from "@/components/Layout/Logo.vue";
+import { useDesktopLifecycle } from "@/composables/useDesktopLifecycle";
 
 const { t } = useI18n();
 
@@ -141,6 +153,7 @@ const { isDesktop, isSmallScreen } = useMobile();
 const showCloseModal = ref(false);
 // 是否记住
 const rememberNotAsk = ref(false);
+const desktopLifecycle = useDesktopLifecycle({ showCloseModal, rememberNotAsk });
 // 是否启用无边框窗口
 const useBorderless = ref(true);
 // 当前窗口状态
@@ -148,19 +161,17 @@ const isMax = ref(false);
 // 是否显示侧边栏
 const showAside = ref(false);
 // 最小化
-const min = () => window.electron.ipcRenderer.send("win-min");
+const min = () => void platform.window?.minimize().catch(console.error);
 
 // 最大化或还原
-const maxOrRes = () => {
-  if (window.electron.ipcRenderer.sendSync("win-state")) {
-    window.electron.ipcRenderer.send("win-restore");
-  } else {
-    window.electron.ipcRenderer.send("win-max");
-  }
-};
+const maxOrRes = () => void platform.window?.toggleMaximize().catch(console.error);
 
 // 隐藏或关闭
 const hideOrClose = (action: "hide" | "exit") => {
+  if (platform.lifecycle) {
+    void desktopLifecycle.resolveClose(action);
+    return;
+  }
   if (rememberNotAsk.value) {
     settingStore.showCloseAppTip = false;
     settingStore.closeAppMethod = action;
@@ -172,6 +183,10 @@ const hideOrClose = (action: "hide" | "exit") => {
 
 // 尝试关闭软件
 const tryClose = () => {
+  if (!platform.capabilities.tray) {
+    void platform.window?.close().catch(console.error);
+    return;
+  }
   if (settingStore.showCloseAppTip) {
     showCloseModal.value = true;
   } else {
@@ -210,8 +225,8 @@ const setOptions = computed<DropdownOption[]>(() => [
     // 重启
     key: "restart",
     label: t("nav.software_hot_reload"),
-    show: isElectron,
-    props: { onClick: () => window.electron.ipcRenderer.send("win-reload") },
+    show: platform.capabilities.windowControls,
+    props: { onClick: () => void platform.window?.reload().catch(console.error) },
     icon: renderIcon("Restart"),
   },
   {
@@ -271,29 +286,35 @@ const setSelect = (key: string) => {
   }
 };
 
+let stopMaximized = () => {};
+let stopClose = () => {};
+let disposed = false;
+
 onMounted(async () => {
-  // 获取窗口状态并监听主进程的状态变更
-  if (isElectron) {
-    // 获取无边框窗口配置
-    const windowConfig = await window.api.store.get("window");
-    useBorderless.value = windowConfig?.useBorderless ?? true;
-    isMax.value = window.electron.ipcRenderer.sendSync("win-state");
-    window.electron.ipcRenderer.on("win-state-change", (_event, value: boolean) => {
+  if (platform.window) {
+    stopMaximized = platform.window.onMaximized((value) => {
       isMax.value = value;
     });
-    // Mac 下点击原生关闭按钮时，触发关闭确认逻辑
-    window.electron.ipcRenderer.on("win-close-triggered", () => {
-      tryClose();
-    });
+  }
+  if (isElectron) {
+    stopClose = window.electron.ipcRenderer.on("win-close-triggered", () => tryClose());
+  }
+  try {
+    const maximized = await platform.window?.isMaximized();
+    if (!disposed) isMax.value = maximized ?? false;
+    if (isElectron) {
+      const windowConfig = await window.api.store.get("window");
+      if (!disposed) useBorderless.value = windowConfig?.useBorderless ?? true;
+    }
+  } catch (error) {
+    console.error("获取窗口状态失败：", error);
   }
 });
 
 onUnmounted(() => {
-  // 清理事件监听器
-  if (isElectron) {
-    window.electron.ipcRenderer.removeAllListeners("win-state-change");
-    window.electron.ipcRenderer.removeAllListeners("win-close-triggered");
-  }
+  disposed = true;
+  stopMaximized();
+  stopClose();
 });
 </script>
 

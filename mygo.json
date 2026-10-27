@@ -1,0 +1,15 @@
+{
+  "name": "HE-Music",
+  "slug": "he-music",
+  "identifier": "top.hmusic.desktop",
+  "version": "1.0.4",
+  "publisher": "he-music",
+  "icon": "public/icons/favicon-1024x1024.png",
+  "main": "./desktop",
+  "out": "build/mygo",
+  "bindings": "src/platform/mygo.bindings.ts",
+  "devUrl": "http://127.0.0.1:14667",
+  "devCommand": "pnpm run dev:desktop:frontend",
+  "buildCommand": "pnpm run build:desktop:frontend",
+  "frontendDist": "dist/desktop"
+}

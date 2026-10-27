@@ -3,8 +3,10 @@ import { isElectron } from "@/utils/env";
 import { SettingConfig } from "@/types/settings";
 import { computed } from "vue";
 import { t } from "@/i18n";
+import { platform } from "@/platform";
+import type { GeneralSettingsActions } from "./generalActions";
 
-export const useGeneralSettings = (): SettingConfig => {
+export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConfig => {
   const dataStore = useDataStore();
   const settingStore = useSettingStore();
 
@@ -12,67 +14,6 @@ export const useGeneralSettings = (): SettingConfig => {
   const closeTaskbarProgress = (val: boolean) => {
     if (!isElectron) return;
     if (!val) window.electron.ipcRenderer.send("set-bar", "none");
-  };
-
-  // 导出设置
-  const exportSettings = async () => {
-    console.log("[Frontend] Export settings clicked");
-    try {
-      // 收集渲染进程数据 (localStorage)
-      const rendererData = {
-        "setting-store": localStorage.getItem("setting-store"),
-        "shortcut-store": localStorage.getItem("shortcut-store"),
-      };
-
-      const result = await window.api.store.export(rendererData);
-      console.log("[Frontend] Export result:", result);
-      if (result) {
-        window.$message.success(t("message.export_settings_success"));
-      } else {
-        window.$message.error(t("message.export_settings_fail"));
-      }
-    } catch (error) {
-      console.error("[Frontend] Export error:", error);
-      window.$message.error(t("message.export_settings_error"));
-    }
-  };
-
-  // 导入设置
-  const importSettings = async () => {
-    console.log("[Frontend] Import settings clicked");
-    window.$dialog.warning({
-      title: t("setting.other.import_settings"),
-      content: t("message.import_settings_confirm"),
-      positiveText: t("common.ok"),
-      negativeText: t("common.cancel"),
-      onPositiveClick: async () => {
-        console.log("[Frontend] Import confirmed");
-        try {
-          const data = await window.api.store.import();
-          console.log("[Frontend] Import data:", data);
-
-          if (data) {
-            // 恢复渲染进程数据
-            if (data.renderer) {
-              if (data.renderer["setting-store"])
-                localStorage.setItem("setting-store", data.renderer["setting-store"]);
-              if (data.renderer["shortcut-store"])
-                localStorage.setItem("shortcut-store", data.renderer["shortcut-store"]);
-            }
-
-            window.$message.success(t("message.export_settings_success"));
-            setTimeout(() => {
-              window.location.reload();
-            }, 1000);
-          } else {
-            window.$message.error(t("message.import_settings_fail"));
-          }
-        } catch (error) {
-          console.error("[Frontend] Import error:", error);
-          window.$message.error(t("message.import_settings_error"));
-        }
-      },
-    });
   };
 
   // 重置设置
@@ -118,14 +59,14 @@ export const useGeneralSettings = (): SettingConfig => {
     groups: [
       {
         title: t("setting.general.system_behavior"),
-        show: isElectron,
+        show: isElectron || platform.kind === "mygo",
         items: [
           {
             key: "closeAppMethod",
             label: t("setting.general.close_software"),
             type: "select",
             description: t("setting.general.close_software_tip"),
-            disabled: computed(() => settingStore.showCloseAppTip),
+            disabled: computed(() => settingStore.showCloseAppTip || !platform.capabilities.tray),
             options: [
               {
                 label: t("setting.general.close_software_value_hide"),
@@ -133,7 +74,7 @@ export const useGeneralSettings = (): SettingConfig => {
               },
               {
                 label: t("setting.general.close_software_value_close"),
-                value: "close",
+                value: "exit",
               },
             ],
             value: computed({
@@ -143,6 +84,7 @@ export const useGeneralSettings = (): SettingConfig => {
           },
           {
             key: "showCloseAppTip",
+            disabled: computed(() => !platform.capabilities.tray),
             label: t("setting.general.show_close_app_tip"),
             type: "switch",
             value: computed({
@@ -152,6 +94,7 @@ export const useGeneralSettings = (): SettingConfig => {
           },
           {
             key: "showTaskbarProgress",
+            show: isElectron,
             label: t("setting.general.show_taskbar_progress"),
             type: "switch",
             description: t("setting.general.show_taskbar_progress_tip"),
@@ -165,6 +108,7 @@ export const useGeneralSettings = (): SettingConfig => {
           },
           {
             key: "registryProtocols",
+            show: isElectron,
             label: t("setting.general.registry_protocols"),
             type: "select",
             options: [
@@ -190,6 +134,7 @@ export const useGeneralSettings = (): SettingConfig => {
           },
           {
             key: "checkUpdateOnStart",
+            show: isElectron,
             label: t("setting.general.check_update_on_start"),
             type: "switch",
             description: t("setting.general.check_update_on_start_tip"),
@@ -217,24 +162,26 @@ export const useGeneralSettings = (): SettingConfig => {
       {
         title: t("setting.other.backup_and_restore"),
         tags: [{ text: "Beta", type: "warning" }],
-        show: isElectron,
+        show: isElectron || Boolean(platform.files),
         items: [
           {
             key: "exportSettings",
+            disabled: actions.disabled,
             label: t("setting.other.export_settings"),
             type: "button",
             description: t("setting.other.export_settings_tip"),
             buttonLabel: t("setting.other.export_settings"),
-            action: exportSettings,
+            action: actions.exportSettings,
             componentProps: { type: "primary" },
           },
           {
             key: "importSettings",
+            disabled: actions.disabled,
             label: t("setting.other.import_settings"),
             type: "button",
             description: t("setting.other.import_settings_tip"),
             buttonLabel: t("setting.other.import_settings"),
-            action: importSettings,
+            action: actions.importSettings,
             componentProps: { type: "primary" },
           },
         ],

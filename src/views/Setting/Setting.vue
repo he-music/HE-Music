@@ -76,6 +76,7 @@ import { computed } from "vue";
 import { isElectron } from "@/utils/env";
 import { usePlaySettings } from "@/components/Setting/config/play";
 import { useGeneralSettings } from "@/components/Setting/config/general";
+import { useGeneralSettingsActions } from "@/components/Setting/config/generalActions";
 import { useAppearanceSettings } from "@/components/Setting/config/appearance";
 import { useLyricSettings } from "@/components/Setting/config/lyric";
 import { useKeyboardSettings } from "@/components/Setting/config/keyboard";
@@ -90,8 +91,9 @@ const activeKey = computed<SettingType>(
   () => (router.currentRoute.value.query.type as SettingType) || "general",
 );
 
+const generalActions = useGeneralSettingsActions();
 const playConfig = computed(() => usePlaySettings());
-const generalConfig = computed(() => useGeneralSettings());
+const generalConfig = computed(() => useGeneralSettings(generalActions));
 const appearanceConfig = computed(() => useAppearanceSettings());
 const lyricConfig = computed(() => useLyricSettings());
 const keyboardConfig = computed(() => useKeyboardSettings());

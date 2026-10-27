@@ -6,6 +6,7 @@ import SvgIcon from "@/components/Global/SvgIcon.vue";
 import { t } from "@/i18n";
 import { isElectron } from "@/utils/env";
 import { API_URL } from "@/utils/request";
+import { platform } from "@/platform";
 
 type AnyObject = { [key: string]: any };
 
@@ -14,7 +15,9 @@ let imageBlobURL: string = "";
 
 // 链接跳转
 export const openLink = (url: string, target: "_self" | "_blank" = "_blank") => {
-  window.open(url, target);
+  void platform.openExternal(url, target).catch((error: unknown) => {
+    console.error("打开外部链接失败：", error);
+  });
 };
 
 // 图标渲染

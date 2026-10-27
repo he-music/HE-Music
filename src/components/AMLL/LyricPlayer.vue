@@ -216,10 +216,13 @@ onUnmounted(() => {
   }
 });
 
+const documentVisibility = useDocumentVisibility();
 // 动画帧更新
 watchEffect((onCleanup) => {
-  if (!props.disabled) {
+  // 暂停时仍由 core 推进弹簧收尾，保留原有动画语义。
+  if (!props.disabled && documentVisibility.value === "visible") {
     let canceled = false;
+    let frame: number | undefined;
     let lastTime = -1;
     const onFrame = (time: number) => {
       if (canceled) return;
@@ -228,11 +231,12 @@ watchEffect((onCleanup) => {
       }
       playerRef.value?.update(time - lastTime);
       lastTime = time;
-      requestAnimationFrame(onFrame);
+      frame = requestAnimationFrame(onFrame);
     };
-    requestAnimationFrame(onFrame);
+    frame = requestAnimationFrame(onFrame);
     onCleanup(() => {
       canceled = true;
+      if (frame !== undefined) cancelAnimationFrame(frame);
     });
   }
 });

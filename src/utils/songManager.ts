@@ -76,7 +76,7 @@ class SongManager {
     link?: Link,
   ): Promise<string | null> => {
     const res = await songUrl(id, platform, link?.quality, link?.format);
-    console.log(`🌐 ${id} music data:`, res);
+    console.log("🌐 music URL resolved");
     const songData = res;
     // 是否有播放地址
     if (!songData || !songData?.url) return null;

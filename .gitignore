@@ -31,7 +31,16 @@ components.d.ts
 .env.development
 .env.production
 /deploy.sh
-/docs/
+/docs/*
+!/docs/plans/
+/docs/plans/*
+!/docs/plans/mygo-migration.md
+!/docs/plans/mygo-migration-log.md
+!/docs/plans/mygo-windows-checklist.md
 /.agents/
 /.claude/
 /.codex/
+
+# mygo 迁移构建产物
+/.mygo/
+/build/mygo/

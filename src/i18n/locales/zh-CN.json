@@ -353,7 +353,12 @@
     "download_success": "下载成功",
     "export_settings_error": "设置导出错误",
     "export_settings_fail": "设置导出失败",
-    "export_settings_success": "设置导入成功，即将重启",
+    "export_settings_success": "设置导出成功",
+    "import_settings_success": "设置导入成功，即将重新加载",
+    "settings_file_busy": "文件操作正在进行，请稍后重试",
+    "settings_file_failed": "设置文件操作失败，请重试",
+    "settings_restore_failed": "导入失败，部分旧设置未能恢复，请检查存储空间后重新加载",
+    "import_renderer_settings_confirm": "导入将替换播放器设置和快捷键并重新加载；不会恢复账户或原生文件授权，是否继续？",
     "found_local_music_count": "发现 {count} 首歌曲",
     "get_artist_detail_fail": "获取歌手详情失败",
     "get_comment_data_fail": "获取评论数据失败",
@@ -524,6 +529,8 @@
     "playlist_square": "歌单",
     "restore": "还原",
     "software_hot_reload": "软件热重载",
+    "show_main_window": "显示主窗口",
+    "quit_app": "退出应用",
     "un_login": "未登录"
   },
   "platform": {

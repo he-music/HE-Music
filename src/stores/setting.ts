@@ -5,7 +5,7 @@ import { FontStyleSelection } from "@/types/global";
 import type { KineticJumpGranularity } from "@/utils/lyric/kinetic";
 import { deserializeLyricSettings, type LyricRenderer } from "@/utils/lyric/renderer";
 
-interface SettingState {
+export interface SettingState {
   /** 明暗模式 */
   themeMode: "light" | "dark" | "auto";
   themeColorType: ThemeColorType;
@@ -116,112 +116,114 @@ interface SettingState {
   registryProtocols: string[];
 }
 
+export const createSettingState = (): SettingState => ({
+  // 个性化
+  themeMode: "auto", // 明暗模式
+  themeColorType: "default", // 主题类别
+  themeCustomColor: "#fe7971", // 主题自定义颜色
+  themeFollowCover: false, // 主题跟随歌曲封面
+  themeGlobalColor: false, // 全局着色
+  themeVariant: "secondary",
+  globalFont: "default", // 全局字体
+  lyricFont: "follow", // 歌词区域字体
+  japaneseLyricFont: "follow",
+  englishLyricFont: "follow",
+  koreanLyricFont: "follow",
+  hideVipTag: false, // 隐藏 VIP 标签
+  showSearchHistory: true, // 显示搜索历史
+  menuShowCover: true, // 菜单显示封面
+  routeAnimation: "slide", // 路由动画
+  playerExpandAnimation: "up", // 播放器展开动画
+  language: "zh-CN", // 语言
+  // 系统
+  useOnlineService: true, // 是否使用在线服务
+  showCloseAppTip: true, // 显示关闭应用提示
+  closeAppMethod: "hide", // 关闭方式
+  showTaskbarProgress: false, // 显示任务栏进度
+  checkUpdateOnStart: false, // 启动时检查更新
+  preventSleep: false, // 是否禁止休眠
+  fullPlayerCache: false, // 全屏播放器缓存
+  useKeepAlive: true, // 使用 keep-alive
+  // 播放
+  songLevel: "320mp3", // 音质
+  playDevice: "default", // 播放设备
+  autoPlay: false, // 自动播放
+  songVolumeFade: true, // 渐入渐出
+  songVolumeFadeTime: 300, // 渐入渐出时间
+  useSongUnlock: true, // 是否使用解灰
+  countDownShow: true, // 显示倒计时
+  barLyricShow: true, // 显示歌词条
+  autoHidePlayerMeta: true, // 播放器元素自动隐藏
+  playerType: "cover", // 播放器类型
+  playerBackgroundType: "blur", // 背景类型
+  playerBackgroundFps: 30,
+  playerBackgroundFlowSpeed: 4,
+  playerMainColorType: "follow-cover", // 播放器主题色类型
+  playerMainColorCustom: "#EFEFEF", // 播放器主题色
+  memoryLastSeek: true, // 记忆最后进度
+  showPlaylistCount: true, // 显示播放列表数量
+  showSpectrums: true, // 是否显示音乐频谱
+  smtcOpen: true, // 是否开启 SMTC
+  // 歌词
+  lyricFontSize: 46, // 歌词大小
+  lyricTranFontSize: 22, // 歌词翻译大小
+  lyricRomaFontSize: 18, // 歌词音译大小
+  lyricFontBold: true, // 歌词字体加粗
+  lyricRenderer: "default", // 歌词效果：普通、AMLL、Monet
+  useAMSpring: false, // 是否使用 AM 歌词弹簧效果
+  AMHidePassedLines: false /** 隐藏已播放歌词 */,
+  AMWordFadeWidth: 0.5 /** 文字动画的渐变宽度 */,
+  showYrc: true, // 显示逐字歌词
+  showYrcAnimation: true, // 显示逐字歌词动画
+  showYrcLongEffect: true,
+  showTran: true, // 显示歌词翻译
+  showRoma: true, // 显示歌词音译
+  lyricsPosition: "flex-start", // 歌词位置
+  lyricsScrollOffset: 0.25, // 歌词滚动偏移量
+  monetScrollOffset: 0.46, // Monet 当前句中心位置，独立于传统滚动歌词
+  showPartitaGuideLines: true, // 云阶是否显示标尺引导线
+  showPartitaUpcoming: true, // 云阶是否显示下一句预告
+  partitaStagger: 32, // 云阶阶梯错落幅度 (px)
+  classicWordRotation: true, // 流光是否启用逐字微旋转
+  classicBreathingFloat: 1.0, // 流光整行呼吸浮动强度倍率
+  classicWordSpacing: 0.7, // 流光单词间距排版倍率
+  kineticJumpGranularity: "auto", // 跃音落点：自动按语言分组，并合并过密跳跃
+  classicShowUpcoming: true, // 流光是否显示下一句预告
+  lyricsBlur: false, // 歌词模糊
+  lrcMousePause: false, // 鼠标悬停暂停
+  enableOnlineLyricsExclude: true, // 在线歌词排除
+  enableTTMLExclude: false, // 歌词排除 TTML
+  enableLocalLyricsExclude: false,
+  lyricsExcludeKeywords: keywords, // 歌词排除关键字
+  lyricsExcludeRegexes: regexes, // 歌词排除正则表达式
+  enableTTMLLyrics: true, // 启用 TTML 歌词
+  // 本地
+  localFilesPath: [],
+  showDefaultLocalPath: true, // 显示默认本地路径
+  localSeparators: ["/", "&"],
+  showLocalCover: true,
+  // 下载
+  downloadPath: "", // 默认下载路径
+  fileNameFormat: "title-artist",
+  folderStrategy: "none",
+  downloadMeta: true, // 同时下载元信息
+  downloadCover: true, // 同时下载封面
+  downloadLyric: true, // 同时下载歌词
+  downloadLyricTran: false, // 下载歌词翻译
+  downloadLyricRoma: false, // 下载歌词音译
+  saveMetaFile: false, // 保留为独立文件
+  // 网络
+  proxyProtocol: "off", // 代理协议
+  proxyServe: "127.0.0.1", // 代理地址
+  proxyPort: 80, // 代理端口
+  useRealIP: false, // 是否使用真实 IP
+  realIP: "116.25.146.177", // 真实IP地址
+  showPlayMeta: false,
+  registryProtocols: [],
+});
+
 export const useSettingStore = defineStore("setting", {
-  state: (): SettingState => ({
-    // 个性化
-    themeMode: "auto", // 明暗模式
-    themeColorType: "default", // 主题类别
-    themeCustomColor: "#fe7971", // 主题自定义颜色
-    themeFollowCover: false, // 主题跟随歌曲封面
-    themeGlobalColor: false, // 全局着色
-    themeVariant: "secondary",
-    globalFont: "default", // 全局字体
-    lyricFont: "follow", // 歌词区域字体
-    japaneseLyricFont: "follow",
-    englishLyricFont: "follow",
-    koreanLyricFont: "follow",
-    hideVipTag: false, // 隐藏 VIP 标签
-    showSearchHistory: true, // 显示搜索历史
-    menuShowCover: true, // 菜单显示封面
-    routeAnimation: "slide", // 路由动画
-    playerExpandAnimation: "up", // 播放器展开动画
-    language: "zh-CN", // 语言
-    // 系统
-    useOnlineService: true, // 是否使用在线服务
-    showCloseAppTip: true, // 显示关闭应用提示
-    closeAppMethod: "hide", // 关闭方式
-    showTaskbarProgress: false, // 显示任务栏进度
-    checkUpdateOnStart: false, // 启动时检查更新
-    preventSleep: false, // 是否禁止休眠
-    fullPlayerCache: false, // 全屏播放器缓存
-    useKeepAlive: true, // 使用 keep-alive
-    // 播放
-    songLevel: "320mp3", // 音质
-    playDevice: "default", // 播放设备
-    autoPlay: false, // 自动播放
-    songVolumeFade: true, // 渐入渐出
-    songVolumeFadeTime: 300, // 渐入渐出时间
-    useSongUnlock: true, // 是否使用解灰
-    countDownShow: true, // 显示倒计时
-    barLyricShow: true, // 显示歌词条
-    autoHidePlayerMeta: true, // 播放器元素自动隐藏
-    playerType: "cover", // 播放器类型
-    playerBackgroundType: "blur", // 背景类型
-    playerBackgroundFps: 30,
-    playerBackgroundFlowSpeed: 4,
-    playerMainColorType: "follow-cover", // 播放器主题色类型
-    playerMainColorCustom: "#EFEFEF", // 播放器主题色
-    memoryLastSeek: true, // 记忆最后进度
-    showPlaylistCount: true, // 显示播放列表数量
-    showSpectrums: true, // 是否显示音乐频谱
-    smtcOpen: true, // 是否开启 SMTC
-    // 歌词
-    lyricFontSize: 46, // 歌词大小
-    lyricTranFontSize: 22, // 歌词翻译大小
-    lyricRomaFontSize: 18, // 歌词音译大小
-    lyricFontBold: true, // 歌词字体加粗
-    lyricRenderer: "default", // 歌词效果：普通、AMLL、Monet
-    useAMSpring: false, // 是否使用 AM 歌词弹簧效果
-    AMHidePassedLines: false /** 隐藏已播放歌词 */,
-    AMWordFadeWidth: 0.5 /** 文字动画的渐变宽度 */,
-    showYrc: true, // 显示逐字歌词
-    showYrcAnimation: true, // 显示逐字歌词动画
-    showYrcLongEffect: true,
-    showTran: true, // 显示歌词翻译
-    showRoma: true, // 显示歌词音译
-    lyricsPosition: "flex-start", // 歌词位置
-    lyricsScrollOffset: 0.25, // 歌词滚动偏移量
-    monetScrollOffset: 0.46, // Monet 当前句中心位置，独立于传统滚动歌词
-    showPartitaGuideLines: true, // 云阶是否显示标尺引导线
-    showPartitaUpcoming: true, // 云阶是否显示下一句预告
-    partitaStagger: 32, // 云阶阶梯错落幅度 (px)
-    classicWordRotation: true, // 流光是否启用逐字微旋转
-    classicBreathingFloat: 1.0, // 流光整行呼吸浮动强度倍率
-    classicWordSpacing: 0.7, // 流光单词间距排版倍率
-    kineticJumpGranularity: "auto", // 跃音落点：自动按语言分组，并合并过密跳跃
-    classicShowUpcoming: true, // 流光是否显示下一句预告
-    lyricsBlur: false, // 歌词模糊
-    lrcMousePause: false, // 鼠标悬停暂停
-    enableOnlineLyricsExclude: true, // 在线歌词排除
-    enableTTMLExclude: false, // 歌词排除 TTML
-    enableLocalLyricsExclude: false,
-    lyricsExcludeKeywords: keywords, // 歌词排除关键字
-    lyricsExcludeRegexes: regexes, // 歌词排除正则表达式
-    enableTTMLLyrics: true, // 启用 TTML 歌词
-    // 本地
-    localFilesPath: [],
-    showDefaultLocalPath: true, // 显示默认本地路径
-    localSeparators: ["/", "&"],
-    showLocalCover: true,
-    // 下载
-    downloadPath: "", // 默认下载路径
-    fileNameFormat: "title-artist",
-    folderStrategy: "none",
-    downloadMeta: true, // 同时下载元信息
-    downloadCover: true, // 同时下载封面
-    downloadLyric: true, // 同时下载歌词
-    downloadLyricTran: false, // 下载歌词翻译
-    downloadLyricRoma: false, // 下载歌词音译
-    saveMetaFile: false, // 保留为独立文件
-    // 网络
-    proxyProtocol: "off", // 代理协议
-    proxyServe: "127.0.0.1", // 代理地址
-    proxyPort: 80, // 代理端口
-    useRealIP: false, // 是否使用真实 IP
-    realIP: "116.25.146.177", // 真实IP地址
-    showPlayMeta: false,
-    registryProtocols: [],
-  }),
+  state: createSettingState,
   getters: {
     /**
      * 获取淡入淡出时间

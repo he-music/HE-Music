@@ -2,16 +2,16 @@
   <div class="login">
     <Logo :size="60" class="logo" />
     <!-- 登录方式 -->
-    <n-tabs class="login-tabs" default-value="login-password" type="segment" animated>
+    <n-tabs class="login-tabs" v-model:value="activeTab" type="segment" animated>
       <n-tab-pane
         name="login-password"
         :tab="t('modal.login_password_tab')"
         display-directive="show:lazy"
       >
-        <LoginPassword @save-login="saveLogin" />
+        <LoginPassword :pause="activeTab !== 'login-password' || closed" @save-login="saveLogin" />
       </n-tab-pane>
       <n-tab-pane name="login-qr" :tab="t('modal.login_qr_tab')" display-directive="show:lazy">
-        <LoginQRCode @saveLogin="saveLogin" />
+        <LoginQRCode :pause="activeTab !== 'login-qr' || closed" @save-login="saveLogin" />
       </n-tab-pane>
     </n-tabs>
 
@@ -31,7 +31,7 @@
       </n-button>
     </n-flex>
     <!-- 关闭登录 -->
-    <n-button :focusable="false" class="close" strong secondary round @click="emit('close')">
+    <n-button :focusable="false" class="close" strong secondary round @click="closeLogin">
       <template #icon>
         <SvgIcon name="WindowClose" />
       </template>
@@ -41,109 +41,99 @@
 </template>
 
 <script setup lang="ts">
-import { updateUserData } from "@/utils/auth";
-import { useDataStore, usePlatformStore, useSettingStore, useStatusStore } from "@/stores";
-
+import { completeLogin, type LoginResult } from "@/utils/login";
+import { useDataStore } from "@/stores";
 import LoginPassword from "@/components/Modal/Login/LoginPassword.vue";
 import Logo from "@/components/Layout/Logo.vue";
-import { usePlayer } from "@/utils/player";
 import { useI18n } from "vue-i18n";
-import { createAuthSession, authProviders, exchangeAuthResult } from "@/api/auth";
+import { createAuthSession, authProviders } from "@/api/auth";
 import SvgIcon from "@/components/Global/SvgIcon.vue";
-import { openLink } from "@/utils/helper";
-import { debounce } from "lodash-es";
-import { isElectron } from "@/utils/env";
 import { getDeviceInfo } from "@/utils/device";
+import { createDesktopOAuth } from "@/platform/auth";
+import { platform } from "@/platform";
 
 const { t } = useI18n();
-
-const emit = defineEmits<{
-  close: [];
-}>();
-
-const player = usePlayer();
+const emit = defineEmits<{ close: [] }>();
 const dataStore = useDataStore();
-const platformStore = usePlatformStore();
-const statusStore = useStatusStore();
-const settingStore = useSettingStore();
-
 const providers = ref<string[]>([]);
-
-// 保存登录信息
-const saveLogin = async (loginData: any) => {
-  console.log("loginData:", loginData);
-  if (!loginData) return;
-  // 更改状态
-  emit("close");
-  dataStore.userLoginStatus = true;
-  // 兼容不同登录方式的字段名（password 返回 access_token，QR/OAuth 返回 token）
-  dataStore.token = loginData.access_token || loginData.token;
-  dataStore.refreshToken = loginData.refresh_token || "";
-  dataStore.expiresAt = loginData.expires_at || 0;
-  window.$message.success(t("modal.login_success"));
-  // 保存登录时间
-  localStorage.setItem("lastLoginTime", Date.now().toString());
-  await updateUserData();
-  await platformStore.loadPlatforms();
-  if (statusStore.playLoading) {
-    player.initPlayer(settingStore.autoPlay, player.getSeek());
+const activeTab = ref("login-password");
+const closed = ref(false);
+let webAttempt = 0;
+let accepted = false;
+const loginFailed = () => window.$message.error(t("modal.login_failed"));
+const saveLogin = async (result: LoginResult) => {
+  if (closed.value || accepted) return;
+  accepted = true;
+  desktopOAuth.cancel();
+  webAttempt++;
+  try {
+    // completeLogin 在第一次 await 前同步接受凭据；随后关闭引发卸载不会丢弃结果。
+    const completion = completeLogin(result);
+    closed.value = true;
+    emit("close");
+    await completion;
+    window.$message.success(t("modal.login_success"));
+  } catch {
+    loginFailed();
   }
 };
-
-const oauthLogin = debounce(
-  async (provider: string) => {
-    const redirect_uri = isElectron
-      ? `http://127.0.0.1:${Number(import.meta.env["VITE_SERVER_PORT"] || 25666)}/login/success`
-      : window.location.origin;
-
+const desktopOAuth = createDesktopOAuth(saveLogin, loginFailed);
+const closeLogin = () => {
+  closed.value = true;
+  webAttempt++;
+  desktopOAuth.cancel();
+  emit("close");
+};
+const oauthLogin = async (provider: string) => {
+  activeTab.value = "login-password";
+  if (closed.value || accepted) return;
+  webAttempt++;
+  desktopOAuth.cancel();
+  if (platform.kind !== "web") {
+    await desktopOAuth.start(provider);
+    return;
+  }
+  const attempt = ++webAttempt;
+  try {
+    const device_info = await getDeviceInfo();
+    if (closed.value || attempt !== webAttempt) return;
     const { url } = await createAuthSession({
       provider,
-      redirect_uri,
-      device_info: await getDeviceInfo(),
+      redirect_uri: window.location.origin,
+      device_info,
     });
-
-    if (isElectron) {
-      openLink(url);
-    } else {
-      window.location.href = url;
-    }
-  },
-  500,
-  { leading: true, trailing: false },
-);
-
-onMounted(() => {
-  authProviders().then((res) => {
-    providers.value = res.list;
-  });
-
-  if (isElectron) {
-    window.electron.ipcRenderer.removeAllListeners("login-success");
-    window.electron.ipcRenderer.on("login-success", async (_, data) => {
-      if (data.state) {
-        // OAuth 回调，用 state 兑换 token
-        try {
-          const result = await exchangeAuthResult(data.state);
-          saveLogin({
-            token: result.access_token,
-            refresh_token: result.refresh_token,
-            expires_at: result.expires_at,
-          });
-        } catch (error) {
-          console.error("OAuth 授权兑换失败：", error);
-          window.$message.error(t("modal.login_failed"));
-        }
-      } else if (data.token && data.token !== dataStore.token) {
-        saveLogin(data);
-      }
-    });
+    if (closed.value || attempt !== webAttempt) return;
+    window.location.href = url;
+  } catch {
+    if (!closed.value && attempt === webAttempt) loginFailed();
   }
+};
+watch(
+  activeTab,
+  () => {
+    webAttempt++;
+    desktopOAuth.cancel();
+  },
+  { flush: "sync" },
+);
+onMounted(() => {
+  void authProviders()
+    .then((res) => {
+      if (!closed.value) providers.value = res.list;
+    })
+    .catch(() => {
+      if (!closed.value) loginFailed();
+    });
 });
-
+onBeforeUnmount(() => {
+  closed.value = true;
+  webAttempt++;
+  desktopOAuth.cancel();
+});
 onBeforeMount(() => {
   if (dataStore.userLoginStatus) {
     window.$message.warning(t("modal.already_login"));
-    emit("close");
+    closeLogin();
   }
 });
 </script>

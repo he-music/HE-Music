@@ -2,6 +2,7 @@
   <n-flex :wrap="false" align="center" style="width: 460px; justify-content: flex-end">
     <!-- 本地/页面内快捷键 -->
     <n-input
+      ref="localInput"
       :value="shortcutItem.shortcut"
       :placeholder="t('setting.shortcut.shortcut_placeholder')"
       readonly
@@ -13,6 +14,7 @@
     />
     <!-- 全局快捷键 -->
     <n-input
+      ref="globalInput"
       v-if="allowGlobal"
       :value="shortcutItem.globalShortcut"
       :disabled="!shortcutStore.globalOpen"
@@ -34,205 +36,116 @@
 
 <script setup lang="ts">
 import { useShortcutStore } from "@/stores";
+import type { ShortcutKey } from "@/stores/shortcut";
+import { platform } from "@/platform";
+import {
+  normalizeShortcut,
+  shortcutSession,
+  type ShortcutSession,
+} from "@/platform/shortcutSession";
 import { formatForGlobalShortcut } from "@/utils/helper";
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onBeforeUnmount } from "vue";
+import type { InputInst } from "naive-ui";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
-
-const props = defineProps<{
-  shortcutKey: string;
-  allowGlobal?: boolean;
-}>();
-
+const props = defineProps<{ shortcutKey: ShortcutKey; allowGlobal?: boolean }>();
 const shortcutStore = useShortcutStore();
 const shortcutItem = computed(() => shortcutStore.shortcutList[props.shortcutKey]);
-
-// 选中状态
+const localInput = ref<InputInst | null>(null);
+const globalInput = ref<InputInst | null>(null);
 const isFocus = ref(false);
 const isGlobalFocus = ref(false);
-
-// 按键标志位
-const keyHandled = ref<string>("");
-
-// 获取按下的快捷键
-const getShortcut = (e: KeyboardEvent): string => {
-  const allowedCodes = [
-    // 字母 a-z
-    "KeyA",
-    "KeyB",
-    "KeyC",
-    "KeyD",
-    "KeyE",
-    "KeyF",
-    "KeyG",
-    "KeyH",
-    "KeyI",
-    "KeyJ",
-    "KeyK",
-    "KeyL",
-    "KeyM",
-    "KeyN",
-    "KeyO",
-    "KeyP",
-    "KeyQ",
-    "KeyR",
-    "KeyS",
-    "KeyT",
-    "KeyU",
-    "KeyV",
-    "KeyW",
-    "KeyX",
-    "KeyY",
-    "KeyZ",
-    // 数字 0-9
-    "Digit0",
-    "Digit1",
-    "Digit2",
-    "Digit3",
-    "Digit4",
-    "Digit5",
-    "Digit6",
-    "Digit7",
-    "Digit8",
-    "Digit9",
-    "Numpad0",
-    "Numpad1",
-    "Numpad2",
-    "Numpad3",
-    "Numpad4",
-    "Numpad5",
-    "Numpad6",
-    "Numpad7",
-    "Numpad8",
-    "Numpad9",
-    // 功能键
-    "Space",
-    "ArrowLeft",
-    "ArrowUp",
-    "ArrowRight",
-    "ArrowDown",
-    "Escape",
-    // Funtion keys
-    "F1",
-    "F2",
-    "F3",
-    "F4",
-    "F5",
-    "F6",
-    "F7",
-    "F8",
-    "F9",
-    "F10",
-    "F11",
-    "F12",
-  ];
-  if (!allowedCodes.includes(e.code)) return "";
-  return e.code;
+const keyHandled = ref("");
+let recording: { session: ShortcutSession; token: symbol } | undefined;
+const finishRecording = () => {
+  const current = recording;
+  recording = undefined;
+  if (current) void current.session.endRecording(current.token);
 };
-
 const onFocus = (global: boolean) => {
+  finishRecording();
   isFocus.value = true;
   isGlobalFocus.value = global;
-  if (global) {
-    window.electron.ipcRenderer.send("unregister-all-shortcut");
-  }
+  keyHandled.value = "";
+  const session = shortcutSession(shortcutStore);
+  if (global && session) recording = { session, token: session.beginRecording() };
 };
-
-const onBlur = async () => {
-  if (isFocus.value) {
-    if (isGlobalFocus.value) {
-      const failedShortcuts = await shortcutStore.registerAllShortcuts();
-      if (failedShortcuts) {
-        // 更新所有快捷键的注册状态
-        for (const key in shortcutStore.shortcutList) {
-          // @ts-ignore
-          const item = shortcutStore.shortcutList[key];
-          // 如果该快捷键在失败列表中，标记为已注册（即冲突），否则为未注册（成功）
-          // @ts-ignore
-          shortcutStore.shortcutList[key].isRegistered =
-            item.globalShortcut && failedShortcuts.includes(item.globalShortcut);
-        }
-      }
-    }
-  }
+const onBlur = () => {
   isFocus.value = false;
   isGlobalFocus.value = false;
+  keyHandled.value = "";
+  finishRecording();
 };
-
-// 快捷键是否重复
-const isRepeat = (shortcut: string): boolean =>
-  Object.values(shortcutStore.shortcutList).some((item) =>
-    [item.shortcut, item.globalShortcut].includes(shortcut),
-  );
-
-// 是否被占用
-const checkRegistered = async (shortcut: string) => {
-  try {
-    if (!shortcut) return false;
-    const isRegistered = await window.electron.ipcRenderer.invoke(
-      "is-shortcut-registered",
-      formatForGlobalShortcut(shortcut),
-    );
-    // 更新状态
-    shortcutStore.shortcutList[props.shortcutKey].isRegistered = isRegistered;
-    return isRegistered;
-  } catch (error) {
-    console.error("Error checking shortcut registration:", error);
-    return false;
-  }
-};
-
-const changeShortcut = async (shortcut: string) => {
-  const targetKey = isGlobalFocus.value ? "globalShortcut" : "shortcut";
-  shortcutStore.shortcutList[props.shortcutKey][targetKey] = shortcut;
-};
-
-const onKeyDown = async (e: KeyboardEvent) => {
-  e.preventDefault();
-  e.stopPropagation();
+const onWindowBlur = () => {
   if (!isFocus.value) return;
-
-  if (e.code === keyHandled.value) return;
-  keyHandled.value = e.code;
-
-  if (e.code === "Backspace") {
-    changeShortcut("");
+  const input = isGlobalFocus.value ? globalInput.value : localInput.value;
+  onBlur();
+  input?.blur();
+};
+const onVisibilityChange = () => {
+  if (document.visibilityState === "hidden") onWindowBlur();
+};
+onMounted(() => {
+  window.addEventListener("blur", onWindowBlur);
+  document.addEventListener("visibilitychange", onVisibilityChange);
+});
+onBeforeUnmount(() => {
+  window.removeEventListener("blur", onWindowBlur);
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+  onBlur();
+});
+const onKeyDown = (event: KeyboardEvent) => {
+  event.preventDefault();
+  event.stopPropagation();
+  if (!isFocus.value || event.repeat || event.code === keyHandled.value) return;
+  keyHandled.value = event.code;
+  const field = isGlobalFocus.value ? "globalShortcut" : "shortcut";
+  if (event.code === "Backspace") {
+    shortcutItem.value[field] = "";
     return;
   }
-
-  const isCtrl = e.ctrlKey || e.metaKey;
-  const isShift = e.shiftKey;
-  const isAlt = e.altKey;
-
-  const keyCode = getShortcut(e);
-  if (!keyCode) return;
-
-  const shortcut = [isCtrl && "CmdOrCtrl", isShift && "Shift", isAlt && "Alt", keyCode]
+  if (
+    !/^(Key[A-Z]|Digit[0-9]|Numpad[0-9]|F([1-9]|1[0-9]|2[0-4])|Space|Escape|Arrow(Left|Right|Up|Down))$/.test(
+      event.code,
+    )
+  )
+    return;
+  const modified = event.ctrlKey || event.metaKey || event.shiftKey || event.altKey;
+  let shortcut = [
+    (event.ctrlKey || event.metaKey) && "CmdOrCtrl",
+    event.shiftKey && "Shift",
+    event.altKey && "Alt",
+    event.code,
+  ]
     .filter(Boolean)
     .join("+");
-
-  if (isRepeat(shortcut)) {
+  if (isGlobalFocus.value) {
+    shortcut = [
+      event.metaKey && "Super",
+      event.ctrlKey && "Control",
+      event.shiftKey && "Shift",
+      event.altKey && "Alt",
+      event.code,
+    ]
+      .filter(Boolean)
+      .join("+");
+    if (!modified) shortcut = "CmdOrCtrl+Shift+" + event.code;
+    if (platform.kind === "electron") shortcut = formatForGlobalShortcut(shortcut);
+  }
+  const normalized = normalizeShortcut(shortcut, platform.os);
+  const duplicate = Object.entries(shortcutStore.shortcutList).some(
+    ([key, item]) =>
+      key !== props.shortcutKey &&
+      (field !== "globalShortcut" ||
+        platform.shortcuts?.actions.some((action) => action === key)) &&
+      normalizeShortcut(item[field], platform.os) === normalized,
+  );
+  if (duplicate) {
     window.$message.warning(t("message.shortcut_repeat"));
     return;
   }
-
-  if (isGlobalFocus.value) {
-    const key = isCtrl || isShift || isAlt ? shortcut : "CmdOrCtrl+Shift+" + keyCode;
-    const globalShortcut = formatForGlobalShortcut(key);
-    if (!globalShortcut) return;
-
-    // 检查占用
-    const isRegistered = await checkRegistered(globalShortcut);
-    if (isRegistered) {
-      window.$message.warning(t("message.shortcut_registered"));
-    } else {
-      window.$message.success(t("message.shortcut_set_success"));
-    }
-    changeShortcut(globalShortcut);
-  } else {
-    changeShortcut(shortcut);
-    window.$message.success(t("message.shortcut_set_success"));
-  }
+  shortcutItem.value[field] = shortcut;
+  if (!isGlobalFocus.value) window.$message.success(t("message.shortcut_set_success"));
 };
 </script>
 

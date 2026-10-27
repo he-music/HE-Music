@@ -353,7 +353,12 @@
     "download_success": "Downloaded successfully",
     "export_settings_error": "Export settings error",
     "export_settings_fail": "Export settings failed",
-    "export_settings_success": "Settings imported successfully, restarting soon",
+    "export_settings_success": "Settings exported successfully",
+    "import_settings_success": "Settings imported successfully; reloading shortly",
+    "settings_file_busy": "A file operation is in progress. Try again shortly.",
+    "settings_file_failed": "The settings file operation failed. Please try again.",
+    "settings_restore_failed": "Import failed and some previous settings could not be restored. Check storage space before reloading.",
+    "import_renderer_settings_confirm": "Replace player settings and shortcuts, then reload? Accounts and native file permissions will not be restored.",
     "found_local_music_count": "Found {count} track | Found {count} tracks",
     "get_artist_detail_fail": "Failed to get artist detail",
     "get_comment_data_fail": "Failed to get comment data",
@@ -524,6 +529,8 @@
     "playlist_square": "Playlists",
     "restore": "Restore",
     "software_hot_reload": "Hot Reload",
+    "show_main_window": "Show main window",
+    "quit_app": "Quit application",
     "un_login": "Not Logged In"
   },
   "platform": {

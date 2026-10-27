@@ -122,8 +122,8 @@ class AudioManager {
       }
 
       this.isInitialized = true;
-    } catch (error) {
-      console.error("AudioManager: 初始化 AudioContext 失败", error);
+    } catch {
+      console.error("AudioManager: 初始化 AudioContext 失败");
     }
   }
 
@@ -169,7 +169,7 @@ class AudioManager {
       try {
         await this.audioElement?.play();
       } catch (error) {
-        console.error("AudioManager: 播放失败", error);
+        console.error("AudioManager: 播放失败");
         throw error;
       }
     }
@@ -375,8 +375,8 @@ class AudioManager {
       if (this.audioElement && typeof this.audioElement.setSinkId === "function") {
         await this.audioElement.setSinkId(deviceId);
       }
-    } catch (error) {
-      console.error("AudioManager: 设置输出设备失败", error);
+    } catch {
+      console.error("AudioManager: 设置输出设备失败");
     }
   }
 

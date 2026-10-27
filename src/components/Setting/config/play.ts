@@ -1,5 +1,6 @@
 import { useSettingStore, useStatusStore } from "@/stores";
-import { isElectron } from "@/utils/env";
+import { isElectron, isMygo } from "@/utils/env";
+import { platform } from "@/platform";
 import { renderOption } from "@/utils/helper";
 import { SettingConfig } from "@/types/settings";
 import { SelectOption } from "naive-ui";
@@ -145,6 +146,7 @@ export const usePlaySettings = (): SettingConfig => {
             label: t("setting.general.prevent_sleep"),
             type: "switch",
             description: t("setting.general.prevent_sleep_tip"),
+            show: !isMygo || Boolean(platform.systemMedia),
             value: computed({
               get: () => settingStore.preventSleep,
               set: (v) => (settingStore.preventSleep = v),
@@ -154,6 +156,7 @@ export const usePlaySettings = (): SettingConfig => {
             key: "songVolumeFade",
             label: t("setting.play.song_volume_fade"),
             type: "switch",
+            show: !isMygo,
             value: computed({
               get: () => settingStore.songVolumeFade,
               set: (v) => (settingStore.songVolumeFade = v),

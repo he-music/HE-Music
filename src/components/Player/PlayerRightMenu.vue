@@ -84,7 +84,7 @@
 
 <script setup lang="ts">
 import { useDataStore, useMusicStore, useSettingStore, useStatusStore } from "@/stores";
-import { isElectron } from "@/utils/env";
+import { isElectron, isMygo } from "@/utils/env";
 import { renderIcon } from "@/utils/helper";
 import { openAutoClose, openChangeRate, openEqualizer } from "@/utils/modal";
 import type { DropdownOption } from "naive-ui";
@@ -125,6 +125,7 @@ const controlsOptions = computed<DropdownOption[]>(() => [
     label: t("common.equalizer"),
     key: "equalizer",
     icon: renderIcon("Eq"),
+    disabled: isMygo,
   },
   {
     label: t("common.auto_close"),

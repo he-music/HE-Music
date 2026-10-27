@@ -55,15 +55,30 @@ import type { FormInst, FormRules } from "naive-ui";
 import axios from "axios";
 import { accountLogin } from "@/api/login";
 import { useFormRule } from "@/utils/rules";
-import { LoginType } from "@/types/main";
+import type { LoginResult } from "@/utils/login";
 import { useI18n } from "vue-i18n";
 import { getDeviceInfo } from "@/utils/device";
 const { t } = useI18n();
 const { passwordRule, usernameRule } = useFormRule();
 const emit = defineEmits<{
-  saveLogin: [any, LoginType];
+  saveLogin: [LoginResult];
 }>();
 const loading = ref(false);
+const props = defineProps<{ pause?: boolean }>();
+let generation = 0;
+let disposed = false;
+watch(
+  () => props.pause,
+  () => {
+    generation++;
+    loading.value = false;
+  },
+  { flush: "sync" },
+);
+onBeforeUnmount(() => {
+  disposed = true;
+  generation++;
+});
 
 // 表单类型
 interface FormType {
@@ -95,8 +110,10 @@ const resetKeyboardSubmitGuard = () => {
 
 // 按钮点击和回车共用表单提交入口
 const login = async () => {
-  if (ignoreKeyboardSubmit || loading.value || !formRef.value) return;
+  if (disposed || props.pause || ignoreKeyboardSubmit || loading.value || !formRef.value) return;
   loading.value = true;
+  const attempt = generation;
+  const active = () => !disposed && !props.pause && attempt === generation;
   try {
     try {
       await formRef.value.validate();
@@ -104,17 +121,20 @@ const login = async () => {
       // 校验失败由表单展示字段错误，不发送登录请求
       return;
     }
+    if (!active()) return;
     const deviceInfo = await getDeviceInfo();
+    if (!active()) return;
     const loginResult = await accountLogin(
       formData.value.username,
       formData.value.password,
       deviceInfo,
     );
-    emit("saveLogin", loginResult, "password");
+    if (!active()) return;
+    emit("saveLogin", loginResult);
   } catch (error) {
-    if (!axios.isAxiosError(error)) window.$message.error(t("modal.login_failed"));
+    if (active() && !axios.isAxiosError(error)) window.$message.error(t("modal.login_failed"));
   } finally {
-    loading.value = false;
+    if (attempt === generation) loading.value = false;
   }
 };
 </script>

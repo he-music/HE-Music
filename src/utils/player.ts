@@ -6,7 +6,7 @@ import { useMusicStore, useStatusStore, useDataStore, useSettingStore } from "@/
 import { calculateProgress, msToS } from "./time";
 import { shuffleArray } from "./helper";
 import songManager from "./songManager";
-import { isElectron } from "./env";
+import { hasNativeSystemMedia, isElectron } from "./env";
 import lyricManager from "./lyricManager";
 import audioManager, { AudioEventType } from "./audioManager";
 import blob from "./blob";
@@ -31,6 +31,18 @@ class Player {
   };
   /** 存储事件回调函数的引用，用于清理 */
   private eventCallbacks: Map<AudioEventType, (e: Event) => void> = new Map();
+  private seekListeners = new Set<() => void>();
+
+  public onSeek(listener: () => void): () => void {
+    this.seekListeners.add(listener);
+    return () => {
+      this.seekListeners.delete(listener);
+    };
+  }
+
+  private notifySeek(): void {
+    this.seekListeners.forEach((listener) => listener());
+  }
   /** 播放请求递增序号，用于防止快速切歌异步竞态 */
   private playRequestId = 0;
   private playbackAttempt?: { src: string; autoPlay: boolean; seek: number; requestId: number };
@@ -63,7 +75,6 @@ class Player {
     // 播放
     const playCallback = () => {
       const statusStore = useStatusStore();
-      const playSongData = songManager.getPlaySongData();
       const { name, artist } = songManager.getPlayerInfoObj() || {};
       const playTitle = `${name} - ${artist}`;
       window.document.title = `${playTitle} | HE-Music`;
@@ -77,29 +88,27 @@ class Player {
           artistName: artist,
         });
       }
-      console.log("▶️ song play:", playSongData);
+      console.log("▶️ song play:");
     };
     audioManager.on("play", playCallback);
     this.eventCallbacks.set("play", playCallback);
     // 暂停
     const pauseCallback = () => {
       const statusStore = useStatusStore();
-      const playSongData = songManager.getPlaySongData();
       statusStore.playStatus = false;
       if (!isElectron) window.document.title = "HE-Music";
       // IPC 通知
       if (isElectron) {
         window.electron.ipcRenderer.send("play-status-change", false);
       }
-      console.log("⏸️ song pause:", playSongData);
+      console.log("⏸️ song pause:");
     };
     audioManager.on("pause", pauseCallback);
     this.eventCallbacks.set("pause", pauseCallback);
     // 结束
     const endedCallback = () => {
       const statusStore = useStatusStore();
-      const playSongData = songManager.getPlaySongData();
-      console.log("⏹️ song end:", playSongData);
+      console.log("⏹️ song end:");
       // 检查自动关闭
       if (
         statusStore.autoClose.enable &&
@@ -115,8 +124,7 @@ class Player {
     this.eventCallbacks.set("ended", endedCallback);
     // 错误
     const errorCallback = (e: Event) => {
-      const playSongData = songManager.getPlaySongData();
-      console.error("❌ song error:", playSongData, e);
+      console.error("❌ song error:");
       const customEvent = e as CustomEvent<{
         originalEvent: Event;
         errorCode: number;
@@ -178,7 +186,7 @@ class Player {
         count: 0,
         total: 0,
       };
-      console.log("▶️ song canplay:", playSongData);
+      console.log("▶️ song canplay:");
       // 恢复均衡器
       if (isElectron && statusStore.eqEnabled) {
         // 简单恢复 EQ 增益
@@ -257,9 +265,9 @@ class Player {
         if (!isCurrent()) return;
         settled = true;
         this.httpPlaybackDialog = undefined;
-        void this.createPlayer(httpsUrl.href, attempt.autoPlay, seek).catch((err) => {
+        void this.createPlayer(httpsUrl.href, attempt.autoPlay, seek).catch(() => {
           if (attempt.requestId !== this.playRequestId) return;
-          console.error("HTTPS 重试播放失败:", err);
+          console.error("HTTPS 重试播放失败:");
           // 媒体 error 事件负责普通错误；没有媒体错误码时补上恢复逻辑。
           if (audioManager.getErrorCode() === 0) void this.handlePlaybackError();
         });
@@ -298,10 +306,18 @@ class Player {
       // 恢复进度
       if (seek && seek > 0) {
         audioManager.seek(seek / 1000);
+        this.notifySeek();
       }
-    } catch (e) {
-      console.error("Player create failed", e);
-      throw e;
+    } catch (error) {
+      if (requestId !== this.playRequestId) return;
+      if (!this.handlePlayRejection(error)) {
+        console.error("Player create failed");
+        throw error;
+      }
+      if (seek > 0) {
+        audioManager.seek(seek / 1000);
+        this.notifySeek();
+      }
     }
     // 获取歌词数据
     lyricManager.handleLyric(id, platform, path);
@@ -312,27 +328,45 @@ class Player {
     // 更新 MediaSession
     if (!path) this.updateMediaSession();
   }
+  /** 播放策略拒绝保留当前音源，等待下一次用户操作。 */
+  private handlePlayRejection(error: unknown): boolean {
+    if (!(error instanceof Error) || error.name !== "NotAllowedError") return false;
+    const statusStore = useStatusStore();
+    statusStore.playLoading = false;
+    statusStore.playStatus = false;
+    window.$message.error(t("message.song_play_fail"));
+    return true;
+  }
   /**
    * 初始化 MediaSession
    */
   private initMediaSession() {
     const settingStore = useSettingStore();
-    if (!settingStore.smtcOpen) return;
+    if (hasNativeSystemMedia || !settingStore.smtcOpen) return;
     if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.setActionHandler("play", () => this.play());
-    navigator.mediaSession.setActionHandler("pause", () => this.pause());
-    navigator.mediaSession.setActionHandler("previoustrack", () => this.nextOrPrev("prev"));
-    navigator.mediaSession.setActionHandler("nexttrack", () => this.nextOrPrev("next"));
-    navigator.mediaSession.setActionHandler("seekto", (event) => {
-      const seekTime = event.seekTime ? Number(event.seekTime) * 1000 : 0;
-      if (seekTime) this.setSeek(seekTime);
+    if (typeof navigator.mediaSession.setActionHandler !== "function") return;
+    const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler) => {
+      try {
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch {
+        // 部分宿主只实现了 MediaSession 的部分 action。
+      }
+    };
+    setHandler("play", () => this.play());
+    setHandler("pause", () => this.pause());
+    setHandler("previoustrack", () => this.nextOrPrev("prev"));
+    setHandler("nexttrack", () => this.nextOrPrev("next"));
+    setHandler("seekto", (event) => {
+      const seekTime = Number(event.seekTime) * 1000;
+      if (Number.isFinite(seekTime) && seekTime >= 0) this.setSeek(seekTime);
     });
   }
   /** 更新 MediaSession */
   private updateMediaSession() {
     const settingStore = useSettingStore();
-    if (!settingStore.smtcOpen) return;
+    if (hasNativeSystemMedia || !settingStore.smtcOpen) return;
     if (!("mediaSession" in navigator)) return;
+    if (typeof window.MediaMetadata !== "function") return;
     const musicStore = useMusicStore();
     // 获取播放数据
     const playSongData = songManager.getPlaySongData();
@@ -365,7 +399,11 @@ class Player {
         },
       ],
     };
-    navigator.mediaSession.metadata = new window.MediaMetadata(metaData);
+    try {
+      navigator.mediaSession.metadata = new window.MediaMetadata(metaData);
+    } catch {
+      // 宿主可能尚未实现 metadata 写入，不能阻断歌曲初始化。
+    }
   }
   /**
    * 实时更新 MediaSession
@@ -374,7 +412,7 @@ class Player {
    */
   private updateMediaSessionState(duration: number, currentTime: number) {
     const settingStore = useSettingStore();
-    if (!settingStore.smtcOpen) return;
+    if (hasNativeSystemMedia || !settingStore.smtcOpen) return;
     if (
       !("mediaSession" in navigator) ||
       typeof navigator.mediaSession.setPositionState !== "function"
@@ -417,7 +455,7 @@ class Player {
     this.retryInfo.count += 1;
     this.retryInfo.total += 1;
 
-    console.log(this.retryInfo);
+    console.log("Playback retry", this.retryInfo.count, this.retryInfo.total);
     // 错误码 2：资源过期或临时网络错误，允许较少次数的刷新
     if (errCode === 2 && this.retryInfo.count <= 2) {
       await this.initPlayer(true, this.getSeek());
@@ -468,9 +506,9 @@ class Player {
       // statusStore.songQuality = handleSongQuality(infoData.format.bitrate ?? 0);
       // 获取主色
       songManager.getCoverColor(musicStore.playSong.cover);
-    } catch (error) {
+    } catch {
       window.$message.error(t("message.get_local_music_meta_fail"));
-      console.error("Failed to parse local music info:", error);
+      console.error("Failed to parse local music info:");
     }
   }
   /**
@@ -526,13 +564,18 @@ class Player {
       audioManager.pause();
       // 本地歌曲
       if (path) {
+        if (!isElectron) {
+          statusStore.playLoading = false;
+          statusStore.playStatus = false;
+          return;
+        }
         try {
           await this.createPlayer(`file://${path}`, autoPlay, seek);
           if (currentRequestId !== this.playRequestId) return;
           await this.parseLocalMusicInfo(path);
-        } catch (err) {
+        } catch {
           if (currentRequestId !== this.playRequestId) return;
-          console.error("播放器初始化错误（本地）：", err);
+          console.error("播放器初始化错误（本地）：");
           // createPlayer 内部已触发 handlePlaybackError，这里只记录日志
           // 如果 createPlayer 没有触发错误处理，则手动触发
           const errCode = audioManager.getErrorCode();
@@ -552,12 +595,11 @@ class Player {
           const link = this.selectPlayQuality(playSongData, quality);
           if (!link) throw new Error("Get song link error");
           statusStore.playQuality = link.name;
-          console.log("Getting online song url...", id, platform, link);
+          console.log("Getting online song url...");
           playerUrl = await songManager.getOnlineUrl(id, platform, link);
         } catch (err) {
           if (currentRequestId !== this.playRequestId) return;
-          console.error("❌ 获取歌曲地址出错：", err);
-          console.log("Getting online song url error:", err);
+          console.error("❌ 获取歌曲地址出错：");
           // 如果是 AxiosError 的 401 就忽略
           if (err instanceof AxiosError && err.response?.status === 401) {
             return;
@@ -575,9 +617,9 @@ class Player {
             if (quality) {
               window.$message.success(t("message.change_quality_to", { quality }));
             }
-          } catch (err) {
+          } catch {
             if (currentRequestId !== this.playRequestId) return;
-            console.error("播放器初始化错误（在线）：", err);
+            console.error("播放器初始化错误（在线）：");
             // createPlayer 内部已触发 handlePlaybackError，这里只记录日志
             // 如果 createPlayer 没有触发错误处理，则手动触发
             const errCode = audioManager.getErrorCode();
@@ -588,9 +630,9 @@ class Player {
           }
         }
       }
-    } catch (err) {
+    } catch {
       if (currentRequestId !== this.playRequestId) return;
-      console.error("❌ 初始化音乐播放器出错：", err);
+      console.error("❌ 初始化音乐播放器出错：");
       window.$message.error(t("message.song_play_fail"));
       await this.handlePlaybackError(undefined);
     }
@@ -600,6 +642,10 @@ class Player {
    */
   async play() {
     const statusStore = useStatusStore();
+    if (!isElectron && useMusicStore().playSong?.path) {
+      statusStore.playStatus = false;
+      return;
+    }
     const settingStore = useSettingStore();
     // 检查播放器状态
     if (!audioManager.src) {
@@ -612,7 +658,13 @@ class Player {
       return;
     }
     const fadeTime = settingStore.getFadeTime ? settingStore.getFadeTime / 1000 : 0;
-    await audioManager.play(undefined, { fadeIn: !!fadeTime, fadeDuration: fadeTime });
+    const requestId = this.playRequestId;
+    try {
+      await audioManager.play(undefined, { fadeIn: !!fadeTime, fadeDuration: fadeTime });
+    } catch (error) {
+      if (requestId !== this.playRequestId) return;
+      if (!this.handlePlayRejection(error)) throw error;
+    }
   }
   /**
    * 暂停
@@ -703,7 +755,7 @@ class Player {
       // 初始化播放器（不传入seek参数，确保从头开始播放）
       await this.initPlayer(play, 0);
     } catch (error) {
-      console.error("Error in nextOrPrev:", error);
+      console.error("Error in nextOrPrev:");
       statusStore.playLoading = false;
       throw error;
     }
@@ -796,6 +848,7 @@ class Player {
     }
     audioManager.seek(time / 1000);
     statusStore.currentTime = time;
+    this.notifySeek();
   }
   /**
    * 获取播放进度
@@ -1005,7 +1058,7 @@ class Player {
       statusStore.lyricIndex = -1;
       await this.initPlayer(true, 0);
     } catch (error) {
-      console.error("Error in togglePlayIndex:", error);
+      console.error("Error in togglePlayIndex:");
       statusStore.playLoading = false;
       throw error;
     }
@@ -1077,8 +1130,8 @@ class Player {
       if (device) {
         audioManager.setSinkId(device);
       }
-    } catch (error) {
-      console.error("Failed to change audio output device:", error);
+    } catch {
+      console.error("Failed to change audio output device:");
     }
   }
   /**
@@ -1116,6 +1169,7 @@ class Player {
    * 切换桌面歌词
    */
   public toggleDesktopLyric() {
+    if (!isElectron) return;
     const statusStore = useStatusStore();
     const show = !statusStore.showDesktopLyric;
     statusStore.showDesktopLyric = show;
@@ -1129,6 +1183,7 @@ class Player {
    * @param show 是否显示
    */
   public setDesktopLyricShow(show: boolean) {
+    if (!isElectron) return;
     const statusStore = useStatusStore();
     if (statusStore.showDesktopLyric === show) return;
     statusStore.showDesktopLyric = show;
@@ -1193,7 +1248,7 @@ class Player {
           musicStore.radio.platform,
           musicStore.radio.pageIndex || 1,
         );
-        console.log(`🌐 radio :`, result.list);
+        console.log("🌐 radio loaded");
         musicStore.radio.playIndex = 0;
         musicStore.radio.list = result.list;
         musicStore.radio.pageIndex = result.page_index || musicStore.radio.pageIndex;
@@ -1221,8 +1276,8 @@ class Player {
         this.resetStatus();
         await this.initPlayer();
       }
-    } catch (error) {
-      console.error("Failed to initialize radio:", error);
+    } catch {
+      console.error("Failed to initialize radio:");
     }
   }
   /**

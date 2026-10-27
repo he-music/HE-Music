@@ -2,7 +2,8 @@ import { useDataStore, useSettingStore, useShortcutStore, useStatusStore } from 
 import { useEventListener } from "@vueuse/core";
 import { openUserAgreement } from "@/utils/modal";
 import { cloneDeep } from "lodash-es";
-import { isElectron } from "./env";
+import { platform } from "@/platform";
+import { shortcutSession } from "@/platform/shortcutSession";
 import packageJson from "@/../package.json";
 import { usePlayer } from "@/utils/player";
 import log from "./log";
@@ -14,7 +15,6 @@ const init = async () => {
   const dataStore = useDataStore();
   const statusStore = useStatusStore();
   const settingStore = useSettingStore();
-  const shortcutStore = useShortcutStore();
   const { locale } = useI18n();
   // init pinia-data
   const player = usePlayer();
@@ -43,9 +43,7 @@ const init = async () => {
     player.startAutoCloseTimer(statusStore.autoClose.time, statusStore.autoClose.remainTime);
   }
 
-  if (isElectron) {
-    // 注册全局快捷键
-    shortcutStore.registerAllShortcuts();
+  if (platform.capabilities.electronStartup) {
     console.log("register-protocol", settingStore.registryProtocols);
     // 显示窗口
     window.electron.ipcRenderer.send("win-loaded");
@@ -83,6 +81,16 @@ const keyDownEvent = (event: KeyboardEvent) => {
   ) {
     return;
   }
+  const nativeChord = [
+    event.metaKey && "Super",
+    event.ctrlKey && "Ctrl",
+    event.altKey && "Alt",
+    event.shiftKey && "Shift",
+    event.code,
+  ]
+    .filter(Boolean)
+    .join("+");
+  if (shortcutSession(useShortcutStore())?.owns(nativeChord)) return;
   const player = usePlayer();
   const shortcutStore = useShortcutStore();
   const statusStore = useStatusStore();
@@ -95,7 +103,8 @@ const keyDownEvent = (event: KeyboardEvent) => {
 
   // 循环注册快捷键
   for (const shortcutKey in shortcutStore.shortcutList) {
-    const shortcut = shortcutStore.shortcutList[shortcutKey];
+    const shortcut =
+      shortcutStore.shortcutList[shortcutKey as keyof typeof shortcutStore.shortcutList];
     if (!shortcut?.shortcut) continue;
     const shortcutParts = shortcut.shortcut.split("+");
     let match = true;
@@ -132,7 +141,7 @@ const keyDownEvent = (event: KeyboardEvent) => {
           player.setVolume("down");
           break;
         case "toggleDesktopLyric":
-          player.toggleDesktopLyric();
+          if (platform.capabilities.desktopLyrics) player.toggleDesktopLyric();
           break;
         case "openPlayer":
           statusStore.showFullPlayer = true;

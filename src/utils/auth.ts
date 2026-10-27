@@ -41,8 +41,8 @@ export const toLogout = async () => {
   // 调用后端登出（失败也继续清理本地状态）
   try {
     await logoutApi();
-  } catch (error) {
-    console.error("后端登出失败：", error);
+  } catch {
+    console.error("后端登出失败");
   }
   sessionStorage.clear();
   // 清除用户数据
@@ -83,7 +83,7 @@ export const updateUserData = async () => {
     const hasFailed = allUserLikeResult.some((result) => result.status === "rejected");
     if (hasFailed) throw new Error("Failed to update some user data");
   } catch (error) {
-    console.error("❌ Error updating user data:", error);
+    console.error("更新用户数据失败");
     throw error;
   }
 };

@@ -118,6 +118,7 @@ import { isElectron } from "@/utils/env";
 import packageJson from "@/../package.json";
 import { usePlaySettings } from "./config/play";
 import { useGeneralSettings } from "./config/general";
+import { useGeneralSettingsActions } from "./config/generalActions";
 import { useAppearanceSettings } from "./config/appearance";
 import { useLyricSettings } from "./config/lyric";
 import { useKeyboardSettings } from "./config/keyboard";
@@ -128,8 +129,9 @@ import { useI18n } from "vue-i18n";
 const { t } = useI18n();
 const props = defineProps<{ type: SettingType; scrollTo?: string }>();
 
+const generalActions = useGeneralSettingsActions();
 const playConfig = computed(() => usePlaySettings());
-const generalConfig = computed(() => useGeneralSettings());
+const generalConfig = computed(() => useGeneralSettings(generalActions));
 const appearanceConfig = computed(() => useAppearanceSettings());
 const lyricConfig = computed(() => useLyricSettings());
 const keyboardConfig = computed(() => useKeyboardSettings());
