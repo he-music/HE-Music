@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMygoPlatform } from "./mygo";
+import type { LyricsClock, LyricsSnapshot, LyricsWindowState } from "./desktopLyrics";
 const bridge = vi.hoisted(() => ({ call: vi.fn(), on: vi.fn() }));
 vi.mock("mygo-runtime", () => ({
   runtime: () => ({ platform: "darwin" }),
   currentWindow: {},
   call: (...args: unknown[]) => bridge.call(...args),
-  event: () => ({ on: bridge.on }),
+  event: (name: string) => ({ on: (listener: unknown) => bridge.on(name, listener) }),
 }));
 afterEach(() => vi.clearAllMocks());
 describe("mygo lifecycle capability", () => {
@@ -51,5 +52,100 @@ describe("mygo lifecycle capability", () => {
     if (available === "failure") await expect(operation).rejects.toThrow("synthetic");
     else await operation;
     expect(adapter.capabilities.tray).toBe(false);
+  });
+  it("歌词provider映射官方方法与四个事件，未提前开放功能开关", async () => {
+    const adapter = createMygoPlatform();
+    const lyrics = adapter.desktopLyrics;
+    if (!lyrics) throw new Error("Expected native lyrics provider");
+    const state: LyricsWindowState = {
+      epoch: 4,
+      revision: 1,
+      visible: false,
+      pending: false,
+      locked: false,
+      hoverUnlock: false,
+      bounds: { x: 0, y: 0, width: 800, height: 180 },
+      failure: "",
+    };
+    const snapshot: LyricsSnapshot = {
+      epoch: 4,
+      seq: 1,
+      trackKey: "synthetic",
+      playName: "Song",
+      artistName: "Artist",
+      playing: true,
+      positionMs: 1200,
+      offsetMs: -175,
+      rate: 1,
+      loading: false,
+      lrcData: [],
+      yrcData: [],
+    };
+    const clock: LyricsClock = {
+      epoch: 4,
+      seq: 2,
+      trackKey: "synthetic",
+      playing: false,
+      positionMs: 1500,
+      offsetMs: -175,
+      rate: 1.5,
+    };
+    bridge.call.mockImplementation(async (method: string) => {
+      if (method === "DesktopLyrics.Begin") return { epoch: 4 };
+      if (method === "DesktopLyrics.Attach") return { window: state, snapshot };
+      if (
+        [
+          "DesktopLyrics.SetVisible",
+          "DesktopLyrics.Close",
+          "DesktopLyrics.SetBounds",
+          "DesktopLyrics.GetState",
+        ].includes(method)
+      )
+        return state;
+      return undefined;
+    });
+    await expect(lyrics.begin()).resolves.toEqual({ epoch: 4 });
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLyrics.Begin");
+    await lyrics.publishSnapshot(snapshot);
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLyrics.PublishSnapshot", snapshot);
+    await lyrics.publishClock(clock);
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLyrics.PublishClock", clock);
+    await expect(lyrics.attach()).resolves.toEqual({ window: state, snapshot });
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLyrics.Attach");
+    await lyrics.setVisible(4, true);
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLyrics.SetVisible", 4, true);
+    await lyrics.close(4);
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLyrics.Close", 4);
+    await lyrics.setBounds(4, state.bounds);
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLyrics.SetBounds", 4, state.bounds);
+    await lyrics.getState(4);
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLyrics.GetState", 4);
+    const command = { epoch: 4, trackKey: "synthetic", action: "toggle" as const };
+    await lyrics.command(command);
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLyrics.Command", command);
+    await lyrics.teardown(4);
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLyrics.Teardown", 4);
+
+    const listeners = [vi.fn(), vi.fn(), vi.fn(), vi.fn()];
+    const off = [vi.fn(), vi.fn(), vi.fn(), vi.fn()];
+    for (const unsubscribe of off) bridge.on.mockReturnValueOnce(unsubscribe);
+    const stops = [
+      lyrics.onWindow(listeners[0]),
+      lyrics.onSnapshot(listeners[1]),
+      lyrics.onClock(listeners[2]),
+      lyrics.onCommand(listeners[3]),
+    ];
+    expect(bridge.on.mock.calls).toEqual([
+      ["desktop:lyrics-window", listeners[0]],
+      ["desktop:lyrics-snapshot", listeners[1]],
+      ["desktop:lyrics-clock", listeners[2]],
+      ["desktop:lyrics-command", listeners[3]],
+    ]);
+    stops.forEach((stop, index) => {
+      expect(stop).toBe(off[index]);
+      stop();
+      expect(off[index]).toHaveBeenCalledOnce();
+    });
+    expect(adapter.capabilities.desktopLyrics).toBe(false);
   });
 });

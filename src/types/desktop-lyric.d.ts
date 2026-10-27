@@ -14,7 +14,7 @@ export interface LyricData {
   lyricLoading?: boolean;
   /** 当前播放歌曲 id（用于偏移校准） */
   songId?: number;
-  /** 当前歌曲的时间偏移（秒，正负均可） */
+  /** 当前歌曲的时间偏移（毫秒，正负均可） */
   songOffset?: number;
   /** 歌词数据 */
   lrcData?: LyricLine[];

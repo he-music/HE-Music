@@ -73,6 +73,92 @@ export interface LifecycleStatus {
   trayAvailable: boolean;
 }
 
+export type LyricsAction = "previous" | "toggle" | "next" | "show-main" | "open-settings";
+
+export interface LyricsAttachment {
+  window: LyricsWindowState;
+  snapshot: LyricsSnapshot | null;
+}
+
+export interface LyricsBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+export interface LyricsClock {
+  epoch: number;
+  seq: number;
+  trackKey: string;
+  playing: boolean;
+  positionMs: number;
+  offsetMs: number;
+  rate: number;
+}
+
+export interface LyricsCommand {
+  epoch: number;
+  trackKey: string;
+  action: LyricsAction;
+}
+
+export interface LyricsLine {
+  words: LyricsWord[];
+  translatedLyric: string;
+  romanLyric: string;
+  isBG: boolean;
+  isDuet: boolean;
+  startTime: number;
+  endTime: number;
+}
+
+export interface LyricsSession {
+  epoch: number;
+}
+
+export interface LyricsSnapshot {
+  epoch: number;
+  seq: number;
+  trackKey: string;
+  playName: string;
+  artistName: string;
+  playing: boolean;
+  positionMs: number;
+  offsetMs: number;
+  rate: number;
+  loading: boolean;
+  lrcData: LyricsLine[];
+  yrcData: LyricsLine[];
+}
+
+/**
+ * Visible means the native window has been shown; Pending means ready/Attach
+ * is still outstanding. A failed asynchronous open reports Failure and false.
+ * Locking is deliberately unavailable until an external unlock path exists.
+ */
+export interface LyricsWindowState {
+  epoch: number;
+  revision: number;
+  visible: boolean;
+  pending: boolean;
+  locked: boolean;
+  hoverUnlock: boolean;
+  bounds: LyricsBounds;
+  failure: string;
+}
+
+/**
+ * All lyric and clock times are milliseconds, including offsetMs. Line bounds
+ * are independent of the first/last word bounds in the upstream LyricLine type.
+ */
+export interface LyricsWord {
+  startTime: number;
+  endTime: number;
+  word: string;
+  romanWord?: string;
+}
+
 /**
  * These are JSON object strings, not native settings or authorization records.
  * The UI must additionally validate setting values against its current defaults.
@@ -267,6 +353,51 @@ export const DesktopLifecycle = {
   },
 } as const;
 
+/**
+ * DesktopLyrics owns an independent, unlocked web window. It never owns audio,
+ * claims lifecycle readiness, writes settings, or accepts arbitrary IPC names.
+ */
+export const DesktopLyrics = {
+  /**
+   * Subscribe first, then Attach. CallerPage must be this exact window's Page;
+   * the main page and other child windows cannot attach or send commands.
+   */
+  attach(): Promise<LyricsAttachment> {
+    return call("DesktopLyrics.Attach");
+  },
+  begin(): Promise<LyricsSession> {
+    return call("DesktopLyrics.Begin");
+  },
+  close(epoch: number): Promise<LyricsWindowState> {
+    return call("DesktopLyrics.Close", epoch);
+  },
+  command(command: LyricsCommand): Promise<void> {
+    return call("DesktopLyrics.Command", command);
+  },
+  getState(epoch: number): Promise<LyricsWindowState> {
+    return call("DesktopLyrics.GetState", epoch);
+  },
+  publishClock(clock: LyricsClock): Promise<void> {
+    return call("DesktopLyrics.PublishClock", clock);
+  },
+  publishSnapshot(snapshot: LyricsSnapshot): Promise<void> {
+    return call("DesktopLyrics.PublishSnapshot", snapshot);
+  },
+  setBounds(epoch: number, bounds: LyricsBounds): Promise<LyricsWindowState> {
+    return call("DesktopLyrics.SetBounds", epoch, bounds);
+  },
+  /**
+   * SetVisible returns immediately with Pending=true on first creation. Only a
+   * later window event with Visible=true confirms ready-to-show AND Attach.
+   */
+  setVisible(epoch: number, visible: boolean): Promise<LyricsWindowState> {
+    return call("DesktopLyrics.SetVisible", epoch, visible);
+  },
+  teardown(epoch: number): Promise<void> {
+    return call("DesktopLyrics.Teardown", epoch);
+  },
+} as const;
+
 /** DesktopPlatform exposes only the desktop capabilities implemented in M2. */
 export const DesktopPlatform = {
   /** OpenExternal opens HTTP(S) links in the system browser. */
@@ -364,6 +495,10 @@ export const events = {
   desktopAuthCallback: event<AuthCallbackReceived>("desktop:auth-callback"),
   desktopTrayAction: event<TrayAction>("desktop:tray-action"),
   desktopCloseRequested: event<CloseRequested>("desktop:close-requested"),
+  desktopLyricsWindow: event<LyricsWindowState>("desktop:lyrics-window"),
+  desktopLyricsSnapshot: event<LyricsSnapshot>("desktop:lyrics-snapshot"),
+  desktopLyricsClock: event<LyricsClock>("desktop:lyrics-clock"),
+  desktopLyricsCommand: event<LyricsCommand>("desktop:lyrics-command"),
   desktopWindowMaximized: event<boolean>("desktop:window-maximized"),
   desktopShortcutAction: event<ShortcutEvent>("desktop:shortcut-action"),
   desktopSystemMediaCommand: event<SystemMediaCommand>("desktop:system-media-command"),

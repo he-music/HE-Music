@@ -1,6 +1,7 @@
 import type { PlatformShortcuts } from "./shortcuts";
 import type { PlatformSystemMedia } from "./systemMedia";
 import type { PlatformFiles } from "./files";
+import type { PlatformDesktopLyrics } from "./desktopLyrics";
 import type {
   CloseRequested,
   CloseResolution,
@@ -52,6 +53,7 @@ export interface PlatformAdapter {
   readonly shortcuts?: PlatformShortcuts;
   readonly systemMedia?: PlatformSystemMedia;
   readonly files?: PlatformFiles;
+  readonly desktopLyrics?: PlatformDesktopLyrics;
 }
 
 export function systemFromUserAgent(userAgent: string): SystemPlatform {

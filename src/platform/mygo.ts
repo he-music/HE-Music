@@ -2,6 +2,7 @@ import { shallowReactive } from "vue";
 import { currentWindow, runtime } from "mygo-runtime";
 import {
   DesktopLifecycle,
+  DesktopLyrics,
   DesktopPlatform,
   GlobalShortcuts,
   SystemMedia,
@@ -25,6 +26,13 @@ export function createMygoPlatform(): PlatformAdapter {
     os: os === "darwin" || os === "win32" || os === "linux" ? os : "unknown",
     capabilities,
     files: NativeFiles,
+    desktopLyrics: {
+      ...DesktopLyrics,
+      onWindow: (listener) => events.desktopLyricsWindow.on(listener),
+      onSnapshot: (listener) => events.desktopLyricsSnapshot.on(listener),
+      onClock: (listener) => events.desktopLyricsClock.on(listener),
+      onCommand: (listener) => events.desktopLyricsCommand.on(listener),
+    },
     systemMedia: {
       ...SystemMedia,
       onCommand: (listener) => events.desktopSystemMediaCommand.on(listener),

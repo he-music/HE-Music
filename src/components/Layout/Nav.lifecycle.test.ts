@@ -4,12 +4,16 @@ import * as Vue from "vue";
 import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 
+type ShellSessionStub = { start: () => Promise<void>; dispose: () => Promise<void> };
 const mocks = vi.hoisted(() => ({
   platform: { kind: "mygo", capabilities: { tray: true, windowControls: false }, lifecycle: {} },
   setting: {} as Record<string, unknown>,
   status: {} as Record<string, unknown>,
   music: {} as Record<string, unknown>,
   player: { playOrPause: vi.fn(), nextOrPrev: vi.fn() },
+  lyrics: undefined as ShellSessionStub | undefined,
+  media: undefined as ShellSessionStub | undefined,
+  files: undefined as ShellSessionStub | undefined,
 }));
 vi.mock("@/platform", () => ({ platform: mocks.platform }));
 vi.mock("@/stores", () => ({
@@ -19,6 +23,13 @@ vi.mock("@/stores", () => ({
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => mocks.player }));
 vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("@/composables/shellDesktopLyrics", () => ({
+  createShellDesktopLyricsSession: () => mocks.lyrics,
+}));
+vi.mock("@/composables/shellSystemMedia", () => ({
+  createShellSystemMediaSession: () => mocks.media,
+}));
+vi.mock("@/platform/filesSession", () => ({ createFilesSession: () => mocks.files }));
 import { useDesktopLifecycle } from "@/composables/useDesktopLifecycle";
 
 const flush = async () => {
@@ -30,6 +41,9 @@ afterEach(async () => {
   unmounts.splice(0).forEach((unmount) => unmount());
   await flush();
   vi.restoreAllMocks();
+  mocks.lyrics = undefined;
+  mocks.media = undefined;
+  mocks.files = undefined;
   vi.unstubAllGlobals();
 });
 
@@ -235,5 +249,61 @@ describe("Nav native lifecycle setup", () => {
     await flush();
     expect(nav.modal().value).toBe(false);
     expect(nav.service.resolveClose).not.toHaveBeenCalled();
+  });
+  it("Ready后启动歌词，失败不撤销媒体文件；卸载同步失效先于lifecycle teardown", async () => {
+    let ready!: (value: { trayAvailable: boolean }) => void;
+    const media = { start: vi.fn(async () => {}), dispose: vi.fn(async () => {}) };
+    const files = { start: vi.fn(async () => {}), dispose: vi.fn(async () => {}) };
+    const lyrics = {
+      start: vi.fn(async () => {
+        expect(media.start).toHaveBeenCalledOnce();
+        throw new Error("synthetic lyrics failure");
+      }),
+      dispose: vi.fn(async () => {}),
+    };
+    mocks.lyrics = lyrics;
+    mocks.media = media;
+    mocks.files = files;
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const nav = mountNav({
+      ready: new Promise((resolve) => {
+        ready = resolve;
+      }),
+    });
+    await flush();
+    expect(lyrics.start).not.toHaveBeenCalled();
+    ready({ trayAvailable: true });
+    await flush();
+    expect(lyrics.start).toHaveBeenCalledOnce();
+    expect(files.start).toHaveBeenCalledOnce();
+    expect(media.dispose).not.toHaveBeenCalled();
+    expect(files.dispose).not.toHaveBeenCalled();
+    expect(nav.service.teardown).not.toHaveBeenCalled();
+    expect(nav.service.syncPlayback).toHaveBeenCalledOnce();
+    nav.unmount();
+    expect(lyrics.dispose).toHaveBeenCalledOnce();
+    expect(nav.service.teardown).not.toHaveBeenCalled();
+    await flush();
+    expect(media.dispose).toHaveBeenCalledOnce();
+    expect(files.dispose).toHaveBeenCalledOnce();
+    expect(nav.service.teardown).toHaveBeenCalledOnce();
+  });
+
+  it("歌词尚未启动即卸载，迟到Ready不启动已失效歌词会话", async () => {
+    let ready!: (value: { trayAvailable: boolean }) => void;
+    const lyrics = { start: vi.fn(async () => {}), dispose: vi.fn(async () => {}) };
+    mocks.lyrics = lyrics;
+    const nav = mountNav({
+      ready: new Promise((resolve) => {
+        ready = resolve;
+      }),
+    });
+    await flush();
+    nav.unmount();
+    expect(lyrics.dispose).toHaveBeenCalledOnce();
+    ready({ trayAvailable: true });
+    await flush();
+    expect(lyrics.start).not.toHaveBeenCalled();
+    expect(nav.service.teardown).toHaveBeenCalledOnce();
   });
 });

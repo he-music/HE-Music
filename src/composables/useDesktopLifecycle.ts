@@ -7,6 +7,7 @@ import type { CloseResolution, LifecycleConfig } from "@/platform/mygo.bindings"
 import { createShellShortcutSession } from "./shellShortcuts";
 import { createShellSystemMediaSession } from "./shellSystemMedia";
 import { createFilesSession } from "@/platform/filesSession";
+import { createShellDesktopLyricsSession } from "./shellDesktopLyrics";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -18,6 +19,7 @@ export function useDesktopLifecycle(ui: {
   const shortcuts = createShellShortcutSession();
   const media = platform.lifecycle ? createShellSystemMediaSession() : undefined;
   const files = lifecycle ? createFilesSession(platform.files) : undefined;
+  const lyrics = lifecycle ? createShellDesktopLyricsSession() : undefined;
   if (!lifecycle) {
     let disposed = false;
     onMounted(() => {
@@ -124,6 +126,7 @@ export function useDesktopLifecycle(ui: {
         await media?.start();
         await syncPlayback();
         if (disposed) return;
+        void lyrics?.start().catch(() => console.error("桌面歌词会话初始化失败"));
         stops.push(
           watch(
             () => [setting.showCloseAppTip, setting.closeAppMethod, setting.language],
@@ -137,6 +140,7 @@ export function useDesktopLifecycle(ui: {
       } catch {
         reportFailure();
         ready = false;
+        await lyrics?.dispose();
         await files?.dispose();
         await media?.dispose();
         await shortcuts?.dispose();
@@ -152,6 +156,7 @@ export function useDesktopLifecycle(ui: {
   );
   onBeforeUnmount(() => {
     disposed = true;
+    const lyricsCleanup = lyrics?.dispose();
     const shortcutCleanup = shortcuts?.dispose();
     const mediaCleanup = media?.dispose();
     const filesCleanup = files?.dispose();
@@ -160,6 +165,7 @@ export function useDesktopLifecycle(ui: {
     ui.showCloseModal.value = false;
     stops.splice(0).forEach((stop) => stop());
     shellTransition = shellTransition.then(async () => {
+      await lyricsCleanup;
       await shortcutCleanup;
       await mediaCleanup;
       await filesCleanup;
