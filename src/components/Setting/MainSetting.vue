@@ -114,7 +114,7 @@ import { SettingItem, SettingGroup } from "@/types/settings";
 import type { SettingType } from "@/types/main";
 import { useMobile } from "@/composables/useMobile";
 import { renderIcon } from "@/utils/helper";
-import { isElectron } from "@/utils/env";
+import { isElectron, isMygo } from "@/utils/env";
 import packageJson from "@/../package.json";
 import { usePlaySettings } from "./config/play";
 import { useGeneralSettings } from "./config/general";
@@ -303,7 +303,7 @@ const menuOptions = computed<MenuOption[]>(() => [
   {
     key: "local",
     label: t("setting.local.local_setting"),
-    show: isElectron,
+    show: isElectron || isMygo,
     icon: renderIcon("Storage"),
   },
   {

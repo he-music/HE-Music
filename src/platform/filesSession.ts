@@ -1,6 +1,14 @@
 import { computed, shallowRef } from "vue";
 import type { PlatformFiles } from "./files";
-import type { RendererSettings, SettingsImportResult, SettingsExportResult } from "./mygo.bindings";
+import type {
+  DefaultDirectoryKind,
+  DefaultDirectoryResult,
+  DirectoryGrant,
+  DirectorySelection,
+  RendererSettings,
+  SettingsImportResult,
+  SettingsExportResult,
+} from "./mygo.bindings";
 
 export type FileOperationResult<T> =
   { status: "completed"; value: T } | { status: "busy" | "unavailable" | "stale" | "failed" };
@@ -11,6 +19,8 @@ export const filesSession = computed(() => activeSession.value);
 export class FilesSession {
   readonly ready = shallowRef(false);
   readonly busy = shallowRef(false);
+  private readonly directoryGrants = shallowRef<readonly DirectoryGrant[]>([]);
+  readonly directories = computed(() => this.directoryGrants.value);
   private epoch: number | undefined;
   private disposed = false;
   private started = false;
@@ -46,6 +56,7 @@ export class FilesSession {
     if (this.cleanup) return this.cleanup;
     this.disposed = true;
     this.ready.value = false;
+    this.directoryGrants.value = [];
     if (activeSession.value === this) activeSession.value = undefined;
     const epoch = this.epoch;
     this.epoch = undefined;
@@ -63,6 +74,42 @@ export class FilesSession {
 
   exportSettings(settings: RendererSettings): Promise<FileOperationResult<SettingsExportResult>> {
     return this.run((epoch) => this.provider.exportSettings(epoch, settings));
+  }
+
+  chooseDirectory(): Promise<FileOperationResult<DirectorySelection>> {
+    return this.run(async (epoch) => {
+      const selection = await this.provider.chooseDirectory(epoch);
+      if (
+        !this.disposed &&
+        this.epoch === epoch &&
+        selection.status === "selected" &&
+        selection.grant?.epoch === epoch
+      ) {
+        const grant = selection.grant;
+        this.directoryGrants.value = [
+          ...this.directoryGrants.value.filter((item) => item.token !== grant.token),
+          grant,
+        ];
+      }
+      return selection;
+    });
+  }
+
+  defaultDirectory(
+    kind: DefaultDirectoryKind,
+  ): Promise<FileOperationResult<DefaultDirectoryResult>> {
+    return this.run((epoch) => this.provider.defaultDirectory(epoch, kind));
+  }
+
+  revokeDirectory(token: string): Promise<FileOperationResult<void>> {
+    return this.run(async (epoch) => {
+      await this.provider.revokeDirectory(epoch, token);
+      if (!this.disposed && this.epoch === epoch) {
+        this.directoryGrants.value = this.directoryGrants.value.filter(
+          (item) => item.token !== token,
+        );
+      }
+    });
   }
 
   private async run<T>(operation: (epoch: number) => Promise<T>): Promise<FileOperationResult<T>> {

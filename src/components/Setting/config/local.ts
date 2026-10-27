@@ -3,8 +3,30 @@ import { SettingConfig } from "@/types/settings";
 import { computed } from "vue";
 import { t } from "@/i18n";
 import { openLocalMusicDirectoryModal } from "@/utils/modal";
+import { isElectron, isMygo } from "@/utils/env";
 
 export const useLocalSettings = (): SettingConfig => {
+  if (!isElectron) {
+    return {
+      groups: isMygo
+        ? [
+            {
+              title: t("setting.local.directory_manage"),
+              items: [
+                {
+                  key: "localFilesPath",
+                  label: t("setting.local.directory_manage"),
+                  type: "button",
+                  buttonLabel: t("setting.local.directory_manage"),
+                  description: t("setting.local.directory_scope"),
+                  action: openLocalMusicDirectoryModal,
+                },
+              ],
+            },
+          ]
+        : [],
+    };
+  }
   // const statusStore = useStatusStore();
   const settingStore = useSettingStore();
 

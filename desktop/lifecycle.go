@@ -42,6 +42,7 @@ func (l *DesktopLifecycle) attachMainWindow(win *mygo.Window, enableTray bool) {
 		return
 	}
 	l.main = win
+	desktopLyrics.attachMainWindow(win)
 	l.listeners = append(l.listeners,
 		win.OnClose(l.onClose),
 		win.OnClosed(l.cleanup),
@@ -52,6 +53,7 @@ func (l *DesktopLifecycle) attachMainWindow(win *mygo.Window, enableTray bool) {
 			desktopShortcuts.revoke()
 			desktopSystemMedia.revoke()
 			desktopFiles.revoke()
+			desktopLyrics.revoke()
 			l.state.beginQuit()
 			l.stopPrompt()
 		}),
@@ -251,6 +253,7 @@ func (l *DesktopLifecycle) revoke() {
 	desktopShortcuts.revoke()
 	desktopSystemMedia.revoke()
 	desktopFiles.revoke()
+	desktopLyrics.revoke()
 	l.state.invalidate()
 	l.stopPrompt()
 	if l.stopOwner != nil {
@@ -271,6 +274,7 @@ func (l *DesktopLifecycle) cleanup() {
 	desktopShortcuts.revoke()
 	desktopSystemMedia.revoke()
 	desktopFiles.revoke()
+	desktopLyrics.revoke()
 	l.stopPrompt()
 	if l.stopOwner != nil {
 		l.stopOwner()
