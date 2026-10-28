@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createDefaultDesktopLyricStyle } from "@/platform/desktopLyricStyle";
 import { createRenderer, h, nextTick, reactive } from "vue";
 import type { LyricsCommand, PlatformDesktopLyrics } from "@/platform/desktopLyrics";
 
@@ -6,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   platform: { kind: "mygo", desktopLyrics: undefined as PlatformDesktopLyrics | undefined },
   music: {} as Record<string, unknown>,
   status: {} as Record<string, unknown>,
+  setting: {} as Record<string, unknown>,
   player: {
     getSeek: vi.fn(() => 5432),
     onSeek: vi.fn(() => () => {}),
@@ -18,6 +20,7 @@ vi.mock("@/platform", () => ({ platform: mocks.platform }));
 vi.mock("@/stores", () => ({
   useMusicStore: () => mocks.music,
   useStatusStore: () => mocks.status,
+  useSettingStore: () => mocks.setting,
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => mocks.player }));
 vi.mock("@/utils/modal", () => ({ openSetting: mocks.openSetting }));
@@ -38,6 +41,11 @@ describe("shellDesktopLyrics", () => {
 
   it("真实曲目信息/歌词与毫秒单位；高频进度不触发主组件更新，切歌仍更新", async () => {
     mocks.platform.kind = "mygo";
+    const settings = reactive({
+      desktopLyricStyle: createDefaultDesktopLyricStyle(),
+      unrelated: false,
+    });
+    mocks.setting = settings;
     const publishSnapshot = vi.fn(async () => {});
     const publishClock = vi.fn(async () => {});
     const commands = new Set<(command: LyricsCommand) => void>();
@@ -130,6 +138,7 @@ describe("shellDesktopLyrics", () => {
         rate: 1.5,
         loading: false,
         lrcData: (mocks.music.songLyric as { lrcData: unknown[] }).lrcData,
+        style: createDefaultDesktopLyricStyle(),
       }),
     );
     const initialSnapshots = publishSnapshot.mock.calls.length;
@@ -148,6 +157,18 @@ describe("shellDesktopLyrics", () => {
     }
     expect(renders).toBe(1);
     expect(publishSnapshot).toHaveBeenCalledTimes(initialSnapshots);
+    settings.unrelated = true;
+    await flush();
+    expect(publishSnapshot).toHaveBeenCalledTimes(initialSnapshots);
+    settings.desktopLyricStyle.playedColor = "#123456";
+    await flush();
+    expect(publishSnapshot).toHaveBeenCalledTimes(initialSnapshots + 1);
+    expect(publishSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        style: { ...createDefaultDesktopLyricStyle(), playedColor: "#123456" },
+      }),
+    );
+    expect(renders).toBe(1);
     mocks.music.playSong = { id: "two", platform: "test", name: "Two", artists: "Other" };
     await flush();
     expect(renders).toBe(2);

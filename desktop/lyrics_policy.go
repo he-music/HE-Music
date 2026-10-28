@@ -136,10 +136,14 @@ func (s *lyricsState) publishSnapshot(snapshot LyricsSnapshot) error {
 		!validLyricsLines(snapshot.LrcData) || !validLyricsLines(snapshot.YrcData) {
 		return errLyricsData
 	}
+	if snapshot.Style != nil && !validLyricsStyle(*snapshot.Style) {
+		return errLyricsData
+	}
 	// Bound arguments are decoded per call; copy arrays as well so policy callers
 	// cannot mutate cached lyrics after validation.
 	snapshot.LrcData = cloneLyricsLines(snapshot.LrcData)
 	snapshot.YrcData = cloneLyricsLines(snapshot.YrcData)
+	snapshot.Style = cloneLyricsStyle(snapshot.Style)
 	s.snapshot, s.seq = &snapshot, snapshot.Seq
 	return nil
 }
@@ -177,6 +181,7 @@ func (s *lyricsState) attachment() LyricsAttachment {
 		snapshot := *s.snapshot
 		snapshot.LrcData = cloneLyricsLines(snapshot.LrcData)
 		snapshot.YrcData = cloneLyricsLines(snapshot.YrcData)
+		snapshot.Style = cloneLyricsStyle(snapshot.Style)
 		result.Snapshot = &snapshot
 	}
 	return result

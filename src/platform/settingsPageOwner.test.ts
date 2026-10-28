@@ -6,7 +6,7 @@ import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 import type { PlatformAdapter } from "./types";
 import type { PlatformFiles } from "./files";
-import type { SettingGroup } from "@/types/settings";
+import type { SettingGroup, SettingConfig } from "@/types/settings";
 import type { SettingsImportResult } from "./mygo.bindings";
 
 const host = vi.hoisted(() => ({ electron: false }));
@@ -156,7 +156,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-function mountPage() {
+function mountPage(type: "general" | "lyrics" = "lyrics") {
   // Compile the production script AND inline template; no extracted/recreated computed wiring.
   const { descriptor } = parse(
     readFileSync(new URL("../components/Setting/MainSetting.vue", import.meta.url), "utf8"),
@@ -171,6 +171,7 @@ function mountPage() {
       return () => slots.default?.();
     },
   });
+  const lyricConfigs: SettingConfig[] = [];
   const modules: Record<string, unknown> = {
     vue: { ...Vue, Transition: pass },
     "vue-i18n": { useI18n: () => ({ t: (key: string) => `${locale.value}:${key}` }) },
@@ -186,7 +187,13 @@ function mountPage() {
     "./config/general": generalModule,
     "./config/play": playModule,
     "./config/appearance": appearanceModule,
-    "./config/lyric": lyricModule,
+    "./config/lyric": {
+      useLyricSettings: () => {
+        const config = lyricModule.useLyricSettings();
+        lyricConfigs.push(config);
+        return config;
+      },
+    },
     "./config/keyboard": keyboardModule,
     "./config/local": localModule,
     "./config/network": networkModule,
@@ -213,7 +220,7 @@ function mountPage() {
     parentNode: () => null,
     nextSibling: () => null,
   });
-  const app = renderer.createApp(exports.default!, { type: "lyrics" });
+  const app = renderer.createApp(exports.default!, { type });
   for (const name of ["NFlex", "NH1", "NScrollbar", "NText", "NButton", "SvgIcon", "AboutSetting"])
     app.component(name, pass);
   app.component(
@@ -262,6 +269,7 @@ function mountPage() {
     groups.flatMap((group) => group.items).find((item) => item.key === key)!;
   return {
     close,
+    lyricConfigs,
     item,
     search: () => search,
     general: async () => {
@@ -274,6 +282,31 @@ function mountPage() {
 }
 
 describe("MainSetting production lazy search/config ownership", () => {
+  it("owns style watchers created by lazy search from the general entry and replaces them on locale changes", async () => {
+    const store = useSettingStore();
+    const page = mountPage("general");
+    const styleValue = (config: SettingConfig | undefined) => {
+      const value = config?.groups
+        .flatMap((group) => group.items)
+        .find((item) => item.key === "desktopLyricPlayedColor")?.value;
+      if (!value) throw new Error("Missing style configuration");
+      return value;
+    };
+    const first = styleValue(page.lyricConfigs[0]);
+    store.desktopLyricStyle.playedColor = "#123456";
+    expect(first.value).toBe("#123456");
+    locale.value = "en";
+    await flush();
+    const current = styleValue(page.lyricConfigs.at(-1));
+    expect(current).not.toBe(first);
+    store.desktopLyricStyle.playedColor = "#abcdef";
+    expect(current.value).toBe("#abcdef");
+    expect(first.value).toBe("#123456");
+    page.close();
+    store.desktopLyricStyle.playedColor = "#fff";
+    expect(current.value).toBe("#abcdef");
+    expect(first.value).toBe("#123456");
+  });
   it.each(["mygo", "electron"] as const)(
     "cancels %s successful import reload when a lyrics-entry page closes",
     async (kind) => {

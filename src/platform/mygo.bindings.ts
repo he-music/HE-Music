@@ -208,6 +208,14 @@ export interface LyricsSnapshot {
   loading: boolean;
   lrcData: LyricsLine[];
   yrcData: LyricsLine[];
+  style?: LyricsStyle;
+}
+
+export interface LyricsStyle {
+  playedColor: string;
+  unplayedColor: string;
+  shadowColor: string;
+  textBackgroundMask: boolean;
 }
 
 /**

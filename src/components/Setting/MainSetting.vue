@@ -109,8 +109,9 @@
 </template>
 
 <script setup lang="ts">
+import { effectScope, onScopeDispose } from "vue";
 import type { MenuOption, NScrollbar, SelectOption } from "naive-ui";
-import { SettingItem, SettingGroup } from "@/types/settings";
+import { SettingItem, SettingGroup, SettingConfig } from "@/types/settings";
 import type { SettingType } from "@/types/main";
 import { useMobile } from "@/composables/useMobile";
 import { renderIcon } from "@/utils/helper";
@@ -133,7 +134,22 @@ const generalActions = useGeneralSettingsActions();
 const playConfig = computed(() => usePlaySettings());
 const generalConfig = computed(() => useGeneralSettings(generalActions));
 const appearanceConfig = computed(() => useAppearanceSettings());
-const lyricConfig = computed(() => useLyricSettings());
+// 搜索会在 render 中惰性求值；为歌词配置单独持有 scope，语言变化时替换并清理旧实例。
+let lyricSettingsScope: ReturnType<typeof effectScope> | undefined;
+let lyricSettingsDisposed = false;
+let lastLyricConfig: SettingConfig = { groups: [] };
+const lyricConfig = computed(() => {
+  if (lyricSettingsDisposed) return lastLyricConfig;
+  lyricSettingsScope?.stop();
+  lyricSettingsScope = effectScope(true);
+  const config = lyricSettingsScope.run(useLyricSettings);
+  if (config) lastLyricConfig = config;
+  return lastLyricConfig;
+});
+onScopeDispose(() => {
+  lyricSettingsDisposed = true;
+  lyricSettingsScope?.stop();
+});
 const keyboardConfig = computed(() => useKeyboardSettings());
 const localConfig = computed(() => useLocalSettings());
 const networkConfig = computed(() => useNetworkSettings());

@@ -57,6 +57,7 @@ type LyricsSnapshot struct {
 	Loading    bool         `json:"loading"`
 	LrcData    []LyricsLine `json:"lrcData"`
 	YrcData    []LyricsLine `json:"yrcData"`
+	Style      *LyricsStyle `json:"style,omitempty"`
 }
 
 type LyricsClock struct {

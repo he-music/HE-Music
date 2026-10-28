@@ -4,8 +4,13 @@ import { ThemeColorType } from "@/types/color";
 import { FontStyleSelection } from "@/types/global";
 import type { KineticJumpGranularity } from "@/utils/lyric/kinetic";
 import { deserializeLyricSettings, type LyricRenderer } from "@/utils/lyric/renderer";
+import {
+  createDefaultDesktopLyricStyle,
+  type DesktopLyricStyle,
+} from "@/platform/desktopLyricStyle";
 
 export interface SettingState {
+  desktopLyricStyle: DesktopLyricStyle;
   /** 明暗模式 */
   themeMode: "light" | "dark" | "auto";
   themeColorType: ThemeColorType;
@@ -117,6 +122,7 @@ export interface SettingState {
 }
 
 export const createSettingState = (): SettingState => ({
+  desktopLyricStyle: createDefaultDesktopLyricStyle(),
   // 个性化
   themeMode: "auto", // 明暗模式
   themeColorType: "default", // 主题类别

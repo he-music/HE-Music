@@ -11,6 +11,11 @@ import { resolveKineticJumpGranularity } from "@/utils/lyric/kinetic";
 import { usePlayer } from "@/utils/player";
 import { platform } from "@/platform";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
+import { watch } from "vue";
+import {
+  createDefaultDesktopLyricStyle,
+  parseDesktopLyricStyle,
+} from "@/platform/desktopLyricStyle";
 
 export const useLyricSettings = (): SettingConfig => {
   const player = usePlayer();
@@ -20,6 +25,28 @@ export const useLyricSettings = (): SettingConfig => {
   // 桌面歌词配置
   const desktopLyricConfig = reactive<LyricConfig>({ ...defaultDesktopLyricConfig });
 
+  const nativeStyle = () =>
+    parseDesktopLyricStyle(settingStore.desktopLyricStyle) ?? createDefaultDesktopLyricStyle();
+  const syncNativeStyle = () => {
+    if (platform.kind === "mygo") Object.assign(desktopLyricConfig, nativeStyle());
+  };
+  watch(
+    () =>
+      platform.kind === "mygo"
+        ? [
+            settingStore.desktopLyricStyle?.playedColor,
+            settingStore.desktopLyricStyle?.unplayedColor,
+            settingStore.desktopLyricStyle?.shadowColor,
+            settingStore.desktopLyricStyle?.textBackgroundMask,
+          ]
+        : [],
+    syncNativeStyle,
+    { immediate: true, flush: "sync" },
+  );
+  const styleAvailable = computed(
+    () =>
+      isElectron || (platform.kind === "mygo" && desktopLyricsSession.value?.ready.value === true),
+  );
   const getDesktopLyricConfig = async () => {
     if (!isElectron) return;
     const config = await window.electron.ipcRenderer.invoke("request-desktop-lyric-option");
@@ -36,6 +63,21 @@ export const useLyricSettings = (): SettingConfig => {
   // 保存桌面歌词配置
   const saveDesktopLyricConfig = () => {
     try {
+      if (platform.kind === "mygo") {
+        const style = parseDesktopLyricStyle({
+          playedColor: desktopLyricConfig.playedColor,
+          unplayedColor: desktopLyricConfig.unplayedColor,
+          shadowColor: desktopLyricConfig.shadowColor,
+          textBackgroundMask: desktopLyricConfig.textBackgroundMask,
+        });
+        if (!style) {
+          syncNativeStyle();
+          window.$message.error(t("message.desktop_lyrics_save_fail"));
+          return;
+        }
+        settingStore.desktopLyricStyle = style;
+        return;
+      }
       if (!isElectron) return;
       console.log(cloneDeep(desktopLyricConfig));
       window.electron.ipcRenderer.send(
@@ -54,13 +96,20 @@ export const useLyricSettings = (): SettingConfig => {
   // 恢复默认桌面歌词配置
   const restoreDesktopLyricConfig = () => {
     try {
-      if (!isElectron) return;
+      if (!isElectron && platform.kind !== "mygo") return;
       window.$dialog.warning({
         title: t("common.warning"),
-        content: t("message.desktop_lyrics_reset_confirm"),
+        content:
+          platform.kind === "mygo"
+            ? t("message.desktop_lyrics_style_reset_confirm")
+            : t("message.desktop_lyrics_reset_confirm"),
         positiveText: t("common.ok"),
         negativeText: t("common.cancel"),
         onPositiveClick: () => {
+          if (platform.kind === "mygo") {
+            settingStore.desktopLyricStyle = createDefaultDesktopLyricStyle();
+            return;
+          }
           window.electron.ipcRenderer.send(
             "update-desktop-lyric-option",
             defaultDesktopLyricConfig,
@@ -748,7 +797,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricPlayedColor",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.desktop_lyrics_font_color_played"),
             type: "color-picker",
             description: t("setting.lyrics.desktop_lyrics_font_color_played_tip"),
@@ -761,7 +810,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricUnplayedColor",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.desktop_lyrics_font_color_unplayed"),
             type: "color-picker",
             description: t("setting.lyrics.desktop_lyrics_font_color_unplayed_tip"),
@@ -774,7 +823,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricShadowColor",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.desktop_lyrics_shadow_color"),
             type: "color-picker",
             description: t("setting.lyrics.desktop_lyrics_shadow_color_tip"),
@@ -787,7 +836,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricTextBackgroundMask",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.desktop_lyrics_text_background_mask"),
             type: "switch",
             value: computed({
@@ -823,10 +872,16 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricRestore",
-            show: isElectron,
-            label: t("setting.lyrics.desktop_lyrics_reset_default"),
+            show: styleAvailable,
+            label:
+              platform.kind === "mygo"
+                ? t("setting.lyrics.desktop_lyrics_style_reset_default")
+                : t("setting.lyrics.desktop_lyrics_reset_default"),
             type: "button",
-            description: t("setting.lyrics.desktop_lyrics_reset_default_tip"),
+            description:
+              platform.kind === "mygo"
+                ? t("message.desktop_lyrics_style_reset_confirm")
+                : t("setting.lyrics.desktop_lyrics_reset_default_tip"),
             buttonLabel: t("common.reset_default"),
             action: restoreDesktopLyricConfig,
           },

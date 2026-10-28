@@ -177,6 +177,10 @@ import defaultDesktopLyricConfig from "@/assets/data/lyricConfig";
 import { platform } from "@/platform";
 import { useI18n } from "vue-i18n";
 import { createDesktopLyricsConsumer } from "./desktopLyricsConsumer";
+import {
+  createDefaultDesktopLyricStyle,
+  parseDesktopLyricStyle,
+} from "@/platform/desktopLyricStyle";
 
 const FALLBACK_INITIALIZATION_TIMEOUT = 2000; // 歌词窗口初始化后备超时时间，用于防止无数据时无限期空白
 const isElectron = platform.kind === "electron";
@@ -540,6 +544,12 @@ watch(
   consumer.snapshot,
   (snapshot) => {
     if (disposed) return;
+    if (isNative) {
+      Object.assign(
+        lyricConfig,
+        parseDesktopLyricStyle(snapshot?.style) ?? createDefaultDesktopLyricStyle(),
+      );
+    }
     if (!snapshot) {
       Object.assign(lyricData, {
         playName: "",

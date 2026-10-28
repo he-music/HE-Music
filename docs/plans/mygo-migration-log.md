@@ -597,3 +597,12 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 完整歌词收尾发现扫描文本实际最多1024bytes，不能作为完整LRC播放数据。非Electron本地现从捕获owner的metadata.read读取完整标签，返回后再核owner/ready、当前登记与ref四字段；失效不回退截断预览。长歌词末句及removed/version/owner变化真实4红3绿后修复，相关27项通过；新读取只在歌曲请求内，不增加时钟/watch/动画路径。当前会读取完整元数据，图片尚未用于播放器封面显示。
 - `0d9b688b` 复核完整读取其余逻辑无问题，并找出遗漏的最终歌词日志仍输出私有全文；新增零console调用断言真实红测1次，修复后仅保留Electron/在线原日志。`9a08305a` 窄复核Closed/No issues/OK。
 - 最终父实际全量93文件779项、Node/Web类型、相关TS ESLint及格式通过；Go全包/vet、改动Go测试gofmt和官方绑定完整cmp通过。生产SFC由Vue runtime/stub host验证逻辑，未把被忽略的SFC ESLint计为通过，也未当成真实Naive DOM、WebView、picker、声音、用户库、网络下载/安装或Windows验收。支持范围仍为32MiB MP3/FLAC，原件属性写回仅Darwin，跨进程/崩溃恢复与发行feed/key边界继续保留。
+
+### 桌面歌词首批样式与设置监听归属
+
+- 四字段纯模型 `75134d6` 经独立静态审查通过后整合：已播放色、未播放色、阴影色及文本背景遮罩。TS解析允许部分已知字段补默认，拒绝未知键/访问器/异常原型及非法颜色；Go非nil样式必须完整有效，缺失整个style兼容默认。颜色仅受限hex/rgb/rgba，TS/Go共用golden边界，不允许url/var注入。
+- 主窗口SettingState与设置文件schema持有样式；producer只把四字段加入低频完整快照，Go在推进seq前验证并分离输入/Attach样式对象。子页沿现有snapshot/epoch消费并原位修改现有lyricConfig；没有改AMLL、歌词结构/布局、RAF或焦点。缺失或清空快照恢复独立默认，晚Attach与clock不能回退新样式。
+- mygo设置仅开放上述四项及恢复默认样式；恢复不调用窗口位置/显示/锁定接口，Web/Electron原路径保留。字体枚举、字号与窗口尺寸、双行/对齐等涉及额外能力或布局，本次不开放。官方CLI仅在隔离worktree生成新增8行，父按hashline复制并完整cmp，保留官方长行。
+- 生产SFC stub host确认渐变/遮罩更新与歌词词节点复用；暂时移除样式消费时，回归实际因渐变仍为默认颜色失败，恢复后通过。producer测试确认高频无关状态与不相关设置不增加快照或主组件更新，必要样式与歌曲变化仍更新。
+- 集成审查 `cb381e3d` 找到P1：MainSetting搜索在render中惰性创建配置，直接依赖活动scope会遗留watcher。新增真实script/inline template的general入口与locale替换回归，修前旧实例实际继续变为abcdef、违反123456预期；父以显式effectScope承接配置，重建前停旧scope，卸载时停最后scope并禁止复活，同时保留语言响应。`7d836e80` 窄复核Closed/No issues/OK；原手工effectScope测试未覆盖的生产入口缺口已补齐。
+- 最终父实际全量95文件867项、Node/Web类型、相关TS ESLint与源文件格式、Go全包/vet/gofmt、官方绑定完整cmp通过；SFC由生产编译及Vue stub host验证，不记作SFC ESLint或真实Naive DOM/WebView验收。本轮没有启动App/Vite或用户库、音频、picker、下载/安装、Windows；下一继续托盘收藏/播放模式的独立epoch/revision/track及异步模式一致性。

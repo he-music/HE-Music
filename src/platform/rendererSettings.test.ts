@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
+import { createDefaultDesktopLyricStyle } from "./desktopLyricStyle";
 vi.stubGlobal("localStorage", {});
 const { createSettingState, useSettingStore } = await import("@/stores/setting");
 const { createShortcutState, useShortcutStore } = await import("@/stores/shortcut");
@@ -57,6 +58,42 @@ describe("rendererSettings", () => {
     shortcut.$reset();
     expect(setting.$state).toEqual(createSettingState());
     expect(shortcut.$state).toEqual(createShortcutState());
+  });
+  it("persists desktop style independently and supplies defaults for old settings", () => {
+    const setting = useSettingStore();
+    const shortcut = useShortcutStore();
+    const style = {
+      ...createDefaultDesktopLyricStyle(),
+      playedColor: "#123456",
+      shadowColor: "rgba(1, 2, 3, 0)",
+      textBackgroundMask: true,
+    };
+    setting.desktopLyricStyle = style;
+    const saved = serializeRendererSettings(setting.$state, shortcut.$state);
+    const decoded = validateSettingState(JSON.parse(saved["setting-store"]));
+    expect(decoded.desktopLyricStyle).toEqual(style);
+    decoded.desktopLyricStyle.playedColor = "#fff";
+    expect(setting.desktopLyricStyle.playedColor).toBe("#123456");
+    expect(validateSettingState({}).desktopLyricStyle).toEqual(createDefaultDesktopLyricStyle());
+    expect(
+      validateSettingState({ desktopLyricStyle: { playedColor: "#123" } }).desktopLyricStyle,
+    ).toEqual({ ...createDefaultDesktopLyricStyle(), playedColor: "#123" });
+    setting.$reset();
+    const first = setting.desktopLyricStyle;
+    first.playedColor = "#abc";
+    setting.$reset();
+    expect(setting.desktopLyricStyle).toEqual(createDefaultDesktopLyricStyle());
+    expect(setting.desktopLyricStyle).not.toBe(first);
+  });
+  it.each<unknown>([
+    { playedColor: "url(https://fixture.invalid/private)" },
+    { shadowColor: "rgba(0,0,0,2)" },
+    { textBackgroundMask: "true" },
+    { unknown: false },
+    null,
+    [],
+  ])("rejects malformed persisted desktop style: %j", (desktopLyricStyle) => {
+    expect(() => validateSettingState({ desktopLyricStyle })).toThrow("Invalid renderer settings");
   });
   it("fills partial legacy snapshots from defaults without normalizing invalid current enums", () => {
     expect(validateSettingState({ useAMLyrics: true, lyricsScrollOffset: -1 })).toEqual({

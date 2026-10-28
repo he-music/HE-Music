@@ -6,6 +6,7 @@ import { useDebounceFn, useThrottleFn } from "@vueuse/core";
 import ts from "typescript";
 import { calculateLyricIndex } from "@/utils/calc";
 import defaultConfig from "@/assets/data/lyricConfig";
+import * as desktopLyricStyle from "@/platform/desktopLyricStyle";
 import type { LyricConfig, LyricData, RenderLine } from "@/types/desktop-lyric";
 import type {
   LyricsAttachment,
@@ -284,6 +285,7 @@ function mountView(kind: "mygo" | "electron" | "web", fixture = providerFixture(
     vue: { ...Vue, TransitionGroup: passthrough },
     "@/utils/calc": { calculateLyricIndex },
     "@/assets/data/lyricConfig": { default: defaultConfig },
+    "@/platform/desktopLyricStyle": desktopLyricStyle,
     "@/platform": {
       platform: { kind, desktopLyrics: kind === "mygo" ? fixture.provider : undefined },
     },
@@ -380,6 +382,39 @@ describe("DesktopLyric production SFC", () => {
     await flush();
     expect(defaultConfig.font.size).toBe(24);
     expect(view.fixture.provider.setBounds).not.toHaveBeenCalled();
+  });
+
+  it("样式按完整快照原位更新，旧Attach和时钟不回退，新epoch恢复默认", async () => {
+    const view = mountView("mygo");
+    const style = {
+      playedColor: "#123456",
+      unplayedColor: "#654321",
+      shadowColor: "rgba(1, 2, 3, 0.25)",
+      textBackgroundMask: true,
+    };
+    view.fixture.emitSnapshot({ ...snapshot(8), style });
+    await flush();
+    view.fixture.attachment.resolve({ window: windowState(), snapshot: snapshot(2) });
+    await flush();
+    const word = allNodes(view.root).find((node) => node.props.class === "word");
+    expect(word).toBeDefined();
+    expect(JSON.stringify(word?.props.style)).toContain("#123456");
+    expect(
+      allNodes(view.root).some((node) => String(node.props.class).includes("has-background-mask")),
+    ).toBe(true);
+    expect(view.state.lyricConfig.playedColor).toBe("#123456");
+    view.fixture.emitSnapshot({ ...snapshot(9), style: { ...style, playedColor: "#112233" } });
+    await flush();
+    expect(allNodes(view.root).find((node) => node.props.class === "word")).toBe(word);
+    expect(JSON.stringify(word?.props.style)).toContain("#112233");
+    for (let seq = 10; seq < 60; seq++) view.fixture.emitClock(clock(seq));
+    expect(view.state.lyricConfig.playedColor).toBe("#112233");
+    view.fixture.emitWindow(windowState(1, 8));
+    expect(view.state.lyricConfig.playedColor).toBe(defaultConfig.playedColor);
+    expect(view.state.lyricConfig.textBackgroundMask).toBe(false);
+    view.unmount();
+    view.fixture.emitSnapshot({ ...snapshot(99, "A", 8), style });
+    expect(view.state.lyricConfig.playedColor).toBe(defaultConfig.playedColor);
   });
 
   it("晚Attach不覆盖事件新曲、clock、revision，快照完整替换歌词", async () => {

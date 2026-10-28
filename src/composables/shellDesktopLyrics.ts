@@ -1,13 +1,18 @@
-import { useMusicStore, useStatusStore } from "@/stores";
+import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { platform } from "@/platform";
 import { usePlayer } from "@/utils/player";
 import { DesktopLyricsSession } from "@/platform/desktopLyricsSession";
+import {
+  createDefaultDesktopLyricStyle,
+  parseDesktopLyricStyle,
+} from "@/platform/desktopLyricStyle";
 
 export function createShellDesktopLyricsSession(): DesktopLyricsSession | undefined {
   const provider = platform.kind === "mygo" ? platform.desktopLyrics : undefined;
   if (!provider) return;
   const music = useMusicStore();
   const status = useStatusStore();
+  const setting = useSettingStore();
   const player = usePlayer();
   const trackKey = () => {
     const song = music.playSong;
@@ -37,6 +42,10 @@ export function createShellDesktopLyricsSession(): DesktopLyricsSession | undefi
       music.songLyric.lrcData,
       music.songLyric.yrcData,
       status.lyricLoading,
+      setting.desktopLyricStyle?.playedColor,
+      setting.desktopLyricStyle?.unplayedColor,
+      setting.desktopLyricStyle?.shadowColor,
+      setting.desktopLyricStyle?.textBackgroundMask,
     ],
     clockDependencies: () => [
       status.playStatus,
@@ -48,6 +57,7 @@ export function createShellDesktopLyricsSession(): DesktopLyricsSession | undefi
       playName: music.playSong.name,
       artistName: artistName(),
       loading: status.lyricLoading,
+      style: parseDesktopLyricStyle(setting.desktopLyricStyle) ?? createDefaultDesktopLyricStyle(),
       lrcData: music.songLyric.lrcData.map((line) => ({
         ...line,
         words: line.words.map((word) => ({ ...word })),
