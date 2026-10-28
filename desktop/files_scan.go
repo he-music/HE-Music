@@ -311,7 +311,7 @@ func (j *fileScan) walk(relative string, depth int, items *int, bytes *int64) bo
 		}
 		entries, readErr := file.ReadDir(scanPageSize)
 		for _, entry := range entries {
-			if strings.HasPrefix(entry.Name(), metadataPrivatePrefix) {
+			if strings.HasPrefix(entry.Name(), metadataPrivatePrefix) || strings.HasPrefix(entry.Name(), downloadPrivatePrefix) {
 				continue
 			}
 			if j.ctx.Err() != nil {

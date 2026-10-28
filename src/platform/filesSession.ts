@@ -13,6 +13,11 @@ import type {
   ScanPage,
   LocalAudioTicket,
   LocalFileRef,
+  MetadataResult,
+  MetadataSaveRequest,
+  DownloadRequest,
+  DownloadOperation,
+  DownloadState,
 } from "./mygo.bindings";
 
 export interface FileScanAccess {
@@ -26,6 +31,20 @@ export interface LocalAudioAccess {
   current(): boolean;
   open(): Promise<LocalAudioTicket>;
   close(ticketID: string): Promise<void>;
+}
+
+export interface FileMetadataAccess {
+  current(): boolean;
+  read(): Promise<MetadataResult>;
+  save(request: MetadataSaveRequest): Promise<MetadataResult>;
+  cancel(operationID: string): Promise<MetadataResult>;
+}
+
+export interface FileDownloadAccess {
+  current(): boolean;
+  start(request: DownloadRequest): Promise<DownloadOperation>;
+  read(operationID: string): Promise<DownloadState>;
+  cancel(operationID: string): Promise<DownloadState>;
 }
 
 export type FileOperationResult<T> =
@@ -157,6 +176,75 @@ export class FilesSession {
         return ticket;
       },
       close: (ticketID) => closeLocalAudio(epoch, ticketID),
+    };
+  }
+
+  private captureGrant(token: string) {
+    const epoch = this.epoch;
+    if (epoch === undefined) return;
+    const current = () =>
+      !this.disposed &&
+      this.ready.value &&
+      this.epoch === epoch &&
+      this.directoryGrants.value.some((grant) => grant.token === token && grant.epoch === epoch);
+    return current() ? { epoch, current } : undefined;
+  }
+
+  metadataAccess(ref: LocalFileRef): FileMetadataAccess | undefined {
+    const captured = { ...ref };
+    const grant = this.captureGrant(captured.grantToken);
+    const { readMetadata, saveMetadata, cancelMetadata } = this.provider;
+    if (!grant || !readMetadata || !saveMetadata || !cancelMetadata) return;
+    const { epoch, current } = grant;
+    const ownedResult = (result: MetadataResult): MetadataResult =>
+      current() ? result : { code: "revoked", committed: result.committed };
+    return {
+      current,
+      read: async () => {
+        if (!current()) throw new Error("Metadata authorization expired");
+        return ownedResult(await readMetadata(epoch, captured));
+      },
+      save: async (request) => {
+        if (
+          !current() ||
+          request.ref.grantToken !== captured.grantToken ||
+          request.ref.relativePath !== captured.relativePath ||
+          request.ref.fileId !== captured.fileId ||
+          request.ref.version !== captured.version
+        )
+          throw new Error("Metadata authorization expired");
+        return ownedResult(await saveMetadata(epoch, request));
+      },
+      cancel: (operationID) => cancelMetadata(epoch, operationID),
+    };
+  }
+
+  downloadAccess(token: string): FileDownloadAccess | undefined {
+    const grant = this.captureGrant(token);
+    const { startDownload, readDownloadState, cancelDownload } = this.provider;
+    if (!grant || !startDownload || !readDownloadState || !cancelDownload) return;
+    const { epoch, current } = grant;
+    return {
+      current,
+      start: async (request) => {
+        if (!current() || request.grantToken !== token)
+          throw new Error("Download authorization expired");
+        const captured = { ...request };
+        const operationID = captured.operationId;
+        const operation = await startDownload(epoch, captured);
+        if (!current()) {
+          void cancelDownload(epoch, operationID).catch(() => {});
+          throw new Error("Download authorization expired");
+        }
+        return operation;
+      },
+      read: async (operationID) => {
+        if (!current()) throw new Error("Download authorization expired");
+        const state = await readDownloadState(epoch, operationID);
+        if (!current()) throw new Error("Download authorization expired");
+        return state;
+      },
+      cancel: (operationID) => cancelDownload(epoch, operationID),
     };
   }
 

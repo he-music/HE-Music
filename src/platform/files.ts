@@ -1,6 +1,6 @@
 import type { NativeFiles } from "./mygo.bindings";
 
-/** Picker-scoped methods; paths and imported settings never grant filesystem access. */
+/** Session-scoped file methods; displayed paths and imported settings never grant filesystem access. */
 export interface PlatformFiles {
   begin: typeof NativeFiles.begin;
   chooseDirectory: typeof NativeFiles.chooseDirectory;
@@ -14,4 +14,10 @@ export interface PlatformFiles {
   cancelFileOperation?: typeof NativeFiles.cancelFileOperation;
   openLocalAudio?: typeof NativeFiles.openLocalAudio;
   closeLocalAudio?: typeof NativeFiles.closeLocalAudio;
+  readMetadata?: typeof NativeFiles.readMetadata;
+  saveMetadata?: typeof NativeFiles.saveMetadata;
+  cancelMetadata?: typeof NativeFiles.cancelMetadata;
+  startDownload?: typeof NativeFiles.startDownload;
+  readDownloadState?: typeof NativeFiles.readDownloadState;
+  cancelDownload?: typeof NativeFiles.cancelDownload;
 }

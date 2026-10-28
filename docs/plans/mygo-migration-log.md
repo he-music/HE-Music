@@ -571,3 +571,11 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 父init接metadataAudioDrain到真实stream quiesce，并在scanner每层解析/登记前忽略 `.hemusic-metadata-` 私有文件或目录。新增临时MP3/FLAC真实保存集成：blocked fake HTTP reader排空后原件替换，旧URL/ref失效，新ref suffix Range206，ffprobe逐包hash一致；有效音频内容的root/nested/private-dir备份均不入库。无真实HTTP socket音频、用户库或App操作。
 - 固定CLI在隔离worktree generate的官方metadata绑定增量49行，当前主绑定与隔离产物完整cmp一致；不声称该生成文件通过Prettier。前端blockLocalAudio使用独立Symbol暂停/清理本地实例，gate释放后旧pending URL仍因revision失效；在线源不经本地实例。集成审查 `ef805c0b` OK with notes，指出首实例异常会跳过其余；父真实红测9项中1项拿到later-player URL，改为逐实例捕获/继续清理后重抛首异常，`5ef8458e`复核No issues/OK。
 - LocalFilesSession预备refreshAfterWrite先清旧registry再重扫，新增测试覆盖旧scan页迟到不得复活。当前主目录最终前端83文件666项、Node/Web类型、相关TS lint/格式和Go全包/vet/gofmt通过。controller/编辑UI仍由隔离组件交付并待审查/父接线，不把此后端和屏障checkpoint当完整产品已完成；新的下载后端候选也仍在独立审查。
+
+### 下载后端与操作授权接线
+
+- 独立组件 `60090ca` 经 `be9c3589` review No issues/OK with notes 后合入为 `fa78878`。下载仅在当前授权Root，单层安全MP3/FLAC文件名，完整HTTP200/无压缩或Content-Range、流式32MiB限额及内容/完整payload校验，随机私有工作件经Sync/claim后Root.Link原子no-replace；不覆盖已有目标或回退truncate。Link后同步/登记/清理失败保留真实committed及相对残留名，取消ack不等于done/未写。2active/128条记录，许可在body/FD实际关闭后才归还，signedURL不进终态缓存/日志。
+- worker仅10项下载定向与纯payload/vet通过，未运行desktop全组；父合入后实际跑Go全包-count1通过。超时自动到期、压缩响应拒绝及Sync/registration/cleanup故障分支未全部专项注入，review以源码核对这些路径，不把纯fixture/no-race/无真实网络测试扩张为实际下载或Windows/全部FS验收。
+- 父scanner每层同时过滤 `.hemusic-metadata-` 与 `.hemusic-download-`，六种有效音频私有文件/目录不入库。固定CLI隔离生成下载绑定40行，通过hashline复制增量并完整cmp一致；PlatformFiles六个方法为可选，未硬开Web/Electron。
+- 新FileMetadataAccess/FileDownloadAccess按当前epoch/grant和provider方法捕获，metadata目标ref复制且保存前四字段匹配；授权丢失晚结果只保留revoked和实际committed，不泄ref/info/hash/恢复名。download Start请求复制并单独保存原ID，旧授权晚回只取消原请求ID，不用响应异物ID或新会话provider。父实际红测发现调用方在pending改ID会误取消mutated-id，修正后4项授权测试通过。`4fa5a510`独立审查No issues/OK with notes；最后相关4文件26项、Node/Web类型、TS lint/格式、Go全包/vet/gofmt/diff/cmp通过。
+- 下载controller/UI候选仍在独立修正：未知任务不能newID重下，同目标pending/committed阻重复；retry必须保留失败任务原quality/目录/文件名并重新获取URL。标签editor候选原状态机与真实stub host交互修复已复查，跨文件reconcile展示和恢复名换代仍在窄修。两份候选未合主，当前后端和授权checkpoint不表示完整产品UI已接通。

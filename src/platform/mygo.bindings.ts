@@ -50,6 +50,37 @@ export interface DirectorySelection {
 
 export type DirectorySelectionStatus = "selected" | "cancelled" | "overlap";
 
+export interface DownloadOperation {
+  operationId: string;
+}
+
+/**
+ * OperationID is a caller-generated 32-byte hex idempotency key. A retry needs
+ * a new ID and a newly validated request; existing IDs never start a second IO.
+ */
+export interface DownloadRequest {
+  operationId: string;
+  grantToken: string;
+  url: string;
+  filename: string;
+}
+
+/**
+ * Total is zero when unknown. Received counts accepted bytes and never exceeds
+ * the hard limit. Clients must use Done && Code == "ok", not byte equality.
+ */
+export interface DownloadState {
+  operationId: string;
+  code: string;
+  done: boolean;
+  received: number;
+  total: number;
+  committed: boolean;
+  filename?: string;
+  residualName?: string;
+  ref?: LocalFileRef;
+}
+
 export interface FileSession {
   epoch: number;
 }
@@ -429,6 +460,9 @@ export const NativeFiles = {
   begin(): Promise<FileSession> {
     return call("NativeFiles.Begin");
   },
+  cancelDownload(epoch: number, id: string): Promise<DownloadState> {
+    return call("NativeFiles.CancelDownload", epoch, id);
+  },
   cancelFileOperation(epoch: number, operationID: string): Promise<void> {
     return call("NativeFiles.CancelFileOperation", epoch, operationID);
   },
@@ -453,6 +487,9 @@ export const NativeFiles = {
   openLocalAudio(epoch: number, ref: LocalFileRef): Promise<LocalAudioTicket> {
     return call("NativeFiles.OpenLocalAudio", epoch, ref);
   },
+  readDownloadState(epoch: number, id: string): Promise<DownloadState> {
+    return call("NativeFiles.ReadDownloadState", epoch, id);
+  },
   readMetadata(epoch: number, ref: LocalFileRef): Promise<MetadataResult> {
     return call("NativeFiles.ReadMetadata", epoch, ref);
   },
@@ -472,6 +509,9 @@ export const NativeFiles = {
    */
   saveMetadata(epoch: number, req: MetadataSaveRequest): Promise<MetadataResult> {
     return call("NativeFiles.SaveMetadata", epoch, req);
+  },
+  startDownload(epoch: number, req: DownloadRequest): Promise<DownloadOperation> {
+    return call("NativeFiles.StartDownload", epoch, req);
   },
   /** StartScan starts a read-only job. An empty cursor requests its first page. */
   startScan(epoch: number, grantToken: string): Promise<ScanOperation> {
