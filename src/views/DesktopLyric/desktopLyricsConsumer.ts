@@ -10,7 +10,15 @@ import type {
 
 type PageProvider = Pick<
   PlatformDesktopLyrics,
-  "attach" | "getState" | "setBounds" | "close" | "command" | "onSnapshot" | "onClock" | "onWindow"
+  | "attach"
+  | "getState"
+  | "setBounds"
+  | "setLocked"
+  | "close"
+  | "command"
+  | "onSnapshot"
+  | "onClock"
+  | "onWindow"
 >;
 
 /** 子页只消费已存在的主会话；处置时不撤销主会话。 */
@@ -152,6 +160,17 @@ export function createDesktopLyricsConsumer(provider: PageProvider | undefined) 
     }
   }
 
+  async function setLocked(locked: boolean) {
+    if (disposed || status.value !== "connected" || !provider || !epoch) return;
+    const request = { epoch, revision: windowState.value?.revision };
+    try {
+      const state = await provider.setLocked(request.epoch, locked);
+      recordOperationError(undefined, request);
+      acceptWindow(state);
+    } catch (error) {
+      recordOperationError(error, request);
+    }
+  }
   async function refreshBounds() {
     if (disposed || status.value !== "connected" || !provider || !epoch) return;
     const request = { epoch, revision: windowState.value?.revision };
@@ -191,6 +210,7 @@ export function createDesktopLyricsConsumer(provider: PageProvider | undefined) 
     start,
     command,
     setBounds,
+    setLocked,
     refreshBounds,
     close,
     dispose,

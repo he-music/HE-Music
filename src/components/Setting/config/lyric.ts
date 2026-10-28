@@ -594,13 +594,36 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricLock",
-            show: isElectron,
+            show: () => isElectron || platform.capabilities.desktopLyrics,
+            disabled: () => {
+              if (isElectron) return false;
+              const session = desktopLyricsSession.value;
+              const state = session?.window.value;
+              return (
+                !session?.ready.value ||
+                (!state?.locked &&
+                  (!state?.visible || state.pending || !platform.capabilities.tray))
+              );
+            },
             label: t("setting.lyrics.desktop_lyrics_lock"),
             type: "switch",
             description: t("setting.lyrics.desktop_lyrics_lock_tip"),
             value: computed({
-              get: () => desktopLyricConfig.isLock,
+              get: () =>
+                isElectron
+                  ? desktopLyricConfig.isLock
+                  : (desktopLyricsSession.value?.window.value?.locked ?? false),
               set: (v) => {
+                if (!isElectron) {
+                  const session = desktopLyricsSession.value;
+                  if (session?.ready.value) {
+                    void session.requestLocked(v).catch(() => {
+                      if (desktopLyricsSession.value !== session || !session.ready.value) return;
+                      window.$message?.error(t("message.desktop_lyrics_operation_failed"));
+                    });
+                  }
+                  return;
+                }
                 desktopLyricConfig.isLock = v;
                 saveDesktopLyricConfig();
               },

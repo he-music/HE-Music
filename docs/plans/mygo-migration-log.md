@@ -523,3 +523,17 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 父固定 Node 24.22.1 / pnpm 10.28.1 环境首次集成全量为 71 文件 602 项通过；同 revision 窄修后，最终 Vitest 71 文件 606 项、pnpm typecheck（node/web）、受影响 TS ESLint、源文件 Prettier 及 diff --check 均通过。既有请求错误用例日志与 Fastify 弃用警告保留。现有 ESLint 配置忽略 Vue SFC，不把它们算作 lint 通过。
 - 集成独立复核 `6a6efdd0` 确认 C P1 和宿主检测 P2 已解决，D 启动隔离、Ready/visible 状态及生命周期接线符合源码要求，结论 OK with notes；另提出同 revision 的成功窗口 RPC 不能清旧 operationError。父新增三个同 revision 重试反例，实际先得 3 项失败、24 项跳过；随后只在三类窗口 RPC 成功后独立执行请求上下文校验的清错，再沿用原 revision 合并。再补旧成功回执不能清较新 revision 错误的反例，最终歌词 27 项和全量 606 项通过。该最后窄修由父按建议实施并验证，没有另做一次独立复核；原两次 review 及红测结果保留。
 - 本轮未执行 Go/Swift 编译、Vite 服务或构建、App/LaunchServices、真实歌词窗口、真实音频、picker/用户目录 IO 或 Windows；此前静态/运行时失败与权限边界不变。媒体按键无响应、托盘缺图标且动作少仍未修复，快捷键验收继续延后。本地音乐扫描/播放、下载、标签编辑及自动更新仍待实施，runtime 新 Swift 编译准备仍只到 A0。会话报告、差异和临时产物不进入产品提交。
+
+### 用户实测反馈与功能补齐第二波
+
+- 用户确认桌面歌词显示、逐字与拖动正常；仍缺锁定等旧版功能。新截图显示两个媒体条目，切歌间歇有效；用户怀疑浏览器 MediaSession 和 Go 冲突。优先补齐媒体、歌词/托盘、本地扫描/播放、下载、原文件标签编辑与更新；运行时诊断和 Windows 实测明确后置，不再用它们阻塞功能移植。
+- 用户明确要求标签编辑写回原始音乐文件，并重新评估 mtag 以支持多格式和扫描读标签；撤销之前不改原文件、不用 mtag 的阶段限制。产品最终写回原文件，测试只用自生成夹具，编辑工作副本只是为校验和恢复服务。macOS 不采用 Apple 开发者签名/公证，自动更新仍需实现。
+- 父基于 `c8c33fc` 建立 media-owner、native-controls、mtag-adapter 三个独占 worktree，workflow `18af42c0` 实施后并行独立复核。既有源码均由父在 worker 全 IO 暂停期间按 hashline 修改，新 helper/测试由 worker 首写；未启动或停止用户现有 HE-Music Dev、未运行 Windows 或实际按键/原生交互验收。
+- 媒体源码表明 Player 已跳过显式 MediaSession，不能重复加 guard 解决；WK 音频仍可能自动发布，而 Go 同时使用独立原生媒体中心。固定 SDK 未找到公开的 WK 自动媒体抑制开关，采用 macOS WebKit 为单一媒体发布/控制 owner、Go 仅维护真实 generation 与独立 power lease 的方案，其它系统保持 Go。截图归因和 OS 效果仍待用户复测。
+- mtag 固定源码采用 `57fea0d75b4f88edcdee8ca75e9423d522023f86`，GitHub tag 证据对应 v1.0.2。官方 proxy/sumdb 直接连接失败，后从精确 codeload 下载并保留原失败；未伪造 sumdb 验证。首次夹具出现 MP3 短流码率估计与目标 128 不一致、工具无 libvorbis、内置 vorbis 仅支持双声道，按各自原因修夹具且保留失败。另 v1-only 多艺人真缺陷先红测，补 SyncV1toV2 后验证；初批写入支持范围仅 MP3/FLAC，Ogg 只作拒绝/取消反例，不算支持全格式。
+- 三组件均已在各自 worktree 提交，尚待独立复核与父集成：media `a713ebf`、native-controls `51572e8`、metadata `8049157`。主分支功能状态尚未因这些独立提交改变；共享绑定、前端锁按钮/设置/托盘事件及原文件授权写回由父后续接通。原有 606 项主分支验证不能替代新组件与集成检查。
+- 三份独立复核均 No issues / OK with notes 后，父分别集成为 `8e3f9a6`、`5943df8`、`83c54b0`。父新增主窗口/子页 SetLocked 接线、原生回执驱动的锁按钮与设置开关、锁定时取消旧拖动、托盘设置事件与中英文菜单翻译。锁定前保证原生托盘解锁菜单已安装；设置不要求歌曲，处置后迟到导入不重新开窗。收藏和播放模式托盘项、歌词其它样式与持久化仍未恢复，不称旧版功能全部补齐。
+- 官方 CLI 仅在明确 MYGO_GENERATE 静态路径生成一次（固定 Go 1.27.3，1.3s），输出会话目录；父通过 hashline copy 增量接入 SetLocked、可选 labels 与新 TrayAction，随后 cmp 与完整官方输出完全一致。没有让生成器覆盖原客户端，没有执行 native loop 或 WhenReady 建窗。
+- 父直连 sumdb 的读取同样 TLS EOF；另有 browser read 工具因不支持的空 stdin 字段被拒绝，未发出网络请求，不当作依赖失败。随后通过 goproxy.cn 转发的 sum.golang.org lookup 取到 signed note，并实际执行固定 Go 的 `GOPROXY=https://goproxy.cn GOSUMDB=sum.golang.org go mod download` 成功，得到 v1.0.2 真实模块及 go.mod 的 h1 校验值；已 anchor 加入根 go.mod/go.sum，没有产品本地 replace 或伪造 sum。metadata README 已更新集成状态。
+- 父集成实际验证：完整 Vitest 74 文件 617 项、Node/Web 类型、CGO0 的 `go test -mod=readonly ./...`（包括普通根依赖下的 metadata 夹具）、受影响 TS ESLint 与文件格式通过；末次拖动取消后另执行歌词 28 项和完整类型检查通过。初次接新绑定暴露 mock 缺少 SetLocked 与异步返回类型，均按新合同补齐；格式差异只用锚点修正。原有 Fastify 警告与请求失败用例日志保留，Vue SFC 不算 ESLint 覆盖。
+- 父集成独立复核 `8fcf7270` 确认锁权限、回执/处置、外部恢复与拖动清理、设置禁用条件、托盘设置无歌曲要求、Web/Electron 保留及真实依赖边界，No issues / OK with notes。没有再次运行 App、Vite、LaunchServices、真实按键/音频/picker、用户音乐库 IO 或 Windows；用户自己的开发监视器可能随主目录合入自行重载，不将其当父实机验收。下一阶段仍需接授权扫描/播放、原件标签写回、更多格式、下载与未签名 macOS 更新。

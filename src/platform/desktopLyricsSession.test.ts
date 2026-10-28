@@ -56,6 +56,9 @@ function fixture() {
     attach: vi.fn(),
     close: vi.fn(),
     setBounds: vi.fn(),
+    setLocked: vi.fn(async (_epoch: number, locked: boolean) =>
+      state(2, { visible: true, locked }),
+    ),
     command: vi.fn(),
     onWindow: (listener) => {
       order.push("window");
@@ -267,5 +270,32 @@ describe("DesktopLyricsSession", () => {
     expect(f.provider.setVisible).toHaveBeenCalledTimes(1);
     expect(f.session.ready.value).toBe(false);
     await expect(f.session.publishClock()).rejects.toThrow("失效");
+  });
+  it("主会话锁请求按原生revision确认，处置后迟到解锁回执不复活", async () => {
+    vi.useFakeTimers();
+    const f = fixture();
+    try {
+      await f.session.start();
+      f.windows.forEach((listener) => listener(state(2, { visible: true })));
+      vi.mocked(f.provider.setLocked).mockResolvedValueOnce(
+        state(3, { visible: true, locked: true }),
+      );
+      await f.session.requestLocked(true);
+      expect(f.provider.setLocked).toHaveBeenCalledExactlyOnceWith(7, true);
+      expect(f.session.window.value?.locked).toBe(true);
+      const late = deferred<LyricsWindowState>();
+      vi.mocked(f.provider.setLocked).mockReturnValueOnce(late.promise);
+      const unlocking = f.session.requestLocked(false);
+      await flush();
+      await f.session.dispose();
+      late.resolve(state(4, { visible: true, locked: false }));
+      await unlocking;
+      expect(f.session.ready.value).toBe(false);
+      expect(desktopLyricsSession.value).toBeUndefined();
+      expect(f.session.window.value?.locked).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      await f.session.dispose();
+    }
   });
 });

@@ -40,6 +40,18 @@
             <SvgIcon name="Settings" />
           </div>
           <div
+            v-if="isNative"
+            class="menu-btn lock-btn"
+            :title="
+              consumer.operationError.value
+                ? t('message.desktop_lyrics_operation_failed')
+                : t('setting.lyrics.desktop_lyrics_lock_tip')
+            "
+            @click.stop="toggleLyricLock"
+          >
+            <SvgIcon :name="lyricConfig.isLock ? 'LockOpen' : 'Lock'" />
+          </div>
+          <div
             v-if="isElectron"
             class="menu-btn lock-btn"
             @mouseenter.stop="tempToggleLyricLock(false)"
@@ -511,7 +523,16 @@ const cachedBounds = reactive({
 watch(
   consumer.windowState,
   (state) => {
-    if (!disposed && state) Object.assign(cachedBounds, state.bounds);
+    if (disposed) return;
+    if (isNative) {
+      lyricConfig.isLock = state?.locked ?? false;
+      if (state?.locked) {
+        dragState.isDragging = false;
+        if (releaseFrame) cancelAnimationFrame(releaseFrame);
+        releaseFrame = 0;
+      }
+    }
+    if (state) Object.assign(cachedBounds, state.bounds);
   },
   { flush: "sync" },
 );
@@ -866,7 +887,12 @@ function sendToMainWin(eventName: string, ...args: unknown[]) {
 
 // 切换桌面歌词锁定状态
 const toggleLyricLock = () => {
-  if (!isElectron || disposed) return;
+  if (disposed) return;
+  if (isNative) {
+    void consumer.setLocked(!lyricConfig.isLock);
+    return;
+  }
+  if (!isElectron) return;
   sendToMain("toggleDesktopLyricLock", { lock: !lyricConfig.isLock });
   lyricConfig.isLock = !lyricConfig.isLock;
 };

@@ -5,6 +5,7 @@ import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 import { DesktopLyricsSession } from "@/platform/desktopLyricsSession";
 import type { LyricsWindowState, PlatformDesktopLyrics } from "@/platform/desktopLyrics";
+import type { TrayAction } from "@/platform/mygo.bindings";
 
 type ShellSessionStub = { start: () => Promise<void>; dispose: () => Promise<void> };
 const mocks = vi.hoisted(() => ({
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   status: {} as Record<string, unknown>,
   music: {} as Record<string, unknown>,
   player: { playOrPause: vi.fn(), nextOrPrev: vi.fn() },
+  openSetting: vi.fn().mockResolvedValue(undefined),
   lyrics: undefined as ShellSessionStub | undefined,
   media: undefined as ShellSessionStub | undefined,
   files: undefined as ShellSessionStub | undefined,
@@ -24,6 +26,7 @@ vi.mock("@/stores", () => ({
   useMusicStore: () => mocks.music,
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => mocks.player }));
+vi.mock("@/utils/modal", () => ({ openSetting: mocks.openSetting }));
 vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("@/composables/shellDesktopLyrics", () => ({
   createShellDesktopLyricsSession: () => mocks.lyrics,
@@ -60,7 +63,7 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean }> } = {})
   mocks.player.playOrPause = vi.fn().mockResolvedValue(undefined);
   mocks.player.nextOrPrev = vi.fn().mockResolvedValue(undefined);
   const closeHandlers = new Set<(request: { requestId: number }) => void>();
-  const actions = new Set<(action: "toggle" | "previous" | "next") => void>();
+  const actions = new Set<(action: TrayAction) => void>();
   const service = {
     ready: vi.fn(() => options.ready ?? Promise.resolve({ trayAvailable: true })),
     teardown: vi.fn(async () => {}),
@@ -72,7 +75,7 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean }> } = {})
       closeHandlers.add(handler);
       return () => closeHandlers.delete(handler);
     },
-    onTrayAction: (handler: (action: "toggle" | "previous" | "next") => void) => {
+    onTrayAction: (handler: (action: TrayAction) => void) => {
       actions.add(handler);
       return () => actions.delete(handler);
     },
@@ -146,7 +149,7 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean }> } = {})
     close(id = 1) {
       closeHandlers.forEach((handler) => handler({ requestId: id }));
     },
-    action(action: "toggle" | "previous" | "next") {
+    action(action: TrayAction) {
       actions.forEach((handler) => handler(action));
     },
     modal: () => state.showCloseModal as Vue.Ref<boolean>,
@@ -327,6 +330,7 @@ describe("Nav native lifecycle setup", () => {
       setVisible: async () => ({ ...windowState, revision: 2, pending: true }),
       attach: async () => ({ window: windowState, snapshot: null }),
       setBounds: async () => windowState,
+      setLocked: async (_epoch, locked) => ({ ...windowState, revision: 2, locked }),
       close: async () => windowState,
       command: async () => {},
       teardown: async () => {},
@@ -397,5 +401,27 @@ describe("Nav native lifecycle setup", () => {
     expect(writes).toHaveBeenLastCalledWith(false);
     nav.unmount();
     await flush();
+  });
+  it("托盘设置不依赖歌曲，卸载后的迟到导入不会打开设置", async () => {
+    mocks.openSetting.mockClear();
+    const nav = mountNav();
+    await flush();
+    mocks.music.playSong = { id: "", path: "" };
+    nav.action("open-settings");
+    await vi.dynamicImportSettled();
+    await flush();
+    expect(mocks.openSetting).toHaveBeenCalledOnce();
+    expect(mocks.player.playOrPause).not.toHaveBeenCalled();
+    expect(mocks.player.nextOrPrev).not.toHaveBeenCalled();
+    nav.unmount();
+    await flush();
+    mocks.openSetting.mockClear();
+    const next = mountNav();
+    await flush();
+    next.action("open-settings");
+    next.unmount();
+    await vi.dynamicImportSettled();
+    await flush();
+    expect(mocks.openSetting).not.toHaveBeenCalled();
   });
 });

@@ -62,10 +62,16 @@ export interface LifecycleConfig {
 
 export interface LifecycleLabels {
   show: string;
+  hide?: string;
   play: string;
   pause: string;
   previous: string;
   next: string;
+  showLyrics?: string;
+  hideLyrics?: string;
+  lockLyrics?: string;
+  unlockLyrics?: string;
+  settings?: string;
   quit: string;
 }
 
@@ -135,7 +141,7 @@ export interface LyricsSnapshot {
 /**
  * Visible means the native window has been shown; Pending means ready/Attach
  * is still outstanding. A failed asynchronous open reports Failure and false.
- * Locking is deliberately unavailable until an external unlock path exists.
+ * Locked windows ignore mouse events; a native tray action always permits unlocking.
  */
 export interface LyricsWindowState {
   epoch: number;
@@ -250,7 +256,7 @@ export interface SystemMediaTrack {
   canNext: boolean;
 }
 
-export type TrayAction = "previous" | "toggle" | "next";
+export type TrayAction = "previous" | "toggle" | "next" | "open-settings";
 
 export interface TrayPlaybackState {
   playing: boolean;
@@ -354,8 +360,8 @@ export const DesktopLifecycle = {
 } as const;
 
 /**
- * DesktopLyrics owns an independent, unlocked web window. It never owns audio,
- * claims lifecycle readiness, writes settings, or accepts arbitrary IPC names.
+ * DesktopLyrics owns an independent web window with a native external unlock path.
+ * It never owns audio, claims lifecycle readiness, writes settings, or accepts arbitrary IPC.
  */
 export const DesktopLyrics = {
   /**
@@ -385,6 +391,9 @@ export const DesktopLyrics = {
   },
   setBounds(epoch: number, bounds: LyricsBounds): Promise<LyricsWindowState> {
     return call("DesktopLyrics.SetBounds", epoch, bounds);
+  },
+  setLocked(epoch: number, locked: boolean): Promise<LyricsWindowState> {
+    return call("DesktopLyrics.SetLocked", epoch, locked);
   },
   /**
    * SetVisible returns immediately with Pending=true on first creation. Only a

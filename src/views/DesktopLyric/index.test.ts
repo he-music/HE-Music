@@ -110,6 +110,10 @@ function providerFixture() {
       ...windowState(2),
       bounds,
     })),
+    setLocked: vi.fn(async (_epoch: number, locked: boolean) => ({
+      ...windowState(2),
+      locked,
+    })),
     close: vi.fn(async () => ({ ...windowState(3), visible: false })),
     command: vi.fn<PlatformDesktopLyrics["command"]>().mockResolvedValue(undefined),
   };
@@ -370,7 +374,7 @@ describe("DesktopLyric production SFC", () => {
     expect(text(view.root)).toContain("声");
     expect(
       allNodes(view.root).filter((node) => node.props.class === "menu-btn lock-btn"),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
     expect(view.state.lyricConfig.font).not.toBe(defaultConfig.font);
     view.state.lyricConfig.font.size = 40;
     await flush();
@@ -426,7 +430,7 @@ describe("DesktopLyric production SFC", () => {
     expect(view.state.playSeekMs.value).toBe(25);
   });
 
-  it("模板header五固定命令与Close走子页provider，拒绝任意native IPC和锁", async () => {
+  it("模板header五固定命令与Close走子页provider，拒绝任意native IPC和 hover 解锁", async () => {
     const view = mountView("mygo");
     view.fixture.attachment.resolve({ window: windowState(), snapshot: snapshot() });
     await flush();
@@ -448,9 +452,9 @@ describe("DesktopLyric production SFC", () => {
     view.state.sendToMain("begin");
     view.state.sendToMain("open-setting", "other");
     view.state.sendToMainWin("arbitrary");
-    view.state.toggleLyricLock();
     view.state.tempToggleLyricLock(true);
     expect(view.state.lyricConfig.isLock).toBe(false);
+    expect(view.fixture.provider.setLocked).not.toHaveBeenCalled();
     expect(view.fixture.provider.command).toHaveBeenCalledTimes(5);
   });
 
@@ -659,6 +663,45 @@ describe("DesktopLyric production SFC", () => {
       trackKey: "B",
       action: "next",
     });
+  });
+  it("原生header锁定等待回执，托盘解锁恢复拖动，卸载晚回无效", async () => {
+    const view = mountView("mygo");
+    view.fixture.attachment.resolve({ window: windowState(), snapshot: snapshot() });
+    await flush();
+    const response = deferred<LyricsWindowState>();
+    view.fixture.provider.setLocked.mockImplementationOnce(() => response.promise);
+    const button = allNodes(view.root).find((node) => node.props.class === "menu-btn lock-btn");
+    expect(button).toBeDefined();
+    const click = button!.props.onClick as (event: { stopPropagation(): void }) => void;
+    click({ stopPropagation() {} });
+    expect(view.fixture.provider.setLocked).toHaveBeenCalledExactlyOnceWith(7, true);
+    expect(view.state.lyricConfig.isLock).toBe(false);
+    response.resolve({ ...windowState(5), locked: true });
+    await flush();
+    expect(view.state.lyricConfig.isLock).toBe(true);
+    view.state.onDocPointerDown(pointer(10, 20));
+    view.state.onDocPointerMove(pointer(30, 40));
+    expect(view.fixture.provider.setBounds).not.toHaveBeenCalled();
+    view.state.tempToggleLyricLock(false);
+    expect(view.fixture.provider.setLocked).toHaveBeenCalledTimes(1);
+    view.fixture.emitWindow({ ...windowState(6), locked: false });
+    expect(view.state.lyricConfig.isLock).toBe(false);
+    vi.advanceTimersByTime(20);
+    view.state.onDocPointerDown(pointer(10, 20));
+    view.state.onDocPointerMove(pointer(30, 40));
+    expect(view.fixture.provider.setBounds).toHaveBeenCalledOnce();
+    view.fixture.emitWindow({ ...windowState(7), locked: true });
+    view.fixture.emitWindow({ ...windowState(8), locked: false });
+    vi.advanceTimersByTime(20);
+    view.state.onDocPointerMove(pointer(50, 60));
+    expect(view.fixture.provider.setBounds).toHaveBeenCalledOnce();
+    const late = deferred<LyricsWindowState>();
+    view.fixture.provider.setLocked.mockImplementationOnce(() => late.promise);
+    view.state.toggleLyricLock();
+    view.unmount();
+    late.resolve({ ...windowState(9), locked: true });
+    await flush();
+    expect(view.state.lyricConfig.isLock).toBe(false);
   });
 });
 

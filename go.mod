@@ -2,7 +2,10 @@ module github.com/he-music/HE-Music
 
 go 1.27.3
 
-require github.com/egoist/mygo v0.6.5-0.20261026063203-07ebe19ac0dc
+require (
+	github.com/egoist/mygo v0.6.5-0.20261026063203-07ebe19ac0dc
+	github.com/tommyo123/mtag v1.0.2
+)
 
 require (
 	github.com/ebitengine/purego v0.11.1 // indirect

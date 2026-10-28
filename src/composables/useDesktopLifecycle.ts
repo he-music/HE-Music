@@ -67,6 +67,12 @@ export function useDesktopLifecycle(ui: {
     closeAppMethod: setting.closeAppMethod === "hide" ? "hide" : "exit",
     labels: {
       show: t("nav.show_main_window"),
+      hide: t("nav.hide_main_window"),
+      showLyrics: t("nav.show_desktop_lyrics"),
+      hideLyrics: t("nav.hide_desktop_lyrics"),
+      lockLyrics: t("nav.lock_desktop_lyrics"),
+      unlockLyrics: t("nav.unlock_desktop_lyrics"),
+      settings: t("common.setting"),
       play: t("common.play"),
       pause: t("common.pause"),
       previous: t("common.play_prev"),
@@ -121,6 +127,16 @@ export function useDesktopLifecycle(ui: {
             });
           }),
           lifecycle.onTrayAction((action) => {
+            if (action === "open-settings") {
+              if (!disposed && ready) {
+                void import("@/utils/modal")
+                  .then(async ({ openSetting }) => {
+                    if (!disposed && ready) await openSetting();
+                  })
+                  .catch(reportFailure);
+              }
+              return;
+            }
             if (disposed || !ready || !hasSong()) return;
             void (async () => {
               if (action === "toggle") await player.playOrPause();

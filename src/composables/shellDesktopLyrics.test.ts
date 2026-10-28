@@ -70,6 +70,7 @@ describe("shellDesktopLyrics", () => {
       command: vi.fn(),
       setVisible: vi.fn(),
       setBounds: vi.fn(),
+      setLocked: vi.fn(),
     };
     mocks.music = reactive({
       playSong: { id: "one", platform: "test", name: "One", artists: [{ name: "Singer" }] },

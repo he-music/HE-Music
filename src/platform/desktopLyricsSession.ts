@@ -208,6 +208,13 @@ export class DesktopLyricsSession {
     });
   }
 
+  requestLocked(locked: boolean): Promise<LyricsWindowState> {
+    return this.enqueue(async (epoch) => {
+      const state = await this.provider.setLocked(epoch, locked);
+      this.acceptWindow(state);
+      return state;
+    });
+  }
   dispose(): Promise<void> {
     if (this.cleanup) return this.cleanup;
     this.disposed = true;

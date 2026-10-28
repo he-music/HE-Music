@@ -44,13 +44,13 @@
 
 固定 Go 1.27.3、`GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0`，仅自生成短音频和副本：
 
-| 夹具 | 已验证 |
-| --- | --- |
-| MP3 ID3v2.3 / v2.4 | 中文标题、独立多艺人数组、专辑、备注、LRC、双 PNG 图片、增大标题、清空/保留、未知 TXXX 与 RawFrame 保留、ffprobe packet SHA256 不变 |
-| MP3 v1-only | 仅修改多艺人时提升 v2，旧标题/专辑保留，packet SHA256 不变 |
-| FLAC | 同样字段/多值/封面/清空往返，未知 comment 和 APPLICATION block 保留，packet SHA256 不变，16-bit/44100Hz 属性 |
-| M4A AAC / Ogg Vorbis | 自生成有效容器，仅验证明确拒绝读取/写入且源字节不变；不属于已支持格式 |
-| 失败 | 调用前取消、畸形输入、副本 WriteAt 失败返回错误、原件未变 |
+| 夹具                 | 已验证                                                                                                                              |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| MP3 ID3v2.3 / v2.4   | 中文标题、独立多艺人数组、专辑、备注、LRC、双 PNG 图片、增大标题、清空/保留、未知 TXXX 与 RawFrame 保留、ffprobe packet SHA256 不变 |
+| MP3 v1-only          | 仅修改多艺人时提升 v2，旧标题/专辑保留，packet SHA256 不变                                                                          |
+| FLAC                 | 同样字段/多值/封面/清空往返，未知 comment 和 APPLICATION block 保留，packet SHA256 不变，16-bit/44100Hz 属性                        |
+| M4A AAC / Ogg Vorbis | 自生成有效容器，仅验证明确拒绝读取/写入且源字节不变；不属于已支持格式                                                               |
+| 失败                 | 调用前取消、畸形输入、副本 WriteAt 失败返回错误、原件未变                                                                           |
 
 fixture 通过测试工具 ffmpeg 自生成，音频 packet 由独立 ffprobe 读取/hash；产品包不执行外部程序。
 字段往返主要由 mtag 重开验证，尚未用第二个标签库证明跨播放器多值互操作。
@@ -62,8 +62,8 @@ Windows、真实 App/UI/播放以及用户音乐库均未验收。不能外推�
 
 ## 依赖集成
 
-未改根 go.mod/go.sum。官方 proxy 与 sumdb 在本轮连接失败，未生成或伪造官方 go.sum。
-获得父明确授权后从固定 SHA codeload 下载源码，以 scratch `-modfile` 的本地 replace 验证。
-父应联网获取 `github.com/tommyo123/mtag@v1.0.2`，核对固定 SHA，再通过 anchor 集成根依赖及
-实际 go.sum；在此之前普通根 module 命令不能直接解析本包依赖。
+主模块现已固定 `github.com/tommyo123/mtag v1.0.2`，对应上述精确提交，实际模块校验值已进入 go.sum。
+直接访问官方 proxy/sumdb 的首次失败保留；父随后通过可达的 goproxy.cn 转发，启用
+`GOSUMDB=sum.golang.org`，由 Go 1.27.3 下载并校验模块，未在产品中使用本地 replace。
+根模块 `go test -mod=readonly ./...` 在 CGO0 下通过；原文件授权写回和 UI 桥接仍由后续 service 接通。
 MIT 许可证仍适用，未复制或更改上游源码。
