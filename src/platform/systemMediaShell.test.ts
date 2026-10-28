@@ -115,7 +115,7 @@ function fixture(
   };
   Object.assign(mocks.platform, {
     kind: "mygo",
-    os: "darwin",
+    os: "linux",
     capabilities: { tray: true, windowControls: false },
     systemMedia: provider,
     lifecycle,

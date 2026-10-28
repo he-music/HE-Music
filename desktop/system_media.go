@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"runtime"
 
 	"github.com/egoist/mygo"
 )
@@ -38,6 +39,7 @@ func init() {
 // Serialize shell mutations. Subscribe before configuring; discard queued events
 // unless generation, revision and trackId all match the frontend's current song.
 func (s *SystemMedia) Configure(ctx context.Context, generation uint64, mediaEnabled, preventSleep bool) (SystemMediaStatus, error) {
+	mediaEnabled = nativeSystemMediaEnabled(runtime.GOOS, mediaEnabled)
 	var status SystemMediaStatus
 	err := desktopLifecycle.call(ctx, true, func() error {
 		var err error

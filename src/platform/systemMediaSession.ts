@@ -18,6 +18,7 @@ interface SystemMediaSource {
 /** One Ready shell owns a serialized native session. No clock is a watched dependency. */
 export class SystemMediaSession {
   private generation = 0;
+  private mediaEnabled = false;
   private revision = 0;
   private epoch = 0;
   private active = false;
@@ -41,6 +42,7 @@ export class SystemMediaSession {
       const accepted = this.accepted;
       if (
         !this.active ||
+        !this.mediaEnabled ||
         this.disposed ||
         !this.source.settings().media ||
         !accepted ||
@@ -101,6 +103,7 @@ export class SystemMediaSession {
     return this.enqueue(async () => {
       if (this.disposed) return;
       if (configure) {
+        this.mediaEnabled = false;
         const settings = this.source.settings();
         const status = await this.provider.configure(
           this.generation,
@@ -108,9 +111,16 @@ export class SystemMediaSession {
           settings.preventSleep,
         );
         this.generation = status.generation;
+        this.mediaEnabled = status.mediaEnabled;
         this.revision = 0;
       }
-      if (this.disposed || epoch !== this.epoch || !this.source.settings().media) return;
+      if (
+        this.disposed ||
+        epoch !== this.epoch ||
+        !this.mediaEnabled ||
+        !this.source.settings().media
+      )
+        return;
       const revision = ++this.revision;
       const metadata = this.source.metadata();
       if (!metadata || metadata.id !== this.source.trackID()) {
@@ -174,6 +184,7 @@ export class SystemMediaSession {
     if (this.disposed) return this.queue;
     this.disposed = true;
     this.active = false;
+    this.mediaEnabled = false;
     this.accepted = null;
     this.artwork?.dispose();
     this.epoch++;

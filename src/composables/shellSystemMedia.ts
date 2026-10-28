@@ -2,10 +2,13 @@ import { useDataStore, useMusicStore, useSettingStore, useStatusStore } from "@/
 import { platform } from "@/platform";
 import { usePlayer } from "@/utils/player";
 import { SystemMediaSession } from "@/platform/systemMediaSession";
+import { createWebKitSystemMedia } from "@/platform/systemMediaWebKit";
 
 export function createShellSystemMediaSession(): SystemMediaSession | undefined {
-  const provider = platform.systemMedia;
-  if (!provider) return;
+  const native = platform.systemMedia;
+  if (!native) return;
+  const provider =
+    platform.kind === "mygo" && platform.os === "darwin" ? createWebKitSystemMedia(native) : native;
   const music = useMusicStore();
   const status = useStatusStore();
   const setting = useSettingStore();

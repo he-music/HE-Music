@@ -18,5 +18,5 @@ export const isElectron = isElectronHost;
 /** 是否为 mygo 环境（不会启用 Electron IPC） */
 export const isMygo = platform.kind === "mygo";
 
-/** 原生 provider 接管时避免 Web MediaSession 重复发布。 */
+/** shell provider 独占媒体会话；macOS 由其 WebKit 适配发布，避免 Player 再次注册。 */
 export const hasNativeSystemMedia = isMygo && Boolean(platform.systemMedia);
