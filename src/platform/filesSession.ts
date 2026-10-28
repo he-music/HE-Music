@@ -8,7 +8,16 @@ import type {
   RendererSettings,
   SettingsImportResult,
   SettingsExportResult,
+  ScanOperation,
+  ScanPage,
 } from "./mygo.bindings";
+
+export interface FileScanAccess {
+  current(): boolean;
+  start(): Promise<ScanOperation>;
+  read(operationID: string, cursor: string): Promise<ScanPage>;
+  cancel(operationID: string): Promise<void>;
+}
 
 export type FileOperationResult<T> =
   { status: "completed"; value: T } | { status: "busy" | "unavailable" | "stale" | "failed" };
@@ -110,6 +119,40 @@ export class FilesSession {
         );
       }
     });
+  }
+
+  /** A scan captures the shell's current grant without occupying the picker slot. */
+  scanAccess(token: string): FileScanAccess | undefined {
+    const { startScan, readScanPage, cancelFileOperation } = this.provider;
+    const epoch = this.epoch;
+    const current = () =>
+      !this.disposed &&
+      this.ready.value &&
+      this.epoch === epoch &&
+      epoch !== undefined &&
+      this.directoryGrants.value.some((grant) => grant.token === token && grant.epoch === epoch);
+    if (!current() || epoch === undefined || !startScan || !readScanPage || !cancelFileOperation) {
+      return undefined;
+    }
+    return {
+      current,
+      start: async () => {
+        if (!current()) throw new Error("File scan is no longer active");
+        const result = await startScan(epoch, token);
+        if (!current()) {
+          await cancelFileOperation(epoch, result.operationId).catch(() => {});
+          throw new Error("File scan is no longer active");
+        }
+        return result;
+      },
+      read: async (operationID, cursor) => {
+        if (!current()) throw new Error("File scan is no longer active");
+        const result = await readScanPage(epoch, operationID, cursor);
+        if (!current()) throw new Error("File scan is no longer active");
+        return result;
+      },
+      cancel: (operationID) => cancelFileOperation(epoch, operationID),
+    };
   }
 
   private async run<T>(operation: (epoch: number) => Promise<T>): Promise<FileOperationResult<T>> {

@@ -9,4 +9,7 @@ export interface PlatformFiles {
   exportSettings: typeof NativeFiles.exportSettings;
   revokeDirectory: typeof NativeFiles.revokeDirectory;
   teardown: typeof NativeFiles.teardown;
+  startScan?: typeof NativeFiles.startScan;
+  readScanPage?: typeof NativeFiles.readScanPage;
+  cancelFileOperation?: typeof NativeFiles.cancelFileOperation;
 }
