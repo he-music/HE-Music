@@ -32,7 +32,7 @@ type LyricsBounds struct {
 
 // Visible means the native window has been shown; Pending means ready/Attach
 // is still outstanding. A failed asynchronous open reports Failure and false.
-// Locking is deliberately unavailable until an external unlock path exists.
+// Locked windows ignore mouse events; a native tray action always permits unlocking.
 type LyricsWindowState struct {
 	Epoch       uint64       `json:"epoch"`
 	Revision    uint64       `json:"revision"`

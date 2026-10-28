@@ -17,8 +17,8 @@ var (
 	desktopLyricsCommand  = mygo.NewEvent[LyricsCommand]("desktop:lyrics-command")
 )
 
-// DesktopLyrics owns an independent, unlocked web window. It never owns audio,
-// claims lifecycle readiness, writes settings, or accepts arbitrary IPC names.
+// DesktopLyrics owns an independent web window with a native external unlock path.
+// It never owns audio, claims lifecycle readiness, writes settings, or accepts arbitrary IPC.
 type DesktopLyrics struct {
 	main      *mygo.Window
 	win       *mygo.Window
@@ -48,6 +48,7 @@ func (l *DesktopLyrics) Begin(ctx context.Context) (LyricsSession, error) {
 		l.revoke()
 		var err error
 		result, err = l.state.begin(ctx)
+		desktopLifecycle.updateMenu()
 		return err
 	})
 	return result, err
@@ -80,6 +81,42 @@ func (l *DesktopLyrics) Close(ctx context.Context, epoch uint64) (LyricsWindowSt
 		return nil
 	})
 	return result, err
+}
+
+func (l *DesktopLyrics) SetLocked(ctx context.Context, epoch uint64, locked bool) (LyricsWindowState, error) {
+	result := LyricsWindowState{}
+	err := l.call(ctx, epoch, true, func() error {
+		if err := l.setLocked(locked); err != nil {
+			return err
+		}
+		result = l.state.window
+		return nil
+	})
+	return result, err
+}
+
+func (l *DesktopLyrics) setLocked(locked bool) error {
+	if l.win == nil || l.win.IsDestroyed() {
+		if locked {
+			return errors.New("desktop lyrics window is closed")
+		}
+		return l.state.setLocked(false, false)
+	}
+	externalUnlock := desktopLifecycle.tray != nil && desktopLifecycle.state.tray &&
+		desktopLifecycle.state.owns(l.state.owner)
+	if err := l.state.setLocked(locked, externalUnlock); err != nil {
+		return err
+	}
+	// Install the native unlock action before making the web window click-through.
+	desktopLifecycle.updateMenu()
+	if locked && desktopLifecycle.menu == nil {
+		_ = l.state.setLocked(false, false)
+		return errors.New("desktop lyrics unlock menu unavailable")
+	}
+	l.win.SetMovable(!locked)
+	l.win.SetIgnoreMouseEvents(locked)
+	l.emitWindow()
+	return nil
 }
 
 func (l *DesktopLyrics) PublishSnapshot(ctx context.Context, snapshot LyricsSnapshot) error {
@@ -152,6 +189,9 @@ func (l *DesktopLyrics) SetBounds(ctx context.Context, epoch uint64, bounds Lyri
 	err := l.call(ctx, epoch, true, func() error {
 		if l.win == nil {
 			return errors.New("desktop lyrics window is closed")
+		}
+		if l.state.window.Locked {
+			return errors.New("desktop lyrics window is locked")
 		}
 		fitted, err := fitLyricsBounds(bounds, lyricsWorkAreas())
 		if err != nil {
@@ -337,6 +377,7 @@ func (l *DesktopLyrics) readBounds() {
 }
 
 func (l *DesktopLyrics) emitWindow() {
+	desktopLifecycle.updateMenu()
 	if l.main != nil && !l.main.IsDestroyed() && l.state.owner != nil && l.state.owner.Err() == nil {
 		_ = desktopLyricsWindow.EmitPage(l.main.Page(), l.state.window)
 	}
@@ -365,6 +406,8 @@ func (l *DesktopLyrics) closeWindow(generation uint64, failure string) {
 	}
 	l.listeners = nil
 	if win != nil && !win.IsDestroyed() {
+		win.SetIgnoreMouseEvents(false)
+		win.SetMovable(true)
 		win.Destroy()
 	}
 }
@@ -373,4 +416,5 @@ func (l *DesktopLyrics) closeWindow(generation uint64, failure string) {
 func (l *DesktopLyrics) revoke() {
 	l.closeWindow(l.state.generation, "")
 	l.state.revoke()
+	desktopLifecycle.updateMenu()
 }

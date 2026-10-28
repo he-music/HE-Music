@@ -12,9 +12,10 @@ const (
 type TrayAction string
 
 const (
-	TrayPrevious TrayAction = "previous"
-	TrayToggle   TrayAction = "toggle"
-	TrayNext     TrayAction = "next"
+	TrayPrevious     TrayAction = "previous"
+	TrayToggle       TrayAction = "toggle"
+	TrayNext         TrayAction = "next"
+	TrayOpenSettings TrayAction = "open-settings"
 )
 
 type CloseResolution string
@@ -26,12 +27,18 @@ const (
 )
 
 type LifecycleLabels struct {
-	Show     string `json:"show"`
-	Play     string `json:"play"`
-	Pause    string `json:"pause"`
-	Previous string `json:"previous"`
-	Next     string `json:"next"`
-	Quit     string `json:"quit"`
+	Show         string `json:"show"`
+	Hide         string `json:"hide,omitempty"`
+	Play         string `json:"play"`
+	Pause        string `json:"pause"`
+	Previous     string `json:"previous"`
+	Next         string `json:"next"`
+	ShowLyrics   string `json:"showLyrics,omitempty"`
+	HideLyrics   string `json:"hideLyrics,omitempty"`
+	LockLyrics   string `json:"lockLyrics,omitempty"`
+	UnlockLyrics string `json:"unlockLyrics,omitempty"`
+	Settings     string `json:"settings,omitempty"`
+	Quit         string `json:"quit"`
 }
 
 type LifecycleConfig struct {

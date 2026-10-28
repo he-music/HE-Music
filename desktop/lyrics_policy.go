@@ -53,6 +53,7 @@ func (s *lyricsState) open() uint64 {
 	s.generation++
 	s.ready, s.attached = false, false
 	s.window.Visible, s.window.Pending, s.window.Failure = false, true, ""
+	s.window.Locked, s.window.HoverUnlock = false, false
 	s.window.Revision++
 	return s.generation
 }
@@ -71,6 +72,18 @@ func (s *lyricsState) shown() {
 	s.window.Revision++
 }
 
+func (s *lyricsState) setLocked(locked, externalUnlock bool) error {
+	if s.window.Locked == locked {
+		return nil
+	}
+	if locked && (!s.current(s.generation) || !s.window.Visible || s.window.Pending || !externalUnlock) {
+		return errors.New("locking desktop lyrics requires a visible window and native unlock menu")
+	}
+	s.window.Locked, s.window.HoverUnlock = locked, false
+	s.window.Revision++
+	return nil
+}
+
 func (s *lyricsState) close(generation uint64, failure string) bool {
 	if generation != s.generation || (!s.window.Pending && !s.window.Visible) {
 		return false
@@ -78,6 +91,7 @@ func (s *lyricsState) close(generation uint64, failure string) bool {
 	s.generation++
 	s.ready, s.attached = false, false
 	s.window.Visible, s.window.Pending, s.window.Failure = false, false, failure
+	s.window.Locked, s.window.HoverUnlock = false, false
 	s.window.Revision++
 	return true
 }
@@ -86,6 +100,7 @@ func (s *lyricsState) revoke() {
 	s.owner, s.snapshot = nil, nil
 	s.seq = 0
 	s.ready, s.attached = false, false
+	s.window.Locked, s.window.HoverUnlock = false, false
 }
 
 func validLyricsTime(value float64) bool {

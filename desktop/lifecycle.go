@@ -25,6 +25,7 @@ type DesktopLifecycle struct {
 	state       lifecycleState
 	tray        *mygo.Tray
 	menu        *mygo.Menu
+	menuState   trayMenuState
 	playback    TrayPlaybackState
 	listeners   []func()
 	stopOwner   func() bool
@@ -302,7 +303,7 @@ func (l *DesktopLifecycle) createTray() {
 	}
 	icon, template := desktopassets.TrayColor, false
 	if runtime.GOOS == "darwin" {
-		icon, template = desktopassets.TrayTemplate, true
+		icon, template = desktopTrayTemplateIcon(), true
 	}
 	if err = tray.SetIcon(icon, template); err != nil {
 		tray.Destroy()
@@ -318,35 +319,21 @@ func (l *DesktopLifecycle) updateMenu() {
 	if l.tray == nil {
 		return
 	}
-	labels := l.state.config.Labels
-	label := func(value, fallback string) string {
-		if value == "" {
-			return fallback
-		}
-		return value
+	state := trayMenuState{
+		labels:          l.state.config.Labels,
+		ready:           l.state.ready(),
+		hasSong:         l.playback.HasSong,
+		playing:         l.playback.Playing,
+		canHide:         l.state.ready() && l.state.tray,
+		lyricsAvailable: l.lyricsReady(),
+		lyricsVisible:   desktopLyrics.state.window.Visible,
+		lyricsPending:   desktopLyrics.state.window.Pending,
+		lyricsLocked:    desktopLyrics.state.window.Locked,
 	}
-	playingLabel := label(labels.Play, "播放")
-	if l.playback.Playing {
-		playingLabel = label(labels.Pause, "暂停")
+	if l.menu != nil && l.menuState == state {
+		return
 	}
-	enabled := l.state.ready() && l.playback.HasSong
-	action := func(value TrayAction) func(*mygo.MenuItem, *mygo.Window) {
-		return func(*mygo.MenuItem, *mygo.Window) {
-			// Menu callbacks receive the focused window, which may be OAuth or
-			// nil. Always target the explicitly claimed main page instead.
-			if l.state.ready() && l.playback.HasSong && l.main != nil {
-				_ = desktopTrayAction.EmitPage(l.main.Page(), value)
-			}
-		}
-	}
-	l.menu = mygo.NewMenu([]*mygo.MenuItem{
-		{Label: label(labels.Show, "显示主窗口"), Click: func(*mygo.MenuItem, *mygo.Window) { l.show() }},
-		mygo.Separator(),
-		{Label: label(labels.Previous, "上一首"), Disabled: !enabled, Click: action(TrayPrevious)},
-		{Label: playingLabel, Disabled: !enabled, Click: action(TrayToggle)},
-		{Label: label(labels.Next, "下一首"), Disabled: !enabled, Click: action(TrayNext)},
-		mygo.Separator(),
-		{Label: label(labels.Quit, "退出"), Click: func(*mygo.MenuItem, *mygo.Window) { l.quit() }},
-	})
+	l.menu = mygo.NewMenu(buildTrayMenuItems(state, l.dispatchTrayCommand))
+	l.menuState = state
 	l.tray.SetMenu(l.menu)
 }
