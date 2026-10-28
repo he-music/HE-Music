@@ -11,6 +11,7 @@ import { createShellDesktopLyricsSession } from "./shellDesktopLyrics";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 import { createShellUpdatesSession } from "./shellUpdates";
 import { createShellTraySession } from "./shellTray";
+import { createShellLocalArtworkSession } from "./shellLocalArtwork";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -25,6 +26,7 @@ export function useDesktopLifecycle(ui: {
     ? createFilesSession(platform.files, { blockAudio: blockLocalAudio })
     : undefined;
   const lyrics = lifecycle ? createShellDesktopLyricsSession() : undefined;
+  const artwork = lifecycle ? createShellLocalArtworkSession() : undefined;
   if (!lifecycle) {
     let disposed = false;
     onMounted(() => {
@@ -156,6 +158,7 @@ export function useDesktopLifecycle(ui: {
       } catch {
         reportFailure();
         tray.dispose();
+        artwork?.dispose();
         await updates?.dispose();
         await lyrics?.dispose();
         await files?.dispose();
@@ -173,6 +176,7 @@ export function useDesktopLifecycle(ui: {
   );
   onBeforeUnmount(() => {
     disposed = true;
+    artwork?.dispose();
     const updatesCleanup = updates?.dispose();
     const lyricsCleanup = lyrics?.dispose();
     const shortcutCleanup = shortcuts?.dispose();

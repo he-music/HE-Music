@@ -7,6 +7,7 @@ import { isWordLyric, parseLineLyric, parseWordLyric, splitLocalLyrics } from "@
 import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
 import { filesSession } from "@/platform/filesSession";
+import { readLocalMetadata } from "@/platform/localMetadataRead";
 
 class LyricManager {
   private lyricRequest = 0;
@@ -66,7 +67,7 @@ class LyricManager {
         }
         const ref = { ...entry.ref };
         // 扫描字段是最多1024字节的展示预览，歌词必须从当前授权读取完整标签。
-        const result = await owner.metadata.read(ref);
+        const result = await readLocalMetadata(owner, ref);
         const current = nativeLocalEntry(songID);
         if (
           filesSession.value !== owner ||

@@ -781,6 +781,10 @@ class Player {
       throw error;
     }
   }
+  /** 本地临时封面变化沿用现有配色请求代次，不写入歌曲快照。 */
+  public updateArtworkTheme(url: string): Promise<void> {
+    return songManager.getCoverColor(url);
+  }
   private nativeModeCoordinator() {
     if (!this.nativeModes) {
       const data = useDataStore();

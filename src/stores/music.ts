@@ -7,6 +7,7 @@ import { SongLyric } from "@/types/lyric";
 import blob from "@/utils/blob";
 import { artistPhotos } from "@/api/artist";
 import { shuffleArray } from "@/utils/helper";
+import { localArtworkForSong } from "@/platform/localArtwork";
 
 interface MusicState {
   playSong: SongInfo;
@@ -92,7 +93,10 @@ export const useMusicStore = defineStore("music", {
     },
     // 歌曲封面
     songCover(state): string {
-      return state.playSong.path ? state.playSong.cover : getSizeCover(state.playSong);
+      return (
+        localArtworkForSong(state.playSong) ??
+        (state.playSong.path ? state.playSong.cover : getSizeCover(state.playSong))
+      );
     },
     isPlayingPlaylist:
       (state) =>
@@ -108,7 +112,10 @@ export const useMusicStore = defineStore("music", {
     getSongCover:
       (state) =>
       (size: number = 300): string => {
-        return state.playSong.path ? state.playSong.cover : getSizeCover(state.playSong, size);
+        return (
+          localArtworkForSong(state.playSong) ??
+          (state.playSong.path ? state.playSong.cover : getSizeCover(state.playSong, size))
+        );
       },
 
     // 电台歌曲

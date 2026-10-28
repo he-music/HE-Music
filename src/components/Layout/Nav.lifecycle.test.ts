@@ -8,6 +8,7 @@ import type { LyricsWindowState, PlatformDesktopLyrics } from "@/platform/deskto
 import type { TrayAction, TrayRequest, TrayPlaybackState } from "@/platform/mygo.bindings";
 
 type ShellSessionStub = { start: () => Promise<void>; dispose: () => Promise<void> };
+type ArtworkSessionStub = { dispose: () => void };
 const mocks = vi.hoisted(() => ({
   platform: { kind: "mygo", capabilities: { tray: true, windowControls: false }, lifecycle: {} },
   setting: {} as Record<string, unknown>,
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   media: undefined as ShellSessionStub | undefined,
   files: undefined as ShellSessionStub | undefined,
   updates: undefined as ShellSessionStub | undefined,
+  artwork: undefined as ArtworkSessionStub | undefined,
 }));
 vi.mock("@/platform", () => ({ platform: mocks.platform }));
 vi.mock("@/stores", () => ({
@@ -38,6 +40,9 @@ vi.mock("@/composables/shellSystemMedia", () => ({
 }));
 vi.mock("@/platform/filesSession", () => ({ createFilesSession: () => mocks.files }));
 vi.mock("@/composables/shellUpdates", () => ({ createShellUpdatesSession: () => mocks.updates }));
+vi.mock("@/composables/shellLocalArtwork", () => ({
+  createShellLocalArtworkSession: () => mocks.artwork,
+}));
 import { useDesktopLifecycle } from "@/composables/useDesktopLifecycle";
 
 const flush = async () => {
@@ -53,6 +58,7 @@ afterEach(async () => {
   mocks.media = undefined;
   mocks.files = undefined;
   mocks.updates = undefined;
+  mocks.artwork = undefined;
   vi.unstubAllGlobals();
 });
 
@@ -172,6 +178,28 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean; epoch: nu
 }
 
 describe("Nav native lifecycle setup", () => {
+  it("releases local artwork synchronously before main lifecycle teardown", async () => {
+    const artwork = { dispose: vi.fn() };
+    mocks.artwork = artwork;
+    const nav = mountNav();
+    await flush();
+    nav.service.teardown.mockImplementation(async () => {
+      expect(artwork.dispose).toHaveBeenCalledOnce();
+    });
+    nav.unmount();
+    expect(artwork.dispose).toHaveBeenCalledOnce();
+    await flush();
+    expect(nav.service.teardown).toHaveBeenCalledOnce();
+  });
+  it("releases local artwork when native Ready rejects", async () => {
+    const artwork = { dispose: vi.fn() };
+    mocks.artwork = artwork;
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const nav = mountNav({ ready: Promise.reject(new Error("fixture ready")) });
+    await flush();
+    expect(artwork.dispose).toHaveBeenCalledOnce();
+    expect(nav.service.teardown).toHaveBeenCalledOnce();
+  });
   it("只在主壳Ready后启动更新，待回执期间不阻塞播放接线，卸载立即处置", async () => {
     let release!: () => void;
     const ready = new Promise<{ trayAvailable: boolean; epoch: number }>((resolve) => {

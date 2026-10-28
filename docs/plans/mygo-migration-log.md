@@ -616,3 +616,12 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - mygo播放器UI和托盘共用全局有界mode协调器：一个active加一个queued，许可保持到真实persist结束。恢复备份的读取不回写缓存；同步一次提交列表/原序/index/mode，按提交时当前id+platform重算索引；持久化只保存捕获副本、用allSettled等两个写入真退出，无晚runtime回写。persist失败准确提示运行时已应用但保存未完成；跨key仍非事务，没有journal或崩溃恢复保证，Web/Electron旧路径保留。
 - 模型审查 `2b7b5a00` 找到输入请求别名P1，父两红复现queued目标被改为repeat及guard被替换后仍applied；复制target及原函数后25项通过，`0cbfc65` Closed。父业务审查 `793487ad` 又找到queued等待期外部版本边界遗漏：真实Player/Pinia/shell/fake DB两个case在同歌换列表或mode A→B→A后实际仍applied shuffle。入队捕获revision/mode/list，执行前复核；只沿自身合法同步提交推进queued边界，读边界异常不提前放行IO。修后相同两例均skipped且无新增commit/write；正常连续提交等3例补齐，`ce98cfee` Closed/No issues/OK。
 - 原生与主壳父审查 `0a39f924` No issues/OK with notes；业务P1经窄修复核关闭。最终父实际全量99文件918项、Node/Web类型、受影响TS ESLint/格式、Go全包/vet/gofmt及官方绑定完整cmp通过。现有请求失败用例日志与Fastify弃用警告保留；未启动App/Vite、OS菜单、真实DB/音频/picker/用户库/下载/安装或Windows，不能把fake或stub算作实机验收。
+
+### 播放器本地内嵌封面与临时资源
+
+- 图片/session纯模型候选 `325e3e2` 在独占worktree交付，worker自报68项；父整合后新增四个current回调重入反例，修前新B封面被旧A清掉或多读一次A，四项实际失败。父在去重、初始admission、currentURL和load finally的回调后复核generation/target/accepted/disposed，修后图片27项及session45项通过；`c84d3e9f` 窄复核Closed/No issues/OK。
+- 图片只做有界JPEG/PNG头部准入：canonical base64、MIME与magic匹配、单图4MiB、宽高4096及总1600万像素、最多32候选且front优先、JPEG头部扫描256KiB。此边界不代表完整解码、CRC或内容认证；真实WebView图像显示仍后置。
+- 主壳按FilesSession owner/ready、目录grant、registry、ref四字段和歌曲id/platform/path复核；同步监听只依赖这些低频状态，一个真实metadata读加一个最新pending，切歌和dispose不假装读已结束。替换presentation owner会同步退休旧URL，旧清理不清新reader；URL工厂、失权、晚回和重入有独立模型及接线回归。
+- URL只由内存reader和music getter派生，不写playSong.cover；真实Pinia持久化插件与stub storage确认保存内容无blob/grant且URL变化不增加持久化写入。原MainPlayer封面key保留、src使用既有派生getter，系统媒体继续经getSongCover消费，没有增加media owner或改歌词/时钟/RAF。配色沿用现有请求代次，失权/换歌清除旧配色请求；Electron原path缓存路径保留。
+- 完整LRC与封面只在相同owner/ref的metadata请求仍挂起时共享Promise，结果完成/失败均退休，不缓存Info/Pictures；各调用者独立复核权限与文件版本。真实主壳编译/runtime测试补充Ready拒绝与卸载前同步处置，factory测试覆盖grant/ref/owner变化、latest pending与替换owner。
+- 父实际全量104文件1004项、Node/Web类型、受影响15个TS ESLint通过。格式首轮发现Nav mock一行，hashline修正后15文件Prettier通过；Go与官方绑定未改，本轮没有重复其已过检查。父集成独立审查 `1e056f41` No issues/OK with notes。没有启动App/Vite、真实Naive DOM/WebView、用户库、图片解码、声音、picker、OS、下载/安装或Windows，不把stub通过等同实机验收。
