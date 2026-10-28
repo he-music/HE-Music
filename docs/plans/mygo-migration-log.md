@@ -511,3 +511,15 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - f5d48e08 交付新 `parent-runtime-candidate-compile-preparation-01` 的 Swift definitions/main/plan；八源 ledger 为六个候选依赖加两个新 fixture 源。CLI、Swift compile、fixture execution、Python fake 均为 0，未生成真实 pins/root/permit。b4ee3b86 独立 A0 No issues / OK with notes，仅认可编译准备，不授权或证明实际编译/运行。原运行时两 P1、Task16、设置 E2E 和媒体/托盘实测缺口保持。
 - 两组件复核通过后，父将上述提交以 `cherry-pick --no-commit` 集成到主工作区，保留父原有两份文档修改；无冲突。下一先执行集成检查，再继续歌词适配层和视图的独立接线；会话差异/报告不进产品提交。
 - 父集成后以固定 Node 24.22.1 / pnpm 10.28.1 和固定 Go 1.27.3 的 HOME-only 干净环境执行：`pnpm typecheck`（node/web）、Vitest 全套 67 文件 551 项、`go test ./...`、两文档 Prettier 与 staged diff --check 均通过。Vitest 的请求失败用例日志和 Fastify 既有弃用警告如实保留，不代表测试失败。没有执行 App、原生 picker、Vite、Swift 或 Windows。准备将已复核组件与进展文档保存为集成节点，再分开实施歌词适配层及视图；全部功能迁移和实机验收仍未完成。
+
+### 桌面歌词适配、视图恢复与主子窗口隔离
+
+- B 适配层已以 `45f26d9` 集成，暂存内容与已复核的 worktree 提交 `5252a918` 逐文件一致。官方 bindings 沿用先前固定版本 CLI 的生成结果，本轮没有再次运行生成器。主会话先订阅再 Begin，按 epoch/seq/revision/trackKey 发布快照及毫秒时钟，歌词失败与文件、媒体、快捷键和主生命周期隔离。
+- C worker `6411d472` 在两次完整暂停交接期间触及 1800000ms 上限，workflow `b8bac716` 失败；实施报告未交付，不能记为 worker 成功。父读取保留文件、检查独立 worktree 差异并接手，使用 hashline 完成源接线、测试格式及三个生产 SFC 反例；未切换其他 CLI。早先一次重叠 anchor batch 被拒绝且零写，修正边界后重做。新测试首轮格式失败保留，最终三文件格式通过。
+- 父恢复后的 C 验证为真实生产 script/template 经 compiler-sfc/custom renderer 挂载，加纯 consumer 测试，共 14 项通过；Web 类型、两 TS ESLint 和三文件 Prettier 通过。主分支集成为 `5f5e1ef`（独立 worktree `b6a43f5`）。场景覆盖 B10 时钟先到、晚 Attach A5、随后 B8 快照，毫秒/rate/offset 接收重锚，固定 header 命令，实际 bounds 回执、晚回与卸载、Attach 拒绝及 Electron 精确退订。UI 壳和 host 被 stub，不能据此声称真实 Naive UI 或 WK 窗口通过。
+- C 独立 review `3fc28ca1` 指出 P1：A 命令切 B 后拒绝会无条件把连接设 failed，阻断新曲后续控制；另指出旧 worktree 平台导入早读 Electron。父在主分支新增生产 SFC 回归，实际先得 1 项失败、14 项跳过，`failed` 与期望 `connected` 不符；随后将 command/bounds/getState/close 的操作错误独立保存为 operationError，按请求 epoch、曲目或 revision 拒绝过期结果，不再使连接永久失效。增加四操作当前失败及旧 epoch 拒绝用例，歌词测试现为 23 项通过。真正 Attach 或原生窗口失败仍显示连接错误。
+- D 新增精确路径角色选择与动态 bootstrap：mygo/Electron 歌词子页直接挂载视图和 i18n，跳过主 App、Provider、router、Pinia 持久化与 initIpc；普通窗口保留原插件与初始化顺序。mygo 宿主判断先于 Electron 检测，真实导入测试将 electron/api getter 设为抛错并验证无读取。新增透明子页根样式及三条中英文连接文案，未改 AMLL、主播放器 RAF、歌词布局或焦点行为。
+- 能力开关由主 DesktopLyricsSession.ready 派生，不硬编码启用；主播放器通过 Ready 会话请求显示，ON 标记只跟随 native visible，pending 不冒充已打开。设置页仅开放 mygo 显示开关，旧锁定、穿透、字体配置保存和重置入口仍限 Electron。新增 Nav 场景确认 pending 不改显示标记、20 次 bounds 与进度变化不重复写标记、visible/close 必要变化正确更新；这不是 Vue 全树性能或真实鼠标验收。
+- 父固定 Node 24.22.1 / pnpm 10.28.1 环境首次集成全量为 71 文件 602 项通过；同 revision 窄修后，最终 Vitest 71 文件 606 项、pnpm typecheck（node/web）、受影响 TS ESLint、源文件 Prettier 及 diff --check 均通过。既有请求错误用例日志与 Fastify 弃用警告保留。现有 ESLint 配置忽略 Vue SFC，不把它们算作 lint 通过。
+- 集成独立复核 `6a6efdd0` 确认 C P1 和宿主检测 P2 已解决，D 启动隔离、Ready/visible 状态及生命周期接线符合源码要求，结论 OK with notes；另提出同 revision 的成功窗口 RPC 不能清旧 operationError。父新增三个同 revision 重试反例，实际先得 3 项失败、24 项跳过；随后只在三类窗口 RPC 成功后独立执行请求上下文校验的清错，再沿用原 revision 合并。再补旧成功回执不能清较新 revision 错误的反例，最终歌词 27 项和全量 606 项通过。该最后窄修由父按建议实施并验证，没有另做一次独立复核；原两次 review 及红测结果保留。
+- 本轮未执行 Go/Swift 编译、Vite 服务或构建、App/LaunchServices、真实歌词窗口、真实音频、picker/用户目录 IO 或 Windows；此前静态/运行时失败与权限边界不变。媒体按键无响应、托盘缺图标且动作少仍未修复，快捷键验收继续延后。本地音乐扫描/播放、下载、标签编辑及自动更新仍待实施，runtime 新 Swift 编译准备仍只到 A0。会话报告、差异和临时产物不进入产品提交。

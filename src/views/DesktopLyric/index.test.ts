@@ -639,6 +639,27 @@ describe("DesktopLyric production SFC", () => {
     expect(text(view.root)).toContain("message.desktop_lyrics_connection_failed");
     expect(view.fixture.off.every((off) => off.mock.calls.length === 1)).toBe(true);
   });
+  it("切曲后旧命令拒绝不冻结新曲的生产视图与控制", async () => {
+    const view = mountView("mygo");
+    view.fixture.attachment.resolve({ window: windowState(), snapshot: snapshot() });
+    await flush();
+    const response = deferred<void>();
+    view.fixture.provider.command.mockImplementationOnce(() => response.promise);
+    view.state.sendToMainWin("playOrPause");
+    view.fixture.emitSnapshot(snapshot(8, "B"));
+    response.reject(new Error("stale track command"));
+    await flush();
+    expect(view.state.consumer.status.value).toBe("connected");
+    expect(text(view.root)).toContain("Song B");
+    expect(text(view.root)).not.toContain("message.desktop_lyrics_connection_failed");
+    view.state.sendToMainWin("playNext");
+    await flush();
+    expect(view.fixture.provider.command).toHaveBeenLastCalledWith({
+      epoch: 7,
+      trackKey: "B",
+      action: "next",
+    });
+  });
 });
 
 describe("desktopLyricsConsumer ordering and disposal", () => {
@@ -698,5 +719,118 @@ describe("desktopLyricsConsumer ordering and disposal", () => {
     const web = createDesktopLyricsConsumer(undefined);
     await web.start();
     expect(web.status.value).toBe("failed");
+  });
+  it.each(["command", "setBounds", "refreshBounds", "close"] as const)(
+    "%s 的当前操作失败可观测，仍允许后续有效命令",
+    async (operation) => {
+      const fixture = providerFixture();
+      const consumer = createDesktopLyricsConsumer(fixture.provider);
+      cleanups.push(consumer.dispose);
+      const started = consumer.start();
+      fixture.attachment.resolve({ window: windowState(), snapshot: snapshot() });
+      await started;
+      const error = new Error("synthetic operation failure");
+      const method = operation === "refreshBounds" ? "getState" : operation;
+      fixture.provider[method].mockRejectedValueOnce(error);
+      if (operation === "command") await consumer.command("toggle");
+      else if (operation === "setBounds") {
+        await consumer.setBounds({ x: 1, y: 2, width: 800, height: 180 });
+      } else await consumer[operation]();
+      expect(consumer.status.value).toBe("connected");
+      expect(consumer.operationError.value).toBe(error);
+      await consumer.command("next");
+      expect(consumer.operationError.value).toBeUndefined();
+      expect(fixture.provider.command).toHaveBeenLastCalledWith({
+        epoch: 7,
+        trackKey: "A",
+        action: "next",
+      });
+    },
+  );
+
+  it.each(["command", "setBounds", "refreshBounds", "close"] as const)(
+    "%s 的旧epoch拒绝不污染新会话",
+    async (operation) => {
+      const fixture = providerFixture();
+      const consumer = createDesktopLyricsConsumer(fixture.provider);
+      cleanups.push(consumer.dispose);
+      const started = consumer.start();
+      fixture.attachment.resolve({ window: windowState(), snapshot: snapshot() });
+      await started;
+      const commandResponse = deferred<void>();
+      const windowResponse = deferred<LyricsWindowState>();
+      if (operation === "command") {
+        fixture.provider.command.mockImplementationOnce(() => commandResponse.promise);
+      } else {
+        const method = operation === "refreshBounds" ? "getState" : operation;
+        fixture.provider[method].mockImplementationOnce(() => windowResponse.promise);
+      }
+      const running =
+        operation === "command"
+          ? consumer.command("toggle")
+          : operation === "setBounds"
+            ? consumer.setBounds({ x: 1, y: 2, width: 800, height: 180 })
+            : consumer[operation]();
+      fixture.emitSnapshot(snapshot(1, "B", 8));
+      fixture.emitWindow(windowState(1, 8));
+      const error = new Error("stale epoch operation");
+      if (operation === "command") commandResponse.reject(error);
+      else windowResponse.reject(error);
+      await running;
+      expect(consumer.status.value).toBe("connected");
+      expect(consumer.operationError.value).toBeUndefined();
+      await consumer.command("next");
+      expect(fixture.provider.command).toHaveBeenLastCalledWith({
+        epoch: 8,
+        trackKey: "B",
+        action: "next",
+      });
+    },
+  );
+  it.each(["setBounds", "refreshBounds", "close"] as const)(
+    "%s 成功返回相同revision也清除旧操作错误",
+    async (operation) => {
+      const fixture = providerFixture();
+      const consumer = createDesktopLyricsConsumer(fixture.provider);
+      cleanups.push(consumer.dispose);
+      const started = consumer.start();
+      fixture.attachment.resolve({ window: windowState(), snapshot: snapshot() });
+      await started;
+      const method = operation === "refreshBounds" ? "getState" : operation;
+      const run = () =>
+        operation === "setBounds"
+          ? consumer.setBounds(windowState().bounds)
+          : consumer[operation]();
+      const error = new Error("temporary window operation failure");
+      fixture.provider[method].mockRejectedValueOnce(error);
+      await run();
+      expect(consumer.operationError.value).toBe(error);
+      fixture.provider[method].mockResolvedValueOnce(windowState());
+      await run();
+      expect(consumer.windowState.value?.revision).toBe(1);
+      expect(consumer.operationError.value).toBeUndefined();
+      expect(consumer.status.value).toBe("connected");
+    },
+  );
+
+  it("迟到旧窗口成功回执不能清除较新revision的操作错误", async () => {
+    const fixture = providerFixture();
+    const consumer = createDesktopLyricsConsumer(fixture.provider);
+    cleanups.push(consumer.dispose);
+    const started = consumer.start();
+    fixture.attachment.resolve({ window: windowState(), snapshot: snapshot() });
+    await started;
+    const response = deferred<LyricsWindowState>();
+    fixture.provider.getState.mockImplementationOnce(() => response.promise);
+    const refreshing = consumer.refreshBounds();
+    fixture.emitWindow(windowState(5));
+    const error = new Error("newer operation failure");
+    fixture.provider.command.mockRejectedValueOnce(error);
+    await consumer.command("toggle");
+    expect(consumer.operationError.value).toBe(error);
+    response.resolve(windowState(1));
+    await refreshing;
+    expect(consumer.windowState.value?.revision).toBe(5);
+    expect(consumer.operationError.value).toBe(error);
   });
 });

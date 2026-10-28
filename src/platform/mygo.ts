@@ -11,13 +11,16 @@ import {
 } from "./mygo.bindings";
 import { externalHttpURL, type PlatformAdapter } from "./types";
 import { playbackShortcutActions } from "./shortcuts";
+import { desktopLyricsSession } from "./desktopLyricsSession";
 
 export function createMygoPlatform(): PlatformAdapter {
   const os = runtime().platform;
   const capabilities = shallowReactive({
     windowControls: true,
     tray: false,
-    desktopLyrics: false,
+    get desktopLyrics() {
+      return desktopLyricsSession.value?.ready.value === true;
+    },
     localMusic: false,
     electronStartup: false,
   });

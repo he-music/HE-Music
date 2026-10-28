@@ -9,6 +9,8 @@ import LyricPreview from "../components/LyricPreview.vue";
 import { t } from "@/i18n";
 import { resolveKineticJumpGranularity } from "@/utils/lyric/kinetic";
 import { usePlayer } from "@/utils/player";
+import { platform } from "@/platform";
+import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 
 export const useLyricSettings = (): SettingConfig => {
   const player = usePlayer();
@@ -575,12 +577,16 @@ export const useLyricSettings = (): SettingConfig => {
       {
         title: t("common.desktop_lyrics"),
         tags: [{ text: "Beta", type: "warning" }],
-        show: isElectron,
+        show: () => isElectron || platform.capabilities.desktopLyrics,
         items: [
           {
             key: "showDesktopLyric",
             label: t("setting.lyrics.show_desktop_lyrics"),
             type: "switch",
+            disabled: () =>
+              !isElectron &&
+              (!desktopLyricsSession.value?.ready.value ||
+                desktopLyricsSession.value?.window.value?.pending === true),
             value: computed({
               get: () => statusStore.showDesktopLyric,
               set: (v) => player.setDesktopLyricShow(v),
@@ -588,6 +594,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricLock",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_lock"),
             type: "switch",
             description: t("setting.lyrics.desktop_lyrics_lock_tip"),
@@ -601,6 +608,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricDoubleLine",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_double_line"),
             type: "switch",
             description: t("setting.lyrics.desktop_lyrics_double_line_tip"),
@@ -614,6 +622,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricLimitBounds",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_limit_bounds"),
             type: "switch",
             description: t("setting.lyrics.desktop_lyrics_limit_bounds_tip"),
@@ -627,6 +636,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricPosition",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_align"),
             type: "select",
             description: t("setting.lyrics.desktop_lyrics_align_tip"),
@@ -646,6 +656,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricFont",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_font_family"),
             type: "button",
             description: t("setting.lyrics.desktop_lyrics_font_family_tip"),
@@ -654,6 +665,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricShowYrc",
+            show: isElectron,
             label: t("setting.lyrics.show_desktop_font_lyrics"),
             type: "switch",
             description: t("setting.lyrics.show_desktop_font_lyrics"),
@@ -667,6 +679,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricShowTran",
+            show: isElectron,
             label: t("setting.lyrics.show_desktop_lyrics_trans"),
             type: "switch",
             description: t("setting.lyrics.show_desktop_lyrics_trans_tip"),
@@ -680,6 +693,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricAnimation",
+            show: isElectron,
             label: t("setting.lyrics.show_desktop_animation"),
             type: "switch",
             description: t("setting.lyrics.show_desktop_animation_tip"),
@@ -693,6 +707,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricFontSize",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_font_size"),
             type: "select",
             description: t("setting.lyrics.desktop_lyrics_font_size_tip"),
@@ -710,6 +725,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricPlayedColor",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_font_color_played"),
             type: "color-picker",
             description: t("setting.lyrics.desktop_lyrics_font_color_played_tip"),
@@ -722,6 +738,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricUnplayedColor",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_font_color_unplayed"),
             type: "color-picker",
             description: t("setting.lyrics.desktop_lyrics_font_color_unplayed_tip"),
@@ -734,6 +751,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricShadowColor",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_shadow_color"),
             type: "color-picker",
             description: t("setting.lyrics.desktop_lyrics_shadow_color_tip"),
@@ -746,6 +764,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricTextBackgroundMask",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_text_background_mask"),
             type: "switch",
             value: computed({
@@ -758,6 +777,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricAlwaysShowPlayInfo",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_always_show_play_info"),
             type: "switch",
             description: t("setting.lyrics.desktop_lyrics_always_show_play_info_tip"),
@@ -771,6 +791,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricResetPosition",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_reset_position"),
             type: "button",
             description: t("setting.lyrics.desktop_lyrics_reset_position_tip"),
@@ -779,6 +800,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricRestore",
+            show: isElectron,
             label: t("setting.lyrics.desktop_lyrics_reset_default"),
             type: "button",
             description: t("setting.lyrics.desktop_lyrics_reset_default_tip"),

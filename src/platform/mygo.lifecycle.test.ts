@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMygoPlatform } from "./mygo";
 import type { LyricsClock, LyricsSnapshot, LyricsWindowState } from "./desktopLyrics";
+import { DesktopLyricsSession } from "./desktopLyricsSession";
 const bridge = vi.hoisted(() => ({ call: vi.fn(), on: vi.fn() }));
 vi.mock("mygo-runtime", () => ({
   runtime: () => ({ platform: "darwin" }),
@@ -147,5 +148,64 @@ describe("mygo lifecycle capability", () => {
       expect(off[index]).toHaveBeenCalledOnce();
     });
     expect(adapter.capabilities.desktopLyrics).toBe(false);
+  });
+  it("歌词能力仅随主会话Ready启用，处置同步撤销", async () => {
+    const adapter = createMygoPlatform();
+    const provider = adapter.desktopLyrics;
+    if (!provider) throw new Error("Expected native lyrics provider");
+    const state: LyricsWindowState = {
+      epoch: 9,
+      revision: 1,
+      visible: false,
+      pending: false,
+      locked: false,
+      hoverUnlock: false,
+      bounds: { x: 0, y: 0, width: 800, height: 180 },
+      failure: "",
+    };
+    bridge.on.mockReturnValue(() => {});
+    bridge.call.mockImplementation(async (method: string) => {
+      if (method === "DesktopLyrics.Begin") return { epoch: 9 };
+      if (method === "DesktopLyrics.GetState") return state;
+      return undefined;
+    });
+    const session = new DesktopLyricsSession(provider, {
+      trackKey: () => "synthetic",
+      snapshotDependencies: () => [],
+      clockDependencies: () => [],
+      snapshot: () => ({
+        trackKey: "synthetic",
+        playName: "Song",
+        artistName: "Artist",
+        playing: false,
+        positionMs: 0,
+        offsetMs: 0,
+        rate: 1,
+        loading: false,
+        lrcData: [],
+        yrcData: [],
+      }),
+      clock: () => ({
+        trackKey: "synthetic",
+        playing: false,
+        positionMs: 0,
+        offsetMs: 0,
+        rate: 1,
+      }),
+      onSeek: () => () => {},
+      execute: () => {},
+    });
+    try {
+      expect(adapter.capabilities.desktopLyrics).toBe(false);
+      const starting = session.start();
+      expect(adapter.capabilities.desktopLyrics).toBe(false);
+      await starting;
+      expect(adapter.capabilities.desktopLyrics).toBe(true);
+      const cleanup = session.dispose();
+      expect(adapter.capabilities.desktopLyrics).toBe(false);
+      await cleanup;
+    } finally {
+      await session.dispose();
+    }
   });
 });

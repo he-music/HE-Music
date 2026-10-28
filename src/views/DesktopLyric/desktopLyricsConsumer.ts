@@ -19,6 +19,7 @@ export function createDesktopLyricsConsumer(provider: PageProvider | undefined) 
   const snapshot = shallowRef<LyricsSnapshot>();
   const clock = shallowRef<LyricsClock>();
   const windowState = shallowRef<LyricsWindowState>();
+  const operationError = shallowRef<unknown>();
   let epoch = 0;
   let snapshotSeq = -1;
   let seq = -1;
@@ -36,6 +37,7 @@ export function createDesktopLyricsConsumer(provider: PageProvider | undefined) 
       snapshot.value = undefined;
       clock.value = undefined;
       windowState.value = undefined;
+      operationError.value = undefined;
       pendingClock = undefined;
     }
     return true;
@@ -76,6 +78,7 @@ export function createDesktopLyricsConsumer(provider: PageProvider | undefined) 
     if (!acceptEpoch(value.epoch)) return;
     if (windowState.value && value.revision <= windowState.value.revision) return;
     windowState.value = value;
+    operationError.value = undefined;
     if (value.failure) status.value = "failed";
   }
 
@@ -93,6 +96,17 @@ export function createDesktopLyricsConsumer(provider: PageProvider | undefined) 
     if (!disposed) status.value = "failed";
   }
 
+  function recordOperationError(
+    error: unknown,
+    request: { epoch: number; trackKey?: string; revision?: number },
+  ) {
+    if (disposed || request.epoch !== epoch) return;
+    if (request.trackKey !== undefined && request.trackKey !== (snapshot.value?.trackKey ?? ""))
+      return;
+    if (request.revision !== undefined && request.revision !== windowState.value?.revision) return;
+    // 单次操作失败不表示订阅断开，也不能使后续有效操作永久失效。
+    operationError.value = error;
+  }
   async function start() {
     if (started || disposed) return;
     started = true;
@@ -117,37 +131,48 @@ export function createDesktopLyricsConsumer(provider: PageProvider | undefined) 
 
   async function command(action: LyricsAction) {
     if (disposed || status.value !== "connected" || !provider || !epoch) return;
+    const request = { epoch, trackKey: snapshot.value?.trackKey ?? "" };
     try {
-      await provider.command({ epoch, trackKey: snapshot.value?.trackKey ?? "", action });
-    } catch {
-      fail();
+      await provider.command({ ...request, action });
+      recordOperationError(undefined, request);
+    } catch (error) {
+      recordOperationError(error, request);
     }
   }
 
   async function setBounds(bounds: LyricsBounds) {
     if (disposed || status.value !== "connected" || !provider || !epoch) return;
+    const request = { epoch, revision: windowState.value?.revision };
     try {
-      acceptWindow(await provider.setBounds(epoch, bounds));
-    } catch {
-      fail();
+      const state = await provider.setBounds(request.epoch, bounds);
+      recordOperationError(undefined, request);
+      acceptWindow(state);
+    } catch (error) {
+      recordOperationError(error, request);
     }
   }
 
   async function refreshBounds() {
     if (disposed || status.value !== "connected" || !provider || !epoch) return;
+    const request = { epoch, revision: windowState.value?.revision };
     try {
-      acceptWindow(await provider.getState(epoch));
-    } catch {
-      fail();
+      const state = await provider.getState(request.epoch);
+      recordOperationError(undefined, request);
+      acceptWindow(state);
+    } catch (error) {
+      recordOperationError(error, request);
     }
   }
 
   async function close() {
     if (disposed || !provider || !epoch) return;
+    const request = { epoch, revision: windowState.value?.revision };
     try {
-      acceptWindow(await provider.close(epoch));
-    } catch {
-      fail();
+      const state = await provider.close(request.epoch);
+      recordOperationError(undefined, request);
+      acceptWindow(state);
+    } catch (error) {
+      recordOperationError(error, request);
     }
   }
 
@@ -162,6 +187,7 @@ export function createDesktopLyricsConsumer(provider: PageProvider | undefined) 
     snapshot,
     clock,
     windowState,
+    operationError,
     start,
     command,
     setBounds,

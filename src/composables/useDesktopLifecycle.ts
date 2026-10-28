@@ -8,6 +8,7 @@ import { createShellShortcutSession } from "./shellShortcuts";
 import { createShellSystemMediaSession } from "./shellSystemMedia";
 import { createFilesSession } from "@/platform/filesSession";
 import { createShellDesktopLyricsSession } from "./shellDesktopLyrics";
+import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -47,6 +48,18 @@ export function useDesktopLifecycle(ui: {
   let requestId: number | null = null;
   let acknowledgement: Promise<void> = Promise.resolve();
   const stops: Array<() => void> = [];
+  if (lyrics) {
+    stops.push(
+      watch(
+        () => {
+          const session = desktopLyricsSession.value;
+          return session?.ready.value === true && session.window.value?.visible === true;
+        },
+        (visible) => (status.showDesktopLyric = visible),
+        { immediate: true, flush: "sync" },
+      ),
+    );
+  }
   const subscriptions: Array<() => void> = [];
   const reportFailure = () => console.error("桌面生命周期操作失败");
   const config = (): LifecycleConfig => ({

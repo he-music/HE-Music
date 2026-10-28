@@ -1,7 +1,15 @@
 <template>
   <n-flex :size="8" align="center" class="right-menu">
-    <n-badge v-if="isElectron" value="ON" :show="statusStore.showDesktopLyric">
-      <div class="menu-icon hidden" @click.stop="player.toggleDesktopLyric()">
+    <n-badge
+      v-if="isElectron || platform.capabilities.desktopLyrics"
+      value="ON"
+      :show="statusStore.showDesktopLyric"
+    >
+      <div
+        class="menu-icon hidden"
+        :aria-disabled="desktopLyricsUnavailable"
+        @click.stop="!desktopLyricsUnavailable && player.toggleDesktopLyric()"
+      >
         <SvgIcon name="DesktopLyric2" :depth="statusStore.showDesktopLyric ? 1 : 3" />
       </div>
     </n-badge>
@@ -91,6 +99,8 @@ import type { DropdownOption } from "naive-ui";
 import { usePlayer } from "@/utils/player";
 import { useI18n } from "vue-i18n";
 import { useSongMenu } from "@/composables/useSongMenu";
+import { platform } from "@/platform";
+import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 
 const { t } = useI18n();
 
@@ -100,6 +110,12 @@ const settingStore = useSettingStore();
 const musicStore = useMusicStore();
 const player = usePlayer();
 
+const desktopLyricsUnavailable = computed(
+  () =>
+    !isElectron &&
+    (!desktopLyricsSession.value?.ready.value ||
+      desktopLyricsSession.value?.window.value?.pending === true),
+);
 const { getQualityMenuOptions } = useSongMenu();
 const playModeOptions = computed(() => [
   {

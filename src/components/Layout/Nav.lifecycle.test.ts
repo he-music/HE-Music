@@ -3,6 +3,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as Vue from "vue";
 import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
+import { DesktopLyricsSession } from "@/platform/desktopLyricsSession";
+import type { LyricsWindowState, PlatformDesktopLyrics } from "@/platform/desktopLyrics";
 
 type ShellSessionStub = { start: () => Promise<void>; dispose: () => Promise<void> };
 const mocks = vi.hoisted(() => ({
@@ -305,5 +307,95 @@ describe("Nav native lifecycle setup", () => {
     await flush();
     expect(lyrics.start).not.toHaveBeenCalled();
     expect(nav.service.teardown).toHaveBeenCalledOnce();
+  });
+  it("歌词显示标记跟随原生确认，bounds和播放时钟不反复写入标记", async () => {
+    const windowState: LyricsWindowState = {
+      epoch: 4,
+      revision: 1,
+      visible: false,
+      pending: false,
+      locked: false,
+      hoverUnlock: false,
+      bounds: { x: 0, y: 0, width: 800, height: 180 },
+      failure: "",
+    };
+    const provider: PlatformDesktopLyrics = {
+      begin: async () => ({ epoch: 4 }),
+      publishSnapshot: async () => {},
+      publishClock: async () => {},
+      getState: async () => windowState,
+      setVisible: async () => ({ ...windowState, revision: 2, pending: true }),
+      attach: async () => ({ window: windowState, snapshot: null }),
+      setBounds: async () => windowState,
+      close: async () => windowState,
+      command: async () => {},
+      teardown: async () => {},
+      onWindow: () => () => {},
+      onCommand: () => () => {},
+      onSnapshot: () => () => {},
+      onClock: () => () => {},
+    };
+    const session = new DesktopLyricsSession(provider, {
+      trackKey: () => "synthetic",
+      snapshotDependencies: () => [],
+      clockDependencies: () => [],
+      snapshot: () => ({
+        trackKey: "synthetic",
+        playName: "Song",
+        artistName: "Artist",
+        playing: false,
+        positionMs: 0,
+        offsetMs: 0,
+        rate: 1,
+        loading: false,
+        lrcData: [],
+        yrcData: [],
+      }),
+      clock: () => ({
+        trackKey: "synthetic",
+        playing: false,
+        positionMs: 0,
+        offsetMs: 0,
+        rate: 1,
+      }),
+      onSeek: () => () => {},
+      execute: () => {},
+    });
+    mocks.lyrics = session;
+    const nav = mountNav();
+    await flush();
+    expect(mocks.status.showDesktopLyric).toBe(false);
+    await session.requestVisible(true);
+    expect(mocks.status.showDesktopLyric).toBe(false);
+    let visible = false;
+    const writes = vi.fn((value: boolean) => {
+      visible = value;
+    });
+    Object.defineProperty(mocks.status, "showDesktopLyric", {
+      configurable: true,
+      get: () => visible,
+      set: writes,
+    });
+    session.acceptWindow({ ...windowState, revision: 3, visible: true });
+    expect(mocks.status.showDesktopLyric).toBe(true);
+    expect(writes).toHaveBeenCalledExactlyOnceWith(true);
+    for (let revision = 4; revision < 24; revision++) {
+      session.acceptWindow({
+        ...windowState,
+        revision,
+        visible: true,
+        bounds: { ...windowState.bounds, x: revision },
+      });
+      mocks.status.currentTime = revision;
+      mocks.status.lyricClock = revision;
+    }
+    await flush();
+    expect(writes).toHaveBeenCalledTimes(1);
+    expect(nav.service.syncPlayback).toHaveBeenCalledOnce();
+    session.acceptWindow({ ...windowState, revision: 24, visible: false });
+    expect(mocks.status.showDesktopLyric).toBe(false);
+    expect(writes).toHaveBeenLastCalledWith(false);
+    nav.unmount();
+    await flush();
   });
 });

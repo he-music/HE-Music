@@ -27,4 +27,21 @@ describe("platform host selection", () => {
     expect(isElectronHost).toBe(false);
     expect(platform.capabilities.electronStartup).toBe(false);
   });
+  it("mygo 优先选择且不读取 Electron 或旧 store 全局", async () => {
+    const forbiddenRead = vi.fn(() => {
+      throw new Error("unexpected Electron global read");
+    });
+    const childWindow = {};
+    Object.defineProperties(childWindow, {
+      electron: { get: forbiddenRead },
+      api: { get: forbiddenRead },
+    });
+    vi.stubGlobal("window", childWindow);
+    vi.stubGlobal("navigator", { userAgent: "Macintosh Electron" });
+    vi.stubGlobal("mygo", { platform: "darwin" });
+    const { platform, isElectronHost } = await import("./index");
+    expect(platform.kind).toBe("mygo");
+    expect(isElectronHost).toBe(false);
+    expect(forbiddenRead).not.toHaveBeenCalled();
+  });
 });

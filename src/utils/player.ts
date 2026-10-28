@@ -7,6 +7,7 @@ import { calculateProgress, msToS } from "./time";
 import { shuffleArray } from "./helper";
 import songManager from "./songManager";
 import { hasNativeSystemMedia, isElectron } from "./env";
+import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 import lyricManager from "./lyricManager";
 import audioManager, { AudioEventType } from "./audioManager";
 import blob from "./blob";
@@ -1169,7 +1170,15 @@ class Player {
    * 切换桌面歌词
    */
   public toggleDesktopLyric() {
-    if (!isElectron) return;
+    if (!isElectron) {
+      const session = desktopLyricsSession.value;
+      if (session?.ready.value) {
+        this.requestNativeDesktopLyrics(
+          !(session.window.value?.visible || session.window.value?.pending),
+        );
+      }
+      return;
+    }
     const statusStore = useStatusStore();
     const show = !statusStore.showDesktopLyric;
     statusStore.showDesktopLyric = show;
@@ -1183,7 +1192,10 @@ class Player {
    * @param show 是否显示
    */
   public setDesktopLyricShow(show: boolean) {
-    if (!isElectron) return;
+    if (!isElectron) {
+      this.requestNativeDesktopLyrics(show);
+      return;
+    }
     const statusStore = useStatusStore();
     if (statusStore.showDesktopLyric === show) return;
     statusStore.showDesktopLyric = show;
@@ -1191,6 +1203,15 @@ class Player {
     window.$message.success(
       show ? t("message.desktop_lyrics_opened") : t("message.desktop_lyrics_closed"),
     );
+  }
+
+  private requestNativeDesktopLyrics(show: boolean): void {
+    const session = desktopLyricsSession.value;
+    if (!session?.ready.value) return;
+    // 显示标记由主会话的窗口回执更新，pending 不能冒充窗口已打开。
+    void session.requestVisible(show).catch(() => {
+      window.$message?.error(t("message.desktop_lyrics_connection_failed"));
+    });
   }
 
   // 切换音质
