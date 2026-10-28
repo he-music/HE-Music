@@ -5,7 +5,7 @@ import * as Vue from "vue";
 import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 import { LocalMetadataSession } from "@/platform/localMetadataSession";
-import type { ScanEntry } from "@/platform/mygo.bindings";
+import type { MetadataResult, ScanEntry } from "@/platform/mygo.bindings";
 
 type ElementNode = {
   tag: string;
@@ -39,6 +39,7 @@ const cleanups: Array<() => void> = [];
 afterEach(() => {
   cleanups.splice(0).forEach((cleanup) => cleanup());
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 const entry: ScanEntry = {
@@ -161,7 +162,11 @@ describe("MygoSongInfoEditor renderer", () => {
       refresh: "not_required" as const,
     }));
     const session = Vue.reactive({
-      operation: { operationId: "a".repeat(64), ref: entry.ref },
+      operation: {
+        operationId: "a".repeat(64),
+        ref: entry.ref,
+        completion: new Promise<never>(() => {}),
+      },
       read: vi.fn(async () => {
         throw new Error("read");
       }),
@@ -460,7 +465,11 @@ it.each([false, true])(
     if (readFails) read.mockRejectedValue(new Error("B read"));
     else read.mockResolvedValue({ ...readResult, info: { ...entry.metadata, Title: "B title" } });
     const ui = mount({
-      operation: { operationId: "a".repeat(64), ref: entry.ref },
+      operation: {
+        operationId: "a".repeat(64),
+        ref: entry.ref,
+        completion: new Promise<never>(() => {}),
+      },
       read,
       save,
       reconcile,
@@ -499,7 +508,11 @@ it("reconciles the same grant and path after a read conflict with a different id
     ref: { ...entry.ref, fileId: "renamed", version: "new" },
   }));
   const ui = mount({
-    operation: { operationId: "a".repeat(64), ref: entry.ref },
+    operation: {
+      operationId: "a".repeat(64),
+      ref: entry.ref,
+      completion: new Promise<never>(() => {}),
+    },
     read: vi.fn(async () => ({ code: "read_ref_conflict", committed: false })),
     reconcile,
   });
@@ -544,3 +557,100 @@ it("clears A recovery names immediately when the view changes to B even while it
   expect(ui.text(ui.root)).not.toContain("A-backup.mp3");
   expect(ui.text(ui.root)).not.toContain("A-work.mp3");
 });
+
+it("does not revive the old baseline when a pending read returns after save completion", async () => {
+  let read!: (value: MetadataResult) => void;
+  let saved!: (value: MetadataResult) => void;
+  const reading = new Promise<MetadataResult>((resolve) => {
+    read = resolve;
+  });
+  const saving = new Promise<MetadataResult>((resolve) => {
+    saved = resolve;
+  });
+  const session = new LocalMetadataSession({
+    access: () => ({
+      current: () => true,
+      read: () => reading,
+      save: () => saving,
+      cancel: async () => ({ code: "ok", committed: false }),
+    }),
+    blockAudio: () => () => {},
+    refreshLibrary: async () => {},
+  });
+  cleanups.push(() => session.dispose());
+  const running = session.save(entry.ref, "sha", {
+    Title: "new",
+    Artists: null,
+    Album: null,
+    AlbumArtists: null,
+    Comment: null,
+    Lyrics: null,
+    Pictures: null,
+  });
+  const ui = mount(session);
+  await flush();
+  saved({
+    code: "ok",
+    committed: true,
+    ref: { ...entry.ref, fileId: "c".repeat(64), version: "d".repeat(64) },
+  });
+  await running;
+  await flush();
+  expect(ui.text(ui.root)).toContain("local_metadata.saved");
+  read(readResult);
+  await flush();
+  expect(
+    ui.all().find((item) => item.tag === "button" && item.props.type === "submit")?.props.disabled,
+  ).toBe(true);
+});
+
+it.each([false, true])(
+  "observes late native completion after the first save wait, moved view: %s",
+  async (moveView) => {
+    vi.useFakeTimers();
+    let finish!: (value: MetadataResult) => void;
+    const native = new Promise<MetadataResult>((resolve) => {
+      finish = resolve;
+    });
+    const release = vi.fn();
+    const session = new LocalMetadataSession({
+      access: (ref) => ({
+        current: () => true,
+        read: async () => ({
+          ...readResult,
+          ref,
+          info: { ...entry.metadata, Title: ref.relativePath },
+        }),
+        save: () => native,
+        cancel: async () => ({ code: "ok", committed: false }),
+      }),
+      blockAudio: () => release,
+      refreshLibrary: async () => {},
+    });
+    cleanups.push(() => session.dispose());
+    const ui = mount(session);
+    vi.stubGlobal("window", { confirm: () => true });
+    await flush();
+    const firstWait = submit(ui);
+    await vi.advanceTimersByTimeAsync(35_000);
+    await firstWait;
+    expect(ui.text(ui.root)).toContain("local_metadata.pending");
+    if (moveView) {
+      ui.setEntry({
+        ...entry,
+        relativePath: "B.mp3",
+        ref: { ...entry.ref, relativePath: "B.mp3", fileId: "B" },
+      });
+      await flush();
+    }
+    finish({
+      code: "ok",
+      committed: true,
+      ref: { ...entry.ref, fileId: "c".repeat(64), version: "d".repeat(64) },
+    });
+    await flush();
+    expect(release).toHaveBeenCalledOnce();
+    expect(ui.text(ui.root).includes("local_metadata.saved")).toBe(!moveView);
+    expect(ui.text(ui.root)).not.toContain("local_metadata.pending");
+  },
+);

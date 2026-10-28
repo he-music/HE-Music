@@ -222,4 +222,51 @@ describe("LocalFilesSession", () => {
     await expect(f.local.scan()).resolves.toBeUndefined();
     expect(f.local.phase.value).toBe("failed");
   });
+  it("bounds a post-write refresh and discards its late scan page", async () => {
+    vi.useFakeTimers();
+    const f = await fixture();
+    const pending = deferred<ScanPage>();
+    vi.mocked(f.provider.readScanPage!).mockReturnValueOnce(pending.promise);
+    const refresh = f.local.refreshAfterWrite();
+    const failure = expect(refresh).rejects.toThrow("Library refresh timed out");
+    await flush();
+    await vi.advanceTimersByTimeAsync(300_000);
+    await failure;
+    expect(f.local.phase.value).toBe("failed");
+    expect(f.local.entries.value).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+    pending.resolve(page());
+    await flush();
+    expect(f.local.phase.value).toBe("failed");
+    expect(f.local.entries.value).toEqual([]);
+  });
+
+  it("clears the refresh deadline when a newer scan replaces it", async () => {
+    vi.useFakeTimers();
+    const f = await fixture();
+    const oldPage = deferred<ScanPage>();
+    const newPage = deferred<ScanPage>();
+    vi.mocked(f.provider.startScan!)
+      .mockResolvedValueOnce({ operationId: "old" })
+      .mockResolvedValueOnce({ operationId: "new" });
+    vi.mocked(f.provider.readScanPage!)
+      .mockReturnValueOnce(oldPage.promise)
+      .mockReturnValueOnce(newPage.promise);
+    const refresh = f.local.refreshAfterWrite();
+    const failure = expect(refresh).rejects.toThrow("Library refresh cancelled");
+    await flush();
+    const newer = f.local.scan();
+    await flush();
+    await failure;
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.advanceTimersByTimeAsync(300_000);
+    expect(f.local.scanning.value).toBe(true);
+    expect(f.provider.cancelFileOperation).not.toHaveBeenCalledWith(7, "new");
+    newPage.resolve({ ...page(), operationId: "new" });
+    await newer;
+    oldPage.resolve({ ...page(), operationId: "old" });
+    await flush();
+    expect(f.local.phase.value).toBe("complete");
+    expect(f.local.entries.value).toHaveLength(1);
+  });
 });

@@ -66,6 +66,7 @@ const pictures = ref<Picture[]>([]);
 const coverPreview = ref("");
 const viewGeneration = ref(0);
 const fileGeneration = ref(0);
+let finalResultPresented = false;
 const form = reactive({
   title: "",
   artists: [] as string[],
@@ -122,6 +123,7 @@ function applyInfo(info: Info, sha256: string | undefined): void {
 
 async function load(): Promise<void> {
   const generation = ++viewGeneration.value;
+  finalResultPresented = false;
   fileGeneration.value++;
   busy.value = false;
   message.value = "";
@@ -207,8 +209,15 @@ function snapshotPatch(original: Info): Patch {
   };
 }
 
-function presentResult(result: MetadataSessionResult): void {
+function presentResult(result: MetadataSessionResult, final = false): void {
+  if (finalResultPresented && !final) return;
+  finalResultPresented ||= final;
+  error.value = "";
+  message.value = "";
   if (result.committed) {
+    viewGeneration.value++;
+    fileGeneration.value++;
+    busy.value = false;
     loaded.value = false;
     baselineSha256.value = "";
     recoveryNames.value = [result.recoveryName, ...(result.residualNames ?? [])].filter(
@@ -279,6 +288,7 @@ async function save(): Promise<void> {
     error.value = t("local_metadata.save_failed");
     return;
   }
+  finalResultPresented = false;
   busy.value = true;
   error.value = "";
   message.value = "";
@@ -294,6 +304,26 @@ async function save(): Promise<void> {
 }
 
 watch(() => [props.session, refKey(props.entry)], load);
+watch(
+  () => [props.session.operation, viewGeneration.value] as const,
+  ([operation, generation]) => {
+    if (!operation || !sameTarget(operation.ref, props.entry.ref)) return;
+    const owner = props.session;
+    const expected = refKey(props.entry);
+    finalResultPresented = false;
+    void operation.completion.then((result) => {
+      if (
+        mounted.value &&
+        props.session === owner &&
+        generation === viewGeneration.value &&
+        expected === refKey(props.entry) &&
+        sameTarget(operation.ref, props.entry.ref)
+      )
+        presentResult(result, true);
+    });
+  },
+  { immediate: true },
+);
 onMounted(() => {
   mounted.value = true;
   void load();

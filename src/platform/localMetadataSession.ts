@@ -26,6 +26,7 @@ export interface MetadataOperation {
   readonly ref: LocalFileRef;
   readonly request: MetadataSaveRequest;
   readonly result: Promise<MetadataSessionResult>;
+  readonly completion: Promise<MetadataSessionResult>;
 }
 
 const SAVE_DEADLINE_MS = 35_000;
@@ -175,6 +176,7 @@ export class LocalMetadataSession {
       ref: request.ref,
       request,
       result,
+      completion,
     };
     const active = {
       access,

@@ -1,6 +1,8 @@
 import { computed, shallowRef } from "vue";
 import type { PlatformFiles } from "./files";
 import { LocalFilesSession } from "./localFilesSession";
+import { LocalMetadataSession } from "./localMetadataSession";
+import { LocalDownloadSession } from "./localDownloadSession";
 import type {
   DefaultDirectoryKind,
   DefaultDirectoryResult,
@@ -53,7 +55,13 @@ export type FileOperationResult<T> =
 const activeSession = shallowRef<FilesSession>();
 export const filesSession = computed(() => activeSession.value);
 
+export interface FilesSessionDependencies {
+  blockAudio(): () => void;
+}
+
 export class FilesSession {
+  readonly metadata?: LocalMetadataSession;
+  readonly downloads?: LocalDownloadSession;
   readonly ready = shallowRef(false);
   readonly busy = shallowRef(false);
   private readonly directoryGrants = shallowRef<readonly DirectoryGrant[]>([]);
@@ -65,7 +73,48 @@ export class FilesSession {
   private cleanup: Promise<void> | undefined;
   private local?: LocalFilesSession;
 
-  constructor(private readonly provider: PlatformFiles) {}
+  constructor(
+    private readonly provider: PlatformFiles,
+    deps?: FilesSessionDependencies,
+  ) {
+    if (deps && provider.readMetadata && provider.saveMetadata && provider.cancelMetadata) {
+      this.metadata = new LocalMetadataSession({
+        access: (ref) => this.metadataAccess(ref),
+        blockAudio: deps.blockAudio,
+        refreshLibrary: async () => {
+          const local = this.local;
+          if (this.disposed || !this.ready.value || !local) throw new Error("Files unavailable");
+          await local.refreshAfterWrite();
+          if (
+            this.disposed ||
+            !this.ready.value ||
+            this.local !== local ||
+            local.phase.value !== "complete"
+          ) {
+            throw new Error("Library refresh incomplete");
+          }
+        },
+      });
+    }
+    if (provider.startDownload && provider.readDownloadState && provider.cancelDownload) {
+      this.downloads = new LocalDownloadSession({
+        access: (token) => this.downloadAccess(token),
+        onCommitted: async () => {
+          const local = this.local;
+          if (this.disposed || !this.ready.value || !local) throw new Error("Files unavailable");
+          await local.scan();
+          if (
+            this.disposed ||
+            !this.ready.value ||
+            this.local !== local ||
+            local.phase.value !== "complete"
+          ) {
+            throw new Error("Library refresh incomplete");
+          }
+        },
+      });
+    }
+  }
 
   start(): Promise<void> {
     if (this.started || this.disposed) return this.beginning ?? Promise.resolve();
@@ -94,6 +143,8 @@ export class FilesSession {
   dispose(): Promise<void> {
     if (this.cleanup) return this.cleanup;
     this.disposed = true;
+    this.metadata?.dispose();
+    this.downloads?.dispose();
     this.local?.dispose();
     this.local = undefined;
     this.ready.value = false;
@@ -149,6 +200,8 @@ export class FilesSession {
         this.directoryGrants.value = this.directoryGrants.value.filter(
           (item) => item.token !== token,
         );
+        if (this.metadata?.operation?.ref.grantToken === token) this.metadata.invalidate();
+        this.downloads?.invalidate(token);
       }
     });
   }
@@ -307,6 +360,9 @@ export class FilesSession {
   }
 }
 
-export function createFilesSession(provider?: PlatformFiles): FilesSession | undefined {
-  return provider ? new FilesSession(provider) : undefined;
+export function createFilesSession(
+  provider?: PlatformFiles,
+  deps?: FilesSessionDependencies,
+): FilesSession | undefined {
+  return provider ? new FilesSession(provider, deps) : undefined;
 }

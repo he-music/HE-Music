@@ -7,6 +7,7 @@ import type { CloseResolution, LifecycleConfig } from "@/platform/mygo.bindings"
 import { createShellShortcutSession } from "./shellShortcuts";
 import { createShellSystemMediaSession } from "./shellSystemMedia";
 import { createFilesSession } from "@/platform/filesSession";
+import { blockLocalAudio } from "@/platform/localAudioSession";
 import { createShellDesktopLyricsSession } from "./shellDesktopLyrics";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
@@ -21,7 +22,9 @@ export function useDesktopLifecycle(ui: {
   const lifecycle = platform.lifecycle;
   const shortcuts = createShellShortcutSession();
   const media = platform.lifecycle ? createShellSystemMediaSession() : undefined;
-  const files = lifecycle ? createFilesSession(platform.files) : undefined;
+  const files = lifecycle
+    ? createFilesSession(platform.files, { blockAudio: blockLocalAudio })
+    : undefined;
   const lyrics = lifecycle ? createShellDesktopLyricsSession() : undefined;
   if (!lifecycle) {
     let disposed = false;

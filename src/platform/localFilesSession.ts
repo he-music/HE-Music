@@ -88,7 +88,29 @@ export class LocalFilesSession {
   async refreshAfterWrite(): Promise<void> {
     if (this.disposed) return;
     this.results.value = [];
-    await this.scan();
+    const scanning = this.scan();
+    const revision = this.revision;
+    const signal = this.abort?.signal;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stop: (() => void) | undefined;
+    const cancelled = new Promise<never>((_resolve, reject) => {
+      stop = () => reject(new Error("Library refresh cancelled"));
+      signal?.addEventListener("abort", stop, { once: true });
+      if (signal?.aborted) stop();
+      timer = setTimeout(() => {
+        reject(new Error("Library refresh timed out"));
+        if (!this.disposed && this.revision === revision) {
+          this.cancel();
+          this.scanPhase.value = "failed";
+        }
+      }, 300_000);
+    });
+    try {
+      await Promise.race([scanning, cancelled]);
+    } finally {
+      clearTimeout(timer);
+      if (stop) signal?.removeEventListener("abort", stop);
+    }
   }
 
   async scan(): Promise<void> {
