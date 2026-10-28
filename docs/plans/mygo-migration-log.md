@@ -553,3 +553,12 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 本地音频后端 `4849dba` 父合入 `396b2e9`，lazy loopback监听/随机票/Host校验/Range/每请求独立FD与lease/取消deadline；独立review `a9609c08` No issues/OK with notes。父接官方生成bindings（完整cmp一致）和主循环返回后的shutdown。mygo现有AudioManager明确跳过WebAudio，保持HTMLAudio/crossOrigin原分流；未因源码出现createMediaElementSource字串而新增CORS或改变在线/Electron音频图。
 - 前端独立review `a018115b` BLOCK：P1为pending open时重扫移除ref未失效旧票，P2为本地歌词仍读取Electron桥。父分别实际红测（旧URL非null；Electron getter读取1次），以await后精确匹配fileId/version/grantToken/relativePath并Close旧票、非Electron本地歌词入口返回空视图窄修；`c14e47cd`只复核这两项，均关闭、No issues/OK。嵌入歌词完整读取/封面/标签编辑仍待后续，不把空歌词兼容处理当完整本地歌词迁移。
 - 修正前全量78文件634项保留；修正后Node24.22.1下最终前端79文件636项、Node/Web类型、相关TS lint/格式、Go全包通过。待接的更新会话WIP测试明确排除在该79/636计数外。未执行新App/Vite/原生picker/真实socket音频/用户音乐库或Windows；不能据纯HTTP/假writer/SFC验证声称真实声音通过。
+
+### 更新前端会话与主壳提示接线
+
+- 父正式实现 `UpdatesSession`，先订阅、Begin RPC入队与定向事件双确认才Ready；跨实例唯一requestId、epoch/opRevision/stateRevision、0号事件不结算、错误旧revision可结算但不可回滚较新快照。启动/操作回执/长任务/cleanup有界，不用0ms轮询；处置同步撤ready，短暂等待迟到Begin后按准确epoch撤销。安装RPC丢失保留不确定fence，只认原生刷新或实际终态，installed仍表示需手动重开。
+- 首次会话审查 `c613243f` BLOCK：安装传输失败后refresh覆盖last，原install终态丢弃。实际红测17项中2失败（installed/failed均停在installing，失败phase字面值随后按复查修正），业务nativeOperation与最新RPC查询last分离后17项通过；`b744111e`确认P1关闭/OK with notes，指出测试字面failed应为真实error，父已修正并重验。
+- 主壳Ready后异步启动更新，不阻塞播放接线；沿用checkUpdateOnStart设置，只自动检查/打开提示、不自动安装。About提供mygo专属状态/检查/刷新/合并下载应用入口；Web/Electron原入口保留。更新说明纯文本，不执行feed HTML；确认显示目标版本并再次核对version/opRevision。关设置页/提示不销毁主壳安装；卸载壳同步失效会话并串行清理。
+- UI审查 `f1d20174` OK with notes，但发现P2：旧owner等待组件import占位吞新owner提示。实际红测create0次非1次；入口仅拦同owner重复，过期占位允许当前owner接管，旧finally/离场不能清新占位。提取可注入loader的presenter测试，产品仍模块单例/默认dynamic import。初版异步mock两个SFC import暴露Vitest无Vue plugin的import-analysis限制，改用同一deferred loader后旧guard仍真实red、修后green；`33cbb4e5`复核No issues/OK。测试为同步离场mock，旧modal延迟离场交错另据源码身份条件核对，未实机验证。
+- 最终固定Node24.22.1全量83文件661项、Node/Web类型、相关TS ESLint和全部改动文件格式通过。项目现有ESLint无.vue配置，两SFC提示ignored，不算SFC lint通过；SFC验证为生产模板编译与stub renderer、vue-tsc和格式。未启动App/Vite/native、真实网络下载/验签/替换/重开或Windows。mygo.json仍未配置feed/public key，开发/未配置返回unavailable；没有冒充最新版本或绕过更新包验签。
+- 音频负载比较器 `690eff5` 已合入为 `6075004`。父在主目录重跑metadata全部测试，包含四类标签夹具、六类编码参数、负载篡改/截断与独立ffprobe逐包hash，全部通过。它仍是MP3/FLAC受限结构和编码负载校验，不能外推PCM解码、更多容器或原件事务已经产品接通。

@@ -13,6 +13,7 @@
           </n-tag>
         </n-flex>
         <n-button
+          v-if="platform.kind !== 'mygo'"
           :loading="statusStore.updateCheck"
           type="primary"
           strong
@@ -26,6 +27,7 @@
           }}
         </n-button>
       </n-card>
+      <n-card v-if="platform.kind === 'mygo'"><MygoUpdate /></n-card>
       <n-card class="set-item mobile-client">
         <n-flex :wrap="false" align="center" class="mobile-client-info">
           <div class="mobile-client-icon">
@@ -145,6 +147,8 @@ import "github-markdown-css/github-markdown.css";
 import packageJson from "@/../package.json";
 import { useI18n } from "vue-i18n";
 import { isElectron } from "@/utils/env";
+import { platform } from "@/platform";
+import MygoUpdate from "@/components/Modal/MygoUpdate.vue";
 import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
 
 const { t } = useI18n();

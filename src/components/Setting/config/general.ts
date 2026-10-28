@@ -134,7 +134,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
           },
           {
             key: "checkUpdateOnStart",
-            show: isElectron,
+            show: isElectron || Boolean(platform.updates),
             label: t("setting.general.check_update_on_start"),
             type: "switch",
             description: t("setting.general.check_update_on_start_tip"),

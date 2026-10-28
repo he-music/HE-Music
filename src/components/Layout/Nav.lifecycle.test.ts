@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   lyrics: undefined as ShellSessionStub | undefined,
   media: undefined as ShellSessionStub | undefined,
   files: undefined as ShellSessionStub | undefined,
+  updates: undefined as ShellSessionStub | undefined,
 }));
 vi.mock("@/platform", () => ({ platform: mocks.platform }));
 vi.mock("@/stores", () => ({
@@ -35,6 +36,7 @@ vi.mock("@/composables/shellSystemMedia", () => ({
   createShellSystemMediaSession: () => mocks.media,
 }));
 vi.mock("@/platform/filesSession", () => ({ createFilesSession: () => mocks.files }));
+vi.mock("@/composables/shellUpdates", () => ({ createShellUpdatesSession: () => mocks.updates }));
 import { useDesktopLifecycle } from "@/composables/useDesktopLifecycle";
 
 const flush = async () => {
@@ -49,6 +51,7 @@ afterEach(async () => {
   mocks.lyrics = undefined;
   mocks.media = undefined;
   mocks.files = undefined;
+  mocks.updates = undefined;
   vi.unstubAllGlobals();
 });
 
@@ -159,6 +162,28 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean }> } = {})
 }
 
 describe("Nav native lifecycle setup", () => {
+  it("只在主壳Ready后启动更新，待回执期间不阻塞播放接线，卸载立即处置", async () => {
+    let release!: () => void;
+    const ready = new Promise<{ trayAvailable: boolean }>((resolve) => {
+      release = () => resolve({ trayAvailable: true });
+    });
+    const updates = {
+      start: vi.fn(() => new Promise<void>(() => {})),
+      dispose: vi.fn(async () => {}),
+    };
+    mocks.updates = updates;
+    const nav = mountNav({ ready });
+    await flush();
+    expect(updates.start).not.toHaveBeenCalled();
+    release();
+    await flush();
+    expect(updates.start).toHaveBeenCalledOnce();
+    expect(nav.service.syncPlayback).toHaveBeenCalled();
+    nav.unmount();
+    expect(updates.dispose).toHaveBeenCalledOnce();
+    await flush();
+    expect(nav.service.teardown).toHaveBeenCalledOnce();
+  });
   it("先安装事件再ready，原生关闭显示后ack，取消保留窗口且后续可再次提示", async () => {
     const nav = mountNav();
     await flush();

@@ -10,6 +10,7 @@ import { createFilesSession } from "@/platform/filesSession";
 import { createShellDesktopLyricsSession } from "./shellDesktopLyrics";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
+import { createShellUpdatesSession } from "./shellUpdates";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -43,6 +44,7 @@ export function useDesktopLifecycle(ui: {
   const status = useStatusStore();
   const music = useMusicStore();
   const player = usePlayer();
+  const updates = createShellUpdatesSession(() => setting.checkUpdateOnStart);
   const { t } = useI18n();
   let disposed = false;
   let ready = false;
@@ -152,6 +154,7 @@ export function useDesktopLifecycle(ui: {
         await lifecycle.ready(config());
         if (disposed) return;
         ready = true;
+        void updates?.start().catch(() => console.error("应用更新会话初始化或检查失败"));
         void files?.start();
         await shortcuts?.start();
         await media?.start();
@@ -171,6 +174,7 @@ export function useDesktopLifecycle(ui: {
       } catch {
         reportFailure();
         ready = false;
+        await updates?.dispose();
         await lyrics?.dispose();
         await files?.dispose();
         await media?.dispose();
@@ -187,6 +191,7 @@ export function useDesktopLifecycle(ui: {
   );
   onBeforeUnmount(() => {
     disposed = true;
+    const updatesCleanup = updates?.dispose();
     const lyricsCleanup = lyrics?.dispose();
     const shortcutCleanup = shortcuts?.dispose();
     const mediaCleanup = media?.dispose();
@@ -196,6 +201,7 @@ export function useDesktopLifecycle(ui: {
     ui.showCloseModal.value = false;
     stops.splice(0).forEach((stop) => stop());
     shellTransition = shellTransition.then(async () => {
+      await updatesCleanup;
       await lyricsCleanup;
       await shortcutCleanup;
       await mediaCleanup;

@@ -1,4 +1,21 @@
 {
+  "updates": {
+    "phase_idle": "Ready to check for updates.",
+    "phase_checking": "Checking for updates…",
+    "phase_available": "An update is available.",
+    "phase_no-update": "This is the latest version.",
+    "phase_unavailable": "In-app updates are not enabled for this build.",
+    "phase_installing": "Downloading, verifying and applying the update. Keep the app open.",
+    "phase_installed": "The update has been applied. Quit and reopen HE-Music.",
+    "phase_error": "The update did not finish. Refresh its status before retrying.",
+    "phase_inactive": "The update session has ended.",
+    "version": "New version: {version}",
+    "refresh": "Refresh update status",
+    "apply": "Download and apply update",
+    "apply_notice": "The update will be downloaded and verified, then replace this app. It cannot be reliably cancelled once started. Quit and reopen the app after completion.",
+    "candidate_changed": "The available update changed. Review the new version and confirm again.",
+    "operation_failed": "The update result could not be confirmed. Refresh its status; do not reinstall while the previous result is unknown."
+  },
   "auto_close": {
     "custom_duration": "Custom Duration",
     "custom_duration_title": "Custom Duration (minutes)",
