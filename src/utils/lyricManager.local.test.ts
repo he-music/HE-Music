@@ -1,13 +1,18 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { SongLyric } from "@/types/lyric";
-import type { ScanEntry } from "@/platform/mygo.bindings";
+import type { LocalFileRef, MetadataResult, ScanEntry } from "@/platform/mygo.bindings";
 
-const mocks = vi.hoisted(() => ({
-  setSongLyric: vi.fn<(data: Partial<SongLyric>, merge: boolean) => void>(),
-  status: { lyricLoading: false, lyricIndex: -1 },
-  online: vi.fn(),
-  lookup: vi.fn<(songID: string) => ScanEntry | undefined>(),
-}));
+const mocks = vi.hoisted(() => {
+  const read = vi.fn<(ref: LocalFileRef) => Promise<MetadataResult | undefined>>();
+  return {
+    read,
+    source: { value: { ready: { value: true }, metadata: { read } } },
+    setSongLyric: vi.fn<(data: Partial<SongLyric>, merge: boolean) => void>(),
+    status: { lyricLoading: false, lyricIndex: -1 },
+    online: vi.fn(),
+    lookup: vi.fn<(songID: string) => ScanEntry | undefined>(),
+  };
+});
 vi.mock("@/stores", () => ({
   useMusicStore: () => ({
     playSong: { id: "mygo-local:file", platform: "local" },
@@ -19,11 +24,14 @@ vi.mock("@/stores", () => ({
 vi.mock("./env", () => ({ isElectron: false }));
 vi.mock("@/api/song", () => ({ songLyric: mocks.online }));
 vi.mock("@/platform/localFilesSession", () => ({ nativeLocalEntry: mocks.lookup }));
+vi.mock("@/platform/filesSession", () => ({ filesSession: mocks.source }));
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.clearAllMocks();
   mocks.lookup.mockReset();
+  mocks.read.mockReset();
+  mocks.source.value = { ready: { value: true }, metadata: { read: mocks.read } };
 });
 
 it("mygo local lyrics clear the current view without reading Electron or requesting an online song", async () => {
@@ -77,7 +85,14 @@ it("parses embedded lyrics from the current native registry and does not reuse a
   vi.stubGlobal("window", Object.defineProperty({}, "electron", { get: bridge }));
   vi.spyOn(console, "log").mockImplementation(() => {});
   const lyricManager = (await import("./lyricManager")).default;
-  mocks.lookup.mockReturnValue(embeddedEntry("[00:00.00]授权中的歌词\n[00:01.00]下一句"));
+  const entry = embeddedEntry("[00:00.00]授权中的歌词\n[00:01.00]下一句");
+  mocks.lookup.mockReturnValue(entry);
+  mocks.read.mockResolvedValue({
+    code: "ok",
+    committed: false,
+    ref: entry.ref,
+    info: entry.metadata,
+  });
   await lyricManager.handleLyric("mygo-local:file", "local", "album/song.mp3");
   const data = mocks.setSongLyric.mock.calls.at(-1)?.[0];
   expect(
@@ -103,3 +118,51 @@ it("refuses embedded lyrics from a different relative path", async () => {
   expect(bridge).not.toHaveBeenCalled();
   expect(mocks.online).not.toHaveBeenCalled();
 });
+
+it("reads full embedded lyrics instead of the bounded 1024-byte scan preview", async () => {
+  vi.stubGlobal("window", {});
+  vi.spyOn(console, "log").mockImplementation(() => {});
+  const full = "[00:00.00]" + "长歌词".repeat(400) + "\n[02:00.00]完整歌词末句";
+  const entry = embeddedEntry(full.slice(0, 300));
+  mocks.lookup.mockReturnValue(entry);
+  mocks.read.mockResolvedValue({
+    code: "ok",
+    committed: false,
+    ref: entry.ref,
+    info: { ...entry.metadata, Lyrics: full },
+  });
+  const lyricManager = (await import("./lyricManager")).default;
+  await lyricManager.handleLyric("mygo-local:file", "local", "album/song.mp3");
+  const data = mocks.setSongLyric.mock.calls.at(-1)?.[0];
+  expect(
+    data?.lrcData?.some((line) => line.words.map((word) => word.word).join("") === "完整歌词末句"),
+  ).toBe(true);
+  expect(mocks.read).toHaveBeenCalledWith(entry.ref);
+  expect(vi.mocked(console.log).mock.calls.length).toBe(0);
+});
+
+it.each(["removed", "version", "owner"])(
+  "discards full metadata lyrics after %s changes",
+  async (change) => {
+    vi.stubGlobal("window", {});
+    vi.spyOn(console, "log").mockImplementation(() => {});
+    const entry = embeddedEntry("[00:00.00]扫描预览");
+    mocks.lookup.mockReturnValue(entry);
+    mocks.read.mockImplementationOnce(async () => {
+      if (change === "removed") mocks.lookup.mockReturnValue(undefined);
+      if (change === "version")
+        mocks.lookup.mockReturnValue({ ...entry, ref: { ...entry.ref, version: "new" } });
+      if (change === "owner")
+        mocks.source.value = { ready: { value: true }, metadata: { read: mocks.read } };
+      return {
+        code: "ok",
+        committed: false,
+        ref: entry.ref,
+        info: { ...entry.metadata, Lyrics: "[00:00.00]失效歌词" },
+      };
+    });
+    const lyricManager = (await import("./lyricManager")).default;
+    await lyricManager.handleLyric("mygo-local:file", "local", "album/song.mp3");
+    expect(mocks.setSongLyric).toHaveBeenLastCalledWith({ lrcData: [], yrcData: [] }, true);
+  },
+);

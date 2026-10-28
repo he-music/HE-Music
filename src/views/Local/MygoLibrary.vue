@@ -35,7 +35,7 @@ import { useI18n } from "vue-i18n";
 import type { SongInfo } from "@/types/main.hemusic";
 import { filesSession } from "@/platform/filesSession";
 import { localFilesSession } from "@/platform/localFilesSession";
-import { openLocalMusicDirectoryModal } from "@/utils/modal";
+import { openLocalMusicDirectoryModal, openSongInfoEditor } from "@/utils/modal";
 import { usePlayer } from "@/utils/player";
 import { secondsToTime } from "@/utils/time";
 
@@ -84,6 +84,21 @@ const columns = computed<DataTableColumns<SongInfo>>(() => [
         NButton,
         { size: "small", onClick: () => void player.updatePlayList(songs.value, song) },
         { default: () => t("common.play") },
+      ),
+  },
+  {
+    title: "",
+    key: "edit",
+    width: 90,
+    render: (song) =>
+      h(
+        NButton,
+        {
+          size: "small",
+          disabled: !ready.value || !filesSession.value?.metadata,
+          onClick: () => void openSongInfoEditor(song),
+        },
+        { default: () => t("modal.song_info_edit") },
       ),
   },
 ]);

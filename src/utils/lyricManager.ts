@@ -6,6 +6,7 @@ import { isElectron } from "./env";
 import { isWordLyric, parseLineLyric, parseWordLyric, splitLocalLyrics } from "@/utils/lyric";
 import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
+import { filesSession } from "@/platform/filesSession";
 
 class LyricManager {
   private lyricRequest = 0;
@@ -48,16 +49,42 @@ class LyricManager {
   private async handleLocalLyric(path: string, songID: string): Promise<SongLyric> {
     if (isElectron) console.log("path", path);
     try {
-      const entry = isElectron ? undefined : nativeLocalEntry(songID);
-      const lyric = isElectron
-        ? await window.electron.ipcRenderer.invoke("get-music-lyric", path)
-        : entry?.relativePath === path
-          ? entry.metadata.Lyrics
-          : "";
+      let lyric = "";
+      if (isElectron) {
+        lyric = await window.electron.ipcRenderer.invoke("get-music-lyric", path);
+      } else {
+        const entry = nativeLocalEntry(songID);
+        const owner = filesSession.value;
+        if (
+          !entry ||
+          entry.relativePath !== path ||
+          entry.ref.relativePath !== path ||
+          !owner?.ready.value ||
+          !owner.metadata
+        ) {
+          return { lrcData: [], yrcData: [] };
+        }
+        const ref = { ...entry.ref };
+        // 扫描字段是最多1024字节的展示预览，歌词必须从当前授权读取完整标签。
+        const result = await owner.metadata.read(ref);
+        const current = nativeLocalEntry(songID);
+        if (
+          filesSession.value !== owner ||
+          !owner.ready.value ||
+          !current ||
+          current.relativePath !== path ||
+          current.ref.grantToken !== ref.grantToken ||
+          current.ref.relativePath !== ref.relativePath ||
+          current.ref.fileId !== ref.fileId ||
+          current.ref.version !== ref.version
+        )
+          return { lrcData: [], yrcData: [] };
+        lyric = result?.info?.Lyrics ?? "";
+      }
       if (!lyric) return { lrcData: [], yrcData: [] };
 
       const splitLyric = splitLocalLyrics(lyric);
-      console.log("splitLyric", splitLyric);
+      if (isElectron) console.log("splitLyric", splitLyric);
       // 解析
       const lrcLines: LyricLine[] = parseLineLyric(splitLyric).line;
 
@@ -172,7 +199,7 @@ class LyricManager {
       ) {
         return;
       }
-      console.log("最终歌词数据", lyricData);
+      if (isElectron || !path) console.log("最终歌词数据", lyricData);
       this.setFinalLyric(lyricData);
     } catch (error) {
       if (

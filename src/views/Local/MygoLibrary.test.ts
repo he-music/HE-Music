@@ -24,6 +24,7 @@ const node = (tag: string, text = ""): Element => ({
 });
 const play = vi.fn();
 const manage = vi.fn();
+const edit = vi.fn();
 const cleanups: Array<() => void> = [];
 const flush = async () => {
   for (let n = 0; n < 30; n++) await Promise.resolve();
@@ -47,7 +48,7 @@ function mount() {
     "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
     "@/platform/filesSession": { filesSession },
     "@/platform/localFilesSession": { localFilesSession },
-    "@/utils/modal": { openLocalMusicDirectoryModal: manage },
+    "@/utils/modal": { openLocalMusicDirectoryModal: manage, openSongInfoEditor: edit },
     "@/utils/player": { usePlayer: () => ({ updatePlayList: play }) },
     "@/utils/time": { secondsToTime: (seconds: number) => `${seconds}s` },
   };
@@ -165,8 +166,11 @@ it("the real local library template manages grants, scans transient rows and cle
       done: true,
     })),
     cancelFileOperation: vi.fn(async () => {}),
+    readMetadata: vi.fn(),
+    saveMetadata: vi.fn(),
+    cancelMetadata: vi.fn(),
   };
-  const files = new FilesSession(provider);
+  const files = new FilesSession(provider, { blockAudio: () => () => {} });
   await files.start();
   const view = mount();
   const clickable = () =>
@@ -188,6 +192,29 @@ it("the real local library template manages grants, scans transient rows and cle
     { id: "mygo-local:file", name: "中文标题", artists: "甲 / 乙", duration: 42 },
   ]);
   expect(JSON.stringify(table?.props.data)).not.toContain("grantToken");
+  const columns = table?.props.columns;
+  const rows = table?.props.data;
+  if (!Array.isArray(columns) || !Array.isArray(rows)) throw new Error("Missing table data");
+  const column: unknown = columns.find(
+    (value: unknown) =>
+      typeof value === "object" && value !== null && "key" in value && value.key === "edit",
+  );
+  if (
+    typeof column !== "object" ||
+    !column ||
+    !("render" in column) ||
+    typeof column.render !== "function"
+  ) {
+    throw new Error("Missing edit action");
+  }
+  const button: unknown = column.render(rows[0]);
+  if (!Vue.isVNode(button) || typeof button.props?.onClick !== "function")
+    throw new Error("Missing edit handler");
+  expect(button.props.disabled).toBe(false);
+  button.props.onClick();
+  expect(edit).toHaveBeenCalledWith(
+    expect.objectContaining({ id: "mygo-local:file", path: "song.mp3" }),
+  );
   await files.revokeDirectory("grant");
   await flush();
   expect(view.all().some((element) => element.tag === "table")).toBe(false);

@@ -9,6 +9,8 @@ import router from "@/router";
 import { usePlatformStore } from "@/stores";
 import { FeatureSupportFlag } from "@/api/platform";
 import { t } from "@/i18n";
+import { platform } from "@/platform";
+import { openMygoSongInfoEditor, openMygoDownloadSong } from "./mygoFileModals";
 
 const openedModals = new Set<string>();
 /**
@@ -125,6 +127,7 @@ export const openJumpArtist = async (platform: string, data: SongInfo["artists"]
 
 // 编辑歌曲信息
 export const openSongInfoEditor = async (song: SongInfo) => {
+  if (platform.kind === "mygo") return openMygoSongInfoEditor(song);
   const { default: SongInfoEditor } = await import("@/components/Modal/SongInfoEditor.vue");
   const modal = window.$modal.create({
     preset: "card",
@@ -221,6 +224,7 @@ export const openUpdatePlaylist = async (
 
 // 下载歌曲
 export const openDownloadSong = async (song: SongInfo) => {
+  if (platform.kind === "mygo") return openMygoDownloadSong(song);
   const { default: DownloadSong } = await import("@/components/Modal/DownloadSong.vue");
   // if (!isLogin()) return openUserLogin();
   // 是否可下载

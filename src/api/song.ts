@@ -1,4 +1,4 @@
-import request, { API_URL, requestHemusic } from "@/utils/request";
+import request, { API_URL, requestHemusic, type HemusicRequestConfig } from "@/utils/request";
 import { isElectron } from "@/utils/env";
 import type { GetSongDetailResponse } from "@/types/main.hemusic";
 
@@ -8,8 +8,10 @@ export const songUrl = (
   platform: string,
   quality: number = 320,
   format: string = "mp3",
+  options: Pick<HemusicRequestConfig, "skipErrorMessage"> = {},
 ) => {
   return requestHemusic({
+    ...options,
     url: "/v1/song/url",
     params: {
       id,

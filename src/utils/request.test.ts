@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { HemusicRequestConfig } from "./request";
 
 const mocks = vi.hoisted(() => {
   const createServer = () => ({
@@ -35,7 +36,7 @@ vi.mock("axios", () => ({
   },
 }));
 
-vi.mock("@/utils/env", () => ({ isDev: false }));
+vi.mock("@/utils/env", () => ({ isDev: false, isElectron: false }));
 vi.mock("@/stores", () => ({
   useDataStore: () => ({ ...mocks.dataStore, clearUserData: mocks.clearUserData }),
   useSettingStore: () => ({ language: "zh-CN", proxyProtocol: "off" }),
@@ -47,6 +48,7 @@ vi.mock("@/utils/modal", () => ({
 }));
 vi.mock("@/api/auth", () => ({ refreshTokenApi: mocks.refreshTokenApi }));
 vi.mock("@/utils/device", () => ({ getDeviceInfo: vi.fn().mockResolvedValue({}) }));
+vi.mock("@/i18n", () => ({ t: (key: string) => key }));
 
 type ResponseErrorHandler = (error: any) => Promise<unknown>;
 
@@ -86,6 +88,49 @@ describe("HE Music Token 刷新", () => {
     };
     await expect(handleResponseError(error)).rejects.toBe(error);
     expect(mocks.messageError).not.toHaveBeenCalled();
+  });
+
+  it("mygo 下载通过真实请求拦截器失败时不提前显示原始响应文本", async () => {
+    const privateMessage =
+      "https://fixture.invalid/song.mp3?signature=private INTERNAL_CODE /fixture/private.mp3";
+    mocks.hemusicServer.request.mockImplementationOnce((config: HemusicRequestConfig) => {
+      const error = {
+        ...createHttpError(500),
+        config,
+        response: { status: 500, statusText: "Failure", data: { message: privateMessage } },
+      };
+      return handleResponseError(error);
+    });
+    const { songUrl } = await import("@/api/song");
+    const { createMygoDownloadResolver } = await import("./mygoFileModals");
+    const resolve = createMygoDownloadResolver((id, platform, quality, format) =>
+      songUrl(id, platform, quality, format, { skipErrorMessage: true }),
+    );
+    await expect(
+      resolve("320", {
+        id: "fixture",
+        platform: "fixture",
+        name: "fixture song",
+        links: [{ name: "320", quality: 320, format: "mp3", size: "1 MiB" }],
+      }),
+    ).rejects.toThrow("Download source unavailable");
+    expect(mocks.messageError).not.toHaveBeenCalled();
+    expect(mocks.hemusicServer.request).toHaveBeenCalledWith(
+      expect.objectContaining({ skipErrorMessage: true }),
+    );
+  });
+
+  it("歌曲URL旧四参调用继续沿用默认请求提示行为", async () => {
+    mocks.hemusicServer.request.mockResolvedValueOnce({
+      url: "https://fixture.invalid/song.mp3",
+      format: "mp3",
+    });
+    const { songUrl } = await import("@/api/song");
+    await songUrl("fixture", "fixture", 320, "mp3");
+    expect(mocks.hemusicServer.request).toHaveBeenCalledWith({
+      url: "/v1/song/url",
+      params: { id: "fixture", platform: "fixture", quality: 320, format: "mp3" },
+    });
   });
 
   it("普通请求继续显示通用错误消息", async () => {

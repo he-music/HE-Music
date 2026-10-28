@@ -579,3 +579,21 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 父scanner每层同时过滤 `.hemusic-metadata-` 与 `.hemusic-download-`，六种有效音频私有文件/目录不入库。固定CLI隔离生成下载绑定40行，通过hashline复制增量并完整cmp一致；PlatformFiles六个方法为可选，未硬开Web/Electron。
 - 新FileMetadataAccess/FileDownloadAccess按当前epoch/grant和provider方法捕获，metadata目标ref复制且保存前四字段匹配；授权丢失晚结果只保留revoked和实际committed，不泄ref/info/hash/恢复名。download Start请求复制并单独保存原ID，旧授权晚回只取消原请求ID，不用响应异物ID或新会话provider。父实际红测发现调用方在pending改ID会误取消mutated-id，修正后4项授权测试通过。`4fa5a510`独立审查No issues/OK with notes；最后相关4文件26项、Node/Web类型、TS lint/格式、Go全包/vet/gofmt/diff/cmp通过。
 - 下载controller/UI候选仍在独立修正：未知任务不能newID重下，同目标pending/committed阻重复；retry必须保留失败任务原quality/目录/文件名并重新获取URL。标签editor候选原状态机与真实stub host交互修复已复查，跨文件reconcile展示和恢复名换代仍在窄修。两份候选未合主，当前后端和授权checkpoint不表示完整产品UI已接通。
+
+### 文件操作组件与主会话
+
+- 标签组件初版 `73825ef` 在独立审查中阻塞，`49669be` 修复稳定请求快照、SHA/patch去重、35秒晚结果、Cancel信号与终态分离、ref目标和刷新状态；`d7ffb4b` 修复跨文件核验误报和恢复名换代。状态机与目标归属分别复核通过，父合入为 `e5603f5`，组件25项、Node/Web类型、TS lint/格式通过。测试是生产SFC编译、Vue runtime和stub host逻辑交互，不是Naive DOM或WebView验收。
+- 下载组件 `5f025ff` 初审阻塞后由 `a6cc334` 固定pending表单revision、主session私有原目标retry配方、按grant退休及3秒有界取消；矛盾的done/ok/未committed响应保持unknown，不能重下。`4fed6d93` 复核No issues/OK with notes，父合入为 `fae11e5`，18项会话和13项组件逻辑测试、类型/TS静态/格式通过。未知任务只Read原ID、取消回执不当done，已落盘/未确认同名任务继续阻止重复提交。
+- `42b255f` 将两个controller交给FilesSession，主壳注入音频gate避免运行时依赖环；grant移除先失效access，再只清对应metadata操作与download任务。保存后先清旧登记，再等待有界刷新；下载普通scan按grant合并，保留其他登记。刷新绑定自身AbortSignal和revision，替换/销毁时清timer/listener，五分钟deadline不会取消后来的扫描，非complete或换owner不报完整刷新。
+- 父新增真实红测发现：首次35秒等待结束后，晚保存完成虽已刷新并release，旧页面仍显示pending；另外挂起Read可在提交后重新启用旧基线。completion观察器按owner、视图、ref和目标更新结果，最终结果不被旧pending覆盖；committed推进Read/FileReader代次并清busy与基线。先修正测试为检查真实submit.disabled，再重跑红测确认问题，最终7文件62项、Node/Web类型、TS lint/格式通过。`296f3ebc` 对 `fae11e5..94890bc` 的11文件父delta独立审查No issues/OK。
+- `94890bc` 从当前native登记的准确相对路径接入内嵌LRC；无登记或路径不符为空，非Electron不读桥接。临时MP3/FLAC扫描实测保留Lyrics且不读图片；播放器相关3文件23项及类型/静态/格式通过，未扩展为真实声音或桌面歌词界面验收。
+- 入口辅助模块、本地页编辑按钮与中英文案仍在接线。当前上述定向检查不能当作全部新代码的最终全量绿色；最终整合还需全量测试和入口审查。未启动用户App或Vite、未调用真实picker/库/下载/安装，也未验证Windows。
+
+### 原件编辑与下载业务入口闭合
+
+- helper累计 `734b5b5`/`8f3dabd` 仅新增三个文件；父通过hashline接既有modal、library和双语JSON，不让缺编辑工具的worker改写已有文件。mygo在旧Electron组件import前分流，Web/Electron原路径保留；library编辑列传当前临时SongInfo，不持久化能力。25个metadata与28个download键进入两语言，动态phase/refresh与失败、committed、恢复状态均有对应文案。
+- Pending import检查owner/ready、完整ref、当前登记和grant；已创建的编辑窗仅随owner/ready/controller或自身grant失效关闭，保存清registry和rename新身份不会吞掉最终结果。下载窗只随整体owner失效关闭；目录props响应更新不重挂载，关窗只释放view/watch，不cancel/dispose主任务。worker真实红测6项及结果窗口4项后修正，父补入口分流、library按钮、按grant下载清理与保留无关登记的集成断言。
+- 产品helper原本在模块初始化时读取songUrl export，父按request/modal依赖环改为lazy lambda，抛错getter的bootstrap红测确认问题后通过。独立审查 `a7a389fa` 又确认真实requestHemusic拦截器会在resolver catch前弹原始错误；真实transport假响应含签名URL/code/path的红测实际捕获1次toast。songUrl新增默认兼容的可选skipErrorMessage配置，仅mygo resolver设true，401鉴权仍走原逻辑；旧四参请求配置相等测试保留。`7a143fbc` 窄复核关闭P1、No issues/OK。
+- 完整歌词收尾发现扫描文本实际最多1024bytes，不能作为完整LRC播放数据。非Electron本地现从捕获owner的metadata.read读取完整标签，返回后再核owner/ready、当前登记与ref四字段；失效不回退截断预览。长歌词末句及removed/version/owner变化真实4红3绿后修复，相关27项通过；新读取只在歌曲请求内，不增加时钟/watch/动画路径。当前会读取完整元数据，图片尚未用于播放器封面显示。
+- `0d9b688b` 复核完整读取其余逻辑无问题，并找出遗漏的最终歌词日志仍输出私有全文；新增零console调用断言真实红测1次，修复后仅保留Electron/在线原日志。`9a08305a` 窄复核Closed/No issues/OK。
+- 最终父实际全量93文件779项、Node/Web类型、相关TS ESLint及格式通过；Go全包/vet、改动Go测试gofmt和官方绑定完整cmp通过。生产SFC由Vue runtime/stub host验证逻辑，未把被忽略的SFC ESLint计为通过，也未当成真实Naive DOM、WebView、picker、声音、用户库、网络下载/安装或Windows验收。支持范围仍为32MiB MP3/FLAC，原件属性写回仅Darwin，跨进程/崩溃恢复与发行feed/key边界继续保留。

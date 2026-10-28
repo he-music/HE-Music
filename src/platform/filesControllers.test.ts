@@ -91,6 +91,23 @@ async function fixture() {
     })),
     saveMetadata: vi.fn(async () => ({ code: "ok", committed: true, ref: newRef })),
     cancelMetadata: vi.fn(async () => ({ code: "ok", committed: false })),
+    startDownload: vi.fn(async (_epoch, request) => ({ operationId: request.operationId })),
+    readDownloadState: vi.fn(async (_epoch, operationId) => ({
+      operationId,
+      code: "running",
+      done: false,
+      committed: false,
+      received: 0,
+      total: 0,
+    })),
+    cancelDownload: vi.fn(async (_epoch, operationId) => ({
+      operationId,
+      code: "cancelled",
+      done: false,
+      committed: false,
+      received: 0,
+      total: 0,
+    })),
   };
   const release = vi.fn();
   const blockAudio = vi.fn(() => release);
@@ -174,4 +191,81 @@ it("disposes the metadata owner with its captured epoch and never refreshes on l
   response.resolve({ code: "ok", committed: true, ref: newRef });
   await flush();
   expect(f.provider.startScan).not.toHaveBeenCalled();
+});
+
+const downloadInput = (grantToken = "grant") => ({
+  grantToken,
+  filename: "download.mp3",
+  url: "https://fixture.invalid/download.mp3?signature=private",
+  label: "fixture track",
+  quality: "320",
+  source: {
+    id: "remote",
+    platform: "fixture",
+    name: "fixture track",
+    links: [{ name: "320", quality: 320000, format: "mp3", size: "1 MiB" }],
+  },
+  resolveURL: async () => ({ url: "https://fixture.invalid/fresh.mp3", format: "mp3" }),
+});
+
+it("merges a downloaded file without clearing unrelated local refs or invoking the write gate", async () => {
+  const f = await fixture();
+  await f.local.scan();
+  const downloads = f.owner.downloads;
+  if (!downloads) throw new Error("Missing download controller");
+  const id = await downloads.start(downloadInput());
+  if (!id) throw new Error("Missing download task");
+  const downloaded = {
+    ...entry,
+    filename: "download.mp3",
+    relativePath: "download.mp3",
+    ref: { ...newRef, relativePath: "download.mp3" },
+  };
+  const page = deferred<ScanPage>();
+  vi.mocked(f.provider.readScanPage!).mockReturnValueOnce(page.promise);
+  vi.mocked(f.provider.readDownloadState!).mockResolvedValueOnce({
+    operationId: id,
+    code: "ok",
+    done: true,
+    committed: true,
+    received: 10,
+    total: 10,
+    ref: downloaded.ref,
+    filename: downloaded.filename,
+  });
+  const refreshing = downloads.refresh(id);
+  await flush();
+  expect(f.local.entries.value).toEqual([entry]);
+  expect(f.blockAudio).not.toHaveBeenCalled();
+  page.resolve({
+    operationId: "scan-2",
+    nextCursor: "1",
+    done: true,
+    issues: [],
+    entries: [entry, downloaded],
+  });
+  await refreshing;
+  await flush();
+  expect(f.local.entries.value).toEqual([entry, downloaded]);
+  expect(downloads.tasks.value.find((task) => task.id === id)?.refresh).toBe("complete");
+});
+
+it("retires only the removed grant download and retains the other live task", async () => {
+  const f = await fixture();
+  vi.mocked(f.provider.chooseDirectory).mockResolvedValueOnce({
+    status: "selected",
+    grant: { token: "other", epoch: 7, displayPath: "/other" },
+    relation: "",
+    existingToken: "",
+  });
+  await f.owner.chooseDirectory();
+  const downloads = f.owner.downloads;
+  if (!downloads) throw new Error("Missing download controller");
+  const first = await downloads.start(downloadInput());
+  const second = await downloads.start(downloadInput("other"));
+  expect(downloads.tasks.value).toHaveLength(2);
+  await f.owner.revokeDirectory("grant");
+  expect(downloads.tasks.value.map((task) => task.id)).toEqual([second]);
+  expect(f.provider.cancelDownload).toHaveBeenCalledWith(7, first);
+  expect(f.provider.cancelDownload).not.toHaveBeenCalledWith(7, second);
 });
