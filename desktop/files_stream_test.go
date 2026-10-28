@@ -269,6 +269,9 @@ func TestLocalAudioRevokeBlockedWriteAndIndependentTicket(t *testing.T) {
 	a, ctx, epoch, ref, _, _ := audioFixture(t, "mp3")
 	ticket := audioOpen(t, a, ctx, epoch, ref)
 	other := audioOpen(t, a, ctx, epoch, ref)
+	a.mu.Lock()
+	first := a.tickets[ticket.TicketID]
+	a.mu.Unlock()
 	w := &audioBlockedWriter{header: make(http.Header), entered: make(chan struct{}), released: make(chan struct{})}
 	done := make(chan struct{})
 	go func() { defer close(done); a.ServeHTTP(w, httptest.NewRequest("GET", ticket.URL, nil)) }()
@@ -277,6 +280,7 @@ func TestLocalAudioRevokeBlockedWriteAndIndependentTicket(t *testing.T) {
 		t.Fatal(err)
 	}
 	audioAwait(t, done)
+	audioAwait(t, first.done)
 	if result := audioRequest(a, other, "GET", ""); result.Code != 200 {
 		t.Fatal("other ticket affected")
 	}

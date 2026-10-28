@@ -34,6 +34,7 @@ type LocalAudioTicket struct {
 type localAudioTicket struct {
 	id     string
 	ref    LocalFileRef
+	info   os.FileInfo
 	lease  *directoryLease
 	ctx    context.Context
 	cancel context.CancelFunc
@@ -41,14 +42,17 @@ type localAudioTicket struct {
 }
 
 type localAudioServer struct {
-	state    *nativeFilesState
-	mu       sync.Mutex
-	host     string
-	server   *http.Server
-	tickets  map[string]*localAudioTicket
-	closed   bool
-	listen   func(string, string) (net.Listener, error)
-	lifetime time.Duration
+	state      *nativeFilesState
+	mu         sync.Mutex
+	host       string
+	server     *http.Server
+	tickets    map[string]*localAudioTicket
+	closed     bool
+	starting   chan struct{}
+	readers    map[*localAudioReadHold]struct{}
+	writeGates map[*localAudioWriteGate]struct{}
+	listen     func(string, string) (net.Listener, error)
+	lifetime   time.Duration
 }
 
 // The registry keeps HTTP locks and IO outside the main actor. Lifecycle owners
@@ -84,24 +88,48 @@ func (a *localAudioServer) ticketLifetime() time.Duration {
 	return localAudioLifetime
 }
 
-func (a *localAudioServer) start() error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if a.closed {
-		return errLocalAudio
-	}
-	if a.host != "" {
+func (a *localAudioServer) start(ctx context.Context) error {
+	for {
+		a.mu.Lock()
+		if a.closed || ctx.Err() != nil {
+			a.mu.Unlock()
+			return errLocalAudio
+		}
+		if a.host != "" {
+			a.mu.Unlock()
+			return nil
+		}
+		if pending := a.starting; pending != nil {
+			a.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return errLocalAudio
+			case <-pending:
+				continue
+			}
+		}
+		pending := make(chan struct{})
+		a.starting = pending
+		a.mu.Unlock()
+		listener, err := a.listen("tcp4", "127.0.0.1:0")
+		a.mu.Lock()
+		a.starting = nil
+		close(pending)
+		if err != nil || listener == nil || a.closed || ctx.Err() != nil {
+			a.mu.Unlock()
+			if listener != nil {
+				_ = listener.Close()
+			}
+			return errLocalAudio
+		}
+		a.host = listener.Addr().String()
+		server := &http.Server{Handler: a, ReadHeaderTimeout: 3 * time.Second, WriteTimeout: localAudioWriteTimeout, IdleTimeout: localAudioWriteTimeout, MaxHeaderBytes: 8192}
+		server.SetKeepAlivesEnabled(false)
+		a.server = server
+		a.mu.Unlock()
+		go func() { _ = server.Serve(listener) }()
 		return nil
 	}
-	listener, err := a.listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		return errLocalAudio
-	}
-	a.host = listener.Addr().String()
-	a.server = &http.Server{Handler: a, ReadHeaderTimeout: 3 * time.Second, WriteTimeout: localAudioWriteTimeout, IdleTimeout: localAudioWriteTimeout, MaxHeaderBytes: 8192}
-	a.server.SetKeepAlivesEnabled(false)
-	go func() { _ = a.server.Serve(listener) }()
-	return nil
 }
 
 func (a *localAudioServer) open(ctx context.Context, epoch uint64, ref LocalFileRef) (LocalAudioTicket, error) {
@@ -110,16 +138,22 @@ func (a *localAudioServer) open(ctx context.Context, epoch uint64, ref LocalFile
 		return LocalAudioTicket{}, err
 	}
 	accepted := false
+	var hold *localAudioReadHold
 	defer func() {
 		if !accepted {
 			lease.Release()
 		}
+		hold.finish()
 	}()
+	hold, err = a.beginRead(lease, ref, lease.Context())
+	if err != nil {
+		return LocalAudioTicket{}, err
+	}
 	file, err := a.state.resolveLocalFile(lease, ref)
 	if err != nil {
 		return LocalAudioTicket{}, errLocalAudio
 	}
-	stopRead := cancelLocalAudioIO(lease.Context(), file, nil)
+	stopRead := cancelLocalAudioIO(hold.ctx, file, nil)
 	_, err = localAudioMIME(file)
 	stopRead()
 	file.Close()
@@ -130,16 +164,16 @@ func (a *localAudioServer) open(ctx context.Context, epoch uint64, ref LocalFile
 	if err != nil {
 		return LocalAudioTicket{}, errLocalAudio
 	}
-	if err = a.start(); err != nil {
+	if err = a.start(hold.ctx); err != nil {
 		return LocalAudioTicket{}, err
 	}
 	if err = a.state.checkLease(lease); err != nil {
 		return LocalAudioTicket{}, err
 	}
 	ticketCtx, cancel := context.WithTimeout(lease.Context(), a.ticketLifetime())
-	t := &localAudioTicket{id: id, ref: ref, lease: lease, ctx: ticketCtx, cancel: cancel, done: make(chan struct{})}
+	t := &localAudioTicket{id: id, ref: ref, info: hold.info, lease: lease, ctx: ticketCtx, cancel: cancel, done: make(chan struct{})}
 	a.mu.Lock()
-	if a.closed || ticketCtx.Err() != nil || len(a.tickets) >= localAudioMaxTickets {
+	if a.closed || a.gated(hold.info) || hold.ctx.Err() != nil || ticketCtx.Err() != nil || len(a.tickets) >= localAudioMaxTickets {
 		a.mu.Unlock()
 		cancel()
 		return LocalAudioTicket{}, errLocalAudio
@@ -149,17 +183,17 @@ func (a *localAudioServer) open(ctx context.Context, epoch uint64, ref LocalFile
 	a.mu.Unlock()
 	accepted = true
 	context.AfterFunc(ticketCtx, func() {
+		cancel()
+		lease.Release()
 		a.mu.Lock()
 		if a.tickets[id] == t {
 			delete(a.tickets, id)
 		}
-		a.mu.Unlock()
-		cancel()
-		lease.Release()
 		close(t.done)
+		a.mu.Unlock()
 	})
 	// A result that lost authorization while preparing the URL is never published.
-	if err = a.state.checkLease(lease); err != nil || ticketCtx.Err() != nil {
+	if err = a.state.checkLease(lease); err != nil || ticketCtx.Err() != nil || hold.ctx.Err() != nil {
 		cancel()
 		return LocalAudioTicket{}, errLocalAudio
 	}
@@ -231,10 +265,17 @@ func (a *localAudioServer) shutdown() error {
 	for _, t := range a.tickets {
 		tickets = append(tickets, t)
 	}
+	readers := make([]*localAudioReadHold, 0, len(a.readers))
+	for reader := range a.readers {
+		readers = append(readers, reader)
+	}
 	server := a.server
 	a.mu.Unlock()
 	for _, t := range tickets {
 		t.cancel()
+	}
+	for _, reader := range readers {
+		reader.cancel()
 	}
 	if server != nil {
 		return server.Close()
@@ -271,11 +312,21 @@ func (a *localAudioServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	defer lease.Release()
+	var hold *localAudioReadHold
+	defer func() {
+		lease.Release()
+		hold.finish()
+	}()
 	ctx, cancel := context.WithCancel(r.Context())
 	stopTicket := context.AfterFunc(t.ctx, cancel)
 	stopLease := context.AfterFunc(lease.Context(), cancel)
 	defer func() { stopTicket(); stopLease(); cancel() }()
+	hold, err = a.beginRead(lease, t.ref, ctx)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	ctx = hold.ctx
 	file, err := a.state.resolveLocalFile(lease, t.ref)
 	if err != nil {
 		t.cancel()
