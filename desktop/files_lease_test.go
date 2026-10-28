@@ -53,9 +53,9 @@ func TestDirectoryLeaseFileRefAndCommitGate(t *testing.T) {
 	lease, err := actor.state.acquireDirectory(ctx, epoch, token)
 	if err != nil {
 		t.Fatal(err)
-		if _, _, err := openGrantedRegular(lease, "alias/song.mp3"); !errors.Is(err, errFilesPath) {
-			t.Fatalf("symlink directory accepted: %v", err)
-		}
+	}
+	if _, _, err := openGrantedRegular(lease, "alias/song.mp3"); !errors.Is(err, errFilesPath) {
+		t.Fatalf("symlink directory accepted: %v", err)
 	}
 	ref, file, err := actor.state.registerLocalFile(lease, "song.mp3")
 	if err != nil {
@@ -69,13 +69,19 @@ func TestDirectoryLeaseFileRefAndCommitGate(t *testing.T) {
 	resolved.Close()
 
 	commit := newFileCommit()
+	t.Cleanup(func() { actor.state.finishFileCommit(commit) })
 	if err := actor.state.claimFileCommit(lease, commit); err != nil {
 		t.Fatal(err)
 	}
 	actor.state.dispatch(actor.state.revoke)
 	lease.Release()
 	actor.state.cleanup.Wait()
-	if commit.phase.Load() != fileCommitClaimed {
+	if _, err := handle.root.Stat("song.mp3"); err != nil {
+		t.Fatalf("claim lost Root before finish: %v", err)
+	}
+	actor.state.finishFileCommit(commit)
+	actor.state.cleanup.Wait()
+	if commit.phase.Load() != fileCommitFinished {
 		t.Fatalf("claimed commit phase changed to %d", commit.phase.Load())
 	}
 	if lease.Context().Err() == nil {

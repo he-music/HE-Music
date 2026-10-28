@@ -26,6 +26,7 @@ type directoryHandle struct {
 	leaseCount   atomic.Int64
 	retired      atomic.Bool
 	closed       atomic.Bool
+	filePaths    map[string]string
 }
 
 func openDirectoryHandle(path string) (*directoryHandle, error) {
