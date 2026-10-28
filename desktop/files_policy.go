@@ -82,6 +82,7 @@ type nativeFilesState struct {
 	epoch       uint64
 	busy        *fileOperation
 	grants      map[string]ownedDirectory
+	fileEntries map[string]*localFileEntry
 	cleanup     sync.WaitGroup
 }
 
@@ -150,13 +151,10 @@ func (s *nativeFilesState) closeDirectories(handles []*directoryHandle) {
 	if len(handles) == 0 {
 		return
 	}
-	s.cleanup.Add(1)
-	go func() {
-		defer s.cleanup.Done()
-		for _, handle := range handles {
-			_ = handle.root.Close()
-		}
-	}()
+	for _, handle := range handles {
+		s.dropFileEntries(handle)
+		handle.retire(s)
+	}
 }
 
 // Main actor only: never clear Busy until the outstanding panel/IO actually exits.
@@ -169,6 +167,7 @@ func (s *nativeFilesState) revoke() {
 		handles = append(handles, entry.handle)
 	}
 	s.grants = nil
+	s.fileEntries = nil
 	s.owner = nil
 	s.epoch++
 	s.closeDirectories(handles)

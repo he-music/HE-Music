@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
@@ -8,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"syscall"
 )
 
@@ -15,10 +17,15 @@ var errFileIO = errors.New("settings file operation failed")
 var errDirectory = errors.New("directory selection unavailable")
 
 type directoryHandle struct {
-	root      *os.Root
-	canonical string
-	info      os.FileInfo
-	ancestors []os.FileInfo
+	root         *os.Root
+	canonical    string
+	info         os.FileInfo
+	ancestors    []os.FileInfo
+	leaseContext context.Context
+	leaseCancel  context.CancelFunc
+	leaseCount   atomic.Int64
+	retired      atomic.Bool
+	closed       atomic.Bool
 }
 
 func openDirectoryHandle(path string) (*directoryHandle, error) {
