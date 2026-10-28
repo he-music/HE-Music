@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createMygoPlatform } from "./mygo";
 import type { LyricsClock, LyricsSnapshot, LyricsWindowState } from "./desktopLyrics";
+import type { TrayPlaybackState, TrayRequest } from "./mygo.bindings";
 import { DesktopLyricsSession } from "./desktopLyricsSession";
 const bridge = vi.hoisted(() => ({ call: vi.fn(), on: vi.fn() }));
 vi.mock("mygo-runtime", () => ({
@@ -11,11 +12,48 @@ vi.mock("mygo-runtime", () => ({
 }));
 afterEach(() => vi.clearAllMocks());
 describe("mygo lifecycle capability", () => {
+  it("forwards the full tray snapshot and typed favorite=false event and releases the exact subscription", async () => {
+    const adapter = createMygoPlatform();
+    const lifecycle = adapter.lifecycle;
+    if (!lifecycle) throw new Error("No lifecycle");
+    const snapshot: TrayPlaybackState = {
+      epoch: 9,
+      revision: 3,
+      trackKey: "track",
+      playing: true,
+      hasSong: true,
+      liked: true,
+      canFavorite: true,
+      canSetMode: true,
+      playMode: "shuffle",
+    };
+    bridge.call.mockResolvedValueOnce(undefined);
+    await lifecycle.syncPlayback(snapshot);
+    expect(bridge.call).toHaveBeenLastCalledWith("DesktopLifecycle.SyncPlayback", snapshot);
+    const off = vi.fn();
+    bridge.on.mockReturnValueOnce(off);
+    const listener = vi.fn<(request: TrayRequest) => void>();
+    const stop = lifecycle.onTrayAction(listener);
+    expect(bridge.on).toHaveBeenLastCalledWith("desktop:tray-action", listener);
+    const emit = bridge.on.mock.calls.at(-1)?.[1];
+    if (typeof emit !== "function") throw new Error("No listener");
+    const request: TrayRequest = {
+      epoch: 9,
+      revision: 3,
+      trackKey: "track",
+      action: "set-favorite",
+      favorite: false,
+    };
+    emit(request);
+    expect(listener).toHaveBeenCalledExactlyOnceWith(request);
+    stop();
+    expect(off).toHaveBeenCalledOnce();
+  });
   it("仅成功ready且tray可用才启用隐藏，teardown立即撤销能力", async () => {
     const adapter = createMygoPlatform();
     expect(adapter.capabilities.tray).toBe(false);
-    bridge.call.mockResolvedValueOnce({ trayAvailable: true });
-    await adapter.lifecycle?.ready({
+    bridge.call.mockResolvedValueOnce({ trayAvailable: true, epoch: 1 });
+    const nativeStatus = await adapter.lifecycle?.ready({
       showCloseAppTip: true,
       closeAppMethod: "exit",
       labels: {
@@ -27,6 +65,7 @@ describe("mygo lifecycle capability", () => {
         quit: "quit",
       },
     });
+    expect(nativeStatus?.epoch).toBe(1);
     expect(adapter.capabilities.tray).toBe(true);
     bridge.call.mockResolvedValueOnce(undefined);
     const teardown = adapter.lifecycle?.teardown();
@@ -37,7 +76,7 @@ describe("mygo lifecycle capability", () => {
   it.each([false, "failure"])("不可用或ready失败不暴露隐藏能力：%s", async (available) => {
     const adapter = createMygoPlatform();
     if (available === "failure") bridge.call.mockRejectedValueOnce(new Error("synthetic"));
-    else bridge.call.mockResolvedValueOnce({ trayAvailable: false });
+    else bridge.call.mockResolvedValueOnce({ trayAvailable: false, epoch: 1 });
     const operation = adapter.lifecycle?.ready({
       showCloseAppTip: true,
       closeAppMethod: "hide",

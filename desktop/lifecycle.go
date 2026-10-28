@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	desktopTrayAction     = mygo.NewEvent[TrayAction]("desktop:tray-action")
+	desktopTrayAction     = mygo.NewEvent[TrayRequest]("desktop:tray-action")
 	desktopCloseRequested = mygo.NewEvent[CloseRequested]("desktop:close-requested")
 	desktopLifecycle      = &DesktopLifecycle{}
 )
@@ -26,7 +26,7 @@ type DesktopLifecycle struct {
 	tray        *mygo.Tray
 	menu        *mygo.Menu
 	menuState   trayMenuState
-	playback    TrayPlaybackState
+	traySession traySession
 	listeners   []func()
 	stopOwner   func() bool
 	promptTimer *time.Timer
@@ -77,6 +77,11 @@ func (l *DesktopLifecycle) Ready(ctx context.Context, config LifecycleConfig) (L
 			return err
 		}
 		l.revoke()
+		epoch, err := l.traySession.begin()
+		if err != nil {
+			return err
+		}
+		status.Epoch = epoch
 		l.state.owner = ctx
 		l.state.config = config
 		l.stopOwner = context.AfterFunc(ctx, func() {
@@ -107,7 +112,9 @@ func (l *DesktopLifecycle) SyncConfig(ctx context.Context, config LifecycleConfi
 // SyncPlayback is for play status/song changes only; never send playback clocks.
 func (l *DesktopLifecycle) SyncPlayback(ctx context.Context, playback TrayPlaybackState) error {
 	return l.call(ctx, true, func() error {
-		l.playback = playback
+		if err := l.traySession.sync(playback); err != nil {
+			return err
+		}
 		l.updateMenu()
 		return nil
 	})
@@ -263,7 +270,7 @@ func (l *DesktopLifecycle) revoke() {
 		l.stopOwner()
 		l.stopOwner = nil
 	}
-	l.playback = TrayPlaybackState{}
+	l.traySession.revoke()
 	l.updateMenu()
 	if l.main != nil && !l.main.IsVisible() {
 		l.show()
@@ -279,6 +286,7 @@ func (l *DesktopLifecycle) cleanup() {
 	desktopFiles.revoke()
 	desktopUpdates.revoke()
 	desktopLyrics.revoke()
+	l.traySession.revoke()
 	l.stopPrompt()
 	if l.stopOwner != nil {
 		l.stopOwner()
@@ -322,11 +330,13 @@ func (l *DesktopLifecycle) updateMenu() {
 	if l.tray == nil {
 		return
 	}
+	playback := l.traySession.snapshot()
 	state := trayMenuState{
+		playback:        playback,
 		labels:          l.state.config.Labels,
 		ready:           l.state.ready(),
-		hasSong:         l.playback.HasSong,
-		playing:         l.playback.Playing,
+		hasSong:         playback.HasSong,
+		playing:         playback.Playing,
 		canHide:         l.state.ready() && l.state.tray,
 		lyricsAvailable: l.lyricsReady(),
 		lyricsVisible:   desktopLyrics.state.window.Visible,
@@ -336,7 +346,12 @@ func (l *DesktopLifecycle) updateMenu() {
 	if l.menu != nil && l.menuState == state {
 		return
 	}
-	l.menu = mygo.NewMenu(buildTrayMenuItems(state, l.dispatchTrayCommand))
+	l.menu = mygo.NewMenu(buildTrayMenuItems(state, func(command trayMenuCommand) {
+		if !trayMenuCommandCurrent(state, l.menuState, command) {
+			return
+		}
+		l.dispatchTrayCommand(command, state.playback)
+	}))
 	l.menuState = state
 	l.tray.SetMenu(l.menu)
 }

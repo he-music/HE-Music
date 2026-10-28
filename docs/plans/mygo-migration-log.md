@@ -606,3 +606,13 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 生产SFC stub host确认渐变/遮罩更新与歌词词节点复用；暂时移除样式消费时，回归实际因渐变仍为默认颜色失败，恢复后通过。producer测试确认高频无关状态与不相关设置不增加快照或主组件更新，必要样式与歌曲变化仍更新。
 - 集成审查 `cb381e3d` 找到P1：MainSetting搜索在render中惰性创建配置，直接依赖活动scope会遗留watcher。新增真实script/inline template的general入口与locale替换回归，修前旧实例实际继续变为abcdef、违反123456预期；父以显式effectScope承接配置，重建前停旧scope，卸载时停最后scope并禁止复活，同时保留语言响应。`7d836e80` 窄复核Closed/No issues/OK；原手工effectScope测试未覆盖的生产入口缺口已补齐。
 - 最终父实际全量95文件867项、Node/Web类型、相关TS ESLint与源文件格式、Go全包/vet/gofmt、官方绑定完整cmp通过；SFC由生产编译及Vue stub host验证，不记作SFC ESLint或真实Naive DOM/WebView验收。本轮没有启动App/Vite或用户库、音频、picker、下载/安装、Windows；下一继续托盘收藏/播放模式的独立epoch/revision/track及异步模式一致性。
+
+### 托盘收藏与播放模式整合
+
+- 纯模式组件 `e78b81a`、原生策略/菜单组件 `fb6b191` 分别在独占worktree交付；父负责既有player/store/lifecycle/契约及绑定接线。原生纯组件审查 `5f793a40` OK，菜单收藏文本和三radio模式复用真实SDK字段；点击先恢复captured权威checked再分派，失败/拒绝/同模式不会留下假勾选。focused窗口参数不参与路由。
+- Ready分配独立且不可复用的安全数tray epoch；SyncPlayback先完整验证，再推进revision。Go缓存及菜单闭包包含epoch/revision/track和原生可见/锁定等状态，父menu guard与session双重验证旧菜单，不给旧回调换新身份；showMain/quit/unlock三条原生恢复路径保留。事件仍定向主Page，没有改变macOS WebKit单媒体owner。
+- 官方CLI在隔离快照 `d82e4c2` 生成，父hashline复制typed增量并完整cmp。TrayRequest使用明确favorite布尔目标和mode目标；取消收藏false保留。renderer业务状态变化立即撤销旧accepted，低频快照串行合并，只有最新成功回包可授权菜单事件。未知动作明确拒绝；时钟及无关歌曲收藏变化不发快照，dispose停止watch并截断晚回。
+- 收藏入口复制原SongInfo与desired，动态import返回再核source/owner/登录及本地path，复用toLikeSong。busy禁止重复点击，liked始终来自store；全局leading debounce返回不算此次成功ACK。注册本地歌可切换模式，但不能收藏；mode不要求登录，电台禁用。已发出收藏请求后的注销/账户并发仍沿用既有auth行为，本轮不声称能取消已发送请求或提供新的账户epoch隔离。
+- mygo播放器UI和托盘共用全局有界mode协调器：一个active加一个queued，许可保持到真实persist结束。恢复备份的读取不回写缓存；同步一次提交列表/原序/index/mode，按提交时当前id+platform重算索引；持久化只保存捕获副本、用allSettled等两个写入真退出，无晚runtime回写。persist失败准确提示运行时已应用但保存未完成；跨key仍非事务，没有journal或崩溃恢复保证，Web/Electron旧路径保留。
+- 模型审查 `2b7b5a00` 找到输入请求别名P1，父两红复现queued目标被改为repeat及guard被替换后仍applied；复制target及原函数后25项通过，`0cbfc65` Closed。父业务审查 `793487ad` 又找到queued等待期外部版本边界遗漏：真实Player/Pinia/shell/fake DB两个case在同歌换列表或mode A→B→A后实际仍applied shuffle。入队捕获revision/mode/list，执行前复核；只沿自身合法同步提交推进queued边界，读边界异常不提前放行IO。修后相同两例均skipped且无新增commit/write；正常连续提交等3例补齐，`ce98cfee` Closed/No issues/OK。
+- 原生与主壳父审查 `0a39f924` No issues/OK with notes；业务P1经窄修复核关闭。最终父实际全量99文件918项、Node/Web类型、受影响TS ESLint/格式、Go全包/vet/gofmt及官方绑定完整cmp通过。现有请求失败用例日志与Fastify弃用警告保留；未启动App/Vite、OS菜单、真实DB/音频/picker/用户库/下载/安装或Windows，不能把fake或stub算作实机验收。

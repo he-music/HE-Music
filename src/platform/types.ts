@@ -8,7 +8,7 @@ import type {
   CloseResolution,
   LifecycleConfig,
   LifecycleStatus,
-  TrayAction,
+  TrayRequest,
   TrayPlaybackState,
 } from "./mygo.bindings";
 export type PlatformKind = "web" | "electron" | "mygo";
@@ -42,7 +42,7 @@ export interface PlatformLifecycle {
   quit(): Promise<void>;
   teardown(): Promise<void>;
   onCloseRequested(listener: (request: CloseRequested) => void): () => void;
-  onTrayAction(listener: (action: TrayAction) => void): () => void;
+  onTrayAction(listener: (action: TrayRequest) => void): () => void;
 }
 export interface PlatformAdapter {
   readonly kind: PlatformKind;

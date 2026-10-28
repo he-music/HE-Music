@@ -11,16 +11,14 @@ import {
   FilterInfo,
 } from "@/types/main.hemusic";
 import { artistFilters } from "@/api/artist";
-import {
-  createPlaybackListSnapshot,
-  createPlaybackSongSnapshot,
-  songEqual,
-} from "@/utils/song";
+import { createPlaybackListSnapshot, createPlaybackSongSnapshot, songEqual } from "@/utils/song";
 import { mvFilters } from "@/api/video";
 
 interface ListState {
   playList: SongInfo[];
   originalPlayList: SongInfo[];
+  /** 列表操作代次，仅在内存中使用，不保存到用户数据。 */
+  playbackRevision: symbol;
   historyList: SongInfo[];
   searchHistory: string[];
   localPlayList: CoverType[];
@@ -83,6 +81,7 @@ export const useDataStore = defineStore("data", {
     // 播放列表
     playList: [],
     originalPlayList: [],
+    playbackRevision: Symbol("playback"),
     // 播放历史
     historyList: [],
     // 搜索历史
@@ -128,6 +127,7 @@ export const useDataStore = defineStore("data", {
   },
   actions: {
     async loadData() {
+      this.playbackRevision = Symbol("playback");
       try {
         // 获取 music-data
         const musicDataKeys = await musicDB.keys();
@@ -155,6 +155,7 @@ export const useDataStore = defineStore("data", {
     },
     // 更新播放列表
     async setPlayList(data: SongInfo | SongInfo[]): Promise<number> {
+      this.playbackRevision = Symbol("playback");
       try {
         // 若为列表
         if (Array.isArray(data)) {
@@ -186,32 +187,53 @@ export const useDataStore = defineStore("data", {
       }
     },
 
+    // 原生模式已同步提交运行时；这里只保存捕获列表，并等待两个真实写入都结束。
+    async persistPlayModeLists(snapshot: {
+      playList: SongInfo[];
+      originalPlayList: SongInfo[];
+    }): Promise<void> {
+      const playList = createPlaybackListSnapshot(snapshot.playList);
+      const original = createPlaybackListSnapshot(snapshot.originalPlayList);
+      const results = await Promise.allSettled([
+        musicDB.setItem("originalPlayList", original),
+        musicDB.setItem("playList", playList),
+      ]);
+      if (results.some((result) => result.status === "rejected")) {
+        throw new Error("播放模式列表保存未完成");
+      }
+    },
     // 保存原始播放列表
     async setOriginalPlayList(data: SongInfo[]): Promise<void> {
+      this.playbackRevision = Symbol("playback");
       const snapshot = createPlaybackListSnapshot(data);
       this.originalPlayList = snapshot;
       await musicDB.setItem("originalPlayList", snapshot);
     },
     // 获取原始播放列表
-    async getOriginalPlayList(): Promise<SongInfo[] | null> {
+    async getOriginalPlayList(cache = true): Promise<SongInfo[] | null> {
       if (Array.isArray(this.originalPlayList) && this.originalPlayList.length > 0) {
         return this.originalPlayList;
       }
       const data = (await musicDB.getItem("originalPlayList")) as SongInfo[] | null;
       if (Array.isArray(data) && data.length > 0) {
         const snapshot = createPlaybackListSnapshot(data);
-        this.originalPlayList = snapshot;
+        if (cache) {
+          this.playbackRevision = Symbol("playback");
+          this.originalPlayList = snapshot;
+        }
         return snapshot;
       }
       return null;
     },
     // 清除原始播放列表
     async clearOriginalPlayList(): Promise<void> {
+      this.playbackRevision = Symbol("playback");
       this.originalPlayList = [];
       await musicDB.setItem("originalPlayList", []);
     },
     // 从原始播放列表中移除歌曲（同步 shuffle 模式下的删除操作）
     async removeSongFromOriginalList(song: SongInfo): Promise<void> {
+      this.playbackRevision = Symbol("playback");
       if (!Array.isArray(this.originalPlayList) || this.originalPlayList.length === 0) return;
       const filtered = this.originalPlayList.filter(
         (item) => item.id !== song.id || item.platform !== song.platform,
@@ -221,6 +243,7 @@ export const useDataStore = defineStore("data", {
     },
     // 向原始播放列表中添加歌曲（同步 shuffle 模式下的添加操作）
     async addSongToOriginalList(song: SongInfo, currentSong?: SongInfo): Promise<void> {
+      this.playbackRevision = Symbol("playback");
       if (!Array.isArray(this.originalPlayList) || this.originalPlayList.length === 0) return;
       const songSnapshot = createPlaybackSongSnapshot(song);
       const filtered = this.originalPlayList.filter(
@@ -243,6 +266,7 @@ export const useDataStore = defineStore("data", {
     },
     // 新增下一首播放歌曲
     async setNextPlaySong(song: SongInfo, index: number): Promise<number> {
+      this.playbackRevision = Symbol("playback");
       const songSnapshot = createPlaybackSongSnapshot(song);
       if (this.playList.length === 0) {
         this.playList = [songSnapshot];

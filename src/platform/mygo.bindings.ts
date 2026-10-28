@@ -126,10 +126,16 @@ export interface LifecycleLabels {
   unlockLyrics?: string;
   settings?: string;
   quit: string;
+  addToFavorites?: string;
+  removeFromFavorites?: string;
+  repeat?: string;
+  repeatOnce?: string;
+  shuffle?: string;
 }
 
 export interface LifecycleStatus {
   trayAvailable: boolean;
+  epoch: number;
 }
 
 /** LocalAudioTicket contains only transient bearer credentials, never filesystem paths. */
@@ -405,11 +411,29 @@ export interface SystemMediaTrack {
   canNext: boolean;
 }
 
-export type TrayAction = "previous" | "toggle" | "next" | "open-settings";
+export type TrayAction = "previous" | "toggle" | "next" | "open-settings" | "set-favorite" | "set-play-mode";
+
+export type TrayPlayMode = "repeat" | "repeat-once" | "shuffle";
 
 export interface TrayPlaybackState {
+  epoch: number;
+  revision: number;
+  trackKey: string;
   playing: boolean;
   hasSong: boolean;
+  liked: boolean;
+  canFavorite: boolean;
+  playMode: TrayPlayMode;
+  canSetMode: boolean;
+}
+
+export interface TrayRequest {
+  epoch: number;
+  revision: number;
+  trackKey: string;
+  action: TrayAction;
+  favorite?: boolean;
+  mode?: TrayPlayMode;
 }
 
 /**
@@ -756,7 +780,7 @@ export const Updates = {
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
 export const events = {
   desktopAuthCallback: event<AuthCallbackReceived>("desktop:auth-callback"),
-  desktopTrayAction: event<TrayAction>("desktop:tray-action"),
+  desktopTrayAction: event<TrayRequest>("desktop:tray-action"),
   desktopCloseRequested: event<CloseRequested>("desktop:close-requested"),
   desktopLyricsWindow: event<LyricsWindowState>("desktop:lyrics-window"),
   desktopLyricsSnapshot: event<LyricsSnapshot>("desktop:lyrics-snapshot"),

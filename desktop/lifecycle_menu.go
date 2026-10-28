@@ -16,9 +16,14 @@ const (
 	trayUnlockLyrics
 	traySettings
 	trayQuit
+	trayFavorite
+	trayModeRepeat
+	trayModeRepeatOnce
+	trayModeShuffle
 )
 
 type trayMenuState struct {
+	playback        TrayPlaybackState
 	labels          LifecycleLabels
 	ready           bool
 	hasSong         bool
@@ -60,6 +65,7 @@ func buildTrayMenuItems(state trayMenuState, dispatch func(trayMenuCommand)) []*
 	}
 	playbackEnabled := state.ready && state.hasSong
 	lockDisabled := !state.lyricsLocked && (!state.lyricsAvailable || !state.lyricsVisible || state.lyricsPending || !state.canHide)
+	controls := buildTrayPlaybackControls(state.playback, state.ready, state.labels, dispatch)
 	return []*mygo.MenuItem{
 		{Label: label(labels.Show, "显示主窗口"), Click: click(trayShowMain)},
 		{Label: label(labels.Hide, "隐藏主窗口"), Disabled: !state.canHide, Click: click(trayHideMain)},
@@ -67,6 +73,8 @@ func buildTrayMenuItems(state trayMenuState, dispatch func(trayMenuCommand)) []*
 		{Label: label(labels.Previous, "上一首"), Disabled: !playbackEnabled, Click: click(trayPrevious)},
 		{Label: playingLabel, Disabled: !playbackEnabled, Click: click(trayToggle)},
 		{Label: label(labels.Next, "下一首"), Disabled: !playbackEnabled, Click: click(trayNext)},
+		controls[0],
+		controls[1],
 		mygo.Separator(),
 		{Label: lyricsLabel, Disabled: !state.lyricsAvailable, Click: click(lyricsCommand)},
 		{Label: lockLabel, Disabled: lockDisabled, Click: click(lockCommand)},
@@ -81,7 +89,7 @@ func (l *DesktopLifecycle) lyricsReady() bool {
 		desktopLyrics.main == l.main && l.state.owns(desktopLyrics.state.owner)
 }
 
-func (l *DesktopLifecycle) dispatchTrayCommand(command trayMenuCommand) {
+func (l *DesktopLifecycle) dispatchTrayCommand(command trayMenuCommand, captured TrayPlaybackState) {
 	// Unlock remains a native recovery action even while renderer revocation is queued.
 	switch command {
 	case trayShowMain:
@@ -94,26 +102,21 @@ func (l *DesktopLifecycle) dispatchTrayCommand(command trayMenuCommand) {
 		_ = desktopLyrics.setLocked(false)
 		return
 	}
-	if !l.state.ready() || l.main == nil || l.main.IsDestroyed() {
+	if !l.state.ready() || l.main == nil || l.main.IsDestroyed() || !l.traySession.matches(captured) {
 		return
 	}
 	switch command {
 	case trayHideMain:
 		_ = l.hide()
-	case trayPrevious, trayToggle, trayNext:
-		if !l.playback.HasSong {
+	case trayPrevious, trayToggle, trayNext, trayFavorite, trayModeRepeat, trayModeRepeatOnce, trayModeShuffle, traySettings:
+		request, err := trayRequestForCommand(&l.traySession, captured, command)
+		if err != nil {
 			return
 		}
-		action := TrayToggle
-		if command == trayPrevious {
-			action = TrayPrevious
-		} else if command == trayNext {
-			action = TrayNext
+		if command == traySettings {
+			l.show()
 		}
-		_ = desktopTrayAction.EmitPage(l.main.Page(), action)
-	case traySettings:
-		l.show()
-		_ = desktopTrayAction.EmitPage(l.main.Page(), TrayOpenSettings)
+		_ = desktopTrayAction.EmitPage(l.main.Page(), request)
 	case trayShowLyrics:
 		if l.lyricsReady() && desktopLyrics.win == nil {
 			_ = desktopLyrics.createWindow()

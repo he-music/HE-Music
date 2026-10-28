@@ -10,7 +10,12 @@ import type { SystemMediaCommand } from "./mygo.bindings";
 
 const mocks = vi.hoisted(() => ({
   platform: {} as PlatformAdapter,
-  data: { playList: [] as unknown[] },
+  data: {
+    playList: [] as unknown[],
+    userData: { id: "" },
+    userLoginStatus: false,
+    isLikeSong: () => false,
+  },
   player: {
     getSeek: vi.fn(() => 0),
     onSeek: vi.fn<(listener: () => void) => () => void>(),
@@ -47,7 +52,12 @@ const unmounts: Array<() => void> = [];
 beforeEach(() => {
   setActivePinia(createPinia());
   vi.stubGlobal("window", { $message: { error: vi.fn() } });
-  mocks.data = Vue.reactive({ playList: [{}] });
+  mocks.data = Vue.reactive({
+    playList: [{}],
+    userData: { id: "" },
+    userLoginStatus: false,
+    isLikeSong: () => false,
+  });
   mocks.player.getSeek.mockReturnValue(0);
 });
 afterEach(async () => {
@@ -58,7 +68,10 @@ afterEach(async () => {
 });
 
 function fixture(
-  ready: Promise<{ trayAvailable: boolean }> = Promise.resolve({ trayAvailable: true }),
+  ready: Promise<{ trayAvailable: boolean; epoch: number }> = Promise.resolve({
+    trayAvailable: true,
+    epoch: 1,
+  }),
 ) {
   const order: string[] = [];
   let generation = 0;
@@ -204,7 +217,7 @@ function mountNav() {
 
 describe("Nav system media shell with actual Pinia stores", () => {
   it("subscribes before Ready, preserves defaults, and exposes only the available power setting", async () => {
-    let resolveReady: (value: { trayAvailable: boolean }) => void = () => {};
+    let resolveReady: (value: { trayAvailable: boolean; epoch: number }) => void = () => {};
     const f = fixture(
       new Promise((resolve) => {
         resolveReady = resolve;
@@ -216,7 +229,7 @@ describe("Nav system media shell with actual Pinia stores", () => {
     await flush();
     expect(f.order.slice(0, 2)).toEqual(["media-subscribe", "ready"]);
     expect(f.provider.configure).not.toHaveBeenCalled();
-    resolveReady({ trayAvailable: true });
+    resolveReady({ trayAvailable: true, epoch: 1 });
     await flush();
     expect(f.provider.configure).toHaveBeenCalledWith(0, true, false);
     expect(

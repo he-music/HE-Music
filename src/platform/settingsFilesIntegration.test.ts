@@ -49,7 +49,12 @@ vi.mock("@/stores", async () => ({
   ...(await import("@/stores/shortcut")),
   ...(await import("@/stores/status")),
   ...(await import("@/stores/music")),
-  useDataStore: () => ({ deleteDB: vi.fn() }),
+  useDataStore: () => ({
+    deleteDB: vi.fn(),
+    userData: { id: "" },
+    userLoginStatus: false,
+    isLikeSong: () => false,
+  }),
 }));
 vi.stubGlobal("localStorage", {});
 const { useSettingStore, useShortcutStore, useStatusStore } = await import("@/stores");
@@ -185,7 +190,7 @@ function mountShell() {
   scopes.push(stop);
   return stop;
 }
-function lifecycle(ready = Promise.resolve({ trayAvailable: false })) {
+function lifecycle(ready = Promise.resolve({ trayAvailable: false, epoch: 1 })) {
   const result = {
     ready: vi.fn(() => ready),
     syncConfig: vi.fn(async () => {}),
@@ -435,12 +440,12 @@ describe("actual desktop lifecycle file setup", () => {
   it("does not begin before Ready, and does not react to playback clocks", async () => {
     const native = provider();
     host.platform.files = native;
-    const ready = deferred<{ trayAvailable: boolean }>();
+    const ready = deferred<{ trayAvailable: boolean; epoch: number }>();
     lifecycle(ready.promise);
     const stop = mountShell();
     await flush();
     expect(native.begin).not.toHaveBeenCalled();
-    ready.resolve({ trayAvailable: false });
+    ready.resolve({ trayAvailable: false, epoch: 1 });
     await flush();
     expect(native.begin).toHaveBeenCalledTimes(1);
     const status = useStatusStore();

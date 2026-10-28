@@ -6,7 +6,7 @@ import { useMusicStore, useStatusStore, useDataStore, useSettingStore } from "@/
 import { calculateProgress, msToS } from "./time";
 import { shuffleArray } from "./helper";
 import songManager from "./songManager";
-import { hasNativeSystemMedia, isElectron } from "./env";
+import { hasNativeSystemMedia, isElectron, isMygo } from "./env";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 import { LocalAudioSession } from "@/platform/localAudioSession";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
@@ -17,6 +17,7 @@ import { listRadioSongs } from "@/api/radio";
 import { t } from "@/i18n";
 import type { Link, SongInfo } from "@/types/main.hemusic";
 import { AxiosError } from "axios";
+import { createNativePlayModeCoordinator } from "./nativePlayMode";
 
 /**
  * 播放器核心
@@ -52,6 +53,7 @@ class Player {
   private httpPlaybackDialog?: DialogReactive;
   private lastHttpRetrySrc = "";
   private localAudio?: LocalAudioSession;
+  private nativeModes?: ReturnType<typeof createNativePlayModeCoordinator>;
 
   constructor() {
     // 初始化媒体会话
@@ -779,10 +781,46 @@ class Player {
       throw error;
     }
   }
+  private nativeModeCoordinator() {
+    if (!this.nativeModes) {
+      const data = useDataStore();
+      const status = useStatusStore();
+      const music = useMusicStore();
+      this.nativeModes = createNativePlayModeCoordinator({
+        read: () => ({
+          mode: status.playSongMode,
+          playList: data.playList,
+          originalPlayList: data.originalPlayList,
+          playIndex: status.playIndex,
+          currentSong: music.playSong,
+          revision: data.playbackRevision,
+        }),
+        readOriginal: () => data.getOriginalPlayList(false),
+        shuffle: (songs) => shuffleArray(songs),
+        commit: (snapshot) => {
+          data.$patch({
+            playList: snapshot.playList,
+            originalPlayList: snapshot.originalPlayList,
+            playbackRevision: Symbol("playback"),
+          });
+          status.$patch({ playIndex: snapshot.playIndex, playSongMode: snapshot.mode });
+        },
+        persist: (snapshot) => data.persistPlayModeLists(snapshot),
+      });
+    }
+    return this.nativeModes;
+  }
   /**
    * 切换播放模式
    */
-  public async togglePlayMode(mode: PlayModeType | false) {
+  public async togglePlayMode(mode: PlayModeType | false, isCurrent: () => boolean = () => true) {
+    if (isMygo) {
+      const result = await this.nativeModeCoordinator().request({ target: mode, isCurrent });
+      if (result.status === "persist-failed" && isCurrent()) {
+        window.$message?.warning(t("message.play_mode_save_failed"));
+      }
+      return result;
+    }
     const statusStore = useStatusStore();
     const dataStore = useDataStore();
     const musicStore = useMusicStore();
@@ -846,6 +884,7 @@ class Player {
     // 应用模式
     statusStore.playSongMode = targetMode;
     this.playModeSyncIpc();
+    return undefined;
   }
   /**
    * 播放模式同步 ipc

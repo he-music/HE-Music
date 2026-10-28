@@ -1,8 +1,7 @@
 import { nextTick, onBeforeUnmount, onMounted, watch, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
+import { useSettingStore, useStatusStore } from "@/stores";
 import { platform } from "@/platform";
-import { usePlayer } from "@/utils/player";
 import type { CloseResolution, LifecycleConfig } from "@/platform/mygo.bindings";
 import { createShellShortcutSession } from "./shellShortcuts";
 import { createShellSystemMediaSession } from "./shellSystemMedia";
@@ -10,8 +9,8 @@ import { createFilesSession } from "@/platform/filesSession";
 import { blockLocalAudio } from "@/platform/localAudioSession";
 import { createShellDesktopLyricsSession } from "./shellDesktopLyrics";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
-import { nativeLocalEntry } from "@/platform/localFilesSession";
 import { createShellUpdatesSession } from "./shellUpdates";
+import { createShellTraySession } from "./shellTray";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -45,12 +44,15 @@ export function useDesktopLifecycle(ui: {
 
   const setting = useSettingStore();
   const status = useStatusStore();
-  const music = useMusicStore();
-  const player = usePlayer();
+  const tray = createShellTraySession(lifecycle, {
+    reportPlaybackFailure: () => {
+      console.error("托盘播放操作失败");
+      window.$message?.error(t("message.song_play_fail"));
+    },
+  });
   const updates = createShellUpdatesSession(() => setting.checkUpdateOnStart);
   const { t } = useI18n();
   let disposed = false;
-  let ready = false;
   let requestId: number | null = null;
   let acknowledgement: Promise<void> = Promise.resolve();
   const stops: Array<() => void> = [];
@@ -83,13 +85,14 @@ export function useDesktopLifecycle(ui: {
       pause: t("common.pause"),
       previous: t("common.play_prev"),
       next: t("common.play_next"),
+      addToFavorites: t("common.add_to_favorites"),
+      removeFromFavorites: t("common.remove_from_favorites"),
+      repeat: t("common.play_mode_repeat"),
+      repeatOnce: t("common.play_mode_repeat_once"),
+      shuffle: t("common.play_mode_shuffle"),
       quit: t("nav.quit_app"),
     },
   });
-  const hasSong = () =>
-    Boolean(music.playSong?.id && (!music.playSong.path || nativeLocalEntry(music.playSong.id)));
-  const syncPlayback = () =>
-    lifecycle.syncPlayback({ playing: status.playStatus, hasSong: hasSong() });
 
   const resolve = async (resolution: CloseResolution) => {
     const remember = ui.rememberNotAsk.value;
@@ -133,35 +136,15 @@ export function useDesktopLifecycle(ui: {
               reportFailure();
             });
           }),
-          lifecycle.onTrayAction((action) => {
-            if (action === "open-settings") {
-              if (!disposed && ready) {
-                void import("@/utils/modal")
-                  .then(async ({ openSetting }) => {
-                    if (!disposed && ready) await openSetting();
-                  })
-                  .catch(reportFailure);
-              }
-              return;
-            }
-            if (disposed || !ready || !hasSong()) return;
-            void (async () => {
-              if (action === "toggle") await player.playOrPause();
-              else await player.nextOrPrev(action === "previous" ? "prev" : "next");
-            })().catch(() => {
-              console.error("托盘播放操作失败");
-              window.$message?.error(t("message.song_play_fail"));
-            });
-          }),
+          lifecycle.onTrayAction(tray.handle),
         );
-        await lifecycle.ready(config());
+        const nativeStatus = await lifecycle.ready(config());
         if (disposed) return;
-        ready = true;
+        await tray.start(nativeStatus.epoch);
         void updates?.start().catch(() => console.error("应用更新会话初始化或检查失败"));
         void files?.start();
         await shortcuts?.start();
         await media?.start();
-        await syncPlayback();
         if (disposed) return;
         void lyrics?.start().catch(() => console.error("桌面歌词会话初始化失败"));
         stops.push(
@@ -169,14 +152,10 @@ export function useDesktopLifecycle(ui: {
             () => [setting.showCloseAppTip, setting.closeAppMethod, setting.language],
             () => void lifecycle.syncConfig(config()).catch(reportFailure),
           ),
-          watch(
-            () => [status.playStatus, music.playSong?.id, music.playSong?.platform, hasSong()],
-            () => void syncPlayback().catch(reportFailure),
-          ),
         );
       } catch {
         reportFailure();
-        ready = false;
+        tray.dispose();
         await updates?.dispose();
         await lyrics?.dispose();
         await files?.dispose();
@@ -199,7 +178,7 @@ export function useDesktopLifecycle(ui: {
     const shortcutCleanup = shortcuts?.dispose();
     const mediaCleanup = media?.dispose();
     const filesCleanup = files?.dispose();
-    ready = false;
+    tray.dispose();
     requestId = null;
     ui.showCloseModal.value = false;
     stops.splice(0).forEach((stop) => stop());

@@ -23,6 +23,7 @@ vi.mock("@/platform", () => ({ platform: mocks.platform }));
 vi.mock("@/stores", () => ({
   useShortcutStore: () => mocks.store,
   useMusicStore: () => mocks.music,
+  useDataStore: () => ({ userData: { id: "" }, userLoginStatus: false, isLikeSong: () => false }),
   useStatusStore: () => mocks.status,
   useSettingStore: () => mocks.setting,
 }));
@@ -106,7 +107,7 @@ function configure() {
   const lifecycle = {
     ready: vi.fn(async () => {
       order.push("ready");
-      return { trayAvailable: true };
+      return { trayAvailable: true, epoch: 1 };
     }),
     syncConfig: vi.fn(async () => {}),
     syncPlayback: vi.fn(async () => {}),

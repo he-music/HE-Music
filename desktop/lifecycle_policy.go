@@ -16,6 +16,8 @@ const (
 	TrayToggle       TrayAction = "toggle"
 	TrayNext         TrayAction = "next"
 	TrayOpenSettings TrayAction = "open-settings"
+	TrayFavorite     TrayAction = "set-favorite"
+	TraySetPlayMode  TrayAction = "set-play-mode"
 )
 
 type CloseResolution string
@@ -27,18 +29,23 @@ const (
 )
 
 type LifecycleLabels struct {
-	Show         string `json:"show"`
-	Hide         string `json:"hide,omitempty"`
-	Play         string `json:"play"`
-	Pause        string `json:"pause"`
-	Previous     string `json:"previous"`
-	Next         string `json:"next"`
-	ShowLyrics   string `json:"showLyrics,omitempty"`
-	HideLyrics   string `json:"hideLyrics,omitempty"`
-	LockLyrics   string `json:"lockLyrics,omitempty"`
-	UnlockLyrics string `json:"unlockLyrics,omitempty"`
-	Settings     string `json:"settings,omitempty"`
-	Quit         string `json:"quit"`
+	Show                string `json:"show"`
+	Hide                string `json:"hide,omitempty"`
+	Play                string `json:"play"`
+	Pause               string `json:"pause"`
+	Previous            string `json:"previous"`
+	Next                string `json:"next"`
+	ShowLyrics          string `json:"showLyrics,omitempty"`
+	HideLyrics          string `json:"hideLyrics,omitempty"`
+	LockLyrics          string `json:"lockLyrics,omitempty"`
+	UnlockLyrics        string `json:"unlockLyrics,omitempty"`
+	Settings            string `json:"settings,omitempty"`
+	Quit                string `json:"quit"`
+	AddToFavorites      string `json:"addToFavorites,omitempty"`
+	RemoveFromFavorites string `json:"removeFromFavorites,omitempty"`
+	Repeat              string `json:"repeat,omitempty"`
+	RepeatOnce          string `json:"repeatOnce,omitempty"`
+	Shuffle             string `json:"shuffle,omitempty"`
 }
 
 type LifecycleConfig struct {
@@ -48,12 +55,20 @@ type LifecycleConfig struct {
 }
 
 type LifecycleStatus struct {
-	TrayAvailable bool `json:"trayAvailable"`
+	TrayAvailable bool   `json:"trayAvailable"`
+	Epoch         uint64 `json:"epoch"`
 }
 
 type TrayPlaybackState struct {
-	Playing bool `json:"playing"`
-	HasSong bool `json:"hasSong"`
+	Epoch       uint64       `json:"epoch"`
+	Revision    uint64       `json:"revision"`
+	TrackKey    string       `json:"trackKey"`
+	Playing     bool         `json:"playing"`
+	HasSong     bool         `json:"hasSong"`
+	Liked       bool         `json:"liked"`
+	CanFavorite bool         `json:"canFavorite"`
+	PlayMode    TrayPlayMode `json:"playMode"`
+	CanSetMode  bool         `json:"canSetMode"`
 }
 
 type CloseRequested struct {

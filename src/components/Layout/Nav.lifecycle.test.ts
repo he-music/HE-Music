@@ -5,7 +5,7 @@ import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 import { DesktopLyricsSession } from "@/platform/desktopLyricsSession";
 import type { LyricsWindowState, PlatformDesktopLyrics } from "@/platform/desktopLyrics";
-import type { TrayAction } from "@/platform/mygo.bindings";
+import type { TrayAction, TrayRequest, TrayPlaybackState } from "@/platform/mygo.bindings";
 
 type ShellSessionStub = { start: () => Promise<void>; dispose: () => Promise<void> };
 const mocks = vi.hoisted(() => ({
@@ -25,6 +25,7 @@ vi.mock("@/stores", () => ({
   useSettingStore: () => mocks.setting,
   useStatusStore: () => mocks.status,
   useMusicStore: () => mocks.music,
+  useDataStore: () => ({ userData: { id: "" }, userLoginStatus: false, isLikeSong: () => false }),
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => mocks.player }));
 vi.mock("@/utils/modal", () => ({ openSetting: mocks.openSetting }));
@@ -55,7 +56,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-function mountNav(options: { ready?: Promise<{ trayAvailable: boolean }> } = {}) {
+function mountNav(options: { ready?: Promise<{ trayAvailable: boolean; epoch: number }> } = {}) {
   mocks.setting = Vue.reactive({
     showCloseAppTip: true,
     closeAppMethod: "exit",
@@ -66,19 +67,19 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean }> } = {})
   mocks.player.playOrPause = vi.fn().mockResolvedValue(undefined);
   mocks.player.nextOrPrev = vi.fn().mockResolvedValue(undefined);
   const closeHandlers = new Set<(request: { requestId: number }) => void>();
-  const actions = new Set<(action: TrayAction) => void>();
+  const actions = new Set<(action: TrayRequest) => void>();
   const service = {
-    ready: vi.fn(() => options.ready ?? Promise.resolve({ trayAvailable: true })),
+    ready: vi.fn(() => options.ready ?? Promise.resolve({ trayAvailable: true, epoch: 1 })),
     teardown: vi.fn(async () => {}),
     syncConfig: vi.fn(async () => {}),
-    syncPlayback: vi.fn(async () => {}),
+    syncPlayback: vi.fn<(snapshot: TrayPlaybackState) => Promise<void>>(async () => {}),
     acknowledgeClose: vi.fn(async () => {}),
     resolveClose: vi.fn(async () => {}),
     onCloseRequested: (handler: (request: { requestId: number }) => void) => {
       closeHandlers.add(handler);
       return () => closeHandlers.delete(handler);
     },
-    onTrayAction: (handler: (action: TrayAction) => void) => {
+    onTrayAction: (handler: (action: TrayRequest) => void) => {
       actions.add(handler);
       return () => actions.delete(handler);
     },
@@ -153,7 +154,16 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean }> } = {})
       closeHandlers.forEach((handler) => handler({ requestId: id }));
     },
     action(action: TrayAction) {
-      actions.forEach((handler) => handler(action));
+      const snapshot = service.syncPlayback.mock.calls.at(-1)?.[0];
+      if (snapshot)
+        actions.forEach((handler) =>
+          handler({
+            epoch: snapshot.epoch,
+            revision: snapshot.revision,
+            trackKey: snapshot.trackKey,
+            action,
+          }),
+        );
     },
     modal: () => state.showCloseModal as Vue.Ref<boolean>,
     remember: () => state.rememberNotAsk as Vue.Ref<boolean>,
@@ -164,8 +174,8 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean }> } = {})
 describe("Nav native lifecycle setup", () => {
   it("只在主壳Ready后启动更新，待回执期间不阻塞播放接线，卸载立即处置", async () => {
     let release!: () => void;
-    const ready = new Promise<{ trayAvailable: boolean }>((resolve) => {
-      release = () => resolve({ trayAvailable: true });
+    const ready = new Promise<{ trayAvailable: boolean; epoch: number }>((resolve) => {
+      release = () => resolve({ trayAvailable: true, epoch: 1 });
     });
     const updates = {
       start: vi.fn(() => new Promise<void>(() => {})),
@@ -220,8 +230,15 @@ describe("Nav native lifecycle setup", () => {
     const nav = mountNav();
     await flush();
     expect(nav.service.syncPlayback).toHaveBeenCalledExactlyOnceWith({
+      epoch: 1,
+      revision: 1,
+      trackKey: JSON.stringify(["synthetic", "synthetic"]),
       playing: false,
       hasSong: true,
+      liked: false,
+      canFavorite: false,
+      canSetMode: true,
+      playMode: "repeat",
     });
     mocks.status.currentTime = 9000;
     mocks.status.lyricClock = 9000;
@@ -248,7 +265,7 @@ describe("Nav native lifecycle setup", () => {
     expect(mocks.player.playOrPause).toHaveBeenCalledOnce();
   });
   it("ready未完成卸载，迟到ready后teardown，不同步旧状态", async () => {
-    let done!: (value: { trayAvailable: boolean }) => void;
+    let done!: (value: { trayAvailable: boolean; epoch: number }) => void;
     const nav = mountNav({
       ready: new Promise((resolve) => {
         done = resolve;
@@ -256,7 +273,7 @@ describe("Nav native lifecycle setup", () => {
     });
     await flush();
     nav.unmount();
-    done({ trayAvailable: true });
+    done({ trayAvailable: true, epoch: 1 });
     await flush();
     expect(nav.service.teardown).toHaveBeenCalledOnce();
     expect(nav.service.syncPlayback).not.toHaveBeenCalled();
@@ -281,7 +298,7 @@ describe("Nav native lifecycle setup", () => {
     expect(nav.service.resolveClose).not.toHaveBeenCalled();
   });
   it("Ready后启动歌词，失败不撤销媒体文件；卸载同步失效先于lifecycle teardown", async () => {
-    let ready!: (value: { trayAvailable: boolean }) => void;
+    let ready!: (value: { trayAvailable: boolean; epoch: number }) => void;
     const media = { start: vi.fn(async () => {}), dispose: vi.fn(async () => {}) };
     const files = { start: vi.fn(async () => {}), dispose: vi.fn(async () => {}) };
     const lyrics = {
@@ -302,7 +319,7 @@ describe("Nav native lifecycle setup", () => {
     });
     await flush();
     expect(lyrics.start).not.toHaveBeenCalled();
-    ready({ trayAvailable: true });
+    ready({ trayAvailable: true, epoch: 1 });
     await flush();
     expect(lyrics.start).toHaveBeenCalledOnce();
     expect(files.start).toHaveBeenCalledOnce();
@@ -320,7 +337,7 @@ describe("Nav native lifecycle setup", () => {
   });
 
   it("歌词尚未启动即卸载，迟到Ready不启动已失效歌词会话", async () => {
-    let ready!: (value: { trayAvailable: boolean }) => void;
+    let ready!: (value: { trayAvailable: boolean; epoch: number }) => void;
     const lyrics = { start: vi.fn(async () => {}), dispose: vi.fn(async () => {}) };
     mocks.lyrics = lyrics;
     const nav = mountNav({
@@ -331,7 +348,7 @@ describe("Nav native lifecycle setup", () => {
     await flush();
     nav.unmount();
     expect(lyrics.dispose).toHaveBeenCalledOnce();
-    ready({ trayAvailable: true });
+    ready({ trayAvailable: true, epoch: 1 });
     await flush();
     expect(lyrics.start).not.toHaveBeenCalled();
     expect(nav.service.teardown).toHaveBeenCalledOnce();
@@ -432,6 +449,7 @@ describe("Nav native lifecycle setup", () => {
     const nav = mountNav();
     await flush();
     mocks.music.playSong = { id: "", path: "" };
+    await flush();
     nav.action("open-settings");
     await vi.dynamicImportSettled();
     await flush();
