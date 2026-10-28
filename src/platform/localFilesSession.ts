@@ -85,6 +85,12 @@ export class LocalFilesSession {
     this.scanIssues.value = [];
   }
 
+  async refreshAfterWrite(): Promise<void> {
+    if (this.disposed) return;
+    this.results.value = [];
+    await this.scan();
+  }
+
   async scan(): Promise<void> {
     if (this.disposed) return;
     this.cancel();

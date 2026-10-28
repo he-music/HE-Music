@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FilesSession } from "./filesSession";
-import { LocalAudioSession } from "./localAudioSession";
+import { LocalAudioSession, blockLocalAudio } from "./localAudioSession";
 import { localFilesSession } from "./localFilesSession";
 import type { PlatformFiles } from "./files";
 import type { LocalAudioTicket, ScanEntry } from "./mygo.bindings";
@@ -150,5 +150,61 @@ describe("LocalAudioSession", () => {
     expect(await opening).toBeNull();
     expect(f.provider.closeLocalAudio).toHaveBeenCalledWith(4, "removed");
     expect(f.audio.active).toBe(false);
+  });
+  it("holds independent file-write gates and releases only the matching owner", async () => {
+    const f = await fixture();
+    await f.audio.open(ref);
+    const first = blockLocalAudio();
+    const second = blockLocalAudio();
+    cleanups.push(first, second);
+    expect(f.audio.active).toBe(false);
+    expect(f.invalidate).toHaveBeenCalledOnce();
+    expect(f.provider.closeLocalAudio).toHaveBeenCalledWith(4, "ticket");
+    expect(await f.audio.open(ref)).toBeNull();
+    first();
+    first();
+    expect(await f.audio.open(ref)).toBeNull();
+    expect(f.provider.openLocalAudio).toHaveBeenCalledOnce();
+    second();
+    expect(await f.audio.open(ref)).toBe(ticket("ticket").url);
+  });
+  it("does not resurrect a pending URL even if a write gate has already been released", async () => {
+    const f = await fixture();
+    const pending = deferred<LocalAudioTicket>();
+    vi.mocked(f.provider.openLocalAudio!).mockReturnValueOnce(pending.promise);
+    const opening = f.audio.open(ref);
+    const release = blockLocalAudio();
+    cleanups.push(release);
+    release();
+    pending.resolve(ticket("late-write"));
+    expect(await opening).toBeNull();
+    expect(f.provider.closeLocalAudio).toHaveBeenCalledWith(4, "late-write");
+    expect(await f.audio.open(ref)).toBe(ticket("ticket").url);
+  });
+  it("releases a native ticket and the attempted gate when clearing the player throws", async () => {
+    const f = await fixture();
+    await f.audio.open(ref);
+    f.invalidate.mockImplementationOnce(() => {
+      throw new Error("player unavailable");
+    });
+    expect(blockLocalAudio).toThrow("player unavailable");
+    expect(f.provider.closeLocalAudio).toHaveBeenCalledWith(4, "ticket");
+    expect(await f.audio.open(ref)).toBe(ticket("ticket").url);
+  });
+  it("clears later instances after one player throws so their pending tickets stay stale", async () => {
+    const f = await fixture();
+    await f.audio.open(ref);
+    const later = new LocalAudioSession(vi.fn());
+    cleanups.push(() => later.dispose());
+    const pending = deferred<LocalAudioTicket>();
+    vi.mocked(f.provider.openLocalAudio!).mockReturnValueOnce(pending.promise);
+    const opening = later.open(ref);
+    f.invalidate.mockImplementationOnce(() => {
+      throw new Error("first player unavailable");
+    });
+    expect(blockLocalAudio).toThrow("first player unavailable");
+    pending.resolve(ticket("later-player"));
+    expect(await opening).toBeNull();
+    expect(f.provider.closeLocalAudio).toHaveBeenCalledWith(4, "later-player");
   });
 });

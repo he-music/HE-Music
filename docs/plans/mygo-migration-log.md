@@ -562,3 +562,12 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - UI审查 `f1d20174` OK with notes，但发现P2：旧owner等待组件import占位吞新owner提示。实际红测create0次非1次；入口仅拦同owner重复，过期占位允许当前owner接管，旧finally/离场不能清新占位。提取可注入loader的presenter测试，产品仍模块单例/默认dynamic import。初版异步mock两个SFC import暴露Vitest无Vue plugin的import-analysis限制，改用同一deferred loader后旧guard仍真实red、修后green；`33cbb4e5`复核No issues/OK。测试为同步离场mock，旧modal延迟离场交错另据源码身份条件核对，未实机验证。
 - 最终固定Node24.22.1全量83文件661项、Node/Web类型、相关TS ESLint和全部改动文件格式通过。项目现有ESLint无.vue配置，两SFC提示ignored，不算SFC lint通过；SFC验证为生产模板编译与stub renderer、vue-tsc和格式。未启动App/Vite/native、真实网络下载/验签/替换/重开或Windows。mygo.json仍未配置feed/public key，开发/未配置返回unavailable；没有冒充最新版本或绕过更新包验签。
 - 音频负载比较器 `690eff5` 已合入为 `6075004`。父在主目录重跑metadata全部测试，包含四类标签夹具、六类编码参数、负载篡改/截断与独立ffprobe逐包hash，全部通过。它仍是MP3/FLAC受限结构和编码负载校验，不能外推PCM解码、更多容器或原件事务已经产品接通。
+
+### 原件标签事务及音频写入屏障
+
+- 音频读者身份屏障已提交 `74c38c2`：open在resolve FD之前登记hold，HTTP在FD/lease实际清理后才关done；同identity gate覆盖硬链接/跨grant别名，监听启动移出锁并串行化。首轮审查 `d8e3e012` BLOCK，指出票据先移出registry后release会漏等；父用真实lease.stopGrant+channel暂停窗口红测后，将cancel/Release移至锁外先完成，再在同锁内删除及close done。`da98ae4e`复查No issues/OK；LocalAudio组十轮、Go全包/vet/格式通过，不作race或实机声明。
+- 原件事务三提交 `3861f53`、`79587d7`、`0afab21` 整合为 `b71f007`。原件完整SHA256/身份版本与SameFile锁、正式mtag工作副本、独立payload硬门、回读patch验证、同目录完整备份、claim后Rename、属性fcopyfile及准确committed结果已实现。macOS保留ACL/xattr/owner/group/mode，非零flags/setuid/setgid拒绝；非Darwin属性保证unsupported。失败不盲目恢复覆盖未知内容，保留相对backup/residual名；无跨进程CAS、无journal自动崩溃恢复，不承诺所有FS/断电耐久。
+- 原事务审查 `3663a367` BLOCK：旧epoch A延迟注册可删除新B jobs、256个完整图片结果可常驻GiB、撤销后结果不释放。修复统一actor->coordinator短注册/推进/完成/查询/取消，跨epoch活动身份槽和许可直到IO真完才还；2active/256records/64MiB缓存与reservation、轻量墓碑额度、Info深拷贝计容量，commit前预留超限不改原件；handle独立context/owner撤销清敏感结果。`646d9d45`确认三项Closed/OK with notes，指出测试需等全部异步jobs及bytes清零；`0afab21`按该条件修正，父精确diff核对且源码与候选一致、主目录Go全包通过。
+- 父init接metadataAudioDrain到真实stream quiesce，并在scanner每层解析/登记前忽略 `.hemusic-metadata-` 私有文件或目录。新增临时MP3/FLAC真实保存集成：blocked fake HTTP reader排空后原件替换，旧URL/ref失效，新ref suffix Range206，ffprobe逐包hash一致；有效音频内容的root/nested/private-dir备份均不入库。无真实HTTP socket音频、用户库或App操作。
+- 固定CLI在隔离worktree generate的官方metadata绑定增量49行，当前主绑定与隔离产物完整cmp一致；不声称该生成文件通过Prettier。前端blockLocalAudio使用独立Symbol暂停/清理本地实例，gate释放后旧pending URL仍因revision失效；在线源不经本地实例。集成审查 `ef805c0b` OK with notes，指出首实例异常会跳过其余；父真实红测9项中1项拿到later-player URL，改为逐实例捕获/继续清理后重抛首异常，`5ef8458e`复核No issues/OK。
+- LocalFilesSession预备refreshAfterWrite先清旧registry再重扫，新增测试覆盖旧scan页迟到不得复活。当前主目录最终前端83文件666项、Node/Web类型、相关TS lint/格式和Go全包/vet/gofmt通过。controller/编辑UI仍由隔离组件交付并待审查/父接线，不把此后端和屏障checkpoint当完整产品已完成；新的下载后端候选也仍在独立审查。

@@ -3,6 +3,30 @@ import { filesSession, type LocalAudioAccess } from "./filesSession";
 import type { LocalFileRef } from "./mygo.bindings";
 import { localFilesSession } from "./localFilesSession";
 
+const writeBlocks = new Set<symbol>();
+const audioSessions = new Set<LocalAudioSession>();
+
+/** Pause local sources before a file write; each owner releases only its own gate. */
+export function blockLocalAudio(): () => void {
+  const token = Symbol("local-file-write");
+  writeBlocks.add(token);
+  const release = () => {
+    writeBlocks.delete(token);
+  };
+  let failure: { error: unknown } | undefined;
+  for (const session of audioSessions) {
+    try {
+      session.clear();
+    } catch (error) {
+      failure ??= { error };
+    }
+  }
+  if (failure) {
+    release();
+    throw failure.error;
+  }
+  return release;
+}
 function registered(ref: LocalFileRef): boolean {
   return (
     localFilesSession.value?.entries.value.some(
@@ -23,6 +47,7 @@ export class LocalAudioSession {
   private disposed = false;
 
   constructor(private readonly invalidate: () => void) {
+    audioSessions.add(this);
     this.stop = watch(
       () => [
         filesSession.value,
@@ -39,7 +64,7 @@ export class LocalAudioSession {
 
   get active(): boolean {
     const ticket = this.ticket;
-    return Boolean(ticket?.access.current() && registered(ticket.ref));
+    return Boolean(!writeBlocks.size && ticket?.access.current() && registered(ticket.ref));
   }
 
   clear(): void {
@@ -47,19 +72,28 @@ export class LocalAudioSession {
     const ticket = this.ticket;
     this.ticket = undefined;
     if (ticket) {
-      this.invalidate();
-      void ticket.access.close(ticket.id).catch(() => {});
+      try {
+        this.invalidate();
+      } finally {
+        void ticket.access.close(ticket.id).catch(() => {});
+      }
     }
   }
 
   async open(ref: LocalFileRef): Promise<string | null> {
     this.clear();
-    if (this.disposed) return null;
+    if (this.disposed || writeBlocks.size) return null;
     const revision = this.revision;
     const access = filesSession.value?.audioAccess(ref);
     if (!access) throw new Error("Local audio is unavailable");
     const ticket = await access.open();
-    if (this.disposed || revision !== this.revision || !access.current() || !registered(ref)) {
+    if (
+      this.disposed ||
+      writeBlocks.size ||
+      revision !== this.revision ||
+      !access.current() ||
+      !registered(ref)
+    ) {
       await access.close(ticket.ticketId).catch(() => {});
       return null;
     }
@@ -90,7 +124,11 @@ export class LocalAudioSession {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.clear();
-    this.stop();
+    try {
+      this.clear();
+    } finally {
+      audioSessions.delete(this);
+      this.stop();
+    }
   }
 }

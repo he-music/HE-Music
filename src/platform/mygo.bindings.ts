@@ -206,6 +206,42 @@ export interface LyricsWord {
   romanWord?: string;
 }
 
+/**
+ * MetadataResult never transports OS errors or machine paths. SHA256 is the
+ * complete source baseline required by SaveMetadata, not a stat fingerprint.
+ */
+export interface MetadataResult {
+  code: string;
+  ref?: LocalFileRef;
+  info?: Info;
+  sha256?: string;
+  residualNames?: string[];
+  recoveryName?: string;
+  committed: boolean;
+}
+
+export interface MetadataSaveRequest {
+  operationId: string;
+  ref: LocalFileRef;
+  sha256: string;
+  patch: Patch;
+}
+
+/**
+ * Patch uses nil to preserve a field, and a pointer to an empty value to clear
+ * it. Pictures, when supplied, replaces all pictures (the editor's existing
+ * behavior). Comment maps the editor alias; no duplicate description is invented.
+ */
+export interface Patch {
+  Title: string | null;
+  Artists: string[] | null;
+  Album: string | null;
+  AlbumArtists: string[] | null;
+  Comment: string | null;
+  Lyrics: string | null;
+  Pictures: Picture[] | null;
+}
+
 /** Picture preserves the native image role and description as well as its bytes. */
 export interface Picture {
   MIME: string;
@@ -396,6 +432,9 @@ export const NativeFiles = {
   cancelFileOperation(epoch: number, operationID: string): Promise<void> {
     return call("NativeFiles.CancelFileOperation", epoch, operationID);
   },
+  cancelMetadata(epoch: number, id: string): Promise<MetadataResult> {
+    return call("NativeFiles.CancelMetadata", epoch, id);
+  },
   chooseDirectory(epoch: number): Promise<DirectorySelection> {
     return call("NativeFiles.ChooseDirectory", epoch);
   },
@@ -414,6 +453,9 @@ export const NativeFiles = {
   openLocalAudio(epoch: number, ref: LocalFileRef): Promise<LocalAudioTicket> {
     return call("NativeFiles.OpenLocalAudio", epoch, ref);
   },
+  readMetadata(epoch: number, ref: LocalFileRef): Promise<MetadataResult> {
+    return call("NativeFiles.ReadMetadata", epoch, ref);
+  },
   /**
    * ReadScanPage consumes at most scanPageSize queued events. Empty, non-final
    * pages are valid while IO runs; every successful call advances the cursor.
@@ -423,6 +465,13 @@ export const NativeFiles = {
   },
   revokeDirectory(epoch: number, token: string): Promise<void> {
     return call("NativeFiles.RevokeDirectory", epoch, token);
+  },
+  /**
+   * OperationID is a caller-generated 32-byte hex nonce. Reusing it never writes
+   * twice; completed operations return their original result while still owned.
+   */
+  saveMetadata(epoch: number, req: MetadataSaveRequest): Promise<MetadataResult> {
+    return call("NativeFiles.SaveMetadata", epoch, req);
   },
   /** StartScan starts a read-only job. An empty cursor requests its first page. */
   startScan(epoch: number, grantToken: string): Promise<ScanOperation> {

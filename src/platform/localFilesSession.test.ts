@@ -84,6 +84,33 @@ async function flush() {
 }
 
 describe("LocalFilesSession", () => {
+  it("clears obsolete references before refreshing after a write and rejects an older scan page", async () => {
+    const f = await fixture();
+    await f.local.scan();
+    const oldPage = deferred<ScanPage>();
+    const newPage = deferred<ScanPage>();
+    vi.mocked(f.provider.startScan!)
+      .mockResolvedValueOnce({ operationId: "old" })
+      .mockResolvedValueOnce({ operationId: "new" });
+    vi.mocked(f.provider.readScanPage!)
+      .mockReturnValueOnce(oldPage.promise)
+      .mockReturnValueOnce(newPage.promise);
+    const olderScan = f.local.scan();
+    await flush();
+    const refreshing = f.local.refreshAfterWrite();
+    expect(f.local.entries.value).toEqual([]);
+    await flush();
+    oldPage.resolve({ ...page(), operationId: "old" });
+    await olderScan;
+    expect(f.local.entries.value).toEqual([]);
+    const updated = entry();
+    updated.ref = { ...updated.ref, fileId: "new-file", version: "new-version" };
+    updated.metadata.Title = "已保存";
+    newPage.resolve({ ...page([updated]), operationId: "new" });
+    await refreshing;
+    expect(f.local.entries.value).toEqual([updated]);
+    expect(f.provider.cancelFileOperation).toHaveBeenCalledWith(7, "old");
+  });
   it("scans current grants without occupying the picker slot and drops results on revoke", async () => {
     const f = await fixture();
     const pending = deferred<ScanPage>();
