@@ -7,6 +7,7 @@ import {
   GlobalShortcuts,
   SystemMedia,
   NativeFiles,
+  Updates,
   events,
 } from "./mygo.bindings";
 import { externalHttpURL, type PlatformAdapter } from "./types";
@@ -29,6 +30,10 @@ export function createMygoPlatform(): PlatformAdapter {
     os: os === "darwin" || os === "win32" || os === "linux" ? os : "unknown",
     capabilities,
     files: NativeFiles,
+    updates: {
+      ...Updates,
+      onChange: (listener) => events.desktopUpdates.on(listener),
+    },
     desktopLyrics: {
       ...DesktopLyrics,
       onWindow: (listener) => events.desktopLyricsWindow.on(listener),
