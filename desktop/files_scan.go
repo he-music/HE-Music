@@ -23,7 +23,6 @@ const (
 	scanMaxItems            = 10000
 	scanMaxFileBytes  int64 = 32 << 20
 	scanMaxBytes      int64 = 512 << 20
-	scanMaxRegistered       = 20000
 	scanLifetime            = 5 * time.Minute
 )
 
@@ -89,8 +88,8 @@ func (s *nativeFilesState) startScan(ctx context.Context, epoch uint64, token st
 		lease.Release()
 		return ScanOperation{}, err
 	}
-	// acquireDirectory releases automatically on owner cancellation. This extra
-	// reference belongs to the worker and is released only after all IO exits.
+	// The worker keeps an independent hold until all IO exits, paired with
+	// releaseWorker even when cancellation or page teardown happens first.
 	err = s.main(ctx, func(parent *mygo.Window) error {
 		if parent != lease.parent || !s.owns(ctx, epoch) || !lease.handle.retainLease() {
 			return errFilesLease
@@ -102,6 +101,8 @@ func (s *nativeFilesState) startScan(ctx context.Context, epoch uint64, token st
 		return ScanOperation{}, err
 	}
 	jobCtx, cancel := context.WithTimeout(ctx, scanLifetime)
+	// Completed but unread jobs must also expire when their grant is revoked.
+	stopGrant := context.AfterFunc(lease.handle.leaseContext, cancel)
 	job := &fileScan{state: s, lease: lease, id: id, ctx: jobCtx, cancel: cancel, queue: make(chan scanEvent, scanQueueSize), finished: make(chan struct{})}
 	fileScans.Lock()
 	count := 0
@@ -116,24 +117,18 @@ func (s *nativeFilesState) startScan(ctx context.Context, epoch uint64, token st
 	fileScans.Unlock()
 	if count >= scanMaxOperations {
 		cancel()
+		stopGrant()
 		job.releaseWorker()
 		lease.Release()
 		return ScanOperation{}, errFilesBusy
 	}
 	context.AfterFunc(jobCtx, func() {
+		defer stopGrant()
 		<-job.finished
-		// Cancelled or expired jobs must not retain references never delivered.
-		var unpublished []string
-		for event := range job.queue {
-			if event.entry != nil {
-				unpublished = append(unpublished, event.entry.Ref.FileID)
-			}
+		// References belong to the grant's bounded, deduplicated index. Dropping
+		// a cancelled job must not invalidate refs published by another scan.
+		for range job.queue {
 		}
-		s.dispatch(func() {
-			for _, id := range unpublished {
-				delete(s.fileEntries, id)
-			}
-		})
 		fileScans.Lock()
 		if fileScans.jobs[id] == job {
 			delete(fileScans.jobs, id)
@@ -225,11 +220,6 @@ drain:
 	job.mu.Unlock()
 	// The final authorization check is the publication gate, after queue access.
 	if _, err := s.scanJob(ctx, epoch, id); err != nil {
-		s.dispatch(func() {
-			for _, entry := range page.Entries {
-				delete(s.fileEntries, entry.Ref.FileID)
-			}
-		})
 		return ScanPage{}, err
 	}
 	if page.Done {
@@ -274,10 +264,6 @@ func (j *fileScan) run() {
 	defer j.releaseWorker()
 	defer j.lease.Release()
 	defer close(j.queue)
-	// Stop forwarding lease cancellation before normal Release: completed pages
-	// retain no Root reference; page publication rechecks the captured grant.
-	stop := context.AfterFunc(j.lease.Context(), j.cancel)
-	defer stop()
 	items := 0
 	var bytes int64
 	j.walk("", 0, &items, &bytes)
@@ -444,36 +430,18 @@ func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 		return j.issue(relative, code)
 	}
 	// Registration happens only for parsed files, and the reopened identity must
-	// still match the exact file read above. Bound the shared session index too.
-	err = j.state.main(j.lease.owner, func(*mygo.Window) error {
-		if len(j.state.fileEntries) >= scanMaxRegistered {
-			return errFilesBusy
-		}
-		return nil
-	})
-	if err != nil {
-		return j.issue(relative, "reference-limit")
-	}
+	// still match the exact file read above. The core bounds the shared index.
 	ref, registered, err := j.state.registerLocalFile(j.lease, relative)
 	if err != nil {
+		if errors.Is(err, errFilesBusy) {
+			return j.issue(relative, "reference-limit")
+		}
 		return j.issue(relative, "changed")
 	}
 	defer registered.Close()
-	err = j.state.main(j.lease.owner, func(*mygo.Window) error {
-		if len(j.state.fileEntries) > scanMaxRegistered {
-			delete(j.state.fileEntries, ref.FileID)
-			return errFilesBusy
-		}
-		return nil
-	})
-	if err != nil {
-		j.state.dispatch(func() { delete(j.state.fileEntries, ref.FileID) })
-		return j.issue(relative, "reference-limit")
-	}
 	registeredInfo, err := registered.Stat()
 	registered.Close()
 	if err != nil || !sameLocalFileInfo(before, registeredInfo) || j.ctx.Err() != nil {
-		j.state.dispatch(func() { delete(j.state.fileEntries, ref.FileID) })
 		if j.ctx.Err() != nil {
 			return false
 		}
@@ -481,7 +449,6 @@ func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 	}
 	info = boundedScanInfo(info)
 	if !j.emit(scanEvent{entry: &ScanEntry{Ref: *ref, RelativePath: relative, Filename: filename, Size: before.Size(), Metadata: info}}) {
-		j.state.dispatch(func() { delete(j.state.fileEntries, ref.FileID) })
 		return false
 	}
 	return true

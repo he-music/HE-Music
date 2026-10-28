@@ -54,6 +54,28 @@ export interface FileSession {
   epoch: number;
 }
 
+/**
+ * Info keeps performers separate from album artists. Zero audio properties mean
+ * unknown or not applicable; no lossless classification is inferred from suffixes.
+ */
+export interface Info {
+  Container: string;
+  Title: string;
+  Artists: string[];
+  Album: string;
+  AlbumArtists: string[];
+  Comment: string;
+  Lyrics: string;
+  Pictures: Picture[];
+  PicturesLoaded: boolean;
+  DurationSeconds: number;
+  BitrateKbps: number;
+  SampleRateHz: number;
+  Channels: number;
+  BitsPerSample: number;
+  Codec: string;
+}
+
 export interface LifecycleConfig {
   showCloseAppTip: boolean;
   closeAppMethod: CloseAppMethod;
@@ -77,6 +99,18 @@ export interface LifecycleLabels {
 
 export interface LifecycleStatus {
   trayAvailable: boolean;
+}
+
+/**
+ * LocalFileRef is an opaque, session-scoped reference to a regular file below a
+ * granted directory. RelativePath is descriptive; authorization remains the
+ * grant, lease, and backend entry identity.
+ */
+export interface LocalFileRef {
+  grantToken: string;
+  relativePath: string;
+  fileId: string;
+  version: string;
 }
 
 export type LyricsAction = "previous" | "toggle" | "next" | "show-main" | "open-settings";
@@ -165,6 +199,14 @@ export interface LyricsWord {
   romanWord?: string;
 }
 
+/** Picture preserves the native image role and description as well as its bytes. */
+export interface Picture {
+  MIME: string;
+  Type: number;
+  Description: string;
+  Data: string;
+}
+
 /**
  * These are JSON object strings, not native settings or authorization records.
  * The UI must additionally validate setting values against its current defaults.
@@ -178,6 +220,31 @@ export interface RendererSettingsDocument {
   format: string;
   version: number;
   renderer: RendererSettings;
+}
+
+export interface ScanEntry {
+  ref: LocalFileRef;
+  relativePath: string;
+  filename: string;
+  size: number;
+  metadata: Info;
+}
+
+export interface ScanIssue {
+  relativePath: string;
+  code: string;
+}
+
+export interface ScanOperation {
+  operationId: string;
+}
+
+export interface ScanPage {
+  operationId: string;
+  entries: ScanEntry[];
+  nextCursor: string;
+  done: boolean;
+  issues: ScanIssue[];
 }
 
 export interface SettingsExportResult {
@@ -319,6 +386,9 @@ export const NativeFiles = {
   begin(): Promise<FileSession> {
     return call("NativeFiles.Begin");
   },
+  cancelFileOperation(epoch: number, operationID: string): Promise<void> {
+    return call("NativeFiles.CancelFileOperation", epoch, operationID);
+  },
   chooseDirectory(epoch: number): Promise<DirectorySelection> {
     return call("NativeFiles.ChooseDirectory", epoch);
   },
@@ -331,8 +401,19 @@ export const NativeFiles = {
   importSettings(epoch: number): Promise<SettingsImportResult> {
     return call("NativeFiles.ImportSettings", epoch);
   },
+  /**
+   * ReadScanPage consumes at most scanPageSize queued events. Empty, non-final
+   * pages are valid while IO runs; every successful call advances the cursor.
+   */
+  readScanPage(epoch: number, operationID: string, cursor: string): Promise<ScanPage> {
+    return call("NativeFiles.ReadScanPage", epoch, operationID, cursor);
+  },
   revokeDirectory(epoch: number, token: string): Promise<void> {
     return call("NativeFiles.RevokeDirectory", epoch, token);
+  },
+  /** StartScan starts a read-only job. An empty cursor requests its first page. */
+  startScan(epoch: number, grantToken: string): Promise<ScanOperation> {
+    return call("NativeFiles.StartScan", epoch, grantToken);
   },
   teardown(epoch: number): Promise<void> {
     return call("NativeFiles.Teardown", epoch);

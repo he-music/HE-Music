@@ -40,6 +40,26 @@ func scanTestGrant(t *testing.T) (*fileTestActor, context.Context, uint64, strin
 	}
 	return actor, ctx, epoch, token, path
 }
+func scanTestAwaitRemoved(t *testing.T, job *fileScan) {
+	t.Helper()
+	deadline := time.After(5 * time.Second)
+	tick := time.NewTicker(time.Millisecond)
+	defer tick.Stop()
+	for {
+		fileScans.Lock()
+		removed := fileScans.jobs[job.id] != job
+		fileScans.Unlock()
+		if removed {
+			return
+		}
+		select {
+		case <-deadline:
+			t.Fatal("scan job was not removed")
+		case <-tick.C:
+		}
+	}
+}
+
 func scanTestJob(t *testing.T, s *nativeFilesState, ctx context.Context, epoch uint64, token string) *fileScan {
 	t.Helper()
 	op, err := s.startScan(ctx, epoch, token)
@@ -201,6 +221,21 @@ func TestScanReadOnlyEmbeddedTagsWithoutSuffix(t *testing.T) {
 			file, err := actor.state.resolveLocalFile(lease, entry.Ref)
 			if err != nil {
 				t.Fatal(err)
+			}
+			file.Close()
+			// A cancelled rescan must not delete a stable reference already shown
+			// by the first scan when the registry deduplicates the same file.
+			rescan := scanTestJob(t, actor.state, ctx, epoch, token)
+			select {
+			case <-rescan.finished:
+			case <-time.After(5 * time.Second):
+				t.Fatal("rescan did not finish")
+			}
+			rescan.cancel()
+			scanTestAwaitRemoved(t, rescan)
+			file, err = actor.state.resolveLocalFile(lease, entry.Ref)
+			if err != nil {
+				t.Fatalf("cancelled rescan invalidated a published reference: %v", err)
 			}
 			file.Close()
 			after, err := os.ReadFile(target)
@@ -367,8 +402,8 @@ func TestScanWorkerReferenceSurvivesOwnerCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	// Simulate the worker's independent hold while the lease's automatic owner
-	// callback releases the authorization reference before IO has actually exited.
+	// A worker's independent hold survives revocation and explicit lease release
+	// until that worker's IO has actually exited.
 	if !lease.handle.retainLease() {
 		t.Fatal("retain")
 	}
@@ -443,4 +478,23 @@ func TestScanConcurrentCursorConsumption(t *testing.T) {
 	if successes != 1 || rejected != 1 {
 		t.Fatalf("successes=%d rejected=%d", successes, rejected)
 	}
+}
+
+func TestScanCompletedUnreadJobIsRemovedOnGrantRevoke(t *testing.T) {
+	actor, ctx, epoch, token, _ := scanTestGrant(t)
+	job := scanTestJob(t, actor.state, ctx, epoch, token)
+	select {
+	case <-job.finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("empty scan did not finish")
+	}
+	if err := actor.state.revokeDirectory(ctx, epoch, token); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-job.ctx.Done():
+	case <-time.After(5 * time.Second):
+		t.Fatal("completed scan ignored grant revocation")
+	}
+	scanTestAwaitRemoved(t, job)
 }
