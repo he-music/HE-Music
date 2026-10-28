@@ -5,6 +5,7 @@ import { type LyricLine } from "@applemusic-like-lyrics/lyric";
 import { isElectron } from "./env";
 import { isWordLyric, parseLineLyric, parseWordLyric, splitLocalLyrics } from "@/utils/lyric";
 import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
+import { nativeLocalEntry } from "@/platform/localFilesSession";
 
 class LyricManager {
   private lyricRequest = 0;
@@ -44,11 +45,15 @@ class LyricManager {
    * @param path 本地歌词路径
    * @returns 歌词数据
    */
-  private async handleLocalLyric(path: string): Promise<SongLyric> {
-    if (!isElectron) return { lrcData: [], yrcData: [] };
-    console.log("path", path);
+  private async handleLocalLyric(path: string, songID: string): Promise<SongLyric> {
+    if (isElectron) console.log("path", path);
     try {
-      const lyric = await window.electron.ipcRenderer.invoke("get-music-lyric", path);
+      const entry = isElectron ? undefined : nativeLocalEntry(songID);
+      const lyric = isElectron
+        ? await window.electron.ipcRenderer.invoke("get-music-lyric", path)
+        : entry?.relativePath === path
+          ? entry.metadata.Lyrics
+          : "";
       if (!lyric) return { lrcData: [], yrcData: [] };
 
       const splitLyric = splitLocalLyrics(lyric);
@@ -147,7 +152,7 @@ class LyricManager {
       }
       let lyricData;
       if (path) {
-        lyricData = await this.handleLocalLyric(path);
+        lyricData = await this.handleLocalLyric(path, id);
         // 排除本地歌词内容
         if (settingStore.enableLocalLyricsExclude) {
           lyricData = this.handleLyricExclude(lyricData);

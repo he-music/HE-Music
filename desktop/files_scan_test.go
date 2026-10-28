@@ -190,7 +190,8 @@ func TestScanReadOnlyEmbeddedTagsWithoutSuffix(t *testing.T) {
 				t.Fatal(err)
 			}
 			pictures := []metadata.Picture{{MIME: "image/png", Type: 3, Data: picture.Bytes()}}
-			if err := metadata.EditWorkingCopy(ctx, fixture, stat.Size(), metadata.Patch{Pictures: &pictures}); err != nil {
+			lyrics := "[00:00.00]临时内嵌歌词\n[00:01.00]下一句"
+			if err := metadata.EditWorkingCopy(ctx, fixture, stat.Size(), metadata.Patch{Pictures: &pictures, Lyrics: &lyrics}); err != nil {
 				t.Fatal(err)
 			}
 			fixture.Close()
@@ -206,6 +207,9 @@ func TestScanReadOnlyEmbeddedTagsWithoutSuffix(t *testing.T) {
 			entry := entries[0]
 			if entry.Metadata.Title != "临时扫描标题" || len(entry.Metadata.Artists) != 1 || entry.Metadata.Artists[0] != "临时艺术家" {
 				t.Fatalf("tags: %+v", entry.Metadata)
+			}
+			if entry.Metadata.Lyrics != lyrics {
+				t.Fatal("scan did not preserve embedded lyrics")
 			}
 			if entry.Metadata.PicturesLoaded || len(entry.Metadata.Pictures) != 0 {
 				t.Fatal("scan loaded pictures")
