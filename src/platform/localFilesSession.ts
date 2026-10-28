@@ -1,5 +1,5 @@
 import { computed, shallowRef, watch, type Ref } from "vue";
-import { filesSession, type FileScanAccess, type FilesSession } from "./filesSession";
+import type { FileScanAccess, FilesSession } from "./filesSession";
 import type { ScanEntry, ScanIssue } from "./mygo.bindings";
 
 interface DirectoryScanIssue extends ScanIssue {
@@ -21,6 +21,14 @@ function waitForPage(signal: AbortSignal): Promise<void> {
   });
 }
 
+const activeSession = shallowRef<LocalFilesSession>();
+export const localFilesSession = computed(() => activeSession.value);
+export function nativeLocalEntry(songID: string): ScanEntry | undefined {
+  if (!songID.startsWith("mygo-local:")) return undefined;
+  const fileID = songID.slice("mygo-local:".length);
+  return activeSession.value?.entries.value.find((entry) => entry.ref.fileId === fileID);
+}
+
 /** Transient scan results only: file capabilities never enter persisted song data. */
 export class LocalFilesSession {
   private readonly results = shallowRef<readonly ScanEntry[]>([]);
@@ -36,7 +44,8 @@ export class LocalFilesSession {
   private operation?: { access: FileScanAccess; id: string };
   private readonly stop: () => void;
 
-  constructor(private readonly source: Readonly<Ref<FilesSession | undefined>> = filesSession) {
+  constructor(private readonly source: Readonly<Ref<FilesSession | undefined>>) {
+    activeSession.value = this;
     this.stop = watch(
       () => [source.value, source.value?.ready.value, source.value?.directories.value] as const,
       ([session, ready], [previous]) => {
@@ -69,6 +78,7 @@ export class LocalFilesSession {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    if (activeSession.value === this) activeSession.value = undefined;
     this.cancel();
     this.stop();
     this.results.value = [];

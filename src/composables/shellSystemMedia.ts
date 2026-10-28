@@ -3,6 +3,7 @@ import { platform } from "@/platform";
 import { usePlayer } from "@/utils/player";
 import { SystemMediaSession } from "@/platform/systemMediaSession";
 import { createWebKitSystemMedia } from "@/platform/systemMediaWebKit";
+import { nativeLocalEntry } from "@/platform/localFilesSession";
 
 export function createShellSystemMediaSession(): SystemMediaSession | undefined {
   const native = platform.systemMedia;
@@ -16,7 +17,7 @@ export function createShellSystemMediaSession(): SystemMediaSession | undefined 
   const player = usePlayer();
   const trackID = () => {
     const song = music.playSong;
-    return song?.id && song.platform && !song.path
+    return song?.id && song.platform && (!song.path || nativeLocalEntry(song.id))
       ? JSON.stringify([song.platform, song.id])
       : null;
   };

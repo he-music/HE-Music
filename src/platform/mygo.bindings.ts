@@ -101,6 +101,13 @@ export interface LifecycleStatus {
   trayAvailable: boolean;
 }
 
+/** LocalAudioTicket contains only transient bearer credentials, never filesystem paths. */
+export interface LocalAudioTicket {
+  ticketId: string;
+  url: string;
+  version: string;
+}
+
 /**
  * LocalFileRef is an opaque, session-scoped reference to a regular file below a
  * granted directory. RelativePath is descriptive; authorization remains the
@@ -392,6 +399,9 @@ export const NativeFiles = {
   chooseDirectory(epoch: number): Promise<DirectorySelection> {
     return call("NativeFiles.ChooseDirectory", epoch);
   },
+  closeLocalAudio(epoch: number, ticketID: string): Promise<void> {
+    return call("NativeFiles.CloseLocalAudio", epoch, ticketID);
+  },
   defaultDirectory(epoch: number, kind: DefaultDirectoryKind): Promise<DefaultDirectoryResult> {
     return call("NativeFiles.DefaultDirectory", epoch, kind);
   },
@@ -400,6 +410,9 @@ export const NativeFiles = {
   },
   importSettings(epoch: number): Promise<SettingsImportResult> {
     return call("NativeFiles.ImportSettings", epoch);
+  },
+  openLocalAudio(epoch: number, ref: LocalFileRef): Promise<LocalAudioTicket> {
+    return call("NativeFiles.OpenLocalAudio", epoch, ref);
   },
   /**
    * ReadScanPage consumes at most scanPageSize queued events. Empty, non-final

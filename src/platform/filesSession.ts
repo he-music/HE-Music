@@ -1,5 +1,6 @@
 import { computed, shallowRef } from "vue";
 import type { PlatformFiles } from "./files";
+import { LocalFilesSession } from "./localFilesSession";
 import type {
   DefaultDirectoryKind,
   DefaultDirectoryResult,
@@ -10,6 +11,8 @@ import type {
   SettingsExportResult,
   ScanOperation,
   ScanPage,
+  LocalAudioTicket,
+  LocalFileRef,
 } from "./mygo.bindings";
 
 export interface FileScanAccess {
@@ -17,6 +20,12 @@ export interface FileScanAccess {
   start(): Promise<ScanOperation>;
   read(operationID: string, cursor: string): Promise<ScanPage>;
   cancel(operationID: string): Promise<void>;
+}
+
+export interface LocalAudioAccess {
+  current(): boolean;
+  open(): Promise<LocalAudioTicket>;
+  close(ticketID: string): Promise<void>;
 }
 
 export type FileOperationResult<T> =
@@ -35,6 +44,7 @@ export class FilesSession {
   private started = false;
   private beginning: Promise<void> | undefined;
   private cleanup: Promise<void> | undefined;
+  private local?: LocalFilesSession;
 
   constructor(private readonly provider: PlatformFiles) {}
 
@@ -55,6 +65,7 @@ export class FilesSession {
       this.epoch = epoch;
       this.ready.value = true;
       activeSession.value = this;
+      this.local = new LocalFilesSession(shallowRef(this));
     } catch {
       // File capability failure must not fail the media, shortcut or tray lifecycle.
       console.error("文件会话初始化失败");
@@ -64,6 +75,8 @@ export class FilesSession {
   dispose(): Promise<void> {
     if (this.cleanup) return this.cleanup;
     this.disposed = true;
+    this.local?.dispose();
+    this.local = undefined;
     this.ready.value = false;
     this.directoryGrants.value = [];
     if (activeSession.value === this) activeSession.value = undefined;
@@ -119,6 +132,32 @@ export class FilesSession {
         );
       }
     });
+  }
+
+  audioAccess(ref: LocalFileRef): LocalAudioAccess | undefined {
+    const { openLocalAudio, closeLocalAudio } = this.provider;
+    const epoch = this.epoch;
+    const current = () =>
+      !this.disposed &&
+      this.ready.value &&
+      this.epoch === epoch &&
+      this.directoryGrants.value.some(
+        (grant) => grant.token === ref.grantToken && grant.epoch === epoch,
+      );
+    if (!current() || epoch === undefined || !openLocalAudio || !closeLocalAudio) return undefined;
+    return {
+      current,
+      open: async () => {
+        if (!current()) throw new Error("Local audio authorization expired");
+        const ticket = await openLocalAudio(epoch, ref);
+        if (!current()) {
+          await closeLocalAudio(epoch, ticket.ticketId).catch(() => {});
+          throw new Error("Local audio authorization expired");
+        }
+        return ticket;
+      },
+      close: (ticketID) => closeLocalAudio(epoch, ticketID),
+    };
   }
 
   /** A scan captures the shell's current grant without occupying the picker slot. */

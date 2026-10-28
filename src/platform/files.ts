@@ -12,4 +12,6 @@ export interface PlatformFiles {
   startScan?: typeof NativeFiles.startScan;
   readScanPage?: typeof NativeFiles.readScanPage;
   cancelFileOperation?: typeof NativeFiles.cancelFileOperation;
+  openLocalAudio?: typeof NativeFiles.openLocalAudio;
+  closeLocalAudio?: typeof NativeFiles.closeLocalAudio;
 }

@@ -45,6 +45,7 @@ class LyricManager {
    * @returns 歌词数据
    */
   private async handleLocalLyric(path: string): Promise<SongLyric> {
+    if (!isElectron) return { lrcData: [], yrcData: [] };
     console.log("path", path);
     try {
       const lyric = await window.electron.ipcRenderer.invoke("get-music-lyric", path);

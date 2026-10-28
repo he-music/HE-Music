@@ -540,3 +540,16 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 文件核心合同报告 `files-core/contract.md` 明确下一切片为 `files_lease.go`/`files_entry.go` 与纯测试：目录借用不占 picker busy，严格相对路径和 `os.Root`，引用计数/撤销排空，file ref 身份/版本，同原件提交门。扫描、loopback 音频、mtag 原件写回和下载必须复用该核心；本次只读设计，未称已实现。
 - 父集成独立复核 `8fcf7270` 确认锁权限、回执/处置、外部恢复与拖动清理、设置禁用条件、托盘设置无歌曲要求、Web/Electron 保留及真实依赖边界，No issues / OK with notes。没有再次运行 App、Vite、LaunchServices、真实按键/音频/picker、用户音乐库 IO 或 Windows；用户自己的开发监视器可能随主目录合入自行重载，不将其当父实机验收。下一阶段仍需接授权扫描/播放、原件标签写回、更多格式、下载与未签名 macOS 更新。
 - 更新后端独立 review `848441e5` 读取父提供的精确提交差异 artifact，确认六个 `desktop/updates*.go` 仅新增846行，结论 No issues / OK with notes；没有把 clean worktree 当差异，也没有运行真实更新下载/安装。
+
+### 授权文件核心、只读扫描与前端分页会话
+
+- 文件 lease 初版提交 `00ec182` 后，父复查新增反例，实际复现 claimed commit 的 Root 随调用方 Release 提前关闭；另内部 open 直接接受 `./song.mp3`，原 symlink 断言误放在 `t.Fatal` 后。随后 `9d3c385` 在同 actor 内授权 claim，独立持 Root 到 finish、owner 取消只通知不自动 Release、内部强制路径验证、逐级 pin Root 与路线/parent 身份复核，并将有效断言移至正常路径。同路径且身份/版本不变复用 ref，总索引 65536 上限；8 项核心定向与 Go 全包、gofmt/diff 通过，独立 reviewer `2c4ff4e0` 为 No issues / OK with notes。
+- 同次窄修把 lifecycle 三处更新撤销改为主线程同步执行，消除旧排队 revoke 晚于同页新 Begin 的窗口；不释放跨会话安装 fence。此前 `5c3640a` 的排队接线记录保留，当前以此修正为准。更新 provider 在 `6c8a76b` 通过可选 PlatformUpdates 暴露，相关平台3文件12项、Web类型、TS lint/格式通过；前端更新会话/UI和发布条件仍待接。
+- 扫描 worker 基于旧 lease 交付 `9c73d20`，父合入为 `b068d95`，只新增扫描后端/测试。真实 MP3/FLAC 自生成夹具读取内嵌标题/艺人，扩展名为 `.data` 仍识别，跳过图片，源字节 SHA256 不变；未知/损坏格式逐项 issue。首次委派的两个 artifact 路径误少连字符，纠正后继续；前一只读 worker 缺 hashline 编辑工具已停止，不将其计划视为代码实现。
+- 与新版核心合并时，取消队列原本删除 ref 会误删其它扫描已发布的去重 ref；父新增取消重扫的 MP3/FLAC 两子例，实际先均失败，随后改为 scan 只弃队列、ref 归 grant 的有界共享索引。另 completed-unread job 独立监听 grant 撤销，避免 worker 完成释放 lease 后遗留槽位。最终17顶层（8核心+9扫描）及Go全包、gofmt/diff通过，reviewer `833667e3` No issues / OK with notes；官方生成并cmp完全一致的扫描bindings与修正提交为 `a50ac0a`。
+- 扫描每state最多8任务、64事件队列、32事件/页，十进制游标不能回放；当前限制深16、10000条目、单文件32MiB、逻辑累计512MiB、5分钟期限，超限有issue。Done仅表示任务结束，UI必须区分 partial，不能冒充完整扫描。未消费队列不再单独删除ref；重复同文件不增ref，撤销grant清共享索引。所有扫描仅临时夹具/fake actor，真实目录/picker/播放/Windows未验收。
+- 前端 `d31a467` 提供可选扫描接口、FileScanAccess和LocalFilesSession：捕获主文件会话epoch/grant，不占picker busy，空页有可清理轮询，迟到Start按旧epoch取消，撤销/替换不保留旧页；结果与引用只存内存，逐项问题/限额表达partial。相关4文件23项、Node/Web类型、TS lint/格式通过；主壳注册、页面和播放器接线仍在继续，尚未开放完整localMusic或原件保存。
+- 后续主文件会话持有扫描列表与授权内存索引，mygo 本地页、受控票据播放、播放/seek/切歌/撤销清音源已接线；本地路由仅在文件会话Ready开放，不放开其它Electron专属页。旧Electron本地布局和播放器file路径保留，Web不启用本地能力。mygo媒体/托盘仅接受当前registry仍存在的本地歌曲，播放进度不进入扫描页依赖。真实SFC模板挂载验证选择/扫描/行数据/撤销，临时SongInfo不包含grant/ref/URL，页面卸载不销毁主壳授权。
+- 本地音频后端 `4849dba` 父合入 `396b2e9`，lazy loopback监听/随机票/Host校验/Range/每请求独立FD与lease/取消deadline；独立review `a9609c08` No issues/OK with notes。父接官方生成bindings（完整cmp一致）和主循环返回后的shutdown。mygo现有AudioManager明确跳过WebAudio，保持HTMLAudio/crossOrigin原分流；未因源码出现createMediaElementSource字串而新增CORS或改变在线/Electron音频图。
+- 前端独立review `a018115b` BLOCK：P1为pending open时重扫移除ref未失效旧票，P2为本地歌词仍读取Electron桥。父分别实际红测（旧URL非null；Electron getter读取1次），以await后精确匹配fileId/version/grantToken/relativePath并Close旧票、非Electron本地歌词入口返回空视图窄修；`c14e47cd`只复核这两项，均关闭、No issues/OK。嵌入歌词完整读取/封面/标签编辑仍待后续，不把空歌词兼容处理当完整本地歌词迁移。
+- 修正前全量78文件634项保留；修正后Node24.22.1下最终前端79文件636项、Node/Web类型、相关TS lint/格式、Go全包通过。待接的更新会话WIP测试明确排除在该79/636计数外。未执行新App/Vite/原生picker/真实socket音频/用户音乐库或Windows；不能据纯HTTP/假writer/SFC验证声称真实声音通过。

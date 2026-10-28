@@ -273,6 +273,15 @@
     "no_record": "暂无记录，快去播放一些歌曲吧"
   },
   "local": {
+    "scan_music": "扫描歌曲",
+    "scan_idle": "请选择目录后扫描",
+    "scan_scanning": "正在扫描…",
+    "scan_complete": "本次扫描结束，共 {count} 首歌曲",
+    "scan_partial": "已读取 {count} 首歌曲，部分文件未纳入",
+    "scan_failed": "扫描失败，已读取的列表保留，请重试",
+    "scan_partial_detail": "部分文件无法读取或超出本次扫描范围，已记录 {count} 条提示。",
+    "scan_supported": "当前支持 MP3 和 FLAC，每个文件最多 32 MiB；每次最多检查 10000 个条目、累计 512 MiB。目录授权在退出后失效。",
+    "scan_empty": "尚无歌曲，请选择音乐目录并扫描",
     "add_folder": "添加文件夹",
     "local_music_folder_manage": "本地目录管理",
     "manage_local_music_folder": "目录管理",
@@ -709,7 +718,7 @@
     },
     "local": {
       "directory_manage": "管理授权目录",
-      "directory_scope": "本轮仅管理临时目录授权，尚未接通扫描和播放。",
+      "directory_scope": "选择本次使用的音乐目录，然后在本地音乐页扫描和播放 MP3、FLAC。",
       "directory_restart": "授权仅在当前会话有效，重启后需要重新选择目录。",
       "directory_reselect": "已保存或导入的路径仅供参考，需要重新选择授权",
       "directory_choose": "选择并授权目录",

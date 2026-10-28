@@ -273,6 +273,15 @@
     "no_record": "No history yet. Start playing some tracks!"
   },
   "local": {
+    "scan_music": "Scan songs",
+    "scan_idle": "Select directories, then scan",
+    "scan_scanning": "Scanning…",
+    "scan_complete": "Scan finished with {count} songs",
+    "scan_partial": "Read {count} songs; some files were skipped",
+    "scan_failed": "Scan failed. Previous results are kept; please retry.",
+    "scan_partial_detail": "Some files could not be read or exceeded this scan's limits. {count} notices were recorded.",
+    "scan_supported": "MP3 and FLAC are currently supported, up to 32 MiB per file, 10000 entries and 512 MiB per scan. Directory access expires when you quit.",
+    "scan_empty": "No songs yet. Select a music directory and scan.",
     "add_folder": "Add Folder",
     "local_music_folder_manage": "Local Directory Management",
     "manage_local_music_folder": "Directory Management",
@@ -709,7 +718,7 @@
     },
     "local": {
       "directory_manage": "Manage directory grants",
-      "directory_scope": "This only manages temporary directory grants. Scanning and playback are not connected.",
+      "directory_scope": "Select music directories for this session, then scan and play MP3 and FLAC from Local Music.",
       "directory_restart": "Grants last for this session only. Select directories again after restarting.",
       "directory_reselect": "Saved or imported paths are suggestions only. Select them again to grant access.",
       "directory_choose": "Choose directory",

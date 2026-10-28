@@ -13,6 +13,9 @@ class FakeAudio extends EventTarget {
   playbackRate = 1;
   paused = true;
   error: { code: number } | null = null;
+  removeAttribute = vi.fn((name: string) => {
+    if (name === "src") this.src = "";
+  });
   load = vi.fn(() => {
     this.currentTime = 0;
     this.dispatchEvent(new Event("loadstart"));
@@ -60,6 +63,15 @@ describe.each(["web", "mygo"])("AudioManager %s HTMLAudio path", (kind) => {
     manager = (await import("./audioManager")).default;
   });
 
+  it("clears buffered source when its local authorization is revoked", async () => {
+    await manager.play("http://127.0.0.1:12345/ticket", { autoPlay: false });
+    audio.load.mockClear();
+    manager.clearSource();
+    expect(audio.removeAttribute).toHaveBeenCalledExactlyOnceWith("src");
+    expect(audio.src).toBe("");
+    expect(audio.load).toHaveBeenCalledOnce();
+    expect(audio.paused).toBe(true);
+  });
   it("preloads without play, then resumes and pauses without a WebAudio graph", async () => {
     await manager.play("https://audio.example/first.mp3", { autoPlay: false });
     expect(audio.load).toHaveBeenCalledOnce();

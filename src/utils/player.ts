@@ -8,6 +8,8 @@ import { shuffleArray } from "./helper";
 import songManager from "./songManager";
 import { hasNativeSystemMedia, isElectron } from "./env";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
+import { LocalAudioSession } from "@/platform/localAudioSession";
+import { nativeLocalEntry } from "@/platform/localFilesSession";
 import lyricManager from "./lyricManager";
 import audioManager, { AudioEventType } from "./audioManager";
 import blob from "./blob";
@@ -49,6 +51,7 @@ class Player {
   private playbackAttempt?: { src: string; autoPlay: boolean; seek: number; requestId: number };
   private httpPlaybackDialog?: DialogReactive;
   private lastHttpRetrySrc = "";
+  private localAudio?: LocalAudioSession;
 
   constructor() {
     // 初始化媒体会话
@@ -544,6 +547,7 @@ class Player {
    * @param quality 音质
    */
   public async initPlayer(autoPlay: boolean = true, seek: number = 0, quality: string = "") {
+    this.localAudio?.clear();
     const currentRequestId = ++this.playRequestId;
     this.httpPlaybackDialog?.destroy();
     this.httpPlaybackDialog = undefined;
@@ -565,15 +569,29 @@ class Player {
       audioManager.pause();
       // 本地歌曲
       if (path) {
-        if (!isElectron) {
+        const nativeEntry = nativeLocalEntry(id);
+        if (!isElectron && !nativeEntry) {
           statusStore.playLoading = false;
           statusStore.playStatus = false;
           return;
         }
         try {
-          await this.createPlayer(`file://${path}`, autoPlay, seek);
-          if (currentRequestId !== this.playRequestId) return;
-          await this.parseLocalMusicInfo(path);
+          if (nativeEntry) {
+            this.localAudio ??= new LocalAudioSession(() => {
+              ++this.playRequestId;
+              this.playbackAttempt = undefined;
+              audioManager.clearSource();
+              statusStore.playStatus = false;
+              statusStore.playLoading = false;
+            });
+            const url = await this.localAudio.open(nativeEntry.ref);
+            if (!url || currentRequestId !== this.playRequestId) return;
+            await this.createPlayer(url, autoPlay, seek);
+          } else {
+            await this.createPlayer(`file://${path}`, autoPlay, seek);
+            if (currentRequestId !== this.playRequestId) return;
+            await this.parseLocalMusicInfo(path);
+          }
         } catch {
           if (currentRequestId !== this.playRequestId) return;
           console.error("播放器初始化错误（本地）：");
@@ -643,7 +661,7 @@ class Player {
    */
   async play() {
     const statusStore = useStatusStore();
-    if (!isElectron && useMusicStore().playSong?.path) {
+    if (!isElectron && useMusicStore().playSong?.path && !this.localAudio?.active) {
       statusStore.playStatus = false;
       return;
     }
@@ -1109,6 +1127,7 @@ class Player {
    */
   public async cleanPlayList() {
     ++this.playRequestId;
+    this.localAudio?.clear();
     this.httpPlaybackDialog?.destroy();
     this.httpPlaybackDialog = undefined;
     this.playbackAttempt = undefined;

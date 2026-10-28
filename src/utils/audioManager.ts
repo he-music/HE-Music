@@ -221,6 +221,12 @@ class AudioManager {
       this.audioElement.currentTime = 0;
     }
   }
+  /** Drop a revoked local source, including bytes already buffered by the element. */
+  public clearSource() {
+    this.pause();
+    this.audioElement?.removeAttribute("src");
+    this.audioElement?.load();
+  }
 
   /**
    * 跳转到指定时间

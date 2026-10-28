@@ -9,6 +9,7 @@ import { createShellSystemMediaSession } from "./shellSystemMedia";
 import { createFilesSession } from "@/platform/filesSession";
 import { createShellDesktopLyricsSession } from "./shellDesktopLyrics";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
+import { nativeLocalEntry } from "@/platform/localFilesSession";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -80,7 +81,8 @@ export function useDesktopLifecycle(ui: {
       quit: t("nav.quit_app"),
     },
   });
-  const hasSong = () => Boolean(music.playSong?.id && !music.playSong.path);
+  const hasSong = () =>
+    Boolean(music.playSong?.id && (!music.playSong.path || nativeLocalEntry(music.playSong.id)));
   const syncPlayback = () =>
     lifecycle.syncPlayback({ playing: status.playStatus, hasSong: hasSong() });
 
@@ -162,7 +164,7 @@ export function useDesktopLifecycle(ui: {
             () => void lifecycle.syncConfig(config()).catch(reportFailure),
           ),
           watch(
-            () => [status.playStatus, music.playSong?.id, music.playSong?.platform],
+            () => [status.playStatus, music.playSong?.id, music.playSong?.platform, hasSong()],
             () => void syncPlayback().catch(reportFailure),
           ),
         );

@@ -1,6 +1,7 @@
 import { createRouter, createWebHashHistory, Router } from "vue-router";
 import { openUserLogin } from "@/utils/modal";
 import { isElectron } from "@/utils/env";
+import { platform } from "@/platform";
 import { isLogin } from "@/utils/auth";
 import routes from "./routes";
 import { usePlatformStore, useStatusStore } from "@/stores";
@@ -62,7 +63,8 @@ router.beforeEach((to, from, next) => {
     return;
   }
   // 需要客户端
-  if (to.meta.needApp && !isElectron) {
+  const localMusicRoute = to.matched.some((route) => route.name === "local");
+  if (to.meta.needApp && !isElectron && !(localMusicRoute && platform.capabilities.localMusic)) {
     window.$message?.warning(t("message.client_only_function"));
     next("/403");
     return;

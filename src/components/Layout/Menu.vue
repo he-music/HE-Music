@@ -31,6 +31,7 @@ import { useDataStore, useSettingStore, useStatusStore } from "@/stores";
 import { RouterLink, useRouter } from "vue-router";
 import { renderIcon } from "@/utils/helper";
 import { isElectron } from "@/utils/env";
+import { platform } from "@/platform";
 import { openCreatePlaylist } from "@/utils/modal";
 import { useI18n } from "vue-i18n";
 import type {
@@ -152,7 +153,7 @@ const menuOptions = computed<MenuOption[] | MenuGroupOption[]>(() => {
           key: "local",
           link: "local",
           label: t("common.local_music"),
-          show: isElectron,
+          show: isElectron || platform.capabilities.localMusic,
           icon: renderIcon("FolderMusic"),
         },
         {
@@ -199,7 +200,16 @@ const menuOptions = computed<MenuOption[] | MenuGroupOption[]>(() => {
           children: [...likedPlaylist.value],
         },
       ]
-    : [];
+    : platform.kind === "mygo" && platform.capabilities.localMusic
+      ? [
+          {
+            key: "local",
+            link: "local",
+            label: t("common.local_music"),
+            icon: renderIcon("FolderMusic"),
+          },
+        ]
+      : [];
 });
 
 // 生成歌单列表

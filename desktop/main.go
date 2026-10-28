@@ -18,7 +18,11 @@ func main() {
 		})
 		desktopLifecycle.attachMainWindow(win, true)
 	})
-	if err := mygo.App.Run(); err != nil {
+	err := mygo.App.Run()
+	if cleanupErr := desktopFiles.shutdownLocalAudio(); cleanupErr != nil {
+		log.Print("本地音频服务清理失败")
+	}
+	if err != nil {
 		log.Fatal(err)
 	}
 }

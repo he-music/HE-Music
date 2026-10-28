@@ -13,6 +13,7 @@ import {
 import { externalHttpURL, type PlatformAdapter } from "./types";
 import { playbackShortcutActions } from "./shortcuts";
 import { desktopLyricsSession } from "./desktopLyricsSession";
+import { filesSession } from "./filesSession";
 
 export function createMygoPlatform(): PlatformAdapter {
   const os = runtime().platform;
@@ -22,7 +23,9 @@ export function createMygoPlatform(): PlatformAdapter {
     get desktopLyrics() {
       return desktopLyricsSession.value?.ready.value === true;
     },
-    localMusic: false,
+    get localMusic() {
+      return filesSession.value?.ready.value === true;
+    },
     electronStartup: false,
   });
   return {

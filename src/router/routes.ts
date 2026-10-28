@@ -1,5 +1,6 @@
 import { type RouteRecordRaw } from "vue-router";
 import AppLayout from "@/layout/AppLayout.vue";
+import { platform } from "@/platform";
 
 /**
  * 应用路由
@@ -286,7 +287,10 @@ const appRoutes: Array<RouteRecordRaw> = [
     path: "/local",
     name: "local",
     meta: { needApp: true, offline: true },
-    component: () => import("@/views/Local/layout.vue"),
+    component: () =>
+      platform.kind === "mygo"
+        ? import("@/views/Local/MygoLibrary.vue")
+        : import("@/views/Local/layout.vue"),
     redirect: "/local/songs",
     children: [
       {
