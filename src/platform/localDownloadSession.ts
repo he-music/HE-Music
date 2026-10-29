@@ -1,5 +1,11 @@
 import { computed, shallowRef } from "vue";
 import type { DownloadOperation, DownloadRequest, DownloadState } from "./mygo.bindings";
+import {
+  localDownloadSnapshot,
+  validLocalDownloadFormat,
+  type LocalDownloadPersistence,
+  type LocalDownloadSnapshot,
+} from "./localDownloadPersistence";
 
 export interface LocalDownloadAccess {
   current(): boolean;
@@ -31,9 +37,9 @@ export function localDownloadSource(source: LocalDownloadSource): LocalDownloadS
     platform: source.platform,
     name: source.name,
     links: Object.freeze(
-      source.links.map(({ name, quality, format, size }) =>
-        Object.freeze({ name, quality, format, size }),
-      ),
+      source.links
+        .filter((link) => validLocalDownloadFormat(link.format))
+        .map(({ name, quality, format, size }) => Object.freeze({ name, quality, format, size })),
     ),
   });
 }
@@ -59,6 +65,7 @@ export interface LocalDownloadTask {
   readonly percent: number | undefined;
   readonly refresh: "none" | "pending" | "complete" | "failed";
   readonly retryable: boolean;
+  readonly interrupted?: boolean;
 }
 interface RecordState {
   task: LocalDownloadTask;
@@ -68,11 +75,14 @@ interface RecordState {
   pending: Set<() => void>;
   retrying: boolean;
   retiring?: boolean;
-  recipe?: { quality: string; source: LocalDownloadSource; resolveURL: LocalDownloadResolver };
-  expires: number;
+  recipe?: {
+    quality: string;
+    source: LocalDownloadSource;
+    resolveURL: LocalDownloadResolver;
+  };
+  targetDirectory: string;
   timer?: ReturnType<typeof setTimeout>;
 }
-const MAX_BYTES = 32 * 1024 * 1024;
 export function validDownloadFilename(name: string): boolean {
   return (
     new TextEncoder().encode(name).length <= 240 &&
@@ -80,7 +90,8 @@ export function validDownloadFilename(name: string): boolean {
     !name.startsWith(".") &&
     !/[\\/:<>"|?*\p{Cc}]/u.test(name) &&
     !/^(?:CON|PRN|AUX|NUL|CLOCK\$|COM[0-9¹²³]|LPT[0-9¹²³])(?:[ .]|$)/i.test(name) &&
-    /\.(mp3|flac)$/i.test(name)
+    validLocalDownloadFormat(name.slice(name.lastIndexOf(".") + 1)) &&
+    name.includes(".")
   );
 }
 function validURL(value: string): boolean {
@@ -94,23 +105,101 @@ function validURL(value: string): boolean {
   }
 }
 
-/** Owned by FilesSession; closing a view must not dispose this transient queue. */
+/** Owned by FilesSession; closing a view must not dispose this queue. */
 export class LocalDownloadSession {
   private readonly list = shallowRef<readonly LocalDownloadTask[]>([]);
   readonly tasks = computed(() => this.list.value);
+  readonly persistenceError = shallowRef<string>();
+  readonly restored: Promise<void>;
   private readonly records = new Map<string, RecordState>();
+  private readonly archived = new Map<string, LocalDownloadSnapshot>();
+  private readonly archivedRetrying = new Set<string>();
+  private readonly touched = new Set<string>();
+  private loaded = false;
+  private writes: Promise<void> = Promise.resolve();
   private disposed = false;
+  private beginRestore?: () => void;
   constructor(
     private readonly deps: {
       access(token: string): LocalDownloadAccess | undefined;
       onCommitted(): Promise<void>;
+      persistence?: LocalDownloadPersistence;
+      deferRestore?: boolean;
+      directoryPath?(token: string): string | undefined;
+      directoryToken?(path: string): string | undefined;
+      resolveURL?: LocalDownloadResolver;
     },
-  ) {}
+  ) {
+    if (deps.deferRestore) {
+      this.restored = new Promise<void>((resolve) => {
+        this.beginRestore = () => {
+          void this.restore().then(resolve);
+        };
+      });
+    } else this.restored = this.restore();
+  }
+
+  restoreHistory(): Promise<void> {
+    const start = this.beginRestore;
+    this.beginRestore = undefined;
+    start?.();
+    return this.restored;
+  }
+  private async restore(): Promise<void> {
+    if (this.disposed) return;
+    if (!this.deps.persistence) {
+      this.loaded = true;
+      return;
+    }
+    try {
+      // Validate all rows before merging any of them. Corrupt data is never partially cleared.
+      const snapshots = (await this.deps.persistence.load()).map(localDownloadSnapshot);
+      if (new Set(snapshots.map((item) => item.id)).size !== snapshots.length)
+        throw new Error("Invalid history");
+      if (this.disposed) return;
+      for (const snapshot of snapshots) {
+        if (this.records.has(snapshot.id) || this.touched.has(snapshot.id)) continue;
+        this.archived.set(snapshot.id, snapshot);
+      }
+      this.loaded = true;
+      this.publish();
+    } catch {
+      if (!this.disposed) this.persistenceError.value = "mygo.downloads.loadFailed";
+    }
+  }
+
+  private archivedTask(snapshot: LocalDownloadSnapshot): LocalDownloadTask {
+    const interrupted = !snapshot.done;
+    return {
+      id: snapshot.id,
+      filename: snapshot.filename,
+      label: snapshot.label,
+      quality: snapshot.quality,
+      phase: interrupted ? "failed" : snapshot.phase,
+      done: true,
+      committed: snapshot.committed,
+      received: snapshot.received,
+      total: snapshot.total,
+      percent:
+        snapshot.phase === "success"
+          ? 100
+          : snapshot.total
+            ? Math.min(99, Math.floor((snapshot.received / snapshot.total) * 100))
+            : undefined,
+      refresh: "none",
+      interrupted,
+      retryable:
+        !snapshot.committed &&
+        !!snapshot.source &&
+        !!snapshot.targetDirectory &&
+        !!this.deps.directoryToken &&
+        !!this.deps.resolveURL,
+    };
+  }
 
   async start(input: LocalDownloadInput): Promise<string | undefined> {
     if (
       this.disposed ||
-      this.records.size >= 64 ||
       [...this.records.values()].some(
         (record) =>
           record.token === input.grantToken &&
@@ -153,9 +242,10 @@ export class LocalDownloadSession {
         source: localDownloadSource(input.source),
         resolveURL: input.resolveURL,
       },
-      expires: Date.now() + 120_000,
+      targetDirectory: this.deps.directoryPath?.(input.grantToken) ?? "",
     };
     this.records.set(id, record);
+    this.touched.add(id);
     this.publish();
     try {
       const result = await this.bounded(
@@ -177,7 +267,70 @@ export class LocalDownloadSession {
     return id;
   }
 
+  private async retryArchived(id: string): Promise<string | undefined> {
+    const snapshot = this.archived.get(id);
+    const resolveURL = this.deps.resolveURL;
+    if (
+      !snapshot ||
+      !this.archivedTask(snapshot).retryable ||
+      !snapshot.source ||
+      !resolveURL ||
+      this.archivedRetrying.has(id) ||
+      this.disposed
+    )
+      return;
+    const token = this.deps.directoryToken?.(snapshot.targetDirectory);
+    const access = token ? this.deps.access(token) : undefined;
+    if (!token || !access?.current()) return;
+    this.archivedRetrying.add(id);
+    const source = localDownloadSource({
+      ...snapshot.source,
+      links: snapshot.source.links.map((link) => ({ ...link, size: "" })),
+    });
+    try {
+      const result = await this.bounded(() => resolveURL(snapshot.quality, source));
+      if (
+        this.disposed ||
+        this.archived.get(id) !== snapshot ||
+        !access.current() ||
+        this.deps.directoryToken?.(snapshot.targetDirectory) !== token ||
+        !this.validResolvedFormat(snapshot.filename, snapshot.quality, source, result.format)
+      )
+        return;
+      return await this.start({
+        grantToken: token,
+        filename: snapshot.filename,
+        label: snapshot.label,
+        quality: snapshot.quality,
+        source,
+        resolveURL,
+        url: result.url,
+      });
+    } catch {
+      return undefined;
+    } finally {
+      this.archivedRetrying.delete(id);
+    }
+  }
+
+  private validResolvedFormat(
+    filename: string,
+    quality: string,
+    source: LocalDownloadSource,
+    resolved: string,
+  ): boolean {
+    const format = resolved.toLowerCase();
+    const link = source.links.find((item) => item.name === quality);
+    return (
+      !!link &&
+      validLocalDownloadFormat(format) &&
+      format === link.format.toLowerCase() &&
+      filename.toLowerCase().endsWith(`.${format}`)
+    );
+  }
+
   async retry(id: string): Promise<string | undefined> {
+    if (this.archived.has(id)) return this.retryArchived(id);
     const record = this.records.get(id);
     const recipe = record?.recipe;
     if (
@@ -195,15 +348,16 @@ export class LocalDownloadSession {
         () => recipe.resolveURL(recipe.quality, recipe.source),
         record,
       );
-      if (!this.current(record) || record.recipe !== recipe || !record.task.retryable)
-        return undefined;
-      const format = result.format.toLowerCase();
-      const link = recipe.source.links.find((item) => item.name === recipe.quality);
       if (
-        !link ||
-        !/^(mp3|flac)$/.test(format) ||
-        format !== link.format.toLowerCase() ||
-        !record.task.filename.toLowerCase().endsWith(`.${format}`)
+        !this.current(record) ||
+        record.recipe !== recipe ||
+        !record.task.retryable ||
+        !this.validResolvedFormat(
+          record.task.filename,
+          recipe.quality,
+          recipe.source,
+          result.format,
+        )
       )
         return undefined;
       return await this.start({
@@ -223,6 +377,14 @@ export class LocalDownloadSession {
   }
 
   async retire(id: string): Promise<boolean> {
+    if (this.disposed) return false;
+    if (this.archived.has(id)) {
+      if (this.archivedRetrying.has(id)) return false;
+      this.archived.delete(id);
+      this.touched.add(id);
+      this.publish();
+      return true;
+    }
     const record = this.records.get(id);
     const forget = record?.access.forget;
     if (
@@ -241,6 +403,7 @@ export class LocalDownloadSession {
       const forgotten = await this.bounded(() => forget(id), record);
       if (!forgotten || !this.current(record)) return false;
       this.records.delete(id);
+      this.touched.add(id);
       clearTimeout(record.timer);
       record.recipe = undefined;
       record.token = "";
@@ -270,7 +433,25 @@ export class LocalDownloadSession {
   invalidate(token?: string): void {
     for (const record of this.records.values()) {
       if (token !== undefined && record.token !== token) continue;
+      if (this.deps.persistence) {
+        try {
+          this.archived.set(
+            record.task.id,
+            localDownloadSnapshot({
+              ...record.task,
+              source: record.recipe?.source,
+              targetDirectory: record.targetDirectory,
+            }),
+          );
+        } catch {
+          // Cleanup must finish even when a malformed live record cannot be archived.
+          // Preserve the existing disk history until a fresh session can reload it.
+          this.loaded = false;
+          this.persistenceError.value = "mygo.downloads.saveFailed";
+        }
+      }
       this.records.delete(record.task.id);
+      this.touched.add(record.task.id);
       for (const stop of [...record.pending]) stop();
       clearTimeout(record.timer);
       if (!record.task.done) {
@@ -284,15 +465,46 @@ export class LocalDownloadSession {
     }
     this.publish();
   }
-  dispose(): void {
+  dispose(): Promise<void> {
+    // The last published snapshot survives shutdown; clearing live grants must not erase it.
     this.disposed = true;
     this.invalidate();
+    return this.restoreHistory().then(() => this.writes);
   }
   private current(record: RecordState): boolean {
     return !this.disposed && this.records.get(record.task.id) === record && record.access.current();
   }
   private publish(): void {
-    this.list.value = [...this.records.values()].map((record) => record.task);
+    this.list.value = [
+      ...[...this.records.values()].map((record) => record.task),
+      ...[...this.archived.values()].map((snapshot) => this.archivedTask(snapshot)),
+    ];
+    if (!this.loaded || this.disposed || !this.deps.persistence) return;
+    try {
+      const snapshots = [
+        ...[...this.records.values()].map((record) =>
+          localDownloadSnapshot({
+            ...record.task,
+            source: record.recipe?.source,
+            targetDirectory: record.targetDirectory,
+          }),
+        ),
+        ...[...this.archived.values()].map(localDownloadSnapshot),
+      ];
+      const persistence = this.deps.persistence;
+      this.writes = this.writes
+        .catch(() => {})
+        .then(async () => {
+          try {
+            await persistence.save(snapshots);
+            this.persistenceError.value = undefined;
+          } catch {
+            this.persistenceError.value = "mygo.downloads.saveFailed";
+          }
+        });
+    } catch {
+      this.persistenceError.value = "mygo.downloads.saveFailed";
+    }
   }
   private unknown(record: RecordState): void {
     if (record.task.done) return;
@@ -324,10 +536,6 @@ export class LocalDownloadSession {
   }
   private schedule(record: RecordState): void {
     if (!this.current(record) || record.task.done || record.timer) return;
-    if (Date.now() >= record.expires) {
-      this.unknown(record);
-      return;
-    }
     record.timer = setTimeout(() => {
       record.timer = undefined;
       void this.query(record, "read");
@@ -403,10 +611,8 @@ export class LocalDownloadSession {
       typeof state.committed === "boolean" &&
       Number.isSafeInteger(state.received) &&
       state.received >= previous.received &&
-      state.received <= MAX_BYTES &&
       Number.isSafeInteger(state.total) &&
       state.total >= previous.total &&
-      state.total <= MAX_BYTES &&
       (state.total === 0 || state.received <= state.total) &&
       (!previous.committed || state.committed) &&
       (state.filename === undefined || state.filename === previous.filename) &&

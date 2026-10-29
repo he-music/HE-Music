@@ -4,6 +4,8 @@ import type { NativeFiles } from "./mygo.bindings";
 export interface PlatformFiles {
   begin: typeof NativeFiles.begin;
   chooseDirectory: typeof NativeFiles.chooseDirectory;
+  restoreDirectories?: typeof NativeFiles.restoreDirectories;
+  forgetSavedDirectory?: typeof NativeFiles.forgetSavedDirectory;
   defaultDirectory: typeof NativeFiles.defaultDirectory;
   importSettings: typeof NativeFiles.importSettings;
   exportSettings: typeof NativeFiles.exportSettings;

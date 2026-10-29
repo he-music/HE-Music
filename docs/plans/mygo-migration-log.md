@@ -690,3 +690,15 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 图片、头像、流体／写真／自定义背景、乐谱预览、视频／HLS、TTML、验证码和第三方更新日志均在消费入口派生地址；歌曲、收藏、分享、下载和设置模型保留原始 URL，不持久化会话路径。普通 Web／Electron 无 preload 能力时保留原请求路径。应用代理设置仅控制 Go 后续回源与授权下载，关闭明确直连，本地 loopback 目标绕过上游代理；不再调用各平台 WebView 代理设置，更新 SDK 和外部浏览器仍单独联网。
 - 首个接入提交 `178429a` 的独立审查阻断了重定向外漏／Cookie／本地代理问题，后续补齐固定 API 与媒体链；前端独立审查另发现流体背景、NAvatar 和 GitHub 更新日志遗漏，均有明确接线修复。真实组件消费、换歌／卸载、Token 刷新／验证码重试及 Web 保留已有自动化回归。
 - 最终验证：前端 134 文件 1234 项、Node／Web 类型、桌面前端静态构建、改动 TS ESLint／Prettier、Go 全包测试／vet／gofmt、Linux amd64 与 Windows amd64 静态测试编译通过。官方固定 CLI 在隔离快照 `f235edc` 生成绑定，工作区完整 cmp 一致；窄复核 `d42c76ae` 关闭此前具体问题，Open 无、结论 OK。未执行真实 App、API／媒体／代理流量或平台实机验收；自动化与交叉编译不替代这些验收。
+
+### 第十轮：本地音乐与下载持久化及多格式
+
+- 按用户明确要求补齐本地歌曲、目录和下载管理列表跨重启恢复，移除整首歌曲 32 MiB、扫描累计 512 MiB 与 payload 1 GiB 人为上限，并去掉会阻断大文件的下载/标签总执行时限。固定流式缓冲、metadata 字段/封面预算、并发、扫描条目/深度、取消与单次 RPC 等待边界仍保留。
+- MP3、WAV、FLAC、AAC、WebM、M4A、MP4、OGG、AIFF、AIF、APE 共 11 种后缀均开放扫描、票据播放、标签编辑及下载格式选择。扫描不再以标签解析成功或音频属性齐全作为这些候选的收录条件，失败时按文件名显示；播放只做小头部/MIME 探测并流式读取授权 FD，不先完整解析标签，也不添加新的解码器。
+- 私有 AppUserData 的 `local-library-directories.json` 保存已通过原生选择器添加的 canonical 路径；启动仅由 native 恢复这些已选择路径，每次重新建立 grant/lease/ref。`local-library-index.json` 保存路径、相对位置、文件大小/mtime 与有界展示元数据，扫描重新打开并核身份后使用缓存；标签替换使对应缓存失效。歌曲使用目录+相对路径的稳定业务 ID，经当前扫描结果找到 fresh ref；磁盘不保存 token、epoch、临时地址或封面数据。不可用目录保留并可删除，撤销目录同时删除其恢复记录。
+- 下载历史使用独立 localforage store 和版本化字段白名单，保存完成/失败/未完成状态及最小重试来源，不保存 URL、grant/ref、闭包或 Blob。中断任务重启后标为失败/中断，用户重试时重新查询当前目录授权并获取新音源，重新下载，不声称断点续传。坏数据、未知版本和加载失败不当空列表覆盖，读写失败在 UI 可见；退出及撤权保留历史，离开页面不停止下载。
+- 持久化独立审查 `933eec28` 发现旧实例未完成写入可能覆盖新实例历史，以及索引仅接受首个 JSON 值的 P1/P2；通过 dispose 等待写队列、新实例延迟到旧 cleanup 后才 load，以及严格检查 JSON EOF 修复，`cdc314c6` 复核两项 Closed。集成审查 `d599492e` 发现未支持的备选音源污染整批历史及下载弹窗选目录不扫描；真实新增测试先红后绿，过滤重试来源、保证归档异常仍清理且不覆盖历史，并在当前 owner 的新 grant 选择成功后扫描，`2c35f150` 复核两项 Closed。
+- 标签保存使用固定 mtag v1.0.2 的真实容器读写，独立 payload validator 保护 encoded media、解码配置和时间定位。补齐 WAV/RF64、AIFF/AIFC、ADTS AAC、MP4/M4A、Ogg、WebM/Matroska 与 MAC/APE；分流只读小 header，跳过 ID3 body，不借 metadata parser 大量分配。格式审查发现的 Ogg 非 EOS granule 未保护、MP4 偏移重扫和取消/大标签分派问题已修，`3ed57852` 复核 Closed。新增格式使用临时 ffmpeg 夹具与 ffprobe packet SHA256 往返，APE 仅结构夹具；fragmented MP4、chained/multiplexed Ogg、未知大小 Matroska Cluster 等具体布局拒绝保存并保留原件，不能外推到任意编码/变体。
+- Linux 标签替换保留 uid/gid、mode、POSIX access ACL、user xattr 与纳秒时间，具体不能复制的 inode flags/特权属性明确拒绝。Windows 保留 owner/group、DACL/保护状态、mandatory label、四项时间和普通 DOS 属性，ADS/EA/特殊存储属性明确拒绝，审计 SACL 不在普通用户保留合同内。审查 `c68e31f0` 发现原只读目录 Sync 会阻断 Windows 全部保存；改为平台目录提交策略，仍用 pinned `os.Root.Rename`，Windows 返回 `durability_uncertain + committed:true`、fresh ref/info/hash 并保留 backup，不能保证断电后的目录项持久性；恢复副本不会自动删除。POSIX 目录同步错误不被吞掉。Darwin 注入生产流程回归覆盖 unsupported 和真实 I/O error；`76e08861` 复核 Closed/OK，没有把注入测试称作 Windows 文件系统实测。
+- 最终验证：Vitest **136 文件 1261 项**、Node/Web 类型、改动 TS ESLint/Prettier、Go 全包测试/vet/gofmt、桌面前端 Vite 静态构建通过。Linux 和 Windows 的 amd64/arm64 四组测试二进制交叉编译及 vet 通过，Darwin amd64 静态测试编译通过。固定官方 CLI 在冻结快照 `0be9b23` 重新生成绑定，主工作区也用官方 CLI 生成后完整 cmp 一致；快照后只整理空行和文档，无合同变化。构建保留既有 chunk size/Fastify 提示，未安装或变更 SDK/依赖。
+- 未启动、附着或停止用户 App，未执行真实选择器、用户音乐库 IO、声音、外网下载、更新安装或 Windows 程序。真实 11 格式系统解码、跨重启 UI、普通包及 Linux/Windows 属性写回仍待实机验收；这些限制独立于已经完成的生产接线和自动化验证。Web/Electron 路径保留，正式更新 feed/key 与 Electron 清理保持后置。

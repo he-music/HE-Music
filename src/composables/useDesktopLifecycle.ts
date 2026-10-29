@@ -15,6 +15,7 @@ import { createShellLocalArtworkSession } from "./shellLocalArtwork";
 import { createShellProtocolSession } from "./shellProtocols";
 import { createShellTaskbarSession } from "./shellTaskbar";
 import { WindowAppearanceSession } from "@/platform/windowAppearance";
+import { createMygoDownloadResolver } from "@/utils/localDownloadResolver";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -26,7 +27,13 @@ export function useDesktopLifecycle(ui: {
   const shortcuts = createShellShortcutSession();
   const media = platform.lifecycle ? createShellSystemMediaSession() : undefined;
   const files = lifecycle
-    ? createFilesSession(platform.files, { blockAudio: blockLocalAudio })
+    ? createFilesSession(platform.files, {
+        blockAudio: blockLocalAudio,
+        resolveURL: createMygoDownloadResolver(async (id, platform, quality, format) => {
+          const { songUrl } = await import("@/api/song");
+          return songUrl(id, platform, quality, format, { skipErrorMessage: true });
+        }),
+      })
     : undefined;
   const lyrics = lifecycle ? createShellDesktopLyricsSession() : undefined;
   const artwork = lifecycle ? createShellLocalArtworkSession() : undefined;

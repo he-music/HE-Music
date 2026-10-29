@@ -7,6 +7,9 @@
       </button>
     </header>
     <p>{{ t("mygo.downloads.sessionOnly") }}</p>
+    <p v-if="filesSession?.downloads?.persistenceError?.value" role="alert">
+      {{ t(filesSession.downloads.persistenceError.value) }}
+    </p>
     <p v-if="!filesSession?.downloads" role="status">{{ t("mygo.downloads.unavailable") }}</p>
     <p v-else-if="tasks.length === 0" role="status">{{ t("mygo.downloads.empty") }}</p>
     <ul v-else>
@@ -14,6 +17,7 @@
         <h2>{{ task.label }}</h2>
         <p class="filename">{{ task.filename }} · {{ task.quality }}</p>
         <p role="status">{{ t(`mygo.downloads.phase.${task.phase}`) }}</p>
+        <p v-if="task.interrupted">{{ t("mygo.downloads.interrupted") }}</p>
         <template v-if="!task.done">
           <progress :value="task.percent" max="100" :aria-label="t('mygo.downloads.progress')" />
           <p>{{ bytes(task.received) }} / {{ task.total > 0 ? bytes(task.total) : "—" }}</p>

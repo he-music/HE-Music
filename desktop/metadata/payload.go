@@ -17,9 +17,6 @@ var (
 	ErrAudioPayloadChanged = errors.New("metadata: audio payload changed")
 )
 
-// MaxPayloadFileSize bounds work and offset arithmetic. Larger files are refused.
-const MaxPayloadFileSize int64 = 1 << 30
-
 type payloadSource struct {
 	ctx  context.Context
 	r    io.ReaderAt
@@ -69,12 +66,22 @@ func CompareAudioPayload(ctx context.Context, left io.ReaderAt, leftSize int64, 
 	if left == nil || right == nil {
 		return fmt.Errorf("%w: nil reader", ErrInvalidPayload)
 	}
+	if leftSize <= 0 || rightSize <= 0 {
+		return ErrUnsupportedPayload
+	}
+	additional, err := AdditionalPayloadFormat(ctx, left, leftSize)
+	if err != nil {
+		return err
+	}
+	if additional {
+		return CompareFormatAudioPayload(ctx, left, leftSize, right, rightSize)
+	}
 	sources := []payloadSource{{ctx, left, leftSize}, {ctx, right, rightSize}}
 	var spans [2]payloadSpan
 	var hashes [2][32]byte
 	for i, s := range sources {
-		if s.size <= 0 || s.size > MaxPayloadFileSize {
-			return fmt.Errorf("%w: size must be 1..%d", ErrUnsupportedPayload, MaxPayloadFileSize)
+		if s.size <= 0 {
+			return fmt.Errorf("%w: empty file", ErrUnsupportedPayload)
 		}
 		span, err := inspectPayload(s)
 		if canceled := ctx.Err(); canceled != nil {

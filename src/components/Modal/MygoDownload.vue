@@ -1,6 +1,9 @@
 <template>
   <div class="mygo-download">
     <p>{{ t("local_download.notice") }}</p>
+    <p v-if="session.persistenceError.value" role="alert">
+      {{ t(session.persistenceError.value) }}
+    </p>
     <label>{{ t("local_download.directory") }}</label>
     <n-select v-model:value="directory" :options="directoryOptions" />
     <n-button :disabled="busy" @click="choose">{{ t("local_download.choose_directory") }}</n-button>
@@ -52,6 +55,7 @@
 
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, watch } from "vue";
+import { validLocalDownloadFormat } from "@/platform/localDownloadPersistence";
 import { useI18n } from "vue-i18n";
 import type { SongInfo } from "@/types/main.hemusic";
 import type { DirectoryGrant } from "@/platform/mygo.bindings";
@@ -84,7 +88,7 @@ onScopeDispose(() => {
   revision++;
 });
 const supported = computed(() =>
-  props.song.links.filter((link) => /^(mp3|flac)$/i.test(link.format)),
+  props.song.links.filter((link) => validLocalDownloadFormat(link.format)),
 );
 const qualityOptions = computed(() =>
   supported.value.map((link) => ({ label: link.name, value: link.name })),
@@ -174,7 +178,7 @@ async function submit() {
       return;
     const format = result.format.toLowerCase();
     if (
-      !/^(mp3|flac)$/.test(format) ||
+      !validLocalDownloadFormat(format) ||
       format !== link.format.toLowerCase() ||
       !name.toLowerCase().endsWith(`.${format}`)
     )

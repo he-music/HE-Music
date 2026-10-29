@@ -1,5 +1,7 @@
 # 下载持久化接缝交接
 
+父集成状态：下载历史已接入生产 LocalDownloadSession/FilesSession，并补充跨实例写入顺序、备选格式过滤和清理回归。最终结果以 [第十轮迁移日志](../docs/plans/mygo-migration-log.md#第十轮本地音乐与下载持久化及多格式) 为准；以下保留原始交接说明。
+
 本线程只新增持久化 leaf 与存储测试；已有生产文件未修改。完整候选位于 `/tmp/hemusic-download-candidates/localDownloadSession.candidate.ts`，须由父线程通过 hashline 替换现有 session 后才成为生产实现。候选真实类的独立测试通过，不代表生产接线已完成。未启动 App、未访问外网、未读取用户数据库。
 
 ## 新增文件及契约

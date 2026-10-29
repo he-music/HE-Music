@@ -41,6 +41,7 @@ type DirectoryGrant struct {
 	Epoch       uint64 `json:"epoch"`
 }
 type DirectorySelection struct {
+	StorageError  bool                     `json:"storageError,omitempty"`
 	Status        DirectorySelectionStatus `json:"status"`
 	Grant         *DirectoryGrant          `json:"grant"`
 	Relation      DirectoryRelation        `json:"relation"`
@@ -268,6 +269,12 @@ func (s *nativeFilesState) chooseDirectory(ctx context.Context, epoch uint64) (D
 		result = DirectorySelection{Status: "selected", Grant: &grant}
 		return nil
 	})
+	if err == nil && result.Status == DirectorySelected && result.Grant != nil && savedLibraryDirectories.path != "" {
+		if claimErr := s.claimCommit(op); claimErr != nil {
+			return DirectorySelection{}, claimErr
+		}
+		result.StorageError = libraryRememberDirectory(result.Grant.DisplayPath) != nil
+	}
 	return result, err
 }
 

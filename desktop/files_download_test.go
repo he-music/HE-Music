@@ -261,12 +261,6 @@ func TestDownloadHTTPAndPayloadHardGates(t *testing.T) {
 			r.Header.Set("Content-Range", "bytes 0-833/834")
 			return r
 		}, "http_rejected"},
-		{"oversized-length", func() *http.Response { return downloadResponse(nil, downloadMaxBytes+1) }, "limit"},
-		{"unknown-overflow", func() *http.Response {
-			r := downloadResponse(nil, -1)
-			r.Body = io.NopCloser(&downloadZeros{downloadMaxBytes + 1})
-			return r
-		}, "limit"},
 		{"truncated", func() *http.Response { return downloadResponse(downloadMP3(), 999) }, "http_rejected"},
 		{"invalid-audio", func() *http.Response { return downloadResponse([]byte("not audio"), -1) }, "payload_rejected"},
 		{"broken-frame", func() *http.Response { b := downloadMP3(); return downloadResponse(b[:len(b)-1], -1) }, "payload_rejected"},
@@ -280,7 +274,7 @@ func TestDownloadHTTPAndPayloadHardGates(t *testing.T) {
 			j := downloadStart(t, a, ctx, epoch, c, req)
 			downloadWait(t, j)
 			state, err := c.access(a.state, ctx, epoch, req.OperationID, false)
-			if err != nil || state.Code != tc.code || state.Committed || state.Ref != nil || state.Received > downloadMaxBytes {
+			if err != nil || state.Code != tc.code || state.Committed || state.Ref != nil {
 				t.Fatalf("state=%+v err=%v", state, err)
 			}
 			if _, err := os.Stat(filepath.Join(dir, req.Filename)); !os.IsNotExist(err) {
@@ -385,7 +379,7 @@ func TestDownloadCancelRevokeHoldPermitUntilCleanup(t *testing.T) {
 	}
 }
 func TestDownloadValidationAndRedirect(t *testing.T) {
-	for _, name := range []string{"../a.mp3", "a/b.mp3", "a\\b.mp3", "a:1.mp3", "CON.mp3", "CON .mp3", "COM¹.mp3", "LPT².flac", "NUL.flac", ".hidden.mp3", "x\x00.mp3", "x?.mp3", "a.ogg", "a.mp3 ", "a\n.mp3"} {
+	for _, name := range []string{"../a.mp3", "a/b.mp3", "a\\b.mp3", "a:1.mp3", "CON.mp3", "CON .mp3", "COM¹.mp3", "LPT².flac", "NUL.flac", ".hidden.mp3", "x\x00.mp3", "x?.mp3", "a.mp3 ", "a\n.mp3"} {
 		if downloadFilename(name) {
 			t.Errorf("accepted %q", name)
 		}

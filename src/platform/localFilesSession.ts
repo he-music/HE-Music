@@ -23,10 +23,18 @@ function waitForPage(signal: AbortSignal): Promise<void> {
 
 const activeSession = shallowRef<LocalFilesSession>();
 export const localFilesSession = computed(() => activeSession.value);
+export function localSongID(entry: ScanEntry): string {
+  const directory = activeSession.value?.directoryPath(entry.ref.grantToken);
+  return directory
+    ? `mygo-local:path:${encodeURIComponent(directory)}/${encodeURIComponent(entry.relativePath)}`
+    : `mygo-local:${entry.ref.fileId}`;
+}
 export function nativeLocalEntry(songID: string): ScanEntry | undefined {
   if (!songID.startsWith("mygo-local:")) return undefined;
   const fileID = songID.slice("mygo-local:".length);
-  return activeSession.value?.entries.value.find((entry) => entry.ref.fileId === fileID);
+  return activeSession.value?.entries.value.find(
+    (entry) => entry.ref.fileId === fileID || localSongID(entry) === songID,
+  );
 }
 
 /** Transient scan results only: file capabilities never enter persisted song data. */
@@ -65,6 +73,9 @@ export class LocalFilesSession {
     );
   }
 
+  directoryPath(token: string): string | undefined {
+    return this.source.value?.directories.value.find((grant) => grant.token === token)?.displayPath;
+  }
   cancel(): void {
     this.revision++;
     this.abort?.abort();

@@ -119,4 +119,65 @@ describe("FilesSession", () => {
       value: { status: "cancelled", document: null },
     });
   });
+  it("restores saved directories before scanning and keeps local song identity across fresh grants", async () => {
+    const { localFilesSession, nativeLocalEntry, localSongID } =
+      await import("./localFilesSession");
+    const stableIDs: string[] = [];
+    for (const epoch of [10, 11]) {
+      const native = provider();
+      const token = `fresh-${epoch}`;
+      native.begin = vi.fn(async () => ({ epoch }));
+      native.restoreDirectories = vi.fn(async () => ({
+        grants: [{ token, epoch, displayPath: "/saved/music" }],
+        unavailable: ["/missing"],
+      }));
+      native.startScan = vi.fn(async () => ({ operationId: `scan-${epoch}` }));
+      const entry = {
+        ref: {
+          grantToken: token,
+          relativePath: "song.wav",
+          fileId: `ref-${epoch}`,
+          version: `version-${epoch}`,
+        },
+        relativePath: "song.wav",
+        filename: "song.wav",
+        size: 3 * 1024 ** 3,
+        metadata: {
+          Container: "wav",
+          Title: "歌曲",
+          Artists: ["歌手"],
+          Album: "专辑",
+          AlbumArtists: [],
+          Comment: "",
+          Lyrics: "",
+          Pictures: [],
+          PicturesLoaded: false,
+          DurationSeconds: 1,
+          BitrateKbps: 0,
+          SampleRateHz: 44100,
+          Channels: 2,
+          BitsPerSample: 16,
+          Codec: "pcm",
+        },
+      };
+      native.readScanPage = vi.fn(async () => ({
+        operationId: `scan-${epoch}`,
+        entries: [entry],
+        issues: [],
+        nextCursor: "done",
+        done: true,
+      }));
+      native.cancelFileOperation = vi.fn(async () => {});
+      const session = new FilesSession(native);
+      await session.start();
+      expect(native.restoreDirectories).toHaveBeenCalledExactlyOnceWith(epoch);
+      expect(native.startScan).toHaveBeenCalledExactlyOnceWith(epoch, token);
+      expect(localFilesSession.value?.entries.value).toEqual([entry]);
+      stableIDs.push(localSongID(entry));
+      expect(nativeLocalEntry(stableIDs.at(-1)!)).toBe(entry);
+      expect(session.unavailableDirectories.value).toEqual(["/missing"]);
+      await session.dispose();
+    }
+    expect(stableIDs[0]).toBe(stableIDs[1]);
+  });
 });

@@ -1,4 +1,4 @@
-//go:build !darwin
+//go:build !darwin && !linux && !windows
 
 package main
 
@@ -8,8 +8,8 @@ import (
 )
 
 func metadataCheckAttributes(*os.File) error {
-	return errors.New("metadata attribute preservation is supported only on macOS")
+	return errors.New("metadata attribute preservation is unavailable on this platform")
 }
 func metadataCopyAttributes(*os.File, *os.File) error {
-	return errors.New("metadata attribute preservation is supported only on macOS")
+	return errors.New("metadata attribute preservation is unavailable on this platform")
 }

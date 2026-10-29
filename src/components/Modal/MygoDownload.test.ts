@@ -9,6 +9,7 @@ import {
   localDownloadSource,
   type LocalDownloadAccess,
 } from "@/platform/localDownloadSession";
+import { validLocalDownloadFormat } from "@/platform/localDownloadPersistence";
 import type { DownloadState, DirectoryGrant } from "@/platform/mygo.bindings";
 import type { SongInfo } from "@/types/main.hemusic";
 type Element = {
@@ -54,6 +55,7 @@ function mount(props: object) {
     },
   });
   const modules: Record<string, unknown> = {
+    "@/platform/localDownloadPersistence": { validLocalDownloadFormat },
     vue: Vue,
     "vue-i18n": {
       useI18n: () => ({
@@ -215,6 +217,7 @@ it("mounts the actual SFC, chooses grants/quality, edits basename and uses a fre
   expect(quality.props.options).toEqual([
     { label: "320mp3", value: "320mp3" },
     { label: "lossless", value: "lossless" },
+    { label: "other", value: "other" },
   ]);
   change(directory, 1);
   change(quality, "lossless");

@@ -67,6 +67,7 @@ function mountDirectory() {
     "@/utils/env": { isElectron: host.electron, isMygo: host.mygo },
     "@/platform/localDirectorySession": directoryModule,
     "@/platform/libraryDirectoryRecovery": recoveryModule,
+    "@/platform/filesSession": { filesSession },
   };
   const exports: { default?: Vue.Component } = {};
   new Function("require", "exports", code)((name: string) => {
@@ -247,7 +248,7 @@ describe("LocalMusicDirectory真实SFC", () => {
     await reopened.click("revoke");
     expect(session.directories.value).toEqual([]);
     expect(legacy.change).not.toHaveBeenCalled();
-    expect(setting.localFilesPath).toEqual(["/synthetic/imported", "/synthetic/selected"]);
+    expect(setting.localFilesPath).toEqual(["/synthetic/imported"]);
   });
 
   it("无会话禁用按钮、Web安全；Electron目录操作仍调用旧helper", async () => {

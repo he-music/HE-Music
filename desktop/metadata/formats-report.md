@@ -2,41 +2,43 @@
 
 审计基线：`005a459`；SDK：本地只读 `github.com/tommyo123/mtag@v1.0.2`，固定提交 `57fea0d75b4f88edcdee8ca75e9423d522023f86`。没有网络、依赖变更、真实 App、用户音乐文件或 SDK cache 写入。
 
+父集成状态：本报告所列生产接线已落入主分支工作流，最终无 overlay 验证与限制以 [第十轮迁移日志](../../docs/plans/mygo-migration-log.md#第十轮本地音乐与下载持久化及多格式) 为准。以下保留 leaf 审计与交接过程。
+
 本 leaf 仅新增 `formats.go`、`formats_test.go` 和此报告。下列现有文件由父 owner 修改。本次 leaf 在 `/tmp` Go overlay 中仅将 `supported` 改为 `return nil`，验证接入后的行为；overlay 不修改仓库文件。最终父集成仍需跑无 overlay 的测试。
 
 ## 固定 SDK 源码全量容器审计
 
 `container.go` 的 27 个 ContainerKind 均有 detect 和 saveMetadata 分派，不存在此前假设的“AAC 不支持、必须伪装 MP3”。`file_open.go` 的 maxFileSize 默认为 0，只有显式 WithMaxFileSize 才限制整个文件大小。`capabilities.go` 说明各容器的字段能力不同，不能因有 writer 推断所有字段都可写。
 
-| 容器 | 实际 metadata reader / writer | 本次范围 |
-| --- | --- | --- |
-| MP3 | ID3v2/ID3v1/可选 APE；saveMP3 | 保留既有完整性校验 |
-| WAV（RIFF/RF64/BW64） | ID3 chunk、RIFF INFO/BWF；saveRIFFContainer | 开放，新增 fmt/data/fact 校验 |
-| AIFF/AIFC | FORM 内 ID3 chunk；saveRIFFContainer | 开放，新增 COMM/SSND 校验 |
-| FLAC | Vorbis comments/pictures；saveFLAC | 保留既有完整性校验 |
-| MP4/M4A | ilst、mdta、chapters；saveMP4 | 开放，新增 mdat、解码/时间/sample tables、规范化 stco/co64 校验 |
-| OGG | Vorbis/Opus/Speex comment；saveOGG | 开放，新增 packet/CRC/音频页 granule 与完成 packet 序号校验 |
-| MAC（.ape） | native APEv2；saveMAC | 开放，新增非标签区域与 descriptor extent 校验 |
-| AAC（raw ADTS） | 前置 ID3、可选尾部 APE/ID3v1；saveMP3 | 开放，SDK 保持真实 ContainerAAC，逐 ADTS frame 校验 |
-| AC3 | raw ID3/APE；saveMP3 | SDK 可读写，非本次 payload validator 范围 |
-| DTS | raw ID3/APE；saveMP3 | 同上 |
-| AMR | raw ID3/APE；saveMP3 | 同上 |
-| WavPack | native APE；saveMAC | 同上 |
-| MPC | native APE；saveMAC | 同上 |
-| ASF/WMA | native objects；saveASF | 同上，歌词等能力有区别 |
-| DSF | trailing ID3 pointer；saveDSF | 同上 |
-| DFF | ID3 chunk；saveDFF | 同上 |
-| Matroska/WebM | Info/SimpleTag/图片 attachments；saveMatroska | 开放，新增 Tracks/Cluster/TimecodeScale 校验 |
-| TTA | raw ID3/APE；saveMP3 | SDK 可读写，非本次 payload validator 范围 |
-| TAK | APE；saveMAC | 同上 |
-| W64 | Wave64 summary/ID3；saveW64Container | 同上 |
-| MOD | native title；saveTracker | 同上，非所有字段/模块变体都可写 |
-| S3M | native title；saveTracker | 同上 |
-| XM | native title；saveTracker | 同上 |
-| IT | native title；saveTracker | 同上 |
-| RealMedia | native text objects；saveRealMedia | 同上，字段能力受限 |
-| CAF | info chunks；saveCAF | 同上，字段能力受限 |
-| OMA | OpenMG/ID3；saveOMA | 同上 |
+| 容器                  | 实际 metadata reader / writer                 | 本次范围                                                        |
+| --------------------- | --------------------------------------------- | --------------------------------------------------------------- |
+| MP3                   | ID3v2/ID3v1/可选 APE；saveMP3                 | 保留既有完整性校验                                              |
+| WAV（RIFF/RF64/BW64） | ID3 chunk、RIFF INFO/BWF；saveRIFFContainer   | 开放，新增 fmt/data/fact 校验                                   |
+| AIFF/AIFC             | FORM 内 ID3 chunk；saveRIFFContainer          | 开放，新增 COMM/SSND 校验                                       |
+| FLAC                  | Vorbis comments/pictures；saveFLAC            | 保留既有完整性校验                                              |
+| MP4/M4A               | ilst、mdta、chapters；saveMP4                 | 开放，新增 mdat、解码/时间/sample tables、规范化 stco/co64 校验 |
+| OGG                   | Vorbis/Opus/Speex comment；saveOGG            | 开放，新增 packet/CRC/音频页 granule 与完成 packet 序号校验     |
+| MAC（.ape）           | native APEv2；saveMAC                         | 开放，新增非标签区域与 descriptor extent 校验                   |
+| AAC（raw ADTS）       | 前置 ID3、可选尾部 APE/ID3v1；saveMP3         | 开放，SDK 保持真实 ContainerAAC，逐 ADTS frame 校验             |
+| AC3                   | raw ID3/APE；saveMP3                          | SDK 可读写，非本次 payload validator 范围                       |
+| DTS                   | raw ID3/APE；saveMP3                          | 同上                                                            |
+| AMR                   | raw ID3/APE；saveMP3                          | 同上                                                            |
+| WavPack               | native APE；saveMAC                           | 同上                                                            |
+| MPC                   | native APE；saveMAC                           | 同上                                                            |
+| ASF/WMA               | native objects；saveASF                       | 同上，歌词等能力有区别                                          |
+| DSF                   | trailing ID3 pointer；saveDSF                 | 同上                                                            |
+| DFF                   | ID3 chunk；saveDFF                            | 同上                                                            |
+| Matroska/WebM         | Info/SimpleTag/图片 attachments；saveMatroska | 开放，新增 Tracks/Cluster/TimecodeScale 校验                    |
+| TTA                   | raw ID3/APE；saveMP3                          | SDK 可读写，非本次 payload validator 范围                       |
+| TAK                   | APE；saveMAC                                  | 同上                                                            |
+| W64                   | Wave64 summary/ID3；saveW64Container          | 同上                                                            |
+| MOD                   | native title；saveTracker                     | 同上，非所有字段/模块变体都可写                                 |
+| S3M                   | native title；saveTracker                     | 同上                                                            |
+| XM                    | native title；saveTracker                     | 同上                                                            |
+| IT                    | native title；saveTracker                     | 同上                                                            |
+| RealMedia             | native text objects；saveRealMedia            | 同上，字段能力受限                                              |
+| CAF                   | info chunks；saveCAF                          | 同上，字段能力受限                                              |
+| OMA                   | OpenMG/ID3；saveOMA                           | 同上                                                            |
 
 主要源码依据：`container.go:12` 枚举，`:163` magic detection（包括 ID3 后再次识别 ADTS），`:433` 起全部 writer 分派；`file_fields.go`、`file_text.go` 字段映射；`file_images.go` 图片；`save_ogg.go` 重分页；`save_matroska.go` 保留 Cluster/Tracks 原 bytes。27 种以外 unknown magic 会 fallback bare-MP3，不能将该 fallback 当成实际媒体真实性证明。最终保存必须经过独立 payload validator。
 
@@ -211,7 +213,6 @@ go test -mod=readonly ./desktop/metadata -run '^TestFormats(MalformedAndCancelle
 - APE：本机 ffmpeg 无 APE encoder、无 mac 命令。测试仅自行构造 MAC descriptor/header/seek table + 明确不声称可解码的 opaque frame bytes，验证真实 APEv2 标签 read/write、封面、歌词、音频区域保留与篡改拒绝。没有使用 SDK 的真实音频 fixture。不能把结构测试外推为实际 APE 编码/解码测试。
 - 上述最终检查均通过；首次无 overlay 的完整新增测试因父白名单尚未接入而失败，不能报告当前仓库完整集成已通过。首次 WebM ffprobe CombinedOutput 混入 stderr 的测试问题已通过只解析 stdout 修正；长标题改为不带末尾空格，避免 SDK 正常 trim 造成错误断言。
 - 没有真实 App、系统播放、UI、网络或用户文件验证。文件允许扫描/发放播放 URL 不保证系统 codec 能解码；需要展示真实失败。
-
 
 ## 独立 review 修复（本轮）
 

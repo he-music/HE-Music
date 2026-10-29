@@ -42,6 +42,7 @@ export interface DirectoryGrant {
 export type DirectoryRelation = "" | "duplicate" | "child" | "parent";
 
 export interface DirectorySelection {
+  storageError?: boolean;
   status: DirectorySelectionStatus;
   grant: DirectoryGrant | null;
   relation: DirectoryRelation;
@@ -393,6 +394,11 @@ export interface RendererSettingsDocument {
   renderer: RendererSettings;
 }
 
+export interface RestoredDirectories {
+  grants: DirectoryGrant[];
+  unavailable: string[];
+}
+
 export interface ScanEntry {
   ref: LocalFileRef;
   relativePath: string;
@@ -607,8 +613,8 @@ export const AuthCallback = {
 } as const;
 
 /**
- * NativeFiles exposes picker-scoped operations only. It does not expose paths as
- * capabilities, enumerate media, persist grants, or read/write arbitrary targets.
+ * NativeFiles scopes IO to selected directories and restores private selection records.
+ * Paths never act as renderer capabilities; every session creates fresh grants and refs.
  */
 export const NativeFiles = {
   /**
@@ -642,6 +648,13 @@ export const NativeFiles = {
   forgetDownload(epoch: number, operationID: string): Promise<boolean> {
     return call("NativeFiles.ForgetDownload", epoch, operationID);
   },
+  /**
+   * ForgetSavedDirectory only removes an existing persisted record, including a
+   * missing directory. It never opens a renderer-supplied path or grants access.
+   */
+  forgetSavedDirectory(epoch: number, displayPath: string): Promise<void> {
+    return call("NativeFiles.ForgetSavedDirectory", epoch, displayPath);
+  },
   importSettings(epoch: number): Promise<SettingsImportResult> {
     return call("NativeFiles.ImportSettings", epoch);
   },
@@ -660,6 +673,9 @@ export const NativeFiles = {
    */
   readScanPage(epoch: number, operationID: string, cursor: string): Promise<ScanPage> {
     return call("NativeFiles.ReadScanPage", epoch, operationID, cursor);
+  },
+  restoreDirectories(epoch: number): Promise<RestoredDirectories> {
+    return call("NativeFiles.RestoreDirectories", epoch);
   },
   revokeDirectory(epoch: number, token: string): Promise<void> {
     return call("NativeFiles.RevokeDirectory", epoch, token);

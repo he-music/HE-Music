@@ -1,5 +1,7 @@
 # 标签保存的平台目录持久化接线候选
 
+父集成状态：以下策略已接入生产保存流程，新增 Darwin 生产流程的 unsupported/真实 I/O error 注入回归，并通过独立窄复核。Windows 仍只有静态交叉编译，具体验证见 [第十轮迁移日志](../docs/plans/mygo-migration-log.md#第十轮本地音乐与下载持久化及多格式)。
+
 本 lane 只新增叶文件，不改既有生产文件。父会话已确认：Windows 保留 `os.Root.Rename`、文件 `Sync` 和恢复副本，允许保存并发布新引用，但明确返回 `durability_uncertain`，不宣称断电持久性。
 
 ## 证据和边界

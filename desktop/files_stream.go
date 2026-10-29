@@ -7,19 +7,16 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
 const (
-	localAudioMaxTickets         = 16
-	localAudioLifetime           = 10 * time.Minute
-	localAudioWriteTimeout       = 5 * time.Second
-	localAudioMaxBytes     int64 = 32 << 20
+	localAudioMaxTickets   = 16
+	localAudioLifetime     = 10 * time.Minute
+	localAudioWriteTimeout = 5 * time.Second
 )
 
 var errLocalAudio = errors.New("local audio is unavailable")
@@ -198,26 +195,6 @@ func (a *localAudioServer) open(ctx context.Context, epoch uint64, ref LocalFile
 		return LocalAudioTicket{}, errLocalAudio
 	}
 	return LocalAudioTicket{TicketID: id, URL: "http://" + host + "/" + id, Version: ref.Version}, nil
-}
-
-// Content is inspected through the validated FD, independent of suffix. This
-// first slice deliberately limits files to the same bounded MP3/FLAC parser as scan.
-func localAudioMIME(file *os.File) (string, error) {
-	stat, err := file.Stat()
-	if err != nil || stat.Size() <= 0 || stat.Size() > localAudioMaxBytes {
-		return "", errLocalAudio
-	}
-	info, err := metadata.ParseScan(file, stat.Size())
-	if err != nil || info.SampleRateHz <= 0 || info.Channels <= 0 {
-		return "", errLocalAudio
-	}
-	switch strings.ToLower(info.Container) {
-	case "mp3":
-		return "audio/mpeg", nil
-	case "flac":
-		return "audio/flac", nil
-	}
-	return "", errLocalAudio
 }
 
 func (a *localAudioServer) closeTicket(ctx context.Context, epoch uint64, id string) error {

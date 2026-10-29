@@ -119,7 +119,7 @@ func scanTestWrite(t *testing.T, path string, data []byte) {
 func TestScanPagesIssuesAndCursor(t *testing.T) {
 	actor, ctx, epoch, token, path := scanTestGrant(t)
 	for n := 0; n < scanQueueSize+10; n++ {
-		scanTestWrite(t, filepath.Join(path, fmt.Sprintf("%03d.mp3", n)), []byte("plain text, not audio"))
+		scanTestWrite(t, filepath.Join(path, fmt.Sprintf("%03d.txt", n)), []byte("plain text, not audio"))
 	}
 	job := scanTestJob(t, actor.state, ctx, epoch, token)
 	if _, err := actor.state.readScanPage(ctx, epoch, job.id, "999"); !errors.Is(err, errFilesScanCursor) {
@@ -278,20 +278,20 @@ func TestScanDepthSymlinksAndFileByteLimit(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := big.Truncate(scanMaxFileBytes + 1); err != nil {
+	if err := big.Truncate((1 << 30) + 1); err != nil {
 		t.Fatal(err)
 	}
 	big.Close()
 	job := scanTestJob(t, actor.state, ctx, epoch, token)
 	entries, issues := scanTestDrain(t, job)
-	if len(entries) != 0 {
-		t.Fatal("invalid audio accepted")
+	if len(entries) != 2 {
+		t.Fatalf("supported filenames or large file missing: %+v", entries)
 	}
 	counts := map[string]int{}
 	for _, issue := range issues {
 		counts[issue.Code]++
 	}
-	if counts["depth-limit"] != 1 || counts["symlink"] != 2 || counts["file-byte-limit"] != 1 || counts["unsupported-or-corrupt"] != 1 {
+	if counts["depth-limit"] != 1 || counts["symlink"] != 2 || counts["file-byte-limit"] != 0 {
 		t.Fatalf("issues: %v", issues)
 	}
 }
@@ -301,7 +301,7 @@ func TestScanCancelRevokeAndOwnerReplacement(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			actor, ctx, epoch, token, path := scanTestGrant(t)
 			for n := 0; n < scanQueueSize+5; n++ {
-				scanTestWrite(t, filepath.Join(path, fmt.Sprint(n)), []byte("unsupported"))
+				scanTestWrite(t, filepath.Join(path, fmt.Sprint(n)+".mp3"), []byte("unsupported"))
 			}
 			job := scanTestJob(t, actor.state, ctx, epoch, token)
 			deadline := time.After(5 * time.Second)
@@ -368,32 +368,21 @@ func TestScanCancelRevokeAndOwnerReplacement(t *testing.T) {
 func TestScanLimitsAndBoundedMetadata(t *testing.T) {
 	actor, ctx, epoch, token, path := scanTestGrant(t)
 	scanTestWrite(t, filepath.Join(path, "file"), []byte("text"))
-	// Exercise item/aggregate-byte stopping at the boundary without allocating a
-	// huge library. walk consumes the same counters used by the production worker.
-	for _, mode := range []string{"items", "bytes"} {
-		lease, err := actor.state.acquireDirectory(ctx, epoch, token)
-		if err != nil {
-			t.Fatal(err)
-		}
-		job := &fileScan{state: actor.state, lease: lease, ctx: lease.Context(), queue: make(chan scanEvent, 2)}
-		items := 0
-		var bytes int64
-		expected := "item-limit"
-		if mode == "items" {
-			items = scanMaxItems
-		} else {
-			bytes = scanMaxBytes
-			expected = "byte-limit"
-		}
-		if job.walk("", 0, &items, &bytes) {
-			t.Fatalf("%s limit ignored", mode)
-		}
-		event := <-job.queue
-		if event.issue == nil || event.issue.Code != expected {
-			t.Fatalf("%s: %+v", mode, event)
-		}
-		lease.Release()
+	// Item and metadata budgets remain independent of media file bytes.
+	lease, err := actor.state.acquireDirectory(ctx, epoch, token)
+	if err != nil {
+		t.Fatal(err)
 	}
+	job := &fileScan{state: actor.state, lease: lease, ctx: lease.Context(), queue: make(chan scanEvent, 2)}
+	items, bytes := scanMaxItems, int64(1<<40)
+	if job.walk("", 0, &items, &bytes) {
+		t.Fatal("item limit ignored")
+	}
+	event := <-job.queue
+	if event.issue == nil || event.issue.Code != "item-limit" {
+		t.Fatalf("%+v", event)
+	}
+	lease.Release()
 	info := boundedScanInfo(metadata.Info{Title: strings.Repeat("歌", 1000), Artists: make([]string, 100), PicturesLoaded: true, Pictures: []metadata.Picture{{Data: []byte("image")}}})
 	if len(info.Title) > 1024 || !utf8.ValidString(info.Title) || len(info.Artists) != 8 || info.PicturesLoaded || info.Pictures != nil {
 		t.Fatalf("unbounded metadata: %+v", info)
@@ -455,7 +444,7 @@ func TestScanOperationLimitAndCompletedLeaseRelease(t *testing.T) {
 func TestScanConcurrentCursorConsumption(t *testing.T) {
 	actor, ctx, epoch, token, path := scanTestGrant(t)
 	for n := 0; n < scanQueueSize+5; n++ {
-		scanTestWrite(t, filepath.Join(path, fmt.Sprint(n)), []byte("unsupported"))
+		scanTestWrite(t, filepath.Join(path, fmt.Sprint(n)+".mp3"), []byte("unsupported"))
 	}
 	job := scanTestJob(t, actor.state, ctx, epoch, token)
 	start := make(chan struct{})

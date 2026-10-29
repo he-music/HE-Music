@@ -150,7 +150,7 @@ describe("localDownloadSession", () => {
     expect(session.tasks.value[0].done).toBe(false);
     for (const extra of [
       { operationId: "foreign" },
-      { received: 2 ** 40 },
+      { received: Number.MAX_SAFE_INTEGER + 1 },
       { done: true, code: "ok", committed: true, ref: { ...ref, grantToken: "foreign" } },
       { filename: "other.mp3" },
     ]) {
@@ -179,9 +179,9 @@ describe("localDownloadSession", () => {
     });
     const count = vi.mocked(access.read).mock.calls.length;
     await vi.advanceTimersByTimeAsync(10_000);
-    expect(access.read).toHaveBeenCalledTimes(count);
+    expect(vi.mocked(access.read).mock.calls.length).toBeGreaterThan(count);
     expect(access.start).toHaveBeenCalledTimes(1);
-    expect(vi.getTimerCount()).toBe(0);
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
   });
   it("invalidates immediately, cancels exact old id, ignores late results and allows a new epoch", async () => {
     const id = (await session.start(input))!;
@@ -244,8 +244,8 @@ describe("localDownloadSession", () => {
       await session.refresh(id);
     }
     expect(session.tasks.value).toHaveLength(64);
-    expect(await session.start(input)).toBeUndefined();
-    expect(access.start).toHaveBeenCalledTimes(64);
+    expect(await session.start(input)).toBeTruthy();
+    expect(access.start).toHaveBeenCalledTimes(65);
   });
   it("blocks unresolved and committed target aliases while allowing a renamed target", async () => {
     const id = (await session.start({ ...input, filename: "Café.mp3" }))!;
@@ -270,7 +270,7 @@ describe("localDownloadSession", () => {
       ".a.mp3",
       "CON.mp3",
       "COM¹.mp3",
-      "a.wav",
+      "a.unsupported",
       "a\u0000.mp3",
     ]) {
       expect(validDownloadFilename(filename)).toBe(false);

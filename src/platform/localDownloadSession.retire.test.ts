@@ -68,13 +68,13 @@ describe("localDownloadSession retire", () => {
   it("reclaims all 64 records only after native forget and allows a fresh start", async () => {
     const ids: string[] = [];
     for (let i = 0; i < 64; i++) ids.push(await finish());
-    expect(await session.start(input)).toBeUndefined();
+    ids.push(await finish());
     for (const id of ids) {
       expect(await session.retire(id)).toBe(true);
       expect(await session.retire(id)).toBe(false);
     }
     expect(session.tasks.value).toEqual([]);
-    expect(access.forget).toHaveBeenCalledTimes(64);
+    expect(access.forget).toHaveBeenCalledTimes(65);
     expect(await session.start(input)).toBeTruthy();
   });
   it("rejects active, unknown, and cancellation still awaiting cleanup", async () => {

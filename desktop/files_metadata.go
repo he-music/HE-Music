@@ -12,15 +12,12 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/egoist/mygo"
 	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
 const metadataPrivatePrefix = ".hemusic-metadata-"
-const metadataMaxBytes int64 = 32 << 20
-const metadataTimeout = 30 * time.Second
 const metadataMaxJobs = 256
 const metadataMaxActive = 2
 const metadataCacheBytes int64 = 64 << 20
@@ -162,7 +159,7 @@ func metadataHash(ctx context.Context, f *os.File) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if info.Size() <= 0 || info.Size() > metadataMaxBytes {
+	if info.Size() <= 0 {
 		return "", errMetadataLimit
 	}
 	h := sha256.New()
@@ -201,7 +198,7 @@ func (f *NativeFiles) ReadMetadata(ctx context.Context, epoch uint64, ref LocalF
 		return MetadataResult{Code: metadataCode(err)}
 	}
 	defer lease.Release()
-	op, cancel := context.WithTimeout(lease.Context(), metadataTimeout)
+	op, cancel := context.WithCancel(lease.Context())
 	defer cancel()
 	source, err := f.state.resolveLocalFile(lease, ref)
 	if err != nil {
@@ -411,7 +408,7 @@ func (f *NativeFiles) saveMetadata(ctx context.Context, lease *directoryLease, c
 	if err != nil {
 		return fail(err)
 	}
-	if edited.Size() <= 0 || edited.Size() > metadataMaxBytes {
+	if edited.Size() <= 0 {
 		return MetadataResult{Code: "limit"}
 	}
 	if err = metadata.CompareAudioPayload(ctx, source, original.Size(), work, edited.Size()); err != nil {
@@ -463,7 +460,7 @@ func (f *NativeFiles) saveMetadata(ctx context.Context, lease *directoryLease, c
 	if err = work.Sync(); err != nil {
 		return fail(err)
 	}
-	if err = metadataSyncDirectory(parent); err != nil {
+	if err = metadataPrepareCommitDirectory(parent); err != nil {
 		return fail(err)
 	}
 	if metadataAudioDrain != nil {
@@ -528,16 +525,15 @@ func (f *NativeFiles) saveMetadata(ctx context.Context, lease *directoryLease, c
 	if err = parent.Rename(workName, path.Base(req.Ref.RelativePath)); err != nil {
 		return MetadataResult{Code: "replace_failed", RecoveryName: recovery}
 	}
+	invalidateLibraryMetadata(lease.handle.canonical, req.Ref.RelativePath)
 	result := MetadataResult{Code: "ok", Committed: true, RecoveryName: recovery}
 	// Retain recovery material if durability or index publication fails.
-	dir, err := parent.Open(".")
+	directoryDurable, err := metadataDirectoryDurability(parent)
 	if err != nil {
 		return MetadataResult{Code: "durability_uncertain", Committed: true, RecoveryName: recovery}
 	}
-	err = dir.Sync()
-	dir.Close()
-	if err != nil {
-		return MetadataResult{Code: "durability_uncertain", Committed: true, RecoveryName: recovery}
+	if !directoryDurable {
+		result.Code = "durability_uncertain"
 	}
 	newRef, newFile, err := f.state.registerLocalFile(lease, req.Ref.RelativePath)
 	if err != nil {
@@ -568,6 +564,9 @@ func (f *NativeFiles) saveMetadata(ctx context.Context, lease *directoryLease, c
 	result.Ref = newRef
 	result.Info = &parsed
 	result.SHA256 = hash
+	if !directoryDurable {
+		return result
+	}
 	if err = parent.Remove(backupName); err != nil {
 		result.Code = "saved_cleanup_required"
 		return result
@@ -586,7 +585,7 @@ func metadataTemp(root *os.Root, kind string) (*os.File, string, error) {
 	return file, name, err
 }
 func metadataCopy(ctx context.Context, dst, src *os.File, size int64) error {
-	if size <= 0 || size > metadataMaxBytes {
+	if size <= 0 {
 		return errMetadataLimit
 	}
 	buf := make([]byte, 32<<10)
@@ -624,14 +623,9 @@ func metadataRemoveTemporary(root *os.Root, name, parent string, result *Metadat
 		}
 	}
 }
-func metadataSyncDirectory(root *os.Root) error {
-	dir, err := root.Open(".")
-	if err != nil {
-		return err
-	}
-	defer dir.Close()
-	return dir.Sync()
-}
+
+// An unsupported directory durability guarantee remains distinct from an I/O error.
+var metadataDirectoryDurability = metadataCommitDirectoryDurability
 
 // Bound both adapter work and tag expansion independently of the input file.
 func metadataPatchWithinLimit(p metadata.Patch) bool {
@@ -717,7 +711,7 @@ func (c *metadataCoordinator) register(s *nativeFilesState, lease *directoryLeas
 		if len(c.jobs) >= metadataMaxJobs {
 			return errMetadataLimit
 		}
-		op, cancel := context.WithTimeout(lease.Context(), metadataTimeout)
+		op, cancel := context.WithCancel(lease.Context())
 		job = &metadataJob{owner: lease.owner, epoch: lease.epoch, ref: req.Ref, context: op,
 			cancel: cancel, done: make(chan struct{}), bytes: metadataJobBaseBytes}
 		c.jobs[req.OperationID] = job

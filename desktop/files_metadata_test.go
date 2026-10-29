@@ -109,12 +109,12 @@ func TestMetadataLimitAndRevokedRead(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = file.Truncate(metadataMaxBytes + 1); err != nil {
+	if err = file.Truncate((33 << 20)); err != nil {
 		t.Fatal(err)
 	}
 	file.Close()
 	f, ctx, epoch, ref := metadataTestService(t, dir)
-	if result := f.ReadMetadata(ctx, epoch, ref); result.Code != "limit" {
+	if result := f.ReadMetadata(ctx, epoch, ref); result.Code == "limit" {
 		t.Fatalf("%+v", result)
 	}
 	if err = f.RevokeDirectory(ctx, epoch, ref.GrantToken); err != nil {
@@ -143,7 +143,7 @@ func TestMetadataForeignCancelAndBoundedJobs(t *testing.T) {
 	if result := f.SaveMetadata(ctx, epoch, req); result.Code != "limit" {
 		t.Fatal(result)
 	}
-	if runtime.GOOS != "darwin" {
+	if runtime.GOOS != "darwin" && runtime.GOOS != "linux" && runtime.GOOS != "windows" {
 		file, _ := os.Open(filepath.Join(dir, "song.mp3"))
 		defer file.Close()
 		if metadataCheckAttributes(file) == nil {

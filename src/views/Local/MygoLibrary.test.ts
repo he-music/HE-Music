@@ -197,7 +197,12 @@ it("the real local library template manages grants, scans transient rows and cle
   await flush();
   const table = view.all().find((element) => element.tag === "table");
   expect(table?.props.data).toMatchObject([
-    { id: "mygo-local:file", name: "中文标题", artists: "甲 / 乙", duration: 42 },
+    {
+      id: "mygo-local:path:%2Ffixture/song.mp3",
+      name: "中文标题",
+      artists: "甲 / 乙",
+      duration: 42,
+    },
   ]);
   expect(JSON.stringify(table?.props.data)).not.toContain("grantToken");
   const columns = table?.props.columns;
@@ -221,7 +226,7 @@ it("the real local library template manages grants, scans transient rows and cle
   expect(button.props.disabled).toBe(false);
   button.props.onClick();
   expect(edit).toHaveBeenCalledWith(
-    expect.objectContaining({ id: "mygo-local:file", path: "song.mp3" }),
+    expect.objectContaining({ id: "mygo-local:path:%2Ffixture/song.mp3", path: "song.mp3" }),
   );
   const other: ScanEntry = {
     ...entry,

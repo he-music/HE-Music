@@ -3,6 +3,8 @@ import type { PlatformFiles } from "./files";
 import { LocalFilesSession } from "./localFilesSession";
 import { LocalMetadataSession } from "./localMetadataSession";
 import { LocalDownloadSession } from "./localDownloadSession";
+import { createLocalDownloadPersistence } from "./localDownloadPersistence";
+import type { LocalDownloadResolver } from "./localDownloadSession";
 import type {
   DefaultDirectoryKind,
   DefaultDirectoryResult,
@@ -58,6 +60,7 @@ export const filesSession = computed(() => activeSession.value);
 
 export interface FilesSessionDependencies {
   blockAudio(): () => void;
+  resolveURL?: LocalDownloadResolver;
 }
 
 export class FilesSession {
@@ -67,6 +70,8 @@ export class FilesSession {
   readonly busy = shallowRef(false);
   private readonly directoryGrants = shallowRef<readonly DirectoryGrant[]>([]);
   readonly directories = computed(() => this.directoryGrants.value);
+  readonly unavailableDirectories = shallowRef<readonly string[]>([]);
+  readonly persistenceError = shallowRef(false);
   private epoch: number | undefined;
   private disposed = false;
   private started = false;
@@ -100,6 +105,13 @@ export class FilesSession {
     if (provider.startDownload && provider.readDownloadState && provider.cancelDownload) {
       this.downloads = new LocalDownloadSession({
         access: (token) => this.downloadAccess(token),
+        persistence: deps?.resolveURL ? createLocalDownloadPersistence() : undefined,
+        deferRestore: true,
+        directoryPath: (token) =>
+          this.directoryGrants.value.find((grant) => grant.token === token)?.displayPath,
+        directoryToken: (path) =>
+          this.directoryGrants.value.find((grant) => grant.displayPath === path)?.token,
+        resolveURL: deps?.resolveURL,
         onCommitted: async () => {
           const local = this.local;
           if (this.disposed || !this.ready.value || !local) throw new Error("Files unavailable");
@@ -126,15 +138,29 @@ export class FilesSession {
 
   private async initialize(): Promise<void> {
     try {
+      if (this.downloads) await this.downloads.restoreHistory();
+      if (this.disposed) return;
       const { epoch } = await this.provider.begin();
       if (this.disposed) {
         await this.provider.teardown(epoch).catch(() => {});
         return;
       }
       this.epoch = epoch;
+      if (this.provider.restoreDirectories) {
+        try {
+          const restored = await this.provider.restoreDirectories(epoch);
+          if (this.disposed || this.epoch !== epoch) return;
+          this.directoryGrants.value = restored.grants;
+          this.unavailableDirectories.value = restored.unavailable;
+        } catch {
+          if (!this.disposed) this.persistenceError.value = true;
+        }
+      }
+      if (this.disposed || this.epoch !== epoch) return;
       this.ready.value = true;
       activeSession.value = this;
       this.local = new LocalFilesSession(shallowRef(this));
+      if (this.directoryGrants.value.length) await this.local.scan();
     } catch {
       // File capability failure must not fail the media, shortcut or tray lifecycle.
       console.error("文件会话初始化失败");
@@ -145,7 +171,7 @@ export class FilesSession {
     if (this.cleanup) return this.cleanup;
     this.disposed = true;
     this.metadata?.dispose();
-    this.downloads?.dispose();
+    const downloadsCleanup = this.downloads?.dispose();
     this.local?.dispose();
     this.local = undefined;
     this.ready.value = false;
@@ -154,10 +180,11 @@ export class FilesSession {
     const epoch = this.epoch;
     this.epoch = undefined;
     // Do not wait for a pending picker before invalidating the native owner.
-    this.cleanup =
+    const nativeCleanup =
       epoch === undefined
         ? (this.beginning ?? Promise.resolve())
         : this.provider.teardown(epoch).catch(() => {});
+    this.cleanup = Promise.all([nativeCleanup, downloadsCleanup]).then(() => {});
     return this.cleanup;
   }
 
@@ -172,6 +199,7 @@ export class FilesSession {
   chooseDirectory(): Promise<FileOperationResult<DirectorySelection>> {
     return this.run(async (epoch) => {
       const selection = await this.provider.chooseDirectory(epoch);
+      if (selection.storageError) this.persistenceError.value = true;
       if (
         !this.disposed &&
         this.epoch === epoch &&
@@ -207,6 +235,17 @@ export class FilesSession {
     });
   }
 
+  forgetSavedDirectory(path: string): Promise<FileOperationResult<void>> {
+    return this.run(async (epoch) => {
+      if (!this.provider.forgetSavedDirectory) throw new Error("Files unavailable");
+      await this.provider.forgetSavedDirectory(epoch, path);
+      if (!this.disposed && this.epoch === epoch) {
+        this.unavailableDirectories.value = this.unavailableDirectories.value.filter(
+          (item) => item !== path,
+        );
+      }
+    });
+  }
   audioAccess(ref: LocalFileRef): LocalAudioAccess | undefined {
     const { openLocalAudio, closeLocalAudio } = this.provider;
     const epoch = this.epoch;

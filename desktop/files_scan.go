@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -16,14 +17,12 @@ import (
 )
 
 const (
-	scanPageSize            = 32
-	scanQueueSize           = 64
-	scanMaxOperations       = 8
-	scanMaxDepth            = 16
-	scanMaxItems            = 10000
-	scanMaxFileBytes  int64 = 32 << 20
-	scanMaxBytes      int64 = 512 << 20
-	scanLifetime            = 5 * time.Minute
+	scanPageSize      = 32
+	scanQueueSize     = 64
+	scanMaxOperations = 8
+	scanMaxDepth      = 16
+	scanMaxItems      = 10000
+	scanLifetime      = 5 * time.Minute
 )
 
 var errFilesScan = errors.New("invalid or expired file operation")
@@ -267,6 +266,11 @@ func (j *fileScan) run() {
 	items := 0
 	var bytes int64
 	j.walk("", 0, &items, &bytes)
+	if j.ctx.Err() == nil {
+		if err := flushLibraryIndex(); err != nil {
+			j.issue("", "index-save-failed")
+		}
+	}
 }
 
 func (j *fileScan) walk(relative string, depth int, items *int, bytes *int64) bool {
@@ -363,16 +367,6 @@ func (j *fileScan) walk(relative string, depth int, items *int, bytes *int64) bo
 				}
 				continue
 			}
-			if info.Size() > scanMaxFileBytes || info.Size() < 0 {
-				if !j.issue(rel, "file-byte-limit") {
-					return false
-				}
-				continue
-			}
-			if info.Size() > scanMaxBytes-*bytes {
-				j.issue(rel, "byte-limit")
-				return false
-			}
 			if !j.scanFile(rel, entry.Name(), bytes) {
 				return false
 			}
@@ -408,15 +402,11 @@ func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 		return j.issue(relative, "path")
 	}
 	defer file.Close()
-	if before.Size() > scanMaxFileBytes || before.Size() < 0 {
-		return j.issue(relative, "file-byte-limit")
+	info, cached := cachedLibraryMetadata(j.lease.handle.canonical, relative, before)
+	var parseErr error
+	if !cached {
+		info, parseErr = metadata.ParseScan(scanReaderAt{j.ctx, file}, before.Size())
 	}
-	if before.Size() > scanMaxBytes-*bytes {
-		j.issue(relative, "byte-limit")
-		return false
-	}
-	*bytes += before.Size()
-	info, parseErr := metadata.ParseScan(scanReaderAt{j.ctx, file}, before.Size())
 	after, statErr := file.Stat()
 	file.Close()
 	if j.ctx.Err() != nil {
@@ -425,15 +415,14 @@ func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 	if statErr != nil || !sameLocalFileInfo(before, after) {
 		return j.issue(relative, "changed")
 	}
-	if parseErr != nil {
-		code := "unsupported-or-corrupt"
-		if errors.Is(parseErr, metadata.ErrUnsupportedContainer) {
-			code = "unsupported"
+	if parseErr != nil || info.SampleRateHz <= 0 || info.Channels <= 0 {
+		if !supportedLocalAudioName(filename) {
+			return j.issue(relative, "unsupported-or-corrupt")
 		}
-		return j.issue(relative, code)
+		// Tag parsing must not decide whether a supported filename can be played.
+		info = metadata.Info{Title: strings.TrimSuffix(filename, filepath.Ext(filename)), Artists: []string{}}
 	}
-	// Registration happens only for parsed files, and the reopened identity must
-	// still match the exact file read above. The core bounds the shared index.
+	// Register every supported candidate; the reopened identity must still match.
 	ref, registered, err := j.state.registerLocalFile(j.lease, relative)
 	if err != nil {
 		if errors.Is(err, errFilesBusy) {
@@ -451,6 +440,7 @@ func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 		return j.issue(relative, "changed")
 	}
 	info = boundedScanInfo(info)
+	rememberLibraryMetadata(j.lease.handle.canonical, relative, before, info)
 	if !j.emit(scanEvent{entry: &ScanEntry{Ref: *ref, RelativePath: relative, Filename: filename, Size: before.Size(), Metadata: info}}) {
 		return false
 	}

@@ -1,7 +1,7 @@
 {
   "downloads": {
     "clearDone": "Clear finished tasks",
-    "sessionOnly": "Tasks are kept for this session. Downloads continue when you leave this page. Removing a task does not delete saved files.",
+    "sessionOnly": "Task history is saved and restored after restart. Downloads continue when you leave this page. Unfinished tasks become interrupted on exit and can be retried with a fresh source. Removing a task does not delete files.",
     "unavailable": "Download management is unavailable. Please try again later.",
     "empty": "No download tasks",
     "progress": "Download progress",
@@ -12,6 +12,9 @@
     "scanning": "File saved. Updating local music…",
     "scanFailed": "File saved, but the local music list could not be updated. Please rescan in Local Music.",
     "actionFailed": "The action did not complete. The task is still available; please try again later.",
+    "loadFailed": "Could not read download history. Existing data has been preserved.",
+    "saveFailed": "Could not save download history. It may not be available after restarting.",
+    "interrupted": "This task was unfinished on exit. Retry to download it again.",
     "phase": {
       "active": "Downloading",
       "unknown": "Status unconfirmed. Refresh the status before continuing.",

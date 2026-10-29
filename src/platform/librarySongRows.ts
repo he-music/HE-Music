@@ -1,6 +1,7 @@
 import { computed, type Ref } from "vue";
 import type { SongInfo } from "@/types/main.hemusic";
 import type { ScanEntry } from "./mygo.bindings";
+import { localSongID } from "./localFilesSession";
 
 export interface LibrarySongRow extends SongInfo {
   artists: string;
@@ -15,7 +16,7 @@ export function createLibrarySongRows(entries: Readonly<Ref<readonly ScanEntry[]
       const previous = cache.get(entry);
       if (previous) return previous;
       const song: LibrarySongRow = {
-        id: `mygo-local:${entry.ref.fileId}`,
+        id: localSongID(entry),
         name: entry.metadata.Title || entry.filename,
         subtitle: "",
         artists: entry.metadata.Artists.join(" / "),

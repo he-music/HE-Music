@@ -8,10 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 	"sync"
-	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -20,9 +18,7 @@ import (
 )
 
 const downloadPrivatePrefix = ".hemusic-download-"
-const downloadMaxBytes int64 = 32 << 20
 const downloadMaxJobs = 128
-const downloadTimeout = 2 * time.Minute
 
 var errDownload = errors.New("download request rejected")
 
@@ -87,7 +83,7 @@ func downloadCoordinatorFor(s *nativeFilesState) *downloadCoordinator {
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 		configureDownloadProxyTransport(transport)
 		c = &downloadCoordinator{jobs: make(map[string]*downloadJob), client: &http.Client{
-			Transport: transport, Timeout: downloadTimeout,
+			Transport: transport,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Signed query strings must not become a redirect Referer.
 				req.Header.Del("Referer")
@@ -127,8 +123,7 @@ func downloadFilename(name string) bool {
 			return false
 		}
 	}
-	ext := strings.ToLower(path.Ext(name))
-	return ext == ".mp3" || ext == ".flac"
+	return supportedLocalAudioName(name)
 }
 func (f *NativeFiles) StartDownload(ctx context.Context, epoch uint64, req DownloadRequest) (DownloadOperation, error) {
 	return f.state.startDownload(ctx, epoch, req)
@@ -173,7 +168,7 @@ func (s *nativeFilesState) startDownload(ctx context.Context, epoch uint64, req 
 		if c.active >= 2 || len(c.jobs) >= downloadMaxJobs {
 			return errFilesBusy
 		}
-		op, cancel := context.WithTimeout(lease.Context(), downloadTimeout)
+		op, cancel := context.WithCancel(lease.Context())
 		job = &downloadJob{lease: lease, fingerprint: fingerprint, ctx: op, cancel: cancel, commit: newFileCommit(), done: make(chan struct{}), state: DownloadState{OperationID: req.OperationID, Code: "running", Filename: req.Filename}}
 		c.jobs[req.OperationID] = job
 		c.active++
@@ -335,10 +330,6 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		out.Code = "http_rejected"
 		return
 	}
-	if resp.ContentLength > downloadMaxBytes {
-		out.Code = "limit"
-		return
-	}
 	if resp.ContentLength > 0 {
 		out.Total = resp.ContentLength
 	}
@@ -350,16 +341,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		if j.ctx.Err() != nil {
 			return
 		}
-		// Read one sentinel byte above the cap, including for unknown Content-Length.
-		want := int64(len(buf))
-		if remaining := downloadMaxBytes - out.Received + 1; remaining < want {
-			want = remaining
-		}
-		n, readErr := resp.Body.Read(buf[:want])
-		if int64(n) > downloadMaxBytes-out.Received {
-			out.Code = "limit"
-			return
-		}
+		n, readErr := resp.Body.Read(buf)
 		if n > 0 {
 			written, writeErr := file.Write(buf[:n])
 			out.Received += int64(written)
@@ -392,7 +374,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		out.Code = "payload_rejected"
 		return
 	}
-	if (info.Container != "mp3" && info.Container != "flac") || "."+info.Container != strings.ToLower(path.Ext(out.Filename)) {
+	if !localAudioContainerMatches(info.Container, out.Filename) {
 		out.Code = "unsupported"
 		return
 	}

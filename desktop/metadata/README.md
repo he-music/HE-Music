@@ -1,8 +1,8 @@
-# 本地音乐标签适配首批合同
+# 本地音乐标签适配合同
 
 本包使用 `github.com/tommyo123/mtag` 固定提交
 `57fea0d75b4f88edcdee8ca75e9423d522023f86`。GitHub API 已核对 `v1.0.2` 指向该提交。
-目前采用 MP3、FLAC 首批读写；其他容器返回 `ErrUnsupportedContainer`。
+本地业务开放 MP3、WAV、FLAC、AAC、WebM、M4A、MP4、OGG、AIFF、AIF、APE；适配层按实际容器读写，未知容器返回 `ErrUnsupportedContainer`。扫描和播放独立于标签解析，无法读取标签时仍可按文件名收录。
 包不打开路径、不负责授予文件权限，也不执行原件替换。
 
 ## 调用合同
@@ -17,8 +17,8 @@
 - `Artists` 是表演艺人；`AlbumArtists` 是专辑艺术家，二者独立。
   旧 Electron 扫描将 albumArtists 映射为展示 artists，父集成须显式保持或决定更换该业务映射，
   不应误以为两组原生标签相同。编辑器 `alia` 对应 `Comment`，不额外伪造通用 description。
-- MP3 原生多值写入 TPE1/TPE2；FLAC 写重复 ARTIST/ALBUMARTIST comments。
-  不拆分或拼接 `/`、`;` 等字面字符。修改 FLAC 专辑艺术家时清除旧 `ALBUM ARTIST` 别名。
+- MP3 原生多值写入 TPE1/TPE2；FLAC、Ogg 写重复 ARTIST/ALBUMARTIST comments。
+  不拆分或拼接 `/`、`;` 等字面字符。修改 Vorbis 专辑艺术家时清除旧 `ALBUM ARTIST` 别名。
   v1-only MP3 写入先提升到 v2.4，v1 只能保留主艺人，完整数组存在 v2。
 - 普通歌词/LRC 文本作为普通歌词存储；未提供原生 SYLT 创建/编辑接口。
 - 时长为秒，码率为 kbps（上游 bits/s 除以 1000），采样率为 Hz，位深为 bit/sample。
@@ -32,7 +32,7 @@
 1. 在授权范围内打开原件并捕获身份/版本，创建私有副本；对原件保持只读。
 2. 将副本句柄和准确 size 交给 `EditWorkingCopy`，任何错误都废弃副本。
 3. 保存后重新获取副本 size，以 `Parse` 重开验证目标字段；按 service 策略验证音频负载、
-   限制资源大小，并处理取消。同一原件写入串行化。
+   保护媒体及必要解码配置，并处理取消。同一原件写入串行化；不设整个歌曲文件大小上限。
 4. 提交前再次核对 grant、路径关系、原件身份和版本；由父实现平台替换、恢复和持久化策略。
    成功后才发布新元数据/更新索引。副本接口是原始标签更新的实现阶段，并非只导出副本的产品限制。
 
@@ -44,18 +44,22 @@
 
 固定 Go 1.27.3、`GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0`，仅自生成短音频和副本：
 
-| 夹具                 | 已验证                                                                                                                              |
-| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| MP3 ID3v2.3 / v2.4   | 中文标题、独立多艺人数组、专辑、备注、LRC、双 PNG 图片、增大标题、清空/保留、未知 TXXX 与 RawFrame 保留、ffprobe packet SHA256 不变 |
-| MP3 v1-only          | 仅修改多艺人时提升 v2，旧标题/专辑保留，packet SHA256 不变                                                                          |
-| FLAC                 | 同样字段/多值/封面/清空往返，未知 comment 和 APPLICATION block 保留，packet SHA256 不变，16-bit/44100Hz 属性                        |
-| M4A AAC / Ogg Vorbis | 自生成有效容器，仅验证明确拒绝读取/写入且源字节不变；不属于已支持格式                                                               |
-| 失败                 | 调用前取消、畸形输入、副本 WriteAt 失败返回错误、原件未变                                                                           |
+| 夹具                                   | 已验证                                                                                                                              |
+| -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| MP3 ID3v2.3 / v2.4                     | 中文标题、独立多艺人数组、专辑、备注、LRC、双 PNG 图片、增大标题、清空/保留、未知 TXXX 与 RawFrame 保留、ffprobe packet SHA256 不变 |
+| MP3 v1-only                            | 仅修改多艺人时提升 v2，旧标题/专辑保留，packet SHA256 不变                                                                          |
+| FLAC                                   | 同样字段/多值/封面/清空往返，未知 comment 和 APPLICATION block 保留，packet SHA256 不变，16-bit/44100Hz 属性                        |
+| WAV、AIFF/AIF、AAC、M4A/MP4、Ogg、WebM | 中文字段、歌词、封面增长/清除，ffprobe packet SHA256 保持；RF64、Ogg Opus 另有专项                                                  |
+| APE                                    | 合成 MAC 容器结构与负载校验；没有真实 APE 编码/解码夹具，不能据此声称实机播放通过                                                   |
+| 失败                                   | 调用前取消、畸形输入、副本 WriteAt 失败返回错误、原件未变                                                                           |
 
 fixture 通过测试工具 ffmpeg 自生成，音频 packet 由独立 ffprobe 读取/hash；产品包不执行外部程序。
 字段往返主要由 mtag 重开验证，尚未用第二个标签库证明跨播放器多值互操作。
-ID3v2.2、更多未知帧/FLAC block、JPEG、SYLT、多语言歌词、并发冲突、磁盘满/部分写故障、
-Windows、真实 App/UI/播放以及用户音乐库均未验收。不能外推为所有 MP3/FLAC 变体无损。
+更多容器变体、跨播放器多值互操作、SYLT、多语言歌词、真实 App/UI/播放以及用户音乐库尚未验收。fragmented MP4、chained/multiplexed Ogg、unknown-size Matroska Cluster 等不能可靠校验的布局会拒绝保存并保留原件，详见 [多格式报告](formats-report.md)。
+
+原件替换前的平台属性保留由 files service 实现：macOS 保留既有属性合同；Linux 保留 uid/gid、权限、POSIX access ACL、user xattr 与纳秒时间；Windows 保留 owner/group、DACL/保护状态、mandatory label、四项时间与普通 DOS 属性。Linux 特殊 inode flags/特权模式、Windows ADS/EA 或不可复制存储属性会明确拒绝；Windows 审计 SACL 不在普通用户保留合同内。Linux/Windows 当前仅完成交叉编译和静态检查，尚无实机执行结论。
+
+Windows 保存先同步 work/backup 文件，仍通过 pinned `os.Root.Rename` 替换；不对只读目录句柄执行必然失败的 Sync。平台不能保证断电后的目录项持久性，因此返回 `durability_uncertain`、`Committed=true` 和可用的新 ref/info/hash，并保留恢复副本。恢复副本不会自动删除，也不能声称其目录项已获得断电保证。POSIX 目录 Sync 的真实错误继续透传。
 
 本机测试需要 ffmpeg、ffprobe；缺少 ffmpeg 时夹具测试会 skip，不能据此声称格式验证通过。
 可设 `METADATA_FIXTURE_DIR` 为已有 scratch 目录，保留生成夹具及失败副本。
@@ -65,5 +69,5 @@ Windows、真实 App/UI/播放以及用户音乐库均未验收。不能外推�
 主模块现已固定 `github.com/tommyo123/mtag v1.0.2`，对应上述精确提交，实际模块校验值已进入 go.sum。
 直接访问官方 proxy/sumdb 的首次失败保留；父随后通过可达的 goproxy.cn 转发，启用
 `GOSUMDB=sum.golang.org`，由 Go 1.27.3 下载并校验模块，未在产品中使用本地 replace。
-根模块 `go test -mod=readonly ./...` 在 CGO0 下通过；原文件授权写回和 UI 桥接仍由后续 service 接通。
+原文件授权写回和 UI 已由 files service 接通；校验使用临时夹具，无产品外部工具运行依赖。具体本轮验证结果记录在 [迁移日志](../../docs/plans/mygo-migration-log.md)。
 MIT 许可证仍适用，未复制或更改上游源码。

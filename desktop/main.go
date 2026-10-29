@@ -24,6 +24,12 @@ func main() {
 		appearance := WindowAppearance{}
 		directory, directoryErr := mygo.App.Path(mygo.PathUserData)
 		if directoryErr == nil {
+			if err := prepareLibraryPersistence(directory); err != nil {
+				log.Print("配置本地目录持久化失败")
+			}
+			if err := prepareLibraryIndex(directory); err != nil {
+				log.Print("读取本地音乐索引失败，保留原索引并重新扫描")
+			}
 			var appearanceErr error
 			appearance, appearanceErr = prepareWindowAppearance(directory)
 			if appearanceErr != nil {

@@ -35,12 +35,20 @@
   <div v-else-if="isMygo" class="local-music-directory">
     <n-text class="local-list-tip">{{ t("setting.local.directory_scope") }}</n-text>
     <n-text class="local-list-tip">{{ t("setting.local.directory_restart") }}</n-text>
+    <n-text v-if="filesSession?.persistenceError.value" role="alert">{{
+      t("setting.local.directory_persist_failed")
+    }}</n-text>
     <n-text v-if="!ready" role="status">{{ t("setting.local.directory_unavailable") }}</n-text>
     <n-text v-if="feedback" role="status">{{ t(`setting.local.directory_${feedback}`) }}</n-text>
     <section v-if="savedPaths.length">
       <n-text>{{ t("mygo.library.pending") }}</n-text>
       <n-text>{{ t("setting.local.directory_reselect") }}</n-text>
-      <p v-for="path in savedPaths" :key="path">{{ path }}</p>
+      <p v-for="path in savedPaths" :key="path">
+        {{ path }}
+        <n-button :disabled="!ready || busy" @click="forgetSaved(path)">{{
+          t("common.delete")
+        }}</n-button>
+      </p>
     </section>
     <p v-if="suggestion">{{ t("setting.local.directory_suggestion") }}: {{ suggestion }}</p>
     <n-scrollbar style="max-height: 50vh">
@@ -76,6 +84,7 @@ import { computed } from "vue";
 import { isElectron, isMygo } from "@/utils/env";
 import { createLocalDirectorySession } from "@/platform/localDirectorySession";
 import { createLibraryDirectoryRecovery } from "@/platform/libraryDirectoryRecovery";
+import { filesSession } from "@/platform/filesSession";
 import { useSettingStore } from "@/stores";
 import SvgIcon from "@/components/Global/SvgIcon.vue";
 import { changeLocalPath } from "@/utils/helper";
@@ -99,10 +108,24 @@ const busy = computed(() => directory?.busy.value ?? false);
 const grants = computed(() => directory?.grants.value ?? []);
 const choose = () => directory?.choose();
 const showDefault = () => directory?.showDefault();
-const revoke = (token: string) => directory?.revoke(token);
+const revoke = async (token: string) => {
+  const path = grants.value.find((grant) => grant.token === token)?.displayPath;
+  await directory?.revoke(token);
+  if (path && !grants.value.some((grant) => grant.token === token)) {
+    settingStore.localFilesPath = settingStore.localFilesPath.filter((item) => item !== path);
+  }
+};
+const forgetSaved = async (path: string) => {
+  const result = await filesSession.value?.forgetSavedDirectory(path);
+  if (result?.status === "completed") {
+    settingStore.localFilesPath = settingStore.localFilesPath.filter((item) => item !== path);
+    if (settingStore.downloadPath === path) settingStore.downloadPath = "";
+  } else window.$message.error(t("setting.local.directory_failed"));
+};
 const savedPaths = computed(() => [
   ...new Set([
     ...(recovery?.pendingPaths.value ?? []),
+    ...(filesSession.value?.unavailableDirectories.value ?? []),
     ...(settingStore.downloadPath &&
     !grants.value.some((grant) => grant.displayPath === settingStore.downloadPath)
       ? [settingStore.downloadPath]

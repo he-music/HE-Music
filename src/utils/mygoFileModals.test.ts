@@ -133,6 +133,7 @@ function fixture() {
   );
   const created: Array<{ options: ModalOptions; destroy: ReturnType<typeof vi.fn> }> = [];
   const warn = vi.fn();
+  const scanLibrary = vi.fn(async () => {});
   const api = createMygoFileModals({
     owner,
     entry: (id) => (id === song.id ? entry.value : undefined),
@@ -141,6 +142,7 @@ function fixture() {
     warn,
     translate: (key) => key,
     resolveURL: createMygoDownloadResolver(vi.fn()),
+    scanLibrary,
     create: (options) => {
       const destroy = vi.fn(() => {
         options.onAfterLeave?.();
@@ -152,7 +154,18 @@ function fixture() {
   cleanups.push(() => {
     owner.value = undefined;
   });
-  return { api, owner, first, entry, loadEditor, loadDownload, created, warn, makeOwner };
+  return {
+    api,
+    owner,
+    first,
+    entry,
+    loadEditor,
+    loadDownload,
+    created,
+    warn,
+    makeOwner,
+    scanLibrary,
+  };
 }
 function props(options: ModalOptions) {
   if (typeof options.content !== "function") throw new Error("Expected content renderer");
@@ -282,6 +295,31 @@ it("keeps an active original task across modal close, another grant invalidation
   expect(f.first.downloads.tasks.value[0].phase).toBe("active");
 });
 
+it("scans a newly selected download directory only while its modal owner remains current", async () => {
+  const f = fixture();
+  await f.api.openMygoDownloadSong(song);
+  const next = grant("new");
+  f.first.chooseDirectory.mockImplementationOnce(async () => {
+    f.first.directories.value = [grant(), next];
+    return {
+      status: "completed",
+      value: { status: "selected", grant: next, relation: "", existingToken: "" },
+    };
+  });
+  await props(f.created[0].options).chooseDirectory();
+  expect(f.scanLibrary).toHaveBeenCalledExactlyOnceWith(f.first);
+  const panel = deferred<Awaited<ReturnType<MygoModalOwner["chooseDirectory"]>>>();
+  f.first.chooseDirectory.mockReturnValueOnce(panel.promise);
+  const choosing = props(f.created[0].options).chooseDirectory();
+  f.owner.value = f.makeOwner();
+  panel.resolve({
+    status: "completed",
+    value: { status: "selected", grant: grant("late"), relation: "", existingToken: "" },
+  });
+  await choosing;
+  expect(f.scanLibrary).toHaveBeenCalledTimes(1);
+});
+
 it("does not open the picker until its injected user action and ignores stale callbacks", async () => {
   const f = fixture();
   await f.api.openMygoDownloadSong(song);
@@ -361,14 +399,17 @@ describe("fresh URL resolver", () => {
       expect(Object.isFrozen(original.links[0])).toBe(true);
     },
   );
-  it.each(["missing", "aac"])(
+  it.each(["missing", "unsupported"])(
     "rejects unsupported quality %s before requesting",
     async (quality) => {
       const request = vi.fn();
       const resolve = createMygoDownloadResolver(request);
       const source = localDownloadSource({
         ...song,
-        links: [...song.links, { name: "aac", format: "aac", quality: 1, size: "1" }],
+        links: [
+          ...song.links,
+          { name: "unsupported", format: "unsupported", quality: 1, size: "1" },
+        ],
       });
       await expect(resolve(quality, source)).rejects.toThrow("Download source unavailable");
       expect(request).not.toHaveBeenCalled();

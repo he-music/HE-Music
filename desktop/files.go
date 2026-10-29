@@ -9,8 +9,8 @@ import (
 
 var desktopFiles = &NativeFiles{}
 
-// NativeFiles exposes picker-scoped operations only. It does not expose paths as
-// capabilities, enumerate media, persist grants, or read/write arbitrary targets.
+// NativeFiles scopes IO to selected directories and restores private selection records.
+// Paths never act as renderer capabilities; every session creates fresh grants and refs.
 type NativeFiles struct{ state nativeFilesState }
 
 func init() {
@@ -52,6 +52,23 @@ func (f *NativeFiles) ChooseDirectory(ctx context.Context, epoch uint64) (Direct
 }
 
 func (f *NativeFiles) RevokeDirectory(ctx context.Context, epoch uint64, token string) error {
+	var path string
+	if err := f.state.main(ctx, func(*mygo.Window) error {
+		if !f.state.owns(ctx, epoch) {
+			return errFilesOwner
+		}
+		if entry, found := f.state.grants[token]; found {
+			path = entry.grant.DisplayPath
+		}
+		return nil
+	}); err != nil {
+		return err
+	}
+	if path != "" && savedLibraryDirectories.path != "" {
+		if err := f.ForgetSavedDirectory(ctx, epoch, path); err != nil {
+			return err
+		}
+	}
 	return f.state.revokeDirectory(ctx, epoch, token)
 }
 

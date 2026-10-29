@@ -2,10 +2,11 @@ import { h, watch, type Component, type Ref } from "vue";
 import type { ModalOptions, ModalReactive } from "naive-ui";
 import type { SongInfo } from "@/types/main.hemusic";
 import { filesSession, type FilesSession } from "@/platform/filesSession";
-import { nativeLocalEntry } from "@/platform/localFilesSession";
+import { nativeLocalEntry, localFilesSession } from "@/platform/localFilesSession";
 import type { DirectoryGrant, ScanEntry } from "@/platform/mygo.bindings";
 import type { LocalDownloadResolver } from "@/platform/localDownloadSession";
 import { songUrl } from "@/api/song";
+import { createMygoDownloadResolver } from "./localDownloadResolver";
 import { t } from "@/i18n";
 
 export interface MygoModalOwner extends Pick<
@@ -24,37 +25,10 @@ export interface MygoFileModalDependencies {
   warn(key: string): void;
   translate(key: string): string;
   resolveURL: LocalDownloadResolver;
+  scanLibrary?(owner: MygoModalOwner): Promise<void>;
 }
 
-/** Request a fresh URL using the original task's frozen source, including on retry. */
-export function createMygoDownloadResolver(
-  request: (id: string, platform: string, quality: number, format: string) => Promise<unknown>,
-): LocalDownloadResolver {
-  return async (quality, source) => {
-    try {
-      const link = source.links.find((item) => item.name === quality);
-      const format = link?.format.toLowerCase();
-      if (!link || !format || !/^(mp3|flac)$/.test(format)) throw new Error();
-      const response = await request(source.id, source.platform, link.quality, link.format);
-      if (!response || typeof response !== "object") throw new Error();
-      const url = "url" in response ? response.url : undefined;
-      const resolvedFormat = "format" in response ? response.format : undefined;
-      if (
-        typeof url !== "string" ||
-        typeof resolvedFormat !== "string" ||
-        resolvedFormat.toLowerCase() !== format
-      )
-        throw new Error();
-      const parsed = new URL(url);
-      if (!/^(https?:)$/.test(parsed.protocol) || parsed.username || parsed.password || parsed.hash)
-        throw new Error();
-      return { url, format };
-    } catch {
-      // API exceptions may contain signed URLs; never forward their details to the view.
-      throw new Error("Download source unavailable");
-    }
-  };
-}
+export { createMygoDownloadResolver } from "./localDownloadResolver";
 
 interface View {
   current(): boolean;
@@ -85,7 +59,6 @@ export function createMygoFileModals(deps: MygoFileModalDependencies) {
     const entryCurrent = () =>
       song.platform === "local" &&
       !!entry &&
-      song.id === `mygo-local:${entry.ref.fileId}` &&
       song.path === entry.relativePath &&
       entry.relativePath === entry.ref.relativePath &&
       deps.entry(song.id) === entry &&
@@ -141,10 +114,25 @@ export function createMygoFileModals(deps: MygoFileModalDependencies) {
       }
       const chooseDirectory = async () => {
         if (!view.current()) return;
+        const tokens = new Set(owner.directories.value.map((grant) => grant.token));
         try {
           const result = await owner.chooseDirectory();
-          if (view.current() && result.status !== "completed")
+          if (!view.current()) return;
+          if (result.status !== "completed") {
             deps.warn("local_download.operation_failed");
+            return;
+          }
+          const { grant, status } = result.value;
+          if (
+            status === "selected" &&
+            grant &&
+            !tokens.has(grant.token) &&
+            owner.directories.value.some(
+              (item) => item.token === grant.token && item.epoch === grant.epoch,
+            )
+          ) {
+            await deps.scanLibrary?.(owner);
+          }
         } catch {
           if (view.current()) deps.warn("local_download.operation_failed");
         }
@@ -191,6 +179,9 @@ export function createMygoFileModals(deps: MygoFileModalDependencies) {
 const modals = createMygoFileModals({
   owner: filesSession,
   entry: nativeLocalEntry,
+  scanLibrary: async (owner) => {
+    if (filesSession.value === owner && owner.ready.value) await localFilesSession.value?.scan();
+  },
   loadEditor: () => import("@/components/Modal/MygoSongInfoEditor.vue"),
   loadDownload: () => import("@/components/Modal/MygoDownload.vue"),
   create: (options) => window.$modal.create(options),

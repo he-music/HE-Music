@@ -5,7 +5,6 @@ package metadata
 import (
 	"context"
 	"errors"
-	"fmt"
 	"io"
 
 	"github.com/tommyo123/mtag"
@@ -15,7 +14,7 @@ import (
 // UpstreamCommit identifies the implementation validated by this adapter.
 const UpstreamCommit = "57fea0d75b4f88edcdee8ca75e9423d522023f86"
 
-var ErrUnsupportedContainer = errors.New("metadata: only MP3 and FLAC are validated")
+var ErrUnsupportedContainer = errors.New("metadata: unsupported container")
 
 // Picture preserves the native image role and description as well as its bytes.
 type Picture struct {
@@ -108,8 +107,8 @@ func parse(src io.ReaderAt, size int64, pictures bool) (Info, error) {
 }
 
 func supported(f *mtag.File) error {
-	if f.Container() != mtag.ContainerMP3 && f.Container() != mtag.ContainerFLAC {
-		return fmt.Errorf("%w: %s", ErrUnsupportedContainer, f.Container())
+	if f.Container() == mtag.ContainerUnknown {
+		return ErrUnsupportedContainer
 	}
 	return nil
 }
@@ -119,7 +118,7 @@ func artistValues(f *mtag.File, album bool) []string {
 	if album {
 		frame, key, fallback = id3v2.FrameBand, "ALBUMARTIST", f.AlbumArtist()
 	}
-	if f.Container() == mtag.ContainerFLAC {
+	if f.Container() == mtag.ContainerFLAC || f.Container() == mtag.ContainerOGG {
 		if values := f.CustomValues(key); len(values) > 0 {
 			return append([]string(nil), values...)
 		}
@@ -150,7 +149,7 @@ func setArtists(f *mtag.File, values []string, album bool) {
 	if album {
 		frame, key = id3v2.FrameBand, "ALBUMARTIST"
 	}
-	if f.Container() == mtag.ContainerFLAC {
+	if f.Container() == mtag.ContainerFLAC || f.Container() == mtag.ContainerOGG {
 		if album {
 			f.RemoveCustom("ALBUM ARTIST")
 		}
