@@ -38,6 +38,14 @@ async function fixture() {
     importSettings: vi.fn(),
     exportSettings: vi.fn(),
     teardown: vi.fn(async () => {}),
+    revealLocalFile: vi.fn<NonNullable<PlatformFiles["revealLocalFile"]>>(async () => ({
+      code: "ok",
+      removed: false,
+    })),
+    removeLocalFile: vi.fn<NonNullable<PlatformFiles["removeLocalFile"]>>(async () => ({
+      code: "ok",
+      removed: true,
+    })),
     readMetadata: vi.fn<NonNullable<PlatformFiles["readMetadata"]>>(async () => ({
       code: "ok",
       ref: fileRef,
@@ -171,4 +179,31 @@ it("rejects cross-grant starts and drops late download states after disposal", a
   });
   await failure;
   expect(f.files.downloadAccess("grant")).toBeUndefined();
+});
+
+it("captures a file action ref and rejects calls after its grant is revoked", async () => {
+  const f = await fixture();
+  const ref = { ...fileRef };
+  const access = f.files.fileActionAccess(ref);
+  if (!access) throw new Error("Missing file action access");
+  ref.relativePath = "foreign.mp3";
+  expect(await access.reveal()).toEqual({ code: "ok", removed: false });
+  expect(f.provider.revealLocalFile).toHaveBeenCalledWith(7, fileRef);
+  await f.files.revokeDirectory("grant");
+  expect(access.current()).toBe(false);
+  await expect(access.remove()).rejects.toThrow("authorization expired");
+  expect(f.provider.removeLocalFile).not.toHaveBeenCalled();
+});
+
+it("keeps a committed deletion result even when revocation arrives before the reply", async () => {
+  const f = await fixture();
+  const pending = deferred<{ code: string; removed: boolean }>();
+  f.provider.removeLocalFile.mockReturnValueOnce(pending.promise);
+  const access = f.files.fileActionAccess(fileRef);
+  if (!access) throw new Error("Missing file action access");
+  const removing = access.remove();
+  await f.files.revokeDirectory("grant");
+  pending.resolve({ code: "revoked", removed: true });
+  expect(await removing).toEqual({ code: "revoked", removed: true });
+  expect(access.current()).toBe(false);
 });

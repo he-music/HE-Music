@@ -56,6 +56,7 @@ export interface PlatformAdapter {
   readonly capabilities: PlatformCapabilities;
   readonly window: PlatformWindow | null;
   openExternal(url: string, target?: "_self" | "_blank"): Promise<void>;
+  readonly deviceName?: () => Promise<string>;
   readonly lifecycle?: PlatformLifecycle;
   readonly shortcuts?: PlatformShortcuts;
   readonly systemMedia?: PlatformSystemMedia;

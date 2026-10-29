@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"os"
+	"reflect"
 	"syscall"
 	"testing"
 	"unsafe"
@@ -51,12 +52,19 @@ func TestMetadataLinuxAttributes(t *testing.T) {
 		if before.Mode != after.Mode || before.Uid != after.Uid || before.Gid != after.Gid || before.Atim != after.Atim || before.Mtim != after.Mtim {
 			t.Fatalf("attributes differ: source=%+v destination=%+v", before, after)
 		}
+		expected, err := metadataLinuxAttributes(source)
+		if err != nil {
+			t.Fatal(err)
+		}
 		attrs, err := metadataLinuxAttributes(destination)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if actual, ok := attrs["user.music"]; !ok || !bytes.Equal(actual, value) || len(attrs) != 1 {
-			t.Fatalf("unexpected attributes: %v", attrs)
+		if !reflect.DeepEqual(attrs, expected) {
+			t.Fatalf("attributes differ: got=%v want=%v", attrs, expected)
+		}
+		if actual, ok := attrs["user.music"]; !ok || !bytes.Equal(actual, value) {
+			t.Fatalf("user.music was not preserved: %v", attrs)
 		}
 	}
 }
@@ -160,5 +168,68 @@ func TestMetadataLinuxRejectsInodeFlags(t *testing.T) {
 	}()
 	if err := metadataCheckAttributes(file); err == nil {
 		t.Fatal("inode flags were accepted")
+	}
+}
+
+func TestMetadataLinuxSELinuxSameLabelIsReusable(t *testing.T) {
+	source, err := os.CreateTemp(t.TempDir(), "source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	destination, err := os.CreateTemp(t.TempDir(), "destination")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer destination.Close()
+	sourceAttrs, err := metadataLinuxAttributes(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	destinationAttrs, err := metadataLinuxAttributes(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sourceLabel, sourceLabeled := sourceAttrs["security.selinux"]
+	destinationLabel, destinationLabeled := destinationAttrs["security.selinux"]
+	if !sourceLabeled || !destinationLabeled {
+		t.Skipf("SELinux same-label integration case unavailable: sourceLabeled=%t destinationLabeled=%t", sourceLabeled, destinationLabeled)
+	}
+	if !bytes.Equal(sourceLabel, destinationLabel) {
+		t.Skipf("SELinux same-label integration case unavailable: source=%q destination=%q", sourceLabel, destinationLabel)
+	}
+	if err := metadataPrepareSELinuxLabel(destination, sourceAttrs, destinationAttrs); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestMetadataLinuxSELinuxDifferentLabelRequiresVerifiedWrite(t *testing.T) {
+	destination, err := os.CreateTemp(t.TempDir(), "destination")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer destination.Close()
+	before, err := metadataLinuxAttributes(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	label, ok := before["security.selinux"]
+	if !ok || len(label) == 0 {
+		t.Skipf("SELinux different-label integration case unavailable: attributes=%v", before)
+	}
+	different := append(append([]byte(nil), label...), []byte("-different")...)
+	err = metadataPrepareSELinuxLabel(destination, map[string][]byte{"security.selinux": different}, before)
+	after, readErr := metadataLinuxAttributes(destination)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if err != nil {
+		if !reflect.DeepEqual(after, before) {
+			t.Fatalf("failed label update changed destination: before=%v after=%v", before, after)
+		}
+		return
+	}
+	if !bytes.Equal(after["security.selinux"], different) {
+		t.Fatalf("label update succeeded without matching readback: got=%v want=%v", after["security.selinux"], different)
 	}
 }

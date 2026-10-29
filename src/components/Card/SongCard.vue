@@ -21,9 +21,9 @@
       <div class="title">
         <!-- 封面 -->
         <s-image
-          v-if="!hiddenCover"
+          v-if="!hiddenCover && (!song.path || artworkSettings.showLocalCover)"
           :key="song.cover || song.path || song.id"
-          :src="song.path ? song.cover : getSizeCover(song, 300)"
+          :src="song.path ? localArtworkURL || song.cover : getSizeCover(song, 300)"
           class="cover"
           @update:show="localCover"
         />
@@ -169,6 +169,9 @@ import { FeatureSupportFlag } from "@/api/platform";
 import { useI18n } from "vue-i18n";
 import { isElectron } from "@/utils/env";
 const { t } = useI18n();
+import { useLocalArtwork } from "@/composables/useLocalArtwork";
+import { useSettingStore } from "@/stores";
+import { computed, ref, toRef } from "vue";
 import { useMobile } from "@/composables/useMobile";
 
 const props = defineProps<{
@@ -193,6 +196,12 @@ const platformStore = usePlatformStore();
 
 // 歌曲数据
 const song = toRef(props, "song");
+const artworkSettings = useSettingStore();
+const localArtworkVisible = ref(false);
+const localArtworkEnabled = computed(
+  () => localArtworkVisible.value && !props.hiddenCover && artworkSettings.showLocalCover,
+);
+const { url: localArtworkURL } = useLocalArtwork(song, localArtworkEnabled);
 
 const emit = defineEmits<{
   "show-menu": [event: MouseEvent];
@@ -202,7 +211,8 @@ const { isSmallScreen } = useMobile();
 
 // 加载本地歌曲封面
 const localCover = async (show: boolean) => {
-  if (!isElectron || !show || !song.value.path) return;
+  localArtworkVisible.value = show;
+  if (!isElectron || !show || !localArtworkEnabled.value || !song.value.path) return;
   if (song.value.cover || song.value.cover === "/images/song.jpg?asset") return;
   // 获取封面
   const coverData = await window.electron.ipcRenderer.invoke("get-music-cover", song.value.path);

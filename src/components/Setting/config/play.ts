@@ -14,24 +14,31 @@ export const usePlaySettings = (): SettingConfig => {
   const settingStore = useSettingStore();
   const statusStore = useStatusStore();
   const player = usePlayer();
+  const isDesktop = isElectron || isMygo;
 
   const outputDevices = ref<SelectOption[]>([]);
 
   // 获取全部输出设备
   const getOutputDevices = async () => {
-    if (!isElectron) return; // 简单处理：非 Electron 环境暂不复杂处理
-    // WebAudio 引擎：使用浏览器设备列表
+    if (!isDesktop) return;
+    outputDevices.value = [{ label: t("common.system_default"), value: "" }];
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) return;
     try {
       const allDevices = await navigator.mediaDevices.enumerateDevices();
       const devices = uniqBy(
-        allDevices.filter((device) => device.kind === "audiooutput" && device.deviceId),
-        "groupId",
+        allDevices.filter(
+          (device) =>
+            device.kind === "audiooutput" && device.deviceId && device.deviceId !== "default",
+        ),
+        (device) => device.groupId || device.deviceId,
       );
-      const outputData = devices.filter((device) => device.kind === "audiooutput");
-      outputDevices.value = outputData.map((device) => ({
-        label: device.label,
-        value: device.deviceId,
-      }));
+      outputDevices.value = [
+        { label: t("common.system_default"), value: "" },
+        ...devices.map((device, index) => ({
+          label: device.label || `${t("setting.play.output_device")} ${index + 1}`,
+          value: device.deviceId,
+        })),
+      ];
     } catch (e) {
       console.error("获取 WebAudio 设备失败", e);
     }
@@ -114,8 +121,8 @@ export const usePlaySettings = (): SettingConfig => {
     // },
   };
 
-  const onActivate = () => {
-    if (isElectron) getOutputDevices();
+  const onActivate = async () => {
+    if (isDesktop) await getOutputDevices();
   };
 
   return {
@@ -129,12 +136,12 @@ export const usePlaySettings = (): SettingConfig => {
             label: t("setting.play.auto_play"),
             type: "switch",
             description: t("setting.play.auto_play_tip"),
-            show: isElectron,
+            show: isDesktop,
             value: computed({
               get: () => settingStore.autoPlay,
               set: (v) => (settingStore.autoPlay = v),
             }),
-            disabled: !isElectron,
+            disabled: !isDesktop,
           },
           {
             key: "memoryLastSeek",
@@ -161,7 +168,6 @@ export const usePlaySettings = (): SettingConfig => {
             key: "songVolumeFade",
             label: t("setting.play.song_volume_fade"),
             type: "switch",
-            show: !isMygo,
             value: computed({
               get: () => settingStore.songVolumeFade,
               set: (v) => (settingStore.songVolumeFade = v),
@@ -205,7 +211,7 @@ export const usePlaySettings = (): SettingConfig => {
             key: "playDevice",
             label: t("setting.play.output_device"),
             type: "select",
-            show: isElectron,
+            show: isDesktop,
             description: t("setting.play.output_device_tip"),
             options: outputDevices,
             componentProps: {

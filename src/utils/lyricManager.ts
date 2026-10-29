@@ -7,7 +7,7 @@ import { isWordLyric, parseLineLyric, parseWordLyric, splitLocalLyrics } from "@
 import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
 import { filesSession } from "@/platform/filesSession";
-import { readLocalMetadata } from "@/platform/localMetadataRead";
+import { readLocalDisplay } from "@/platform/localDisplayRead";
 
 class LyricManager {
   private lyricRequest = 0;
@@ -60,14 +60,13 @@ class LyricManager {
           !entry ||
           entry.relativePath !== path ||
           entry.ref.relativePath !== path ||
-          !owner?.ready.value ||
-          !owner.metadata
+          !owner?.ready.value
         ) {
           return { lrcData: [], yrcData: [] };
         }
         const ref = { ...entry.ref };
         // 扫描字段是最多1024字节的展示预览，歌词必须从当前授权读取完整标签。
-        const result = await readLocalMetadata(owner, ref);
+        const result = await readLocalDisplay(owner, ref, "lyrics");
         const current = nativeLocalEntry(songID);
         if (
           filesSession.value !== owner ||

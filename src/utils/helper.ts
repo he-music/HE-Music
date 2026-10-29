@@ -5,7 +5,7 @@ import { useClipboard } from "@vueuse/core";
 import { useSettingStore } from "@/stores";
 import SvgIcon from "@/components/Global/SvgIcon.vue";
 import { t } from "@/i18n";
-import { isElectron } from "@/utils/env";
+import { isElectron, isMygo } from "@/utils/env";
 import { API_URL } from "@/utils/request";
 import { platform } from "@/platform";
 
@@ -323,7 +323,7 @@ export const parseFontDataStyle = (style: string) => {
 };
 
 export const getShareUrl = (type: string, id: string, platform: string) => {
-  const host = isElectron ? API_URL : location.origin;
+  const host = isElectron || isMygo ? API_URL : location.origin;
   const u = new URL(host);
   const searchParams = new URLSearchParams({
     id,

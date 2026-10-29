@@ -36,6 +36,16 @@ function getAppType(): string {
  * 获取设备名称，Electron 下通过 IPC 获取真实机型名
  */
 async function getDeviceName(): Promise<string> {
+  const { platform } = await import("@/platform");
+  if (platform.kind === "mygo") {
+    try {
+      const model = await platform.deviceName?.();
+      if (model) return model;
+    } catch {
+      // Authentication remains available when the native model label cannot be read.
+    }
+    return isMac ? "Mac" : isWin ? "Windows PC" : isLinux ? "Linux PC" : "Desktop";
+  }
   if (!isElectron) {
     // 优先使用 userAgentData 获取浏览器名
     const uaData = (navigator as any).userAgentData;

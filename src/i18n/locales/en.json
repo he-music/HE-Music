@@ -330,6 +330,7 @@
     "watch_mv": "Watch Music Video"
   },
   "message": {
+    "local_file_action_failed": "The file operation could not be completed. Refresh the local library and try again.",
     "add_fail": "Addition failed",
     "add_song_to_playlist_success": "Track added to playlist",
     "added_local_music_count": "Added {count} track | Added {count} tracks",

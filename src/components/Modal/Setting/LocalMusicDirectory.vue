@@ -33,8 +33,6 @@
     </n-flex>
   </div>
   <div v-else-if="isMygo" class="local-music-directory">
-    <n-text class="local-list-tip">{{ t("setting.local.directory_scope") }}</n-text>
-    <n-text class="local-list-tip">{{ t("setting.local.directory_restart") }}</n-text>
     <n-text v-if="filesSession?.persistenceError.value" role="alert">{{
       t("setting.local.directory_persist_failed")
     }}</n-text>

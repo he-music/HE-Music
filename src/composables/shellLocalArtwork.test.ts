@@ -3,9 +3,9 @@ import { computed, effectScope, reactive, ref, shallowRef } from "vue";
 import type { LocalFileRef, MetadataResult, ScanEntry } from "@/platform/mygo.bindings";
 import type { SongInfo } from "@/types/main.hemusic";
 import { localArtworkForSong } from "@/platform/localArtwork";
-import { readLocalMetadata } from "@/platform/localMetadataRead";
+import { readLocalDisplay } from "@/platform/localDisplayRead";
 
-const host = vi.hoisted(() => ({ kind: "mygo", files: { readMetadata: vi.fn() } }));
+const host = vi.hoisted(() => ({ kind: "mygo", files: { readLocalArtwork: vi.fn() } }));
 const entries = ref<ScanEntry[]>([]);
 let music: { playSong: SongInfo };
 const makeOwner = () => {
@@ -13,7 +13,7 @@ const makeOwner = () => {
     ref: LocalFileRef;
     resolve: (result: MetadataResult | undefined) => void;
   }> = [];
-  return {
+  const result = {
     ready: ref(true),
     directories: ref([{ token: "grant", displayPath: "fixture", epoch: 1 }]),
     metadata: {
@@ -24,8 +24,16 @@ const makeOwner = () => {
           }),
       ),
     },
+    displayAccess(file: LocalFileRef) {
+      return {
+        current: () => result.ready.value,
+        read: async (): Promise<MetadataResult> =>
+          (await result.metadata.read(file)) ?? { code: "revoked", committed: false },
+      };
+    },
     requests,
   };
+  return result;
 };
 const owner = shallowRef<ReturnType<typeof makeOwner>>();
 vi.mock("@/platform", () => ({ platform: host }));
@@ -147,10 +155,10 @@ async function accept(f: ReturnType<typeof fixture>, index = 0) {
   expect(f.cover.value).toMatch(/^blob:/);
 }
 
-it("presents the registered file's embedded image and shares an in-flight lyric metadata read", async () => {
+it("presents the registered file's embedded image and shares an in-flight display artwork read", async () => {
   const current = owner.value;
   if (!current) throw new Error("No owner");
-  const lyrics = readLocalMetadata(current, entries.value[0].ref);
+  const lyrics = readLocalDisplay(current, entries.value[0].ref, "artwork", entries.value[0]);
   const f = fixture();
   await accept(f);
   await lyrics;
@@ -250,4 +258,92 @@ it("does not enable native artwork on web or electron", () => {
   expect(createShellLocalArtworkSession()).toBeUndefined();
   host.kind = "electron";
   expect(createShellLocalArtworkSession()).toBeUndefined();
+});
+
+it("refreshes a changed same-name sidecar after a same-ref rescan and revokes the old URL", async () => {
+  const f = fixture();
+  await accept(f);
+  const source = owner.value!;
+  const previous = entries.value[0];
+  entries.value = [{ ...previous, ref: { ...previous.ref } }];
+  expect(f.cover.value).toBeUndefined();
+  expect(f.revoke).toHaveBeenCalledWith("blob:cover-1");
+  await flush();
+  expect(source.metadata.read).toHaveBeenCalledTimes(2);
+  expect(source.requests[1].ref).toEqual(source.requests[0].ref);
+  await accept(f, 1);
+  expect(f.cover.value).toBe("blob:cover-2");
+  source.directories.value = [
+    ...source.directories.value,
+    { token: "unrelated", epoch: 1, displayPath: "other" },
+  ];
+  await flush();
+  expect(source.metadata.read).toHaveBeenCalledTimes(2);
+  expect(f.revoke).toHaveBeenCalledOnce();
+});
+
+it("discovers a newly added same-name sidecar after a same-ref rescan with no previous image", async () => {
+  const f = fixture();
+  await flush();
+  const source = owner.value!;
+  const previous = entries.value[0];
+  source.requests[0].resolve({
+    code: "ok",
+    committed: false,
+    ref: source.requests[0].ref,
+    info: { ...previous.metadata, Pictures: [] },
+  });
+  await flush();
+  expect(f.cover.value).toBeUndefined();
+  expect(f.createURL).not.toHaveBeenCalled();
+  entries.value = [{ ...previous, ref: { ...previous.ref } }];
+  await accept(f, 1);
+  expect(source.metadata.read).toHaveBeenCalledTimes(2);
+  expect(f.cover.value).toBe("blob:cover-1");
+});
+
+it("fences an old same-ref pending read and displays only the latest scan entry", async () => {
+  const f = fixture();
+  await flush();
+  const source = owner.value!;
+  const previous = entries.value[0];
+  entries.value = [{ ...previous, ref: { ...previous.ref } }];
+  await flush();
+  // LocalArtworkSession waits for the actual prior read before pumping its latest target.
+  expect(source.metadata.read).toHaveBeenCalledOnce();
+  source.requests[0].resolve({
+    code: "ok",
+    committed: false,
+    ref: source.requests[0].ref,
+    info: previous.metadata,
+  });
+  await flush();
+  expect(f.createURL).not.toHaveBeenCalled();
+  expect(source.metadata.read).toHaveBeenCalledTimes(2);
+  await accept(f, 1);
+  expect(f.cover.value).toBe("blob:cover-1");
+});
+
+it("does not reuse a prior entry's shared pending read or overwrite a fresh sidecar with its late result", async () => {
+  const source = owner.value!;
+  const previous = entries.value[0];
+  const old = readLocalDisplay(source, previous.ref, "artwork", previous);
+  await flush();
+  entries.value = [{ ...previous, ref: { ...previous.ref } }];
+  const f = fixture();
+  await flush();
+  expect(source.metadata.read).toHaveBeenCalledTimes(2);
+  await accept(f, 1);
+  expect(f.cover.value).toBe("blob:cover-1");
+  source.requests[0].resolve({
+    code: "ok",
+    committed: false,
+    ref: previous.ref,
+    info: previous.metadata,
+  });
+  expect(await old).toBeUndefined();
+  await flush();
+  expect(f.cover.value).toBe("blob:cover-1");
+  expect(f.createURL).toHaveBeenCalledOnce();
+  expect(f.revoke).not.toHaveBeenCalled();
 });

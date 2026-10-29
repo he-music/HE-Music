@@ -18,6 +18,10 @@ export interface PlatformFiles {
   closeLocalAudio?: typeof NativeFiles.closeLocalAudio;
   readMetadata?: typeof NativeFiles.readMetadata;
   saveMetadata?: typeof NativeFiles.saveMetadata;
+  readLocalArtwork?: typeof NativeFiles.readLocalArtwork;
+  readLocalLyrics?: typeof NativeFiles.readLocalLyrics;
+  revealLocalFile?: typeof NativeFiles.revealLocalFile;
+  removeLocalFile?: typeof NativeFiles.removeLocalFile;
   cancelMetadata?: typeof NativeFiles.cancelMetadata;
   startDownload?: typeof NativeFiles.startDownload;
   readDownloadState?: typeof NativeFiles.readDownloadState;

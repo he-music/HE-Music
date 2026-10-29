@@ -13,6 +13,7 @@ const host = vi.hoisted(() => ({ electron: false, mygo: true }));
 const setting = vi.hoisted(() => ({
   localFilesPath: ["/synthetic/imported"],
   downloadPath: "/synthetic/imported-download",
+  showLocalCover: true,
 }));
 const legacy = vi.hoisted(() => ({ change: vi.fn(), open: vi.fn() }));
 vi.mock("@/stores", () => ({ useSettingStore: () => setting }));
@@ -190,15 +191,23 @@ afterEach(async () => {
   host.electron = false;
   host.mygo = true;
   setting.localFilesPath = ["/synthetic/imported"];
+  setting.showLocalCover = true;
   vi.clearAllMocks();
 });
 
 describe("LocalMusicDirectory真实SFC", () => {
-  it("设置入口只开放目录授权，Web隐藏且Electron保留旧组", () => {
+  it("设置入口开放授权目录与本地封面，Web隐藏且Electron保留旧组", () => {
     const config = useLocalSettings();
     expect(config.groups.flatMap((group) => group.items.map((item) => item.key))).toEqual([
       "localFilesPath",
+      "showLocalCover",
     ]);
+    const cover = config.groups
+      .flatMap((group) => group.items)
+      .find((item) => item.key === "showLocalCover");
+    if (!cover?.value) throw new Error("Expected cover setting");
+    cover.value.value = false;
+    expect(setting.showLocalCover).toBe(false);
     const item = config.groups[0].items[0];
     if (item.type !== "button") throw new Error("Expected directory button");
     item.action?.();

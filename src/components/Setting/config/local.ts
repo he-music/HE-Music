@@ -6,6 +6,7 @@ import { openLocalMusicDirectoryModal } from "@/utils/modal";
 import { isElectron, isMygo } from "@/utils/env";
 
 export const useLocalSettings = (): SettingConfig => {
+  const settingStore = useSettingStore();
   if (!isElectron) {
     return {
       groups: isMygo
@@ -18,8 +19,22 @@ export const useLocalSettings = (): SettingConfig => {
                   label: t("setting.local.directory_manage"),
                   type: "button",
                   buttonLabel: t("setting.local.directory_manage"),
-                  description: t("setting.local.directory_scope"),
                   action: openLocalMusicDirectoryModal,
+                },
+              ],
+            },
+            {
+              title: t("setting.local.local_music"),
+              items: [
+                {
+                  key: "showLocalCover",
+                  label: t("setting.local.show_local_cover"),
+                  description: t("setting.local.show_local_cover_tip"),
+                  type: "switch",
+                  value: computed({
+                    get: () => settingStore.showLocalCover,
+                    set: (value) => (settingStore.showLocalCover = value),
+                  }),
                 },
               ],
             },
@@ -28,7 +43,6 @@ export const useLocalSettings = (): SettingConfig => {
     };
   }
   // const statusStore = useStatusStore();
-  const settingStore = useSettingStore();
 
   const fileNameFormatOptions = [
     {

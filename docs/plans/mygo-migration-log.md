@@ -702,3 +702,15 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - Linux 标签替换保留 uid/gid、mode、POSIX access ACL、user xattr 与纳秒时间，具体不能复制的 inode flags/特权属性明确拒绝。Windows 保留 owner/group、DACL/保护状态、mandatory label、四项时间和普通 DOS 属性，ADS/EA/特殊存储属性明确拒绝，审计 SACL 不在普通用户保留合同内。审查 `c68e31f0` 发现原只读目录 Sync 会阻断 Windows 全部保存；改为平台目录提交策略，仍用 pinned `os.Root.Rename`，Windows 返回 `durability_uncertain + committed:true`、fresh ref/info/hash 并保留 backup，不能保证断电后的目录项持久性；恢复副本不会自动删除。POSIX 目录同步错误不被吞掉。Darwin 注入生产流程回归覆盖 unsupported 和真实 I/O error；`76e08861` 复核 Closed/OK，没有把注入测试称作 Windows 文件系统实测。
 - 最终验证：Vitest **136 文件 1261 项**、Node/Web 类型、改动 TS ESLint/Prettier、Go 全包测试/vet/gofmt、桌面前端 Vite 静态构建通过。Linux 和 Windows 的 amd64/arm64 四组测试二进制交叉编译及 vet 通过，Darwin amd64 静态测试编译通过。固定官方 CLI 在冻结快照 `0be9b23` 重新生成绑定，主工作区也用官方 CLI 生成后完整 cmp 一致；快照后只整理空行和文档，无合同变化。构建保留既有 chunk size/Fastify 提示，未安装或变更 SDK/依赖。
 - 未启动、附着或停止用户 App，未执行真实选择器、用户音乐库 IO、声音、外网下载、更新安装或 Windows 程序。真实 11 格式系统解码、跨重启 UI、普通包及 Linux/Windows 属性写回仍待实机验收；这些限制独立于已经完成的生产接线和自动化验证。Web/Electron 路径保留，正式更新 feed/key 与 Electron 清理保持后置。
+
+### 第十一轮第一批：本地展示与桌面基础能力
+
+- 按用户要求继续迁移，保留全部 Electron 源码、依赖、入口与分支。实际移除仍需迁移和验证完成后由用户最终确认，本批不宣称整体迁移结束。
+- 本地歌曲删除和定位接入当前授权、完整 ref、身份锁、读者排空和提交 claim。删除需显式确认，并在执行时再次拒绝当前播放歌曲；已删除后的撤权仍保留 `removed:true`，旧 owner 不修改新页面列表。只删除音频目录项，保留其他硬链接及歌词、封面文件；定位成功仅代表 SDK 接受分派。原生叶提交为 `cca75fe`，前端菜单同时供本地库与歌曲卡片消费。
+- 新增不计算整曲 SHA 的封面、歌词展示读取。封面优先内嵌 JPEG/PNG，再尝试同名 `.jpg`；歌词优先同名 UTF-8 `.lrc`，再使用内嵌内容。sidecar 路径由已授权音频 ref 派生，并复核音频、sidecar、父目录及 owner；标签损坏时仍可读取有效同名封面。图片和文本各有独立预算，不改变歌曲大小限制。
+- 列表和卡片只在可见时读取图片，缓存最多 64 项、16 MiB；最后一个 URL lease 释放即 revoke，缓存只复用有界字节，Blob URL 不写入歌曲或持久化。`showLocalCover` 已接入 mygo 设置。当前播放封面也使用同一展示读取；独立审查发现的“重扫后 ref 相同但 sidecar 改变不刷新”已通过 entry revision 与挂起 Promise 身份隔离修复，`e874e70c` 复核 Closed/OK。回归改指生产源码，未保留候选路径或重复测试文件。
+- 补齐输出设备枚举、系统默认设备、自动播放和音量渐变设置；沿用现有 Web Audio 执行链，验证恢复播放可取消旧渐出暂停。设备型号由原生固定系统字段读取，失败保持登录回退；UUID 工具不因读取标识而加载浏览器宿主。窗口几何使用固定 SDK 的 `StateKey="main"`，分享链接使用配置的 API 地址，mygo 用户协议拒绝动作接入原生退出。移除本地页、下载页与目录弹窗的常驻技术说明，保留实际错误提示。
+- Linux 字体枚举使用 purego/fontconfig，fallback 构建约束和前端 provider 同步接入；C 字符串超过 512 字节直接拒绝，保留恰好 512 字节且终止的名称。父验证发现的 `uintptr` 转指针 vet 告警改为 typed ABI。Linux metadata 保留 `security.selinux`，相同标签不额外写入，不同标签只在设置并读回一致后继续；ACL、owner、mode、时间和未知特权属性的原有保护保留。无 SELinux 环境只跳过依赖标签的专用集成用例，通用复制继续验证。
+- 验证针对冻结核心快照 `1ec1be78570278bca192ab3e877c3f783c32dd96`：Vitest **142 文件 1292 项**、Node/Web 类型、指定 TS ESLint、指定文件 Prettier、宿主 Go 全包测试/vet/gofmt、Web 与桌面前端静态构建通过；Linux amd64/arm64 与 Windows amd64/arm64 测试二进制静态编译，以及 Linux arm64、Windows amd64 的 vet 检查通过。固定官方 CLI 在隔离快照生成绑定后，与主工作区完整 cmp 一致；没有手写绑定。Vue ESLint 未配置，本批使用类型检查、实际 SFC CPU host 回归与格式检查，不把忽略告警当作 Vue lint 通过。
+- Podman 实际运行同一冻结源码：Go 1.27.3、Linux arm64、`CGO_ENABLED=0`、离线只读模块缓存；源码复制在 Linux overlayfs，夹具位于容器内 tmpfs。Go 全包测试和 vet 通过，fontconfig 的实际 C ABI 枚举以及 SELinux 两项集成测试执行通过。临时容器已清理，原有容器未动，machine 保持运行；该结果不替代真实 GTK/WebKit、Wayland、托盘、音频、Windows 文件系统或普通安装包验收。
+- 下载命名、分目录、标签及 sidecar 的完整提交链，在线元数据匹配，HTTP 播放控制及原生设置重置继续分批集成。审查发现的事务清理、异步播放意图和跨阶段重置恢复问题必须关闭后再接生产；本批没有通过展示未生效的选项来替代这些行为。未启动用户 App、真实音乐库、外部音乐 API、声音或实际设置清除，也未执行 Electron 删除。

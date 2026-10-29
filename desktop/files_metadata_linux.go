@@ -5,6 +5,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"strings"
 	"syscall"
@@ -75,7 +76,7 @@ func metadataLinuxAttributes(file *os.File) (map[string][]byte, error) {
 			continue
 		}
 		name := string(raw)
-		if !strings.HasPrefix(name, "user.") && name != "system.posix_acl_access" {
+		if !strings.HasPrefix(name, "user.") && name != "system.posix_acl_access" && name != "security.selinux" {
 			return nil, errors.New("unsupported extended attribute: " + name)
 		}
 		value := make([]byte, 65536)
@@ -86,6 +87,31 @@ func metadataLinuxAttributes(file *os.File) (map[string][]byte, error) {
 		attributes[name] = value[:size]
 	}
 	return attributes, nil
+}
+
+func metadataPrepareSELinuxLabel(destination *os.File, source, inherited map[string][]byte) error {
+	sourceLabel, sourceLabeled := source["security.selinux"]
+	destinationLabel, destinationLabeled := inherited["security.selinux"]
+	if sourceLabeled && destinationLabeled && bytes.Equal(sourceLabel, destinationLabel) {
+		return nil
+	}
+	if !sourceLabeled {
+		if destinationLabeled {
+			return errors.New("SELinux label mismatch: source has no security.selinux label")
+		}
+		return nil
+	}
+	if _, err := metadataLinuxXattr(destination, syscall.SYS_FSETXATTR, "security.selinux", sourceLabel); err != nil {
+		return fmt.Errorf("cannot set security.selinux label: %w", err)
+	}
+	actual, err := metadataLinuxAttributes(destination)
+	if err != nil {
+		return fmt.Errorf("cannot read security.selinux label after setting: %w", err)
+	}
+	if !bytes.Equal(actual["security.selinux"], sourceLabel) {
+		return errors.New("security.selinux label differs after setting")
+	}
+	return nil
 }
 
 func metadataCopyAttributes(source, destination *os.File) error {
@@ -99,14 +125,6 @@ func metadataCopyAttributes(source, destination *os.File) error {
 	if err := syscall.Fstat(int(destination.Fd()), &target); err != nil {
 		return err
 	}
-	if stat.Uid != target.Uid || stat.Gid != target.Gid {
-		if err := syscall.Fchown(int(destination.Fd()), int(stat.Uid), int(stat.Gid)); err != nil {
-			return err
-		}
-	}
-	if err := syscall.Fchmod(int(destination.Fd()), stat.Mode&07777); err != nil {
-		return err
-	}
 	attributes, err := metadataLinuxAttributes(source)
 	if err != nil {
 		return err
@@ -115,7 +133,21 @@ func metadataCopyAttributes(source, destination *os.File) error {
 	if err != nil {
 		return err
 	}
+	if err := metadataPrepareSELinuxLabel(destination, attributes, inherited); err != nil {
+		return err
+	}
+	if stat.Uid != target.Uid || stat.Gid != target.Gid {
+		if err := syscall.Fchown(int(destination.Fd()), int(stat.Uid), int(stat.Gid)); err != nil {
+			return err
+		}
+	}
+	if err := syscall.Fchmod(int(destination.Fd()), stat.Mode&07777); err != nil {
+		return err
+	}
 	for name := range inherited {
+		if name == "security.selinux" {
+			continue
+		}
 		if _, present := attributes[name]; !present {
 			if _, err := metadataLinuxXattr(destination, syscall.SYS_FREMOVEXATTR, name, nil); err != nil {
 				return err
@@ -123,6 +155,9 @@ func metadataCopyAttributes(source, destination *os.File) error {
 		}
 	}
 	for name, value := range attributes {
+		if name == "security.selinux" {
+			continue
+		}
 		if _, err := metadataLinuxXattr(destination, syscall.SYS_FSETXATTR, name, value); err != nil {
 			return err
 		}

@@ -32,7 +32,6 @@
         {{ t("mygo.library.play_filtered") }}
       </n-button>
     </n-flex>
-    <n-p>{{ t("local.scan_supported") }}</n-p>
     <n-alert v-if="phase === 'partial'" type="warning" :show-icon="false">
       {{ t("local.scan_partial_detail", { count: issueCount }) }}
     </n-alert>
@@ -54,6 +53,8 @@
 
 <script setup lang="ts">
 import { computed, h, shallowRef } from "vue";
+import LocalSongActions from "@/components/Local/LocalSongActions.vue";
+import LocalArtworkImage from "@/components/Local/LocalArtworkImage.vue";
 import { NButton, type DataTableColumns } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import type { SongInfo } from "@/types/main.hemusic";
@@ -93,6 +94,24 @@ const playFiltered = () => {
 const songKey = (song: SongInfo) => song.id;
 const scan = () => void session.value?.scan();
 const columns = computed<DataTableColumns<SongInfo>>(() => [
+  ...(settingStore.showLocalCover
+    ? [
+        {
+          title: "",
+          key: "cover",
+          width: 56,
+          render: (song: SongInfo) =>
+            h(
+              LocalArtworkImage,
+              { song, style: { width: "40px", height: "40px" } },
+              {
+                default: () =>
+                  h("img", { src: "/images/song.jpg?asset", alt: "", width: 40, height: 40 }),
+              },
+            ),
+        },
+      ]
+    : []),
   { title: t("common.song_name"), key: "name", ellipsis: { tooltip: true } },
   { title: t("common.artist"), key: "artists", ellipsis: { tooltip: true } },
   { title: t("common.album"), key: "album", ellipsis: { tooltip: true } },
@@ -127,6 +146,12 @@ const columns = computed<DataTableColumns<SongInfo>>(() => [
         },
         { default: () => t("modal.song_info_edit") },
       ),
+  },
+  {
+    title: "",
+    key: "file-actions",
+    width: 48,
+    render: (row) => h(LocalSongActions, { song: row }),
   },
 ]);
 </script>

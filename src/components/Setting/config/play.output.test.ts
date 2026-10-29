@@ -1,12 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
+import { unref } from "vue";
 
 const mocks = vi.hoisted(() => ({
+  env: { isElectron: true, isMygo: false },
   toggleOutputDevice: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
 }));
 vi.mock("@/stores", () => ({ useSettingStore: () => ({}), useStatusStore: () => ({}) }));
-vi.mock("@/utils/env", () => ({ isElectron: true, isMygo: false }));
+vi.mock("@/utils/env", () => mocks.env);
 vi.mock("@/platform", () => ({ platform: { capabilities: {} } }));
 vi.mock("@/utils/helper", () => ({ renderOption: vi.fn() }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => mocks }));
@@ -49,6 +51,38 @@ describe("output device feedback", () => {
     } finally {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
+    }
+  });
+  it("exposes desktop playback settings and enumerates mygo outputs with a system default", async () => {
+    mocks.env.isElectron = false;
+    mocks.env.isMygo = true;
+    const enumerateDevices = vi.fn(async () => [
+      { kind: "audiooutput", deviceId: "default", groupId: "default", label: "Default" },
+      { kind: "audiooutput", deviceId: "speaker", groupId: "", label: "Speaker" },
+      { kind: "audiooutput", deviceId: "headset", groupId: "", label: "Headset" },
+      { kind: "audioinput", deviceId: "microphone", groupId: "", label: "Microphone" },
+    ]);
+    vi.stubGlobal("navigator", { mediaDevices: { enumerateDevices } });
+    try {
+      const config = usePlaySettings();
+      const items = config.groups.flatMap((group) => group.items);
+      const autoPlay = items.find((item) => item.key === "autoPlay");
+      const output = items.find((item) => item.key === "playDevice");
+      expect(autoPlay?.show).toBe(true);
+      expect(autoPlay?.disabled).toBe(false);
+      expect(output?.show).toBe(true);
+      expect(items.find((item) => item.key === "songVolumeFade")?.show).not.toBe(false);
+      await config.onActivate?.();
+      expect(enumerateDevices).toHaveBeenCalledOnce();
+      expect(unref(output?.options)).toEqual([
+        { label: "common.system_default", value: "" },
+        { label: "Speaker", value: "speaker" },
+        { label: "Headset", value: "headset" },
+      ]);
+    } finally {
+      mocks.env.isElectron = true;
+      mocks.env.isMygo = false;
+      vi.unstubAllGlobals();
     }
   });
 });

@@ -4,9 +4,17 @@ import type { LocalFileRef, MetadataResult, ScanEntry } from "@/platform/mygo.bi
 
 const mocks = vi.hoisted(() => {
   const read = vi.fn<(ref: LocalFileRef) => Promise<MetadataResult | undefined>>();
+  const createSource = () => ({
+    ready: { value: true },
+    displayAccess: (ref: LocalFileRef) => ({
+      current: () => true,
+      read: async () => (await read(ref)) ?? { code: "revoked", committed: false },
+    }),
+  });
   return {
     read,
-    source: { value: { ready: { value: true }, metadata: { read } } },
+    createSource,
+    source: { value: createSource() },
     setSongLyric: vi.fn<(data: Partial<SongLyric>, merge: boolean) => void>(),
     status: { lyricLoading: false, lyricIndex: -1 },
     online: vi.fn(),
@@ -31,7 +39,7 @@ afterEach(() => {
   vi.clearAllMocks();
   mocks.lookup.mockReset();
   mocks.read.mockReset();
-  mocks.source.value = { ready: { value: true }, metadata: { read: mocks.read } };
+  mocks.source.value = mocks.createSource();
 });
 
 it("mygo local lyrics clear the current view without reading Electron or requesting an online song", async () => {
@@ -152,8 +160,7 @@ it.each(["removed", "version", "owner"])(
       if (change === "removed") mocks.lookup.mockReturnValue(undefined);
       if (change === "version")
         mocks.lookup.mockReturnValue({ ...entry, ref: { ...entry.ref, version: "new" } });
-      if (change === "owner")
-        mocks.source.value = { ready: { value: true }, metadata: { read: mocks.read } };
+      if (change === "owner") mocks.source.value = mocks.createSource();
       return {
         code: "ok",
         committed: false,

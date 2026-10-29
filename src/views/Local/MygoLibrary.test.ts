@@ -27,7 +27,7 @@ const node = (tag: string, text = ""): Element => ({
 const play = vi.fn();
 const manage = vi.fn();
 const edit = vi.fn();
-const settings = Vue.reactive({ localFilesPath: ["/synthetic/remembered"] });
+const settings = Vue.reactive({ localFilesPath: ["/synthetic/remembered"], showLocalCover: true });
 const cleanups: Array<() => void> = [];
 const flush = async () => {
   for (let n = 0; n < 30; n++) await Promise.resolve();
@@ -47,6 +47,8 @@ function mount() {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/components/Local/LocalArtworkImage.vue": { default: pass },
+    "@/components/Local/LocalSongActions.vue": { default: pass },
     "naive-ui": { NButton: pass },
     "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
     "@/platform/filesSession": { filesSession },
@@ -205,6 +207,10 @@ it("the real local library template manages grants, scans transient rows and cle
     },
   ]);
   expect(JSON.stringify(table?.props.data)).not.toContain("grantToken");
+  expect(table?.props.columns).toEqual(
+    expect.arrayContaining([expect.objectContaining({ key: "cover" })]),
+  );
+  expect(view.all().some((element) => element.text === "local.scan_supported")).toBe(false);
   const columns = table?.props.columns;
   const rows = table?.props.data;
   if (!Array.isArray(columns) || !Array.isArray(rows)) throw new Error("Missing table data");

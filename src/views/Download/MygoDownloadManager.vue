@@ -6,7 +6,6 @@
         {{ t("mygo.downloads.clearDone") }}
       </button>
     </header>
-    <p>{{ t("mygo.downloads.sessionOnly") }}</p>
     <p v-if="filesSession?.downloads?.persistenceError?.value" role="alert">
       {{ t(filesSession.downloads.persistenceError.value) }}
     </p>

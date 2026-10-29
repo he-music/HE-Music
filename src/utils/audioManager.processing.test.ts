@@ -356,6 +356,27 @@ describe("production AudioManager Web Audio consumption", () => {
       vi.useRealTimers();
     }
   });
+  it("applies fade-in and cancels an old fade-out when playback resumes", async () => {
+    vi.useFakeTimers();
+    try {
+      manager.setVolume(0.4);
+      await manager.play("https://audio.invalid/fade.mp3", { fadeIn: true, fadeDuration: 0.5 });
+      const gain = lastContext().gain.gain;
+      expect(gain.setValueAtTime).toHaveBeenCalledWith(0, 0);
+      expect(gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.4, 0.5);
+      manager.pause({ fadeOut: true, fadeDuration: 1 });
+      expect(gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(0, 1);
+      expect(lastMedia().paused).toBe(false);
+      await manager.play(undefined, { fadeIn: true, fadeDuration: 0.5 });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(lastMedia().paused).toBe(false);
+      manager.pause({ fadeOut: true, fadeDuration: 1 });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(lastMedia().paused).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
   it("restores the desired device on the current graph context and on a plain fallback or replacement source", async () => {
     await manager.setSinkId("speakers");
     await manager.play("https://audio.invalid/output.mp3");

@@ -82,6 +82,15 @@ export interface DownloadState {
   ref?: LocalFileRef;
 }
 
+/**
+ * FileActionResult carries no machine paths. Removed remains true after a
+ * successful unlink even if the owner is revoked before the response.
+ */
+export interface FileActionResult {
+  code: string;
+  removed: boolean;
+}
+
 export interface FileSession {
   epoch: number;
 }
@@ -664,6 +673,18 @@ export const NativeFiles = {
   readDownloadState(epoch: number, id: string): Promise<DownloadState> {
     return call("NativeFiles.ReadDownloadState", epoch, id);
   },
+  /**
+   * ReadLocalArtwork accepts only a registered audio capability. The .jpg name is
+   * derived below its granted Root; the renderer cannot supply a sidecar pathname.
+   * Embedded JPEG/PNG wins; malformed tags still permit a valid same-name .jpg.
+   */
+  readLocalArtwork(epoch: number, ref: LocalFileRef): Promise<MetadataResult> {
+    return call("NativeFiles.ReadLocalArtwork", epoch, ref);
+  },
+  /** ReadLocalLyrics prefers same-name UTF-8 .lrc, then bounded embedded lyrics. */
+  readLocalLyrics(epoch: number, ref: LocalFileRef): Promise<MetadataResult> {
+    return call("NativeFiles.ReadLocalLyrics", epoch, ref);
+  },
   readMetadata(epoch: number, ref: LocalFileRef): Promise<MetadataResult> {
     return call("NativeFiles.ReadMetadata", epoch, ref);
   },
@@ -674,8 +695,18 @@ export const NativeFiles = {
   readScanPage(epoch: number, operationID: string, cursor: string): Promise<ScanPage> {
     return call("NativeFiles.ReadScanPage", epoch, operationID, cursor);
   },
+  /**
+   * RemoveLocalFile permanently removes only the requested original directory
+   * entry. The menu owns user confirmation and the current-playing prohibition.
+   */
+  removeLocalFile(epoch: number, ref: LocalFileRef): Promise<FileActionResult> {
+    return call("NativeFiles.RemoveLocalFile", epoch, ref);
+  },
   restoreDirectories(epoch: number): Promise<RestoredDirectories> {
     return call("NativeFiles.RestoreDirectories", epoch);
+  },
+  revealLocalFile(epoch: number, ref: LocalFileRef): Promise<FileActionResult> {
+    return call("NativeFiles.RevealLocalFile", epoch, ref);
   },
   revokeDirectory(epoch: number, token: string): Promise<void> {
     return call("NativeFiles.RevokeDirectory", epoch, token);
@@ -826,6 +857,13 @@ export const NetworkProxy = {
 
 /** DesktopPlatform exposes only the desktop capabilities implemented in M2. */
 export const DesktopPlatform = {
+  /**
+   * DeviceName preserves the native desktop device label used by authentication.
+   * It exposes a hardware model label, never the user's hostname or a file path.
+   */
+  deviceName(): Promise<string> {
+    return call("DesktopPlatform.DeviceName");
+  },
   /** OpenExternal opens HTTP(S) links in the system browser. */
   openExternal(rawURL: string): Promise<void> {
     return call("DesktopPlatform.OpenExternal", rawURL);

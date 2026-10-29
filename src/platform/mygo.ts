@@ -41,8 +41,11 @@ export function createMygoPlatform(): PlatformAdapter {
     os: os === "darwin" || os === "win32" || os === "linux" ? os : "unknown",
     capabilities,
     files: NativeFiles,
+    deviceName: DesktopPlatform.deviceName,
     systemFonts:
-      os === "darwin" || os === "win32" ? createSystemFontsProvider(SystemFonts) : undefined,
+      os === "darwin" || os === "win32" || os === "linux"
+        ? createSystemFontsProvider(SystemFonts)
+        : undefined,
     protocols: {
       ...Protocols,
       onIntent: (listener) => events.desktopProtocolIntent.on(listener),

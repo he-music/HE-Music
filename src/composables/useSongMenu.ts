@@ -1,5 +1,5 @@
 import { DropdownOption, NAlert } from "naive-ui";
-import { useStatusStore, useDataStore, usePlatformStore } from "@/stores";
+import { useStatusStore, useDataStore, usePlatformStore, useMusicStore } from "@/stores";
 import { renderIcon, copyData, getShareUrl } from "@/utils/helper";
 import {
   openDownloadSong,
@@ -17,7 +17,10 @@ import { songEqual } from "@/utils/song";
 import { usePlayer } from "@/utils/player";
 import songManager from "@/utils/songManager";
 import { getSizeCover } from "@/utils/format";
-import { isElectron } from "@/utils/env";
+import { isElectron, isMygo } from "@/utils/env";
+import { filesSession } from "@/platform/filesSession";
+import { nativeLocalEntry, localFilesSession } from "@/platform/localFilesSession";
+import { LocalFileActions } from "@/platform/localFileActions";
 
 /** 歌曲菜单 */
 export const useSongMenu = () => {
@@ -25,9 +28,41 @@ export const useSongMenu = () => {
   const dataStore = useDataStore();
   const statusStore = useStatusStore();
   const platformStore = usePlatformStore();
+  const musicStore = useMusicStore();
   const player = usePlayer();
   const { t } = useI18n();
 
+  const localFileActions = new LocalFileActions({
+    access(song) {
+      const owner = filesSession.value;
+      const local = localFilesSession.value;
+      const entry = nativeLocalEntry(song.id);
+      if (
+        !owner ||
+        !local ||
+        !entry ||
+        song.platform !== "local" ||
+        entry.relativePath !== song.path
+      )
+        return;
+      const access = owner.fileActionAccess(entry.ref);
+      if (!access) return;
+      return {
+        ...access,
+        current: () =>
+          filesSession.value === owner &&
+          localFilesSession.value === local &&
+          nativeLocalEntry(song.id) === entry &&
+          access.current(),
+      };
+    },
+    isPlaying: (song) => songEqual(musicStore.playSong, song),
+    onRemoved() {
+      void localFilesSession.value?.refreshAfterWrite().catch(() => {
+        console.error("文件已删除，但本地列表刷新失败");
+      });
+    },
+  });
   const openSheetMusic = (song: SongInfo) => {
     if (
       song.path ||
@@ -45,7 +80,10 @@ export const useSongMenu = () => {
     });
   };
 
-  const deleteLocalSong = (song: SongInfo, emit: (event: "removeSong", args: any[]) => void) => {
+  const deleteLocalSong = (
+    song: SongInfo,
+    emit: (event: "removeSong", args: SongInfo[]) => void,
+  ) => {
     if (!song.path) return;
     window.$dialog.warning({
       title: t("common.confirm_delete"),
@@ -61,8 +99,14 @@ export const useSongMenu = () => {
       positiveText: t("common.delete"),
       negativeText: t("common.cancel"),
       onPositiveClick: async () => {
-        const result = await window.electron.ipcRenderer.invoke("delete-file", song.path);
-        if (result) {
+        const result = isMygo
+          ? await localFileActions.remove(song)
+          : {
+              removed: await window.electron.ipcRenderer.invoke("delete-file", song.path),
+              current: true,
+            };
+        if (result.removed && !result.current) return;
+        if (result.removed) {
           // 通知父组件删除歌曲
           emit("removeSong", [song]);
           const currentPlayList = dataStore.playList;
@@ -94,7 +138,7 @@ export const useSongMenu = () => {
       platform: "",
       type: "",
     },
-    emit: (event: "removeSong", args: any[]) => void,
+    emit: (event: "removeSong", args: SongInfo[]) => void,
   ): DropdownOption[] => {
     const isHasMv = !!song?.mv_id && song.mv_id !== "0";
     const isLocal = !!song?.path;
@@ -289,7 +333,7 @@ export const useSongMenu = () => {
       {
         key: "delete-file",
         label: t("menu.delete_file"),
-        show: isLocal && !isCurrent,
+        show: isLocal && (isElectron || isMygo) && !songEqual(musicStore.playSong, song),
         props: {
           onClick: () => deleteLocalSong(song, emit),
         },
@@ -298,9 +342,16 @@ export const useSongMenu = () => {
       {
         key: "open-folder",
         label: t("menu.open_folder"),
-        show: isLocal,
+        show: isLocal && (isElectron || isMygo),
         props: {
-          onClick: () => window.electron.ipcRenderer.send("open-folder", song.path),
+          onClick: async () => {
+            if (isMygo) {
+              if (!(await localFileActions.reveal(song)))
+                window.$message.error(t("message.local_file_action_failed"));
+              return;
+            }
+            window.electron.ipcRenderer.send("open-folder", song.path);
+          },
         },
         icon: renderIcon("SnippetFolder"),
       },

@@ -330,6 +330,7 @@
     "watch_mv": "观看 MV"
   },
   "message": {
+    "local_file_action_failed": "文件操作未完成，请刷新本地音乐后重试。",
     "add_fail": "添加失败",
     "add_song_to_playlist_success": "歌曲已添加至歌单",
     "added_local_music_count": "新增 {count} 首歌曲",

@@ -17,6 +17,7 @@ import type {
   ScanPage,
   LocalAudioTicket,
   LocalFileRef,
+  FileActionResult,
   MetadataResult,
   MetadataSaveRequest,
   DownloadRequest,
@@ -29,6 +30,12 @@ export interface FileScanAccess {
   start(): Promise<ScanOperation>;
   read(operationID: string, cursor: string): Promise<ScanPage>;
   cancel(operationID: string): Promise<void>;
+}
+
+export interface LocalFileActionAccess {
+  current(): boolean;
+  reveal(): Promise<FileActionResult>;
+  remove(): Promise<FileActionResult>;
 }
 
 export interface LocalAudioAccess {
@@ -281,6 +288,43 @@ export class FilesSession {
       this.epoch === epoch &&
       this.directoryGrants.value.some((grant) => grant.token === token && grant.epoch === epoch);
     return current() ? { epoch, current } : undefined;
+  }
+
+  fileActionAccess(ref: LocalFileRef): LocalFileActionAccess | undefined {
+    const captured = { ...ref };
+    const grant = this.captureGrant(captured.grantToken);
+    const { revealLocalFile, removeLocalFile } = this.provider;
+    if (!grant || !revealLocalFile || !removeLocalFile) return;
+    const { epoch, current } = grant;
+    return {
+      current,
+      reveal: () => {
+        if (!current()) return Promise.reject(new Error("File authorization expired"));
+        return revealLocalFile(epoch, captured);
+      },
+      remove: () => {
+        if (!current()) return Promise.reject(new Error("File authorization expired"));
+        // A late revocation cannot undo a deletion that already committed.
+        return removeLocalFile(epoch, captured);
+      },
+    };
+  }
+
+  displayAccess(ref: LocalFileRef, kind: "artwork" | "lyrics") {
+    const captured = { ...ref };
+    const grant = this.captureGrant(captured.grantToken);
+    const read =
+      kind === "artwork" ? this.provider.readLocalArtwork : this.provider.readLocalLyrics;
+    if (!grant || !read) return;
+    const { epoch, current } = grant;
+    return {
+      current,
+      read: async (): Promise<MetadataResult> => {
+        if (!current()) return { code: "revoked", committed: false };
+        const result = await read(epoch, captured);
+        return current() ? result : { code: "revoked", committed: false };
+      },
+    };
   }
 
   metadataAccess(ref: LocalFileRef): FileMetadataAccess | undefined {
