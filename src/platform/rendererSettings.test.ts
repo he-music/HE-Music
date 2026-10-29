@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
 import { createDefaultDesktopLyricStyle } from "./desktopLyricStyle";
+import { createDefaultDesktopLyricOptions } from "./desktopLyricOptions";
 vi.stubGlobal("localStorage", {});
 const { createSettingState, useSettingStore } = await import("@/stores/setting");
 const { createShortcutState, useShortcutStore } = await import("@/stores/shortcut");
@@ -37,6 +38,31 @@ const partial = (setting: unknown = {}, shortcut: unknown = {}) => ({
 });
 
 describe("rendererSettings", () => {
+  it("persists native text options independently and rejects malformed imported font data", () => {
+    const setting = useSettingStore();
+    const shortcut = useShortcutStore();
+    setting.desktopLyricOptions.font.size = 48;
+    setting.desktopLyricOptions.showTran = false;
+    const saved = serializeRendererSettings(setting.$state, shortcut.$state);
+    const decoded = validateSettingState(JSON.parse(saved["setting-store"]));
+    expect(decoded.desktopLyricOptions.font.size).toBe(48);
+    expect(decoded.desktopLyricOptions.showTran).toBe(false);
+    decoded.desktopLyricOptions.font.size = 96;
+    expect(setting.desktopLyricOptions.font.size).toBe(48);
+    expect(validateSettingState({}).desktopLyricOptions).toEqual(
+      createDefaultDesktopLyricOptions(),
+    );
+    for (const desktopLyricOptions of [
+      { font: { size: 97 } },
+      { font: { family: "url(private)" } },
+      { showYrc: "true" },
+      { unknown: 1 },
+    ]) {
+      expect(() => validateSettingState({ desktopLyricOptions })).toThrow(
+        "Invalid renderer settings",
+      );
+    }
+  });
   it("round trips actual current Pinia snapshots and reset defaults", () => {
     const setting = useSettingStore();
     const shortcut = useShortcutStore();

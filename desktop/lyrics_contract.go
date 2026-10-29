@@ -34,30 +34,32 @@ type LyricsBounds struct {
 // is still outstanding. A failed asynchronous open reports Failure and false.
 // Locked windows ignore mouse events; a native tray action always permits unlocking.
 type LyricsWindowState struct {
-	Epoch       uint64       `json:"epoch"`
-	Revision    uint64       `json:"revision"`
-	Visible     bool         `json:"visible"`
-	Pending     bool         `json:"pending"`
-	Locked      bool         `json:"locked"`
-	HoverUnlock bool         `json:"hoverUnlock"`
-	Bounds      LyricsBounds `json:"bounds"`
-	Failure     string       `json:"failure"`
+	Epoch       uint64        `json:"epoch"`
+	Revision    uint64        `json:"revision"`
+	Visible     bool          `json:"visible"`
+	Pending     bool          `json:"pending"`
+	Locked      bool          `json:"locked"`
+	HoverUnlock bool          `json:"hoverUnlock"`
+	Bounds      LyricsBounds  `json:"bounds"`
+	WorkArea    *LyricsBounds `json:"workArea,omitempty"`
+	Failure     string        `json:"failure"`
 }
 
 type LyricsSnapshot struct {
-	Epoch      uint64       `json:"epoch"`
-	Seq        uint64       `json:"seq"`
-	TrackKey   string       `json:"trackKey"`
-	PlayName   string       `json:"playName"`
-	ArtistName string       `json:"artistName"`
-	Playing    bool         `json:"playing"`
-	PositionMs float64      `json:"positionMs"`
-	OffsetMs   float64      `json:"offsetMs"`
-	Rate       float64      `json:"rate"`
-	Loading    bool         `json:"loading"`
-	LrcData    []LyricsLine `json:"lrcData"`
-	YrcData    []LyricsLine `json:"yrcData"`
-	Style      *LyricsStyle `json:"style,omitempty"`
+	Epoch      uint64         `json:"epoch"`
+	Seq        uint64         `json:"seq"`
+	TrackKey   string         `json:"trackKey"`
+	PlayName   string         `json:"playName"`
+	ArtistName string         `json:"artistName"`
+	Playing    bool           `json:"playing"`
+	PositionMs float64        `json:"positionMs"`
+	OffsetMs   float64        `json:"offsetMs"`
+	Rate       float64        `json:"rate"`
+	Loading    bool           `json:"loading"`
+	LrcData    []LyricsLine   `json:"lrcData"`
+	YrcData    []LyricsLine   `json:"yrcData"`
+	Style      *LyricsStyle   `json:"style,omitempty"`
+	Options    *LyricsOptions `json:"options,omitempty"`
 }
 
 type LyricsClock struct {

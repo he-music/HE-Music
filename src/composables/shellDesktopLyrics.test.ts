@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDefaultDesktopLyricStyle } from "@/platform/desktopLyricStyle";
+import { createDefaultDesktopLyricOptions } from "@/platform/desktopLyricOptions";
 import { createRenderer, h, nextTick, reactive } from "vue";
 import type { LyricsCommand, PlatformDesktopLyrics } from "@/platform/desktopLyrics";
 
@@ -43,6 +44,7 @@ describe("shellDesktopLyrics", () => {
     mocks.platform.kind = "mygo";
     const settings = reactive({
       desktopLyricStyle: createDefaultDesktopLyricStyle(),
+      desktopLyricOptions: createDefaultDesktopLyricOptions(),
       unrelated: false,
     });
     mocks.setting = settings;
@@ -141,6 +143,9 @@ describe("shellDesktopLyrics", () => {
         style: createDefaultDesktopLyricStyle(),
       }),
     );
+    expect(publishSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ options: createDefaultDesktopLyricOptions() }),
+    );
     const initialSnapshots = publishSnapshot.mock.calls.length;
     for (const action of ["toggle", "previous", "next", "open-settings"] as const) {
       commands.forEach((listener) => listener({ epoch: 4, trackKey: '["test","one"]', action }));
@@ -166,6 +171,21 @@ describe("shellDesktopLyrics", () => {
     expect(publishSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({
         style: { ...createDefaultDesktopLyricStyle(), playedColor: "#123456" },
+      }),
+    );
+    expect(renders).toBe(1);
+    const beforeOptions = publishSnapshot.mock.calls.length;
+    settings.desktopLyricOptions.font.size = 48;
+    settings.desktopLyricOptions.showTran = false;
+    await flush();
+    expect(publishSnapshot).toHaveBeenCalledTimes(beforeOptions + 1);
+    expect(publishSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        options: {
+          ...createDefaultDesktopLyricOptions(),
+          font: { ...createDefaultDesktopLyricOptions().font, size: 48 },
+          showTran: false,
+        },
       }),
     );
     expect(renders).toBe(1);

@@ -8,9 +8,14 @@ import {
   createDefaultDesktopLyricStyle,
   type DesktopLyricStyle,
 } from "@/platform/desktopLyricStyle";
+import {
+  createDefaultDesktopLyricOptions,
+  type DesktopLyricOptions,
+} from "@/platform/desktopLyricOptions";
 
 export interface SettingState {
   desktopLyricStyle: DesktopLyricStyle;
+  desktopLyricOptions: DesktopLyricOptions;
   /** 明暗模式 */
   themeMode: "light" | "dark" | "auto";
   themeColorType: ThemeColorType;
@@ -123,6 +128,7 @@ export interface SettingState {
 
 export const createSettingState = (): SettingState => ({
   desktopLyricStyle: createDefaultDesktopLyricStyle(),
+  desktopLyricOptions: createDefaultDesktopLyricOptions(),
   // 个性化
   themeMode: "auto", // 明暗模式
   themeColorType: "default", // 主题类别

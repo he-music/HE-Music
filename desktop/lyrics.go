@@ -20,12 +20,13 @@ var (
 // DesktopLyrics owns an independent web window with a native external unlock path.
 // It never owns audio, claims lifecycle readiness, writes settings, or accepts arbitrary IPC.
 type DesktopLyrics struct {
-	main      *mygo.Window
-	win       *mygo.Window
-	state     lyricsState
-	listeners []func()
-	timer     *time.Timer
-	stopChild func() bool
+	main            *mygo.Window
+	win             *mygo.Window
+	state           lyricsState
+	listeners       []func()
+	timer           *time.Timer
+	stopChild       func() bool
+	appliedFontSize int
 }
 
 func init() { mygo.Bind(desktopLyrics) }
@@ -46,6 +47,7 @@ func (l *DesktopLyrics) Begin(ctx context.Context) (LyricsSession, error) {
 			return errLyricsOwner
 		}
 		l.revoke()
+		l.appliedFontSize = defaultLyricsOptions().Font.Size
 		var err error
 		result, err = l.state.begin(ctx)
 		desktopLifecycle.updateMenu()
@@ -62,6 +64,9 @@ func (l *DesktopLyrics) SetVisible(ctx context.Context, epoch uint64, visible bo
 		if !visible {
 			l.closeWindow(l.state.generation, "")
 		} else if l.win == nil {
+			if err := l.syncOptionsBounds(); err != nil {
+				return err
+			}
 			if err := l.createWindow(); err != nil {
 				result = l.state.window
 				return err
@@ -115,6 +120,11 @@ func (l *DesktopLyrics) setLocked(locked bool) error {
 	}
 	l.win.SetMovable(!locked)
 	l.win.SetIgnoreMouseEvents(locked)
+	if !locked {
+		if err := l.syncOptionsBounds(); err != nil {
+			return err
+		}
+	}
 	l.emitWindow()
 	return nil
 }
@@ -122,6 +132,9 @@ func (l *DesktopLyrics) setLocked(locked bool) error {
 func (l *DesktopLyrics) PublishSnapshot(ctx context.Context, snapshot LyricsSnapshot) error {
 	return l.call(ctx, snapshot.Epoch, false, func() error {
 		if err := l.state.publishSnapshot(snapshot); err != nil {
+			return err
+		}
+		if err := l.syncOptionsBounds(); err != nil {
 			return err
 		}
 		if l.state.attached && l.win != nil {
@@ -297,6 +310,7 @@ func (l *DesktopLyrics) createWindow() (err error) {
 		return errors.New("desktop lyrics window creation failed")
 	}
 	l.state.window.Bounds = LyricsBounds(win.Bounds())
+	l.state.window.WorkArea = lyricsWorkAreaForBounds(l.state.window.Bounds, areas)
 	navigated := false
 	l.listeners = append(l.listeners,
 		win.OnReadyToShow(func() {
@@ -368,8 +382,10 @@ func (l *DesktopLyrics) maybeShow(generation uint64) {
 func (l *DesktopLyrics) readBounds() {
 	if l.win != nil && !l.win.IsDestroyed() {
 		bounds := LyricsBounds(l.win.Bounds())
-		if bounds != l.state.window.Bounds {
+		area := lyricsWorkAreaForBounds(bounds, lyricsWorkAreas())
+		if bounds != l.state.window.Bounds || !sameLyricsWorkArea(area, l.state.window.WorkArea) {
 			l.state.window.Bounds = bounds
+			l.state.window.WorkArea = area
 			l.state.window.Revision++
 			l.emitWindow()
 		}

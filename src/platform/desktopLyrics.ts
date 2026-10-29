@@ -20,7 +20,10 @@ export type {
 } from "./mygo.bindings";
 
 /** Native provider with explicit window state, locking and external tray recovery. */
-export interface PlatformDesktopLyrics extends Readonly<typeof DesktopLyrics> {
+export interface PlatformDesktopLyrics extends Readonly<
+  Omit<typeof DesktopLyrics, "resetPosition">
+> {
+  resetPosition?: typeof DesktopLyrics.resetPosition;
   onWindow(listener: (state: LyricsWindowState) => void): () => void;
   onSnapshot(listener: (snapshot: LyricsSnapshot) => void): () => void;
   onClock(listener: (clock: LyricsClock) => void): () => void;

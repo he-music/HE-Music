@@ -7,6 +7,7 @@ import ts from "typescript";
 import { calculateLyricIndex } from "@/utils/calc";
 import defaultConfig from "@/assets/data/lyricConfig";
 import * as desktopLyricStyle from "@/platform/desktopLyricStyle";
+import * as desktopLyricOptions from "@/platform/desktopLyricOptions";
 import type { LyricConfig, LyricData, RenderLine } from "@/types/desktop-lyric";
 import type {
   LyricsAttachment,
@@ -152,7 +153,7 @@ interface ViewState {
   renderLyricLines: Vue.ComputedRef<RenderLine[]>;
   isInitializing: Vue.Ref<boolean>;
   consumer: ReturnType<typeof createDesktopLyricsConsumer>;
-  cachedBounds: LyricsBounds;
+  cachedBounds: LyricsBounds & { screenMinX: number; screenMaxX: number };
   sendToMain: (event: string, ...args: unknown[]) => void;
   sendToMainWin: (event: string, ...args: unknown[]) => void;
   toggleLyricLock: () => void;
@@ -286,6 +287,7 @@ function mountView(kind: "mygo" | "electron" | "web", fixture = providerFixture(
     "@/utils/calc": { calculateLyricIndex },
     "@/assets/data/lyricConfig": { default: defaultConfig },
     "@/platform/desktopLyricStyle": desktopLyricStyle,
+    "@/platform/desktopLyricOptions": desktopLyricOptions,
     "@/platform": {
       platform: { kind, desktopLyrics: kind === "mygo" ? fixture.provider : undefined },
     },
@@ -362,6 +364,58 @@ function mountView(kind: "mygo" | "electron" | "web", fixture = providerFixture(
 }
 
 describe("DesktopLyric production SFC", () => {
+  it("完整快照应用文字设置并在原节点更新，clock和窗口高度不覆盖字号，工作区用于拖动边界", async () => {
+    const view = mountView("mygo");
+    const options = desktopLyricOptions.createDefaultDesktopLyricOptions();
+    options.font.family = "测试字体";
+    options.font.size = 48;
+    options.font.weight = 400;
+    options.font.style = "italic";
+    options.position = "center";
+    options.alwaysShowPlayInfo = true;
+    options.limitBounds = true;
+    view.fixture.emitSnapshot({ ...snapshot(8), options });
+    await flush();
+    view.fixture.attachment.resolve({ window: windowState(), snapshot: snapshot(2) });
+    await flush();
+    const word = allNodes(view.root).find((node) => node.props.class === "word");
+    expect(word).toBeDefined();
+    expect(JSON.stringify(allNodes(view.root).map((node) => node.props.style))).toContain(
+      "测试字体",
+    );
+    expect(view.state.lyricConfig.font.size).toBe(48);
+    options.font.weight = 700;
+    view.fixture.emitSnapshot({ ...snapshot(9), options });
+    await flush();
+    expect(allNodes(view.root).find((node) => node.props.class === "word")).toBe(word);
+    expect(view.state.lyricConfig.font.weight).toBe(700);
+    view.size.height.value = 360;
+    view.fixture.emitClock(clock(10));
+    await flush();
+    expect(view.state.lyricConfig.font.size).toBe(48);
+    view.fixture.emitWindow({
+      ...windowState(2),
+      workArea: { x: -1000, y: 0, width: 1000, height: 800 },
+    });
+    expect(view.state.cachedBounds.screenMinX).toBe(-1000);
+    expect(view.state.cachedBounds.screenMaxX).toBe(0);
+    view.fixture.emitSnapshot({
+      ...snapshot(11),
+      options: {
+        ...options,
+        showTran: false,
+        showYrc: false,
+        isDoubleLine: false,
+        animation: false,
+      },
+    });
+    await flush();
+    expect(text(view.root)).not.toContain("声音译文");
+    expect(allNodes(view.root).some((node) => node.props.class === "word")).toBe(false);
+    view.fixture.emitWindow(windowState(1, 8));
+    expect(view.state.lyricConfig.font.size).toBe(24);
+    expect(view.state.lyricConfig.showTran).toBe(true);
+  });
   it("mygo首次挂载无Electron访问，先三订阅再Attach，真实模板显示逐字/译文", async () => {
     const view = mountView("mygo");
     expect(view.fixture.order).toEqual(["snapshot", "clock", "window", "attach"]);

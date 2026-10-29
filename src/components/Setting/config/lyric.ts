@@ -16,6 +16,10 @@ import {
   createDefaultDesktopLyricStyle,
   parseDesktopLyricStyle,
 } from "@/platform/desktopLyricStyle";
+import {
+  createDefaultDesktopLyricOptions,
+  parseDesktopLyricOptions,
+} from "@/platform/desktopLyricOptions";
 
 export const useLyricSettings = (): SettingConfig => {
   const player = usePlayer();
@@ -23,12 +27,21 @@ export const useLyricSettings = (): SettingConfig => {
   const settingStore = useSettingStore();
 
   // 桌面歌词配置
-  const desktopLyricConfig = reactive<LyricConfig>({ ...defaultDesktopLyricConfig });
+  const desktopLyricConfig = reactive<LyricConfig>(cloneDeep(defaultDesktopLyricConfig));
 
   const nativeStyle = () =>
     parseDesktopLyricStyle(settingStore.desktopLyricStyle) ?? createDefaultDesktopLyricStyle();
   const syncNativeStyle = () => {
     if (platform.kind === "mygo") Object.assign(desktopLyricConfig, nativeStyle());
+  };
+  const syncNativeOptions = () => {
+    if (platform.kind === "mygo") {
+      Object.assign(
+        desktopLyricConfig,
+        parseDesktopLyricOptions(settingStore.desktopLyricOptions) ??
+          createDefaultDesktopLyricOptions(),
+      );
+    }
   };
   watch(
     () =>
@@ -41,6 +54,27 @@ export const useLyricSettings = (): SettingConfig => {
           ]
         : [],
     syncNativeStyle,
+    { immediate: true, flush: "sync" },
+  );
+  watch(
+    () =>
+      platform.kind === "mygo"
+        ? [
+            settingStore.desktopLyricOptions?.font?.family,
+            settingStore.desktopLyricOptions?.font?.size,
+            settingStore.desktopLyricOptions?.font?.weight,
+            settingStore.desktopLyricOptions?.font?.postScriptName,
+            settingStore.desktopLyricOptions?.font?.style,
+            settingStore.desktopLyricOptions?.isDoubleLine,
+            settingStore.desktopLyricOptions?.position,
+            settingStore.desktopLyricOptions?.limitBounds,
+            settingStore.desktopLyricOptions?.showYrc,
+            settingStore.desktopLyricOptions?.showTran,
+            settingStore.desktopLyricOptions?.animation,
+            settingStore.desktopLyricOptions?.alwaysShowPlayInfo,
+          ]
+        : [],
+    syncNativeOptions,
     { immediate: true, flush: "sync" },
   );
   const styleAvailable = computed(
@@ -92,6 +126,30 @@ export const useLyricSettings = (): SettingConfig => {
       getDesktopLyricConfig();
     }
   };
+  const saveDesktopLyricOptions = () => {
+    if (platform.kind !== "mygo") return saveDesktopLyricConfig();
+    try {
+      const options = parseDesktopLyricOptions({
+        font: { ...desktopLyricConfig.font },
+        isDoubleLine: desktopLyricConfig.isDoubleLine,
+        position: desktopLyricConfig.position,
+        limitBounds: desktopLyricConfig.limitBounds,
+        showYrc: desktopLyricConfig.showYrc,
+        showTran: desktopLyricConfig.showTran,
+        animation: desktopLyricConfig.animation,
+        alwaysShowPlayInfo: desktopLyricConfig.alwaysShowPlayInfo,
+      });
+      if (!options) {
+        syncNativeOptions();
+        window.$message.error(t("message.desktop_lyrics_save_fail"));
+        return;
+      }
+      settingStore.desktopLyricOptions = options;
+    } catch {
+      syncNativeOptions();
+      window.$message.error(t("message.desktop_lyrics_save_fail"));
+    }
+  };
 
   // 恢复默认桌面歌词配置
   const restoreDesktopLyricConfig = () => {
@@ -129,6 +187,23 @@ export const useLyricSettings = (): SettingConfig => {
   // 重置桌面歌词位置
   const resetDesktopLyricWindow = () => {
     try {
+      if (platform.kind === "mygo") {
+        const session = desktopLyricsSession.value;
+        if (!session?.ready.value || !session.canResetPosition) return;
+        void session
+          .requestResetPosition()
+          .then(() => {
+            if (desktopLyricsSession.value === session && session.ready.value) {
+              window.$message.success(t("message.desktop_lyrics_position_reset_success"));
+            }
+          })
+          .catch(() => {
+            if (desktopLyricsSession.value === session && session.ready.value) {
+              window.$message.error(t("message.desktop_lyrics_position_reset_fail"));
+            }
+          });
+        return;
+      }
       if (!isElectron) return;
       window.electron.ipcRenderer.invoke("reset-desktop-lyric-window");
       window.$message.success(t("message.desktop_lyrics_position_reset_success"));
@@ -680,7 +755,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricDoubleLine",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.desktop_lyrics_double_line"),
             type: "switch",
             description: t("setting.lyrics.desktop_lyrics_double_line_tip"),
@@ -688,13 +763,13 @@ export const useLyricSettings = (): SettingConfig => {
               get: () => desktopLyricConfig.isDoubleLine,
               set: (v) => {
                 desktopLyricConfig.isDoubleLine = v;
-                saveDesktopLyricConfig();
+                saveDesktopLyricOptions();
               },
             }),
           },
           {
             key: "desktopLyricLimitBounds",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.desktop_lyrics_limit_bounds"),
             type: "switch",
             description: t("setting.lyrics.desktop_lyrics_limit_bounds_tip"),
@@ -702,13 +777,13 @@ export const useLyricSettings = (): SettingConfig => {
               get: () => desktopLyricConfig.limitBounds,
               set: (v) => {
                 desktopLyricConfig.limitBounds = v;
-                saveDesktopLyricConfig();
+                saveDesktopLyricOptions();
               },
             }),
           },
           {
             key: "desktopLyricPosition",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.desktop_lyrics_align"),
             type: "select",
             description: t("setting.lyrics.desktop_lyrics_align_tip"),
@@ -722,7 +797,7 @@ export const useLyricSettings = (): SettingConfig => {
               get: () => desktopLyricConfig.position,
               set: (v) => {
                 desktopLyricConfig.position = v;
-                saveDesktopLyricConfig();
+                saveDesktopLyricOptions();
               },
             }),
           },
@@ -736,8 +811,57 @@ export const useLyricSettings = (): SettingConfig => {
             action: openFontManager,
           },
           {
+            key: "desktopLyricNativeFont",
+            show: () => platform.kind === "mygo" && styleAvailable.value,
+            label: t("setting.lyrics.desktop_lyrics_font_family"),
+            type: "text-input",
+            description: t("setting.lyrics.desktop_lyrics_font_name_tip"),
+            componentProps: { onBlur: saveDesktopLyricOptions },
+            value: computed({
+              get: () => desktopLyricConfig.font.family,
+              set: (value: string) => {
+                desktopLyricConfig.font.family = value;
+                desktopLyricConfig.font.postScriptName = value;
+              },
+            }),
+          },
+          {
+            key: "desktopLyricFontWeight",
+            show: () => platform.kind === "mygo" && styleAvailable.value,
+            label: t("setting.lyrics.desktop_lyrics_font_weight"),
+            type: "select",
+            options: Array.from({ length: 9 }, (_, index) => ({
+              label: String((index + 1) * 100),
+              value: (index + 1) * 100,
+            })),
+            value: computed({
+              get: () => desktopLyricConfig.font.weight,
+              set: (value: number) => {
+                desktopLyricConfig.font.weight = value;
+                saveDesktopLyricOptions();
+              },
+            }),
+          },
+          {
+            key: "desktopLyricFontStyle",
+            show: () => platform.kind === "mygo" && styleAvailable.value,
+            label: t("setting.lyrics.desktop_lyrics_font_style"),
+            type: "select",
+            options: ["normal", "italic", "oblique"].map((value) => ({
+              label: t(`setting.lyrics.desktop_lyrics_font_style_${value}`),
+              value,
+            })),
+            value: computed({
+              get: () => desktopLyricConfig.font.style,
+              set: (value: string) => {
+                desktopLyricConfig.font.style = value;
+                saveDesktopLyricOptions();
+              },
+            }),
+          },
+          {
             key: "desktopLyricShowYrc",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.show_desktop_font_lyrics"),
             type: "switch",
             description: t("setting.lyrics.show_desktop_font_lyrics"),
@@ -745,13 +869,13 @@ export const useLyricSettings = (): SettingConfig => {
               get: () => desktopLyricConfig.showYrc,
               set: (v) => {
                 desktopLyricConfig.showYrc = v;
-                saveDesktopLyricConfig();
+                saveDesktopLyricOptions();
               },
             }),
           },
           {
             key: "desktopLyricShowTran",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.show_desktop_lyrics_trans"),
             type: "switch",
             description: t("setting.lyrics.show_desktop_lyrics_trans_tip"),
@@ -759,13 +883,13 @@ export const useLyricSettings = (): SettingConfig => {
               get: () => desktopLyricConfig.showTran,
               set: (v) => {
                 desktopLyricConfig.showTran = v;
-                saveDesktopLyricConfig();
+                saveDesktopLyricOptions();
               },
             }),
           },
           {
             key: "desktopLyricAnimation",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.show_desktop_animation"),
             type: "switch",
             description: t("setting.lyrics.show_desktop_animation_tip"),
@@ -773,13 +897,15 @@ export const useLyricSettings = (): SettingConfig => {
               get: () => desktopLyricConfig.animation,
               set: (v) => {
                 desktopLyricConfig.animation = v;
-                saveDesktopLyricConfig();
+                saveDesktopLyricOptions();
               },
             }),
           },
           {
             key: "desktopLyricFontSize",
-            show: isElectron,
+            show: styleAvailable,
+            disabled: () =>
+              platform.kind === "mygo" && desktopLyricsSession.value?.window.value?.locked === true,
             label: t("setting.lyrics.desktop_lyrics_font_size"),
             type: "select",
             description: t("setting.lyrics.desktop_lyrics_font_size_tip"),
@@ -791,7 +917,7 @@ export const useLyricSettings = (): SettingConfig => {
               get: () => desktopLyricConfig.font.size,
               set: (v) => {
                 desktopLyricConfig.font.size = v;
-                saveDesktopLyricConfig();
+                saveDesktopLyricOptions();
               },
             }),
           },
@@ -849,7 +975,7 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricAlwaysShowPlayInfo",
-            show: isElectron,
+            show: styleAvailable,
             label: t("setting.lyrics.desktop_lyrics_always_show_play_info"),
             type: "switch",
             description: t("setting.lyrics.desktop_lyrics_always_show_play_info_tip"),
@@ -857,18 +983,40 @@ export const useLyricSettings = (): SettingConfig => {
               get: () => desktopLyricConfig.alwaysShowPlayInfo,
               set: (v) => {
                 desktopLyricConfig.alwaysShowPlayInfo = v;
-                saveDesktopLyricConfig();
+                saveDesktopLyricOptions();
               },
             }),
           },
           {
             key: "desktopLyricResetPosition",
-            show: isElectron,
+            show: styleAvailable,
+            disabled: () =>
+              platform.kind === "mygo" &&
+              (!desktopLyricsSession.value?.canResetPosition ||
+                desktopLyricsSession.value.window.value?.locked === true ||
+                desktopLyricsSession.value.window.value?.pending === true),
             label: t("setting.lyrics.desktop_lyrics_reset_position"),
             type: "button",
             description: t("setting.lyrics.desktop_lyrics_reset_position_tip"),
             buttonLabel: t("common.reset_position"),
             action: resetDesktopLyricWindow,
+          },
+          {
+            key: "desktopLyricOptionsRestore",
+            show: () => platform.kind === "mygo" && styleAvailable.value,
+            label: t("setting.lyrics.desktop_lyrics_options_reset_default"),
+            type: "button",
+            buttonLabel: t("common.reset_default"),
+            action: () =>
+              window.$dialog.warning({
+                title: t("common.warning"),
+                content: t("message.desktop_lyrics_options_reset_confirm"),
+                positiveText: t("common.ok"),
+                negativeText: t("common.cancel"),
+                onPositiveClick: () => {
+                  settingStore.desktopLyricOptions = createDefaultDesktopLyricOptions();
+                },
+              }),
           },
           {
             key: "desktopLyricRestore",

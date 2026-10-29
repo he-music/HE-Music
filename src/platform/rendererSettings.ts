@@ -3,6 +3,7 @@ import { createShortcutState, type ShortcutStore, type ShortcutType } from "@/st
 import type { FontStyleSelection } from "@/types/global";
 import type { RendererSettings } from "./mygo.bindings";
 import { parseDesktopLyricStyle } from "./desktopLyricStyle";
+import { parseDesktopLyricOptions } from "./desktopLyricOptions";
 
 type Reader<T> = (value: unknown) => T;
 type Schema<T> = { [K in keyof T]-?: Reader<T[K]> };
@@ -59,6 +60,7 @@ const lyricFont: Reader<SettingState["lyricFont"]> = (value) =>
 // A mapped schema keeps every current leaf explicit and checks its declared union type.
 const settingSchema: Schema<SettingState> = {
   desktopLyricStyle: (value) => parseDesktopLyricStyle(value) ?? invalid(),
+  desktopLyricOptions: (value) => parseDesktopLyricOptions(value) ?? invalid(),
   themeMode: enumeration("light", "dark", "auto"),
   themeColorType: enumeration(
     "default",

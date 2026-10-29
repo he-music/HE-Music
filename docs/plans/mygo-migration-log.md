@@ -632,3 +632,13 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - renderer组件 `029019b` 提供结构注入helper，父只对mygo启用，Electron旧分支保留。音量不需要歌曲；在线动作沿原有效id路径，本地动作要求当前FilesSession ready/audioAccess、登记ref与歌曲id/path/platform一致。无歌也可切桌面歌词，基于当前原生visible调用requestVisible，busy覆盖请求，不乐观写store。已进入player/native请求的操作不宣称可被helper取消；晚错只在当前owner报告。
 - 父真实主壳先复现合法本地歌曲被跳过、无歌toggle不执行及provider未暴露toggle。接线后又发现合法ID但路径错配仍调用播放，新增反例真实失败后补歌曲/登记/ref路径与平台复核。微任务派发期间禁用或换绑定也曾实际继续播放；ShortcutSession新增只读executionToken，复用同步撤销的ACK generation，父回归修后拒绝旧动作。settings录制、WeakMap会话与页内owns仍使用同一session，没有第二注册owner。
 - 父最初类型检查发现platform字段一次锚点误指已交付worktree，立即undo恢复原树，再用明确path与主树served anchor接线；mock的可能undefined也已修正。ESLint首轮未用参数和3文件格式问题已修正；两条旧壳测试补等待微任务。最终父全量106文件1032项、Node/Web类型、相关8个TS ESLint/格式、Go全包/vet/gofmt及官方binding完整cmp通过。`606b17aa` 独立父审查No issues/OK with notes。真实App、OS快捷键、音频/用户库及Windows仍后置，未启动App/Vite。
+
+### 桌面歌词文字选项、窗口高度与位置恢复
+
+- 纯模型组件 `a5aad7b` 新增DesktopLyricOptions/LyricsOptions；字体family/size/weight/postScriptName/style及双行、对齐、限制边界、逐字、翻译、切换动画、常驻信息独立于四style和lock。默认沿原lyricConfig；字号20..96整数、字重100..900步100、枚举有限；单字体名限UTF-8 256bytes及Unicode字母/数字与ASCII空格/_-.，拒控制和CSS函数/列表。TS可部分补默认、Go非nil完整，输出与输入深分离。worker13项TS与4个Go测试函数、类型/静态检查通过；`11b9453f` 独立模型审查OK，但未穷举所有浏览器Unicode分类表。
+- 边界纯策略组件 `ed30f46` 复用原字号20..96到高度140..360线性公式与fitLyricsBounds。保留x/y/width后按真实单屏拟合；重置使用首有效工作区、默认宽800、字号高度和底部24px。父接ResetPosition为main-only、epoch且非locked/pending，回执沿revision合并，不隐式显示或解锁。Begin保留原24字号/180默认高度；改字号才同步高度，锁定中导入的新字号原生bounds延至解锁调整。workArea可选字段提供单个真实屏幕，限制拖动复用既有缓存夹紧；不是包围多屏空隙的大矩形。
+- 主窗口renderer setting store/schema持久化options；producer监听显式低频叶子并只放完整snapshot，Go提交seq前校验并clone，clock不修改配置，Attach font/workArea副本独立。设置开放已有双行/对齐/限制边界/逐字/翻译/动画/字号/常驻信息；mygo字体名称离开输入框提交并提供weight/style，系统字体枚举仍未实现。保留Electron font manager和高度反算路径；新增文字选项恢复独立于原四色恢复，位置恢复是独立操作。
+- 子页仅把options原位赋给已有lyricConfig，复用原词节点与条件分支，没有重写歌词结构、CSS布局、RAF或焦点行为。原按窗口高度反算字号的watch在native关闭，避免把快照48覆盖成96。真实生产SFC两mutation反例分别暂移消费后模板仍默认system-ui、恢复反算后实际96而预期48；各实际1failed，恢复后5文件98项通过。producer确认高频无关状态不新增snapshot/主组件更新，必要options和歌曲仍更新；factory确认非法字体回退、独立恢复和scope停止。
+- 初轮生产SFC测试宿主缺新模块映射导致14失败、旧测试预期选项隐藏导致1失败，更新宿主映射与新功能预期后通过。一次相邻anchor插入/替换批次重叠被工具拒绝，零写，合并为不重叠范围后成功。审查并行任务首轮output字段不受该API接受，零子代理启动，按同工具脚本工作流纠正。官方CLI在隔离快照 `0c686e5` 生成新增合同与ResetPosition，父hashline复制并完整cmp。
+- 原生父审查 `757fa393` No issues/OK。前端审查 `9aa4f7f1` 找到编辑草稿隔离P2：共用sync回填使恢复style清掉未提交font，恢复options清掉未提交color。父补两交错反例实际2failed（分别system-ui与#fe7971替代草稿），拆分两组watch/回填/保存/失败恢复，选项控件改调独立options保存，Electron仍回原全配置保存；修后3文件20项、Node/Web类型与相关lint/格式通过，`44f71804` 窄复核Closed/No issues/OK。
+- 最终父全量107文件1051项通过；Node/Web类型、相关13个TS ESLint、16个源/locale Prettier、Go全包/vet/gofmt及官方binding完整cmp通过。全量1051为P2修后结果，原1049仅初版历史；Go/绑定未受P2修改，没有重复已过检查。所有验证均未启动App/Vite、真实picker/用户库/声音/字体枚举/OS窗口/Windows；不将stub模板、fake策略与源码审查当作实际字体或多屏窗口验收。

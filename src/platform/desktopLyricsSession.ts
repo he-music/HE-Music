@@ -31,6 +31,9 @@ export class DesktopLyricsSession {
   readonly window = computed(() => this.windowState.value);
   readonly failure = computed(() => this.errorState.value);
   readonly epoch = computed(() => (this.readyState.value ? this.nativeEpoch : undefined));
+  get canResetPosition(): boolean {
+    return typeof this.provider.resetPosition === "function";
+  }
   private nativeEpoch: number | undefined;
   private disposed = false;
   private started = false;
@@ -203,6 +206,16 @@ export class DesktopLyricsSession {
       if (visible) await this.sendSnapshot(epoch);
       if (this.disposed) throw new Error("桌面歌词会话已失效");
       const state = await this.provider.setVisible(epoch, visible);
+      this.acceptWindow(state);
+      return state;
+    });
+  }
+
+  requestResetPosition(): Promise<LyricsWindowState> {
+    const reset = this.provider.resetPosition;
+    if (!reset) return Promise.reject(new Error("桌面歌词位置重置不可用"));
+    return this.enqueue(async (epoch) => {
+      const state = await reset(epoch);
       this.acceptWindow(state);
       return state;
     });

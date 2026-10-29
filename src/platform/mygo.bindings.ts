@@ -187,6 +187,14 @@ export interface LyricsCommand {
   action: LyricsAction;
 }
 
+export interface LyricsFontOptions {
+  family: string;
+  size: number;
+  weight: number;
+  postScriptName: string;
+  style: string;
+}
+
 export interface LyricsLine {
   words: LyricsWord[];
   translatedLyric: string;
@@ -195,6 +203,17 @@ export interface LyricsLine {
   isDuet: boolean;
   startTime: number;
   endTime: number;
+}
+
+export interface LyricsOptions {
+  font: LyricsFontOptions;
+  isDoubleLine: boolean;
+  position: string;
+  limitBounds: boolean;
+  showYrc: boolean;
+  showTran: boolean;
+  animation: boolean;
+  alwaysShowPlayInfo: boolean;
 }
 
 export interface LyricsSession {
@@ -215,6 +234,7 @@ export interface LyricsSnapshot {
   lrcData: LyricsLine[];
   yrcData: LyricsLine[];
   style?: LyricsStyle;
+  options?: LyricsOptions;
 }
 
 export interface LyricsStyle {
@@ -237,6 +257,7 @@ export interface LyricsWindowState {
   locked: boolean;
   hoverUnlock: boolean;
   bounds: LyricsBounds;
+  workArea?: LyricsBounds;
   failure: string;
 }
 
@@ -631,6 +652,10 @@ export const DesktopLyrics = {
   },
   publishSnapshot(snapshot: LyricsSnapshot): Promise<void> {
     return call("DesktopLyrics.PublishSnapshot", snapshot);
+  },
+  /** ResetPosition is a main-page recovery action. It never shows or unlocks the window. */
+  resetPosition(epoch: number): Promise<LyricsWindowState> {
+    return call("DesktopLyrics.ResetPosition", epoch);
   },
   setBounds(epoch: number, bounds: LyricsBounds): Promise<LyricsWindowState> {
     return call("DesktopLyrics.SetBounds", epoch, bounds);

@@ -112,6 +112,27 @@ function fixture() {
 afterEach(() => vi.useRealTimers());
 
 describe("DesktopLyricsSession", () => {
+  it("重置位置使用原生代次与revision，不乐观显示或覆盖晚到的新状态", async () => {
+    const f = fixture();
+    const response = deferred<LyricsWindowState>();
+    f.provider.resetPosition = vi.fn(() => response.promise);
+    await f.session.start();
+    expect(f.session.canResetPosition).toBe(true);
+    const resetting = f.session.requestResetPosition();
+    await flush();
+    expect(f.provider.resetPosition).toHaveBeenCalledExactlyOnceWith(7);
+    expect(f.session.window.value?.bounds.width).toBe(800);
+    f.windows.forEach((listener) =>
+      listener(state(9, { visible: true, bounds: { x: 11, y: 12, width: 900, height: 180 } })),
+    );
+    response.resolve(state(2, { bounds: { x: 2, y: 3, width: 800, height: 152 } }));
+    await resetting;
+    expect(f.session.window.value?.revision).toBe(9);
+    expect(f.session.window.value?.bounds.x).toBe(11);
+    await f.session.dispose();
+    await expect(f.session.requestResetPosition()).rejects.toThrow();
+    expect(f.provider.resetPosition).toHaveBeenCalledOnce();
+  });
   it("订阅注册失败退订已安装监听，不调用Begin或向主壳抛错", async () => {
     const f = fixture();
     vi.spyOn(f.provider, "onCommand").mockImplementationOnce(() => {

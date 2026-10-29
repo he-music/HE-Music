@@ -7,6 +7,10 @@ import {
   parseDesktopLyricStyle,
 } from "@/platform/desktopLyricStyle";
 
+import {
+  createDefaultDesktopLyricOptions,
+  parseDesktopLyricOptions,
+} from "@/platform/desktopLyricOptions";
 export function createShellDesktopLyricsSession(): DesktopLyricsSession | undefined {
   const provider = platform.kind === "mygo" ? platform.desktopLyrics : undefined;
   if (!provider) return;
@@ -46,6 +50,18 @@ export function createShellDesktopLyricsSession(): DesktopLyricsSession | undefi
       setting.desktopLyricStyle?.unplayedColor,
       setting.desktopLyricStyle?.shadowColor,
       setting.desktopLyricStyle?.textBackgroundMask,
+      setting.desktopLyricOptions?.font?.family,
+      setting.desktopLyricOptions?.font?.size,
+      setting.desktopLyricOptions?.font?.weight,
+      setting.desktopLyricOptions?.font?.postScriptName,
+      setting.desktopLyricOptions?.font?.style,
+      setting.desktopLyricOptions?.isDoubleLine,
+      setting.desktopLyricOptions?.position,
+      setting.desktopLyricOptions?.limitBounds,
+      setting.desktopLyricOptions?.showYrc,
+      setting.desktopLyricOptions?.showTran,
+      setting.desktopLyricOptions?.animation,
+      setting.desktopLyricOptions?.alwaysShowPlayInfo,
     ],
     clockDependencies: () => [
       status.playStatus,
@@ -58,6 +74,8 @@ export function createShellDesktopLyricsSession(): DesktopLyricsSession | undefi
       artistName: artistName(),
       loading: status.lyricLoading,
       style: parseDesktopLyricStyle(setting.desktopLyricStyle) ?? createDefaultDesktopLyricStyle(),
+      options:
+        parseDesktopLyricOptions(setting.desktopLyricOptions) ?? createDefaultDesktopLyricOptions(),
       lrcData: music.songLyric.lrcData.map((line) => ({
         ...line,
         words: line.words.map((word) => ({ ...word })),

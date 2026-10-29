@@ -181,6 +181,10 @@ import {
   createDefaultDesktopLyricStyle,
   parseDesktopLyricStyle,
 } from "@/platform/desktopLyricStyle";
+import {
+  createDefaultDesktopLyricOptions,
+  parseDesktopLyricOptions,
+} from "@/platform/desktopLyricOptions";
 
 const FALLBACK_INITIALIZATION_TIMEOUT = 2000; // 歌词窗口初始化后备超时时间，用于防止无数据时无限期空白
 const isElectron = platform.kind === "electron";
@@ -537,6 +541,12 @@ watch(
       }
     }
     if (state) Object.assign(cachedBounds, state.bounds);
+    if (isNative && state?.workArea) {
+      cachedBounds.screenMinX = state.workArea.x;
+      cachedBounds.screenMinY = state.workArea.y;
+      cachedBounds.screenMaxX = state.workArea.x + state.workArea.width;
+      cachedBounds.screenMaxY = state.workArea.y + state.workArea.height;
+    }
   },
   { flush: "sync" },
 );
@@ -548,6 +558,10 @@ watch(
       Object.assign(
         lyricConfig,
         parseDesktopLyricStyle(snapshot?.style) ?? createDefaultDesktopLyricStyle(),
+      );
+      Object.assign(
+        lyricConfig,
+        parseDesktopLyricOptions(snapshot?.options) ?? createDefaultDesktopLyricOptions(),
       );
     }
     if (!snapshot) {
@@ -786,6 +800,7 @@ const debouncedSaveConfig = useDebounceFn((size: number) => {
 
 // 监听字体大小变化
 watch(computedFontSize, (size) => {
+  if (isNative) return;
   if (!Number.isFinite(size)) return;
   if (dragState.isDragging) return;
   if (isInitializing.value) return;
