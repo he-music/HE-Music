@@ -27,6 +27,33 @@ afterEach(() => {
 });
 
 describe("platform adapters", () => {
+  it("mygo 暴露桌面歌词全局快捷键并保留注册输入和原生事件", async () => {
+    const shortcuts = createMygoPlatform().shortcuts;
+    if (!shortcuts) throw new Error("No shortcuts");
+    expect(shortcuts.actions).toContain("toggleDesktopLyric");
+    const bindings = [{ action: "toggleDesktopLyric" as const, accelerator: "CmdOrCtrl+Shift+D" }];
+    bridge.call.mockResolvedValueOnce({
+      generation: 7,
+      enabled: true,
+      suspended: false,
+      results: [],
+    });
+    await shortcuts.replace(6, true, bindings);
+    expect(bridge.call).toHaveBeenLastCalledWith("GlobalShortcuts.Replace", 6, true, bindings);
+    const off = vi.fn();
+    bridge.on.mockReturnValueOnce(off);
+    const listener = vi.fn();
+    const stop = shortcuts.onAction(listener);
+    const emit = bridge.on.mock.calls.at(-1)?.[0];
+    if (typeof emit !== "function") throw new Error("No shortcut listener");
+    emit({ generation: 7, action: "toggleDesktopLyric" });
+    expect(listener).toHaveBeenCalledExactlyOnceWith({
+      generation: 7,
+      action: "toggleDesktopLyric",
+    });
+    stop();
+    expect(off).toHaveBeenCalledOnce();
+  });
   it("Web 不启用桌面能力，外链使用隔离窗口", async () => {
     const open = vi.fn();
     vi.stubGlobal("window", { open });

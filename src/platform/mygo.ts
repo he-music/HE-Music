@@ -50,15 +50,9 @@ export function createMygoPlatform(): PlatformAdapter {
     },
     shortcuts: {
       ...GlobalShortcuts,
-      actions: playbackShortcutActions,
+      actions: [...playbackShortcutActions, "toggleDesktopLyric"],
       replace: (generation, enabled, bindings) =>
-        GlobalShortcuts.replace(
-          generation,
-          enabled,
-          bindings.flatMap(({ action, accelerator }) =>
-            action === "toggleDesktopLyric" ? [] : [{ action, accelerator }],
-          ),
-        ),
+        GlobalShortcuts.replace(generation, enabled, bindings),
       onAction: (listener) => events.desktopShortcutAction.on(listener),
     },
     lifecycle: {

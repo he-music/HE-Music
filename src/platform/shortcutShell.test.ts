@@ -145,6 +145,7 @@ describe("actual application shell shortcut ownership", () => {
     await flush();
     expect(f.provider.replace).toHaveBeenCalledOnce();
     f.emit(1);
+    await flush();
     expect(mocks.player.setVolume).toHaveBeenCalledExactlyOnceWith("up");
     unmount();
     f.emit(1);
@@ -178,6 +179,7 @@ describe("actual application shell shortcut ownership", () => {
     f.emit(80);
     expect(mocks.player.setVolume).not.toHaveBeenCalled();
     f.emit(1);
+    await flush();
     expect(mocks.player.setVolume).toHaveBeenCalledOnce();
   });
   it("Web无provider不调用native；Electron仍共享壳的挂载与注销", async () => {

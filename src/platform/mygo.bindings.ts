@@ -348,7 +348,7 @@ export interface SettingsImportResult {
 
 export type SettingsImportStatus = "selected" | "cancelled";
 
-export type ShortcutAction = "playOrPause" | "playPrev" | "playNext" | "volumeUp" | "volumeDown";
+export type ShortcutAction = "playOrPause" | "playPrev" | "playNext" | "volumeUp" | "volumeDown" | "toggleDesktopLyric";
 
 export interface ShortcutBinding {
   action: ShortcutAction;

@@ -87,7 +87,7 @@ func TestShortcutReplaceFeedbackAndOwnership(t *testing.T) {
 		{ShortcutVolumeUp, ""},
 		{ShortcutVolumeDown, "Ctrl+Bogus"},
 		{ShortcutPlayPrev, "Cmd+N"},
-		{"toggleDesktopLyric", "Ctrl+D"},
+		{"unknownDesktopLyric", "Ctrl+D"},
 		{"openPlayer", "Ctrl+O"},
 	})
 	if err != nil {

@@ -11,11 +11,12 @@ import (
 type ShortcutAction string
 
 const (
-	ShortcutPlayOrPause ShortcutAction = "playOrPause"
-	ShortcutPlayPrev    ShortcutAction = "playPrev"
-	ShortcutPlayNext    ShortcutAction = "playNext"
-	ShortcutVolumeUp    ShortcutAction = "volumeUp"
-	ShortcutVolumeDown  ShortcutAction = "volumeDown"
+	ShortcutPlayOrPause        ShortcutAction = "playOrPause"
+	ShortcutPlayPrev           ShortcutAction = "playPrev"
+	ShortcutPlayNext           ShortcutAction = "playNext"
+	ShortcutVolumeUp           ShortcutAction = "volumeUp"
+	ShortcutVolumeDown         ShortcutAction = "volumeDown"
+	ShortcutToggleDesktopLyric ShortcutAction = "toggleDesktopLyric"
 )
 
 type ShortcutBinding struct {
@@ -71,7 +72,7 @@ type shortcutState struct {
 
 func supportedShortcutAction(action ShortcutAction) bool {
 	switch action {
-	case ShortcutPlayOrPause, ShortcutPlayPrev, ShortcutPlayNext, ShortcutVolumeUp, ShortcutVolumeDown:
+	case ShortcutPlayOrPause, ShortcutPlayPrev, ShortcutPlayNext, ShortcutVolumeUp, ShortcutVolumeDown, ShortcutToggleDesktopLyric:
 		return true
 	}
 	return false

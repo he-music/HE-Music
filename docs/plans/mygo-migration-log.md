@@ -625,3 +625,10 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - URL只由内存reader和music getter派生，不写playSong.cover；真实Pinia持久化插件与stub storage确认保存内容无blob/grant且URL变化不增加持久化写入。原MainPlayer封面key保留、src使用既有派生getter，系统媒体继续经getSongCover消费，没有增加media owner或改歌词/时钟/RAF。配色沿用现有请求代次，失权/换歌清除旧配色请求；Electron原path缓存路径保留。
 - 完整LRC与封面只在相同owner/ref的metadata请求仍挂起时共享Promise，结果完成/失败均退休，不缓存Info/Pictures；各调用者独立复核权限与文件版本。真实主壳编译/runtime测试补充Ready拒绝与卸载前同步处置，factory测试覆盖grant/ref/owner变化、latest pending与替换owner。
 - 父实际全量104文件1004项、Node/Web类型、受影响15个TS ESLint通过。格式首轮发现Nav mock一行，hashline修正后15文件Prettier通过；Go与官方绑定未改，本轮没有重复其已过检查。父集成独立审查 `1e056f41` No issues/OK with notes。没有启动App/Vite、真实Naive DOM/WebView、用户库、图片解码、声音、picker、OS、下载/安装或Windows，不把stub通过等同实机验收。
+
+### 本地歌曲与桌面歌词全局快捷键
+
+- 原生组件 `204b46d` 为现有ShortcutAction增加toggleDesktopLyric，沿原generation/owner注册、挂起、注销及未知动作校验，不直接控制窗口。既有测试把此动作当unsupported，父将该fixture改为真正未知动作；新增fake backend测试在策略接线前真实unsupported红测，接线后通过。官方CLI仅在隔离快照生成union新增单行，父hashline复制并完整cmp一致。
+- renderer组件 `029019b` 提供结构注入helper，父只对mygo启用，Electron旧分支保留。音量不需要歌曲；在线动作沿原有效id路径，本地动作要求当前FilesSession ready/audioAccess、登记ref与歌曲id/path/platform一致。无歌也可切桌面歌词，基于当前原生visible调用requestVisible，busy覆盖请求，不乐观写store。已进入player/native请求的操作不宣称可被helper取消；晚错只在当前owner报告。
+- 父真实主壳先复现合法本地歌曲被跳过、无歌toggle不执行及provider未暴露toggle。接线后又发现合法ID但路径错配仍调用播放，新增反例真实失败后补歌曲/登记/ref路径与平台复核。微任务派发期间禁用或换绑定也曾实际继续播放；ShortcutSession新增只读executionToken，复用同步撤销的ACK generation，父回归修后拒绝旧动作。settings录制、WeakMap会话与页内owns仍使用同一session，没有第二注册owner。
+- 父最初类型检查发现platform字段一次锚点误指已交付worktree，立即undo恢复原树，再用明确path与主树served anchor接线；mock的可能undefined也已修正。ESLint首轮未用参数和3文件格式问题已修正；两条旧壳测试补等待微任务。最终父全量106文件1032项、Node/Web类型、相关8个TS ESLint/格式、Go全包/vet/gofmt及官方binding完整cmp通过。`606b17aa` 独立父审查No issues/OK with notes。真实App、OS快捷键、音频/用户库及Windows仍后置，未启动App/Vite。

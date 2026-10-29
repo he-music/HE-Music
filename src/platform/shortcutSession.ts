@@ -42,6 +42,11 @@ export class ShortcutSession {
     });
   }
 
+  /** Pending dispatches borrow this acknowledged generation; refresh revokes it synchronously. */
+  get executionToken(): number | undefined {
+    return this.disposed || !this.active ? undefined : (this.executableGeneration ?? undefined);
+  }
+
   start(): Promise<void> {
     if (this.active || this.disposed) return this.queue;
     this.active = true;
