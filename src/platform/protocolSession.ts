@@ -10,6 +10,7 @@ export interface ProtocolResult {
   selected: boolean;
   registered: boolean;
   status: string;
+  reason?: string;
 }
 export interface ProtocolStatus {
   epoch: number;
@@ -39,7 +40,7 @@ export class ProtocolSession {
   constructor(
     private readonly provider: PlatformProtocols,
     private readonly execute: (intent: ProtocolIntent, current: () => boolean) => void,
-    private readonly reportFailure: () => void,
+    private readonly reportFailure: (results?: ProtocolResult[]) => void,
   ) {
     this.stop = provider.onIntent((intent) => {
       if (this.disposed || !this.started) return;
@@ -83,14 +84,8 @@ export class ProtocolSession {
             )
             .map((result) => result.scheme),
         );
-        if (
-          status.results.some(
-            (result) =>
-              result.status.endsWith("failed") ||
-              (!result.selected && result.status === "unsupported" && result.registered),
-          )
-        ) {
-          this.reportFailure();
+        if (status.results.some((result) => result.status.endsWith("failed"))) {
+          this.reportFailure(status.results.filter((result) => result.status.endsWith("failed")));
         }
         this.acknowledged = true;
         const pending = this.buffered;

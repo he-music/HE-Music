@@ -29,12 +29,12 @@ func main() {
 		} else {
 			log.Print("读取应用配置目录失败")
 		}
-		win := mygo.NewWindow(mygo.WindowOptions{
-			Title:     "HE-Music",
-			Width:     1280,
-			Height:    800,
-			Frameless: WindowAppearanceOptions(appearance).Frameless,
-		})
+		options := WindowAppearanceOptions(appearance)
+		options.Title, options.Width, options.Height = "HE-Music", 1280, 800
+		win := mygo.NewWindow(options)
+		if _, hoverErr := installWindowButtonsHover(win, appearance.UseBorderless); hoverErr != nil {
+			log.Print("设置 macOS 原生窗口按钮悬停失败，保留可见按钮: ", hoverErr)
+		}
 		desktopLifecycle.attachMainWindow(win, true)
 		if _, proxyErr := restoreNetworkProxyWebview(); proxyErr != nil {
 			log.Print("恢复代理配置失败")

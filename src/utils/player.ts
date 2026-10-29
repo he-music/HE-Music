@@ -302,7 +302,11 @@ class Player {
     audioManager.setVolume(statusStore.playVolume);
     audioManager.setRate(statusStore.playRate);
     // 播放设备
-    if (!settingStore.showSpectrums) this.toggleOutputDevice();
+    if (!settingStore.showSpectrums) {
+      void this.toggleOutputDevice().catch((error: unknown) => {
+        console.error("Failed to restore audio output device:", error);
+      });
+    }
     const requestId = this.playRequestId;
     this.playbackAttempt = { src, autoPlay, seek, requestId };
     // 加载并播放
@@ -1185,16 +1189,9 @@ class Player {
    * 切换输出设备
    * @param deviceId 输出设备
    */
-  public toggleOutputDevice(deviceId?: string) {
-    try {
-      const settingStore = useSettingStore();
-      const device = deviceId ?? settingStore.playDevice;
-      if (device) {
-        audioManager.setSinkId(device);
-      }
-    } catch {
-      console.error("Failed to change audio output device:");
-    }
+  public async toggleOutputDevice(deviceId?: string) {
+    const settingStore = useSettingStore();
+    await audioManager.setSinkId(deviceId ?? settingStore.playDevice);
   }
   /**
    * 启用/更新均衡器

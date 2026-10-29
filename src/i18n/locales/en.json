@@ -422,6 +422,7 @@
     "no_song_link": "This track has no audio source, skipping to next track",
     "output_device_audio_channel_occupancy_confirm": "Due to system limitations, switching audio output devices will disable music spectrum visualization. The music spectrum will be turned off and will take effect after a hot reload (click the hot reload button in the settings menu). Continue?",
     "output_device_change_success": "Output device switched to {device}",
+    "output_device_change_failed": "Could not switch audio output. Check the device and permission.",
     "parse_fail": "Parsing failed",
     "password_modify_success": "Password modified successfully",
     "play_list_cleared": "Play queue cleared",

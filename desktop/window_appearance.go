@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/egoist/mygo"
 )
@@ -134,5 +135,11 @@ func (s *WindowAppearanceStore) Save(appearance WindowAppearance) (WindowAppeara
 
 // WindowAppearanceOptions maps persisted appearance to the next startup window.
 func WindowAppearanceOptions(appearance WindowAppearance) mygo.WindowOptions {
+	if runtime.GOOS == "darwin" && appearance.UseBorderless {
+		return mygo.WindowOptions{
+			TitleBarStyle:        mygo.TitleBarHidden,
+			TrafficLightPosition: &mygo.Point{X: 16, Y: 28},
+		}
+	}
 	return mygo.WindowOptions{Frameless: appearance.UseBorderless}
 }

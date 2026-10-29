@@ -140,7 +140,10 @@ describe.each(["web", "mygo"])("AudioManager %s HTMLAudio path", (kind) => {
 
   it("does not require setSinkId support or create an audio context", async () => {
     await manager.play("https://audio.example/first.mp3", { autoPlay: false });
-    await expect(manager.setSinkId("persisted-device")).resolves.toBeUndefined();
+    await expect(manager.setSinkId("default")).resolves.toBeUndefined();
+    await expect(manager.setSinkId("persisted-device")).rejects.toMatchObject({
+      name: "NotSupportedError",
+    });
     expect(audioContext).not.toHaveBeenCalled();
   });
 });

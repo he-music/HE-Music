@@ -670,3 +670,13 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 父 Windows vet 发现 COM vtable 的 uintptr 转指针告警后，改为 unsafe.Pointer／unsafe.Add；局部按钮数组跨普通 Go wrapper 传 uintptr 前使用 runtime.Pinner。固定旧快照的编译逃逸分析没有 buttons heap 记录，新版明确 moved to heap；这仅证明编译与地址保持措施，不是 Windows COM 实机证明。前端 failure 接线由 `1d0af240` 独立复核通过，Nav 自绘关闭按钮由 `3333df63` 复核通过，音频、字体／代理、下载、本地索引及发布工具的既有具体审查项均已关闭。
 - 最终集成验证：Vitest 128 文件 1201 项、独立发布工具 21 项通过；Node／Web 类型、改动 TS／mjs ESLint、Prettier、git diff --check、Go 全包测试／vet／gofmt、Windows amd64／arm64 测试二进制静态编译与 vet 通过。另有 Darwin amd64 静态测试编译通过。生产前端静态构建输出至临时目录并通过，未启动 App／Vite server；保留既有 chunk size 与 Fastify deprecation 提示。ESLint 当前没有 Vue 文件路由，显式调用时被忽略，Vue 通过类型检查、生产模板测试和静态构建验证，不声称 Vue lint 通过。
 - Go 全包曾因 PATH 缺 ffmpeg 夹具生成器失败，补入现有 Homebrew 工具路径后通过；未安装依赖或真实读取用户音乐库。发布配置检查按预期因缺真实 feed／公钥退出 1，生产更新仍不可用。真实字体、窗口／输入、音频／CORS／设备、系统代理流量、用户文件操作、下载安装与 Windows 运行均未在本轮验收；平台实机与 Electron 清理保持后置。
+
+### 第八轮：macOS 实测反馈修复
+
+- 用户报告协议关联提示失败、无边框按钮与 Electron 不一致、酷我音源 CORS 206 与默认输出设备报错。随后用户明确更正：全局 `Command + Shift + Right` 在其它应用聚焦时也正常；停止快捷键 backend lane，未合入其独占 worktree 的新文件，也未改变快捷键行为。此前对非排他注册的源码疑点不作为实际故障结论。
+- 协议修复增加 macOS 当前 `.app` 声明／标识符／包类型校验，并在官方设置默认处理器前调用公开 `LSRegisterURL` 注册当前包；只缓存成功，失败可重试。Darwin 关闭 scheme 表示停止处理，系统仍关联不再误报注销失败，仍禁止播放。新增受控 reason 区分缺声明、bundle 注册失败、关联失败及默认处理器读回不匹配。原始错误此前已丢弃，未读取用户运行包或执行真实关联，不能唯一断定此次提示的 Launch Services 原因；重新构建后的真实关联结果仍需验证。
+- macOS 无边框改为官方 `TitleBarHidden` 和 `{16,28}` 原生按钮位置，保留 AppKit 三个按钮；主窗使用完整外观 options，前端不再显示 Windows 风格三按钮，侧栏给原生按钮留出安全区。公开 NSTrackingArea 处理左上悬停，无轮询／定时器，保留原生按钮 action。失败恢复按钮可见，退出清理监听／tracking／路由和引用。生产 Nav 与平台 options 回归实际先红后绿。
+- 原生按钮审查发现初始静止指针在区域内时不一定收到 entered 的 P1，父补无 entered 事件的生产 helper 回归实际失败后修复：安装／resize／离开全屏后同步查询并转换当前指针坐标，区域已在内时使用 NSTrackingAssumeInside 保证退出事件；旧 area 和 disposed fence 保留。`b68b6acc` 独立窄复核关闭，未将 fake／ABI 静态检查称为真实 AppKit 效果验收。
+- 用户实测的 `kw-lv.kuwo.cn` 精确来源直接普通播放，不再额外进行必然失败的 CORS fetch；其它来源仍保留图谱准入与 EQ／频谱，lookalike 主机不被排除。默认设备统一为空字符串，fresh 默认输出和不支持设备选择的默认输出均无需 setSinkId；显式选择设备的真实失败透传 Player／设置页，等待成功后才提示成功，失败不阻塞后续队列。
+- 设备回滚审查发现两个重叠失败后恢复未确认设备的 P1，以及 unsupported 默认成功分支未清确认的 P2；两个反例均实际先红后绿。回滚只采用已确认设备，旧请求实际成功可成为确认，退休输出的晚成功不覆盖当前；默认成功出口清空确认。`028aaa61` 协议部分通过，`70040ef4` 关闭设备 P1，`5a80c351` 关闭 P2。
+- 最终前端 129 文件 1212 项、Node／Web 类型、生产前端静态构建、改动 TS ESLint／Prettier、Go 全包测试／vet／gofmt、Darwin amd64 和 Windows amd64 静态编译通过；固定官方 CLI 在隔离快照 `e03b7db` 生成新增协议 reason 绑定并完整 cmp 一致。保持 Go 1.27.3、Node 24.22.1、pnpm 10.28.1 与固定 SDK；未修改依赖或 SDK，未执行真实 Launch Services 关联、App／鼠标／音频／网络操作。外观需重启生效，协议和原生 hover 的实机结果尚待用户验证。

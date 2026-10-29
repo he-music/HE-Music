@@ -45,7 +45,9 @@ class AudioManager {
   private legacyElement: HTMLAudioElement | null = null;
   private driver: AudioProcessingDriver | undefined;
   private desiredGains = Array<number>(10).fill(0);
-  private desiredSinkId = "default";
+  private desiredSinkId = "";
+  private confirmedSinkId = "";
+  private sinkRevision = 0;
   private readonly sinkQueues = new WeakMap<object, Promise<void>>();
   private readonly appliedSinks = new WeakMap<object, string>();
   private get audioElement(): HTMLAudioElement | null {
@@ -112,7 +114,9 @@ class AudioManager {
       filter.gain.value = this.desiredGains[index];
     });
     audioProcessingAvailable.value = driver.processingAvailable;
-    void this.applyOutputDevice(driver.element, driver.context);
+    void this.applyOutputDevice(driver.element, driver.context).catch((error: unknown) => {
+      console.error("AudioManager: 设置输出设备失败", error);
+    });
   }
   /**
    * 初始化 AudioContext 和音频图谱
@@ -473,8 +477,14 @@ class AudioManager {
    * @param deviceId 设备 ID
    */
   public async setSinkId(deviceId: string) {
-    this.desiredSinkId = deviceId;
-    await this.applyOutputDevice(this.audioElement, this.audioCtx);
+    const revision = ++this.sinkRevision;
+    this.desiredSinkId = deviceId === "default" ? "" : deviceId;
+    try {
+      await this.applyOutputDevice(this.audioElement, this.audioCtx);
+    } catch (error) {
+      if (revision === this.sinkRevision) this.desiredSinkId = this.confirmedSinkId;
+      throw error;
+    }
   }
 
   private async applyOutputDevice(
@@ -483,26 +493,45 @@ class AudioManager {
   ) {
     // Web Audio owns the physical output when a graph exists; an element sink cannot replace it.
     const target: IExtendedAudioContext | HTMLAudioElement | null = context ?? element;
-    if (!target || typeof target.setSinkId !== "function") return;
+    if (!target) return;
     const desired = this.desiredSinkId;
+    if (typeof target.setSinkId !== "function") {
+      if (desired === "") {
+        this.confirmedSinkId = "";
+        return;
+      }
+      throw new DOMException(
+        "This audio output does not support device selection",
+        "NotSupportedError",
+      );
+    }
     const previous = this.sinkQueues.get(target) ?? Promise.resolve();
-    const operation = previous
-      .then(async () => {
-        const current =
-          this.driver?.context ?? this.driver?.element ?? this.audioCtx ?? this.audioElement;
-        if (
-          target !== current ||
-          desired !== this.desiredSinkId ||
-          this.appliedSinks.get(target) === desired
-        )
-          return;
-        await target.setSinkId?.(desired);
-        this.appliedSinks.set(target, desired);
-      })
-      .catch(() => {
-        console.error("AudioManager: 设置输出设备失败");
-      });
-    this.sinkQueues.set(target, operation);
+    const operation = previous.then(async () => {
+      const current =
+        this.driver?.context ?? this.driver?.element ?? this.audioCtx ?? this.audioElement;
+      if (
+        target !== current ||
+        desired !== this.desiredSinkId ||
+        this.appliedSinks.get(target) === desired
+      )
+        return;
+      // Fresh outputs already follow the system default; WebKit need not
+      // implement device selection for ordinary playback to work.
+      if (desired === "" && !this.appliedSinks.has(target)) {
+        this.confirmedSinkId = "";
+        return;
+      }
+      await target.setSinkId?.(desired);
+      this.appliedSinks.set(target, desired);
+      const active =
+        this.driver?.context ?? this.driver?.element ?? this.audioCtx ?? this.audioElement;
+      if (target === active) this.confirmedSinkId = desired;
+    });
+    // A failed request must not block later requests, but its caller sees failure.
+    this.sinkQueues.set(
+      target,
+      operation.catch(() => undefined),
+    );
     await operation;
   }
 

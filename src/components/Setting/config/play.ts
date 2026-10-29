@@ -42,8 +42,13 @@ export const usePlaySettings = (): SettingConfig => {
     // 找到对应的 label 用于显示
     const option = outputDevices.value.find((d) => d.value === deviceId);
     const label = option?.label || deviceId;
-    player.toggleOutputDevice(deviceId);
-    window.$message.success(t("message.output_device_change_success", { device: label }));
+    try {
+      await player.toggleOutputDevice(deviceId);
+      window.$message.success(t("message.output_device_change_success", { device: label }));
+    } catch (error) {
+      console.error("Failed to change audio output device:", error);
+      window.$message.error(t("message.output_device_change_failed"));
+    }
   };
   // 音质数据
   const songLevelData = {

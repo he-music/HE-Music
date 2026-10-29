@@ -162,6 +162,7 @@ const nativeBorderless = computed(
 const showWindowControls = computed(
   () =>
     platform.capabilities.windowControls &&
+    !isMac &&
     (platform.kind === "mygo"
       ? nativeBorderless.value
       : isElectron && !isMac && !isSmallScreen.value),

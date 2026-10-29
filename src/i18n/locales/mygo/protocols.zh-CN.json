@@ -1,3 +1,6 @@
 {
+  "missing_declaration": "当前应用包未声明唤起协议，请使用重新构建的 macOS 应用包。",
+  "bundle_registration_failed": "macOS 未能注册当前应用包的唤起协议，请检查应用包位置后重试。",
+  "not_default": "macOS 尚未将当前应用设为协议的默认处理程序，请重试关联。",
   "association_failed": "未能完成协议关联设置；已关闭的协议将不再触发播放。"
 }

@@ -68,7 +68,9 @@ afterEach(async () => {
   Reflect.deleteProperty(mocks.platform, "window");
 });
 
-function mountNav(options: { ready?: Promise<{ trayAvailable: boolean; epoch: number }> } = {}) {
+function mountNav(
+  options: { mac?: boolean; ready?: Promise<{ trayAvailable: boolean; epoch: number }> } = {},
+) {
   mocks.setting = Vue.reactive({
     showCloseAppTip: true,
     closeAppMethod: "exit",
@@ -113,7 +115,7 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean; epoch: nu
     "@/stores": { useSettingStore: () => mocks.setting },
     "@/platform": { platform: mocks.platform },
     "@/utils/helper": {},
-    "@/utils/env": { isElectron: false, isMac: true },
+    "@/utils/env": { isElectron: false, isMac: options.mac ?? true },
     "@/utils/modal": {},
     "@/constants/links": {},
     "@/composables/useMobile": {
@@ -188,6 +190,13 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean; epoch: nu
 }
 
 describe("Nav native lifecycle setup", () => {
+  it("keeps macOS native controls instead of rendering Windows buttons", async () => {
+    mocks.platform.capabilities.windowControls = true;
+    const nav = mountNav();
+    await flush();
+    expect(nav.nativeBorderless()).toBe(true);
+    expect(nav.windowControls()).toBe(false);
+  });
   it.each([true, false])(
     "routes the custom mygo close button through native lifecycle when showCloseAppTip=%s",
     async (showCloseAppTip) => {
@@ -213,7 +222,7 @@ describe("Nav native lifecycle setup", () => {
   );
   it("keeps controls available if appearance loading fails, and changes them only with applied frame state", async () => {
     mocks.platform.capabilities.windowControls = true;
-    const nav = mountNav();
+    const nav = mountNav({ mac: false });
     expect(nav.nativeBorderless()).toBe(true);
     expect(nav.windowControls()).toBe(true);
     const service = {

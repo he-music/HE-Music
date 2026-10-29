@@ -10,7 +10,7 @@ import (
 )
 
 var desktopProtocolIntent = mygo.NewEvent[ProtocolIntent]("desktop:protocol-intent")
-var desktopProtocols = &Protocols{state: protocolState{backend: mygo.App, goos: runtime.GOOS}}
+var desktopProtocols = &Protocols{state: protocolState{backend: newNativeProtocolBackend(), goos: runtime.GOOS}}
 
 type Protocols struct{ state protocolState }
 

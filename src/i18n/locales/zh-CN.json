@@ -422,6 +422,7 @@
     "no_song_link": "该歌曲暂无音源，跳至下一首",
     "output_device_audio_channel_occupancy_confirm": "由于系统限制，切换音频输出设备会导致音乐频谱失效，将会关闭音乐频谱，并将于热重载后生效（ 请点击右上角的设置菜单中的热重载按钮 ），是否继续？",
     "output_device_change_success": "已切换输出设备为 {device}",
+    "output_device_change_failed": "无法切换音频输出设备，请检查设备及权限",
     "parse_fail": "解析失败",
     "password_modify_success": "密码修改成功",
     "play_list_cleared": "播放列表已清空",

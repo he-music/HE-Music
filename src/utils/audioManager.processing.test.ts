@@ -161,6 +161,112 @@ describe("production AudioManager Web Audio consumption", () => {
     expect(first.close).toHaveBeenCalledOnce();
     expect(lastContext().filters[2].gain.value).toBe(6);
   });
+  it("plays the known non-CORS Kuwo CDN without probing or creating a graph", async () => {
+    await manager.play("https://kw-lv.kuwo.cn/signed/track.mp3");
+    expect(fetcher).not.toHaveBeenCalled();
+    expect(contexts).toHaveLength(0);
+    expect(lastMedia().crossOrigin).toBeNull();
+    expect(lastMedia().paused).toBe(false);
+  });
+  it("does not exclude another CDN just because its hostname contains Kuwo's name", async () => {
+    await manager.play("https://kw-lv.kuwo.cn.example.test/track.mp3");
+    expect(fetcher).toHaveBeenCalledOnce();
+    expect(contexts).toHaveLength(1);
+    expect(lastContext().setSinkId).not.toHaveBeenCalled();
+  });
+  it("does not restore an unconfirmed device after two overlapping routing failures", async () => {
+    await manager.play("https://audio.invalid/routing.mp3");
+    const context = lastContext();
+    let rejectFirst: (error: Error) => void = () => {};
+    let rejectSecond: (error: Error) => void = () => {};
+    context.setSinkId.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        }),
+    );
+    context.setSinkId.mockImplementationOnce(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSecond = reject;
+        }),
+    );
+    const first = manager.setSinkId("A");
+    const firstResult = expect(first).rejects.toThrow("A failed");
+    await flush();
+    const second = manager.setSinkId("B");
+    const secondResult = expect(second).rejects.toThrow("B failed");
+    rejectFirst(new Error("A failed"));
+    await flush();
+    rejectSecond(new Error("B failed"));
+    await Promise.all([firstResult, secondResult]);
+    context.setSinkId.mockClear();
+    await manager.play("https://audio.invalid/next-routing.mp3");
+    expect(lastContext().setSinkId).not.toHaveBeenCalled();
+  });
+  it("keeps an older confirmed success when a newer overlapping request fails", async () => {
+    await manager.play("https://audio.invalid/confirmed.mp3");
+    const context = lastContext();
+    let resolveFirst: () => void = () => {};
+    context.setSinkId.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    context.setSinkId.mockRejectedValueOnce(new Error("B failed"));
+    const first = manager.setSinkId("A");
+    await flush();
+    const second = manager.setSinkId("B");
+    const failure = expect(second).rejects.toThrow("B failed");
+    resolveFirst();
+    await Promise.all([first, failure]);
+    await manager.play("https://audio.invalid/confirmed-next.mp3");
+    expect(lastContext().setSinkId).toHaveBeenCalledWith("A");
+    await manager.setSinkId("default");
+    await manager.play("https://audio.invalid/default-next.mp3");
+    lastContext().setSinkId.mockRejectedValueOnce(new Error("C failed"));
+    await expect(manager.setSinkId("C")).rejects.toThrow("C failed");
+    await manager.play("https://audio.invalid/default-last.mp3");
+    expect(lastContext().setSinkId).not.toHaveBeenCalled();
+  });
+  it("confirms the default on an output without device selection before another request fails", async () => {
+    await manager.play("https://audio.invalid/previous-speakers.mp3");
+    await manager.setSinkId("speakers");
+    await manager.play("https://kw-lv.kuwo.cn/plain.mp3");
+    Reflect.set(lastMedia(), "setSinkId", undefined);
+    await manager.setSinkId("default");
+    await expect(manager.setSinkId("missing")).rejects.toMatchObject({
+      name: "NotSupportedError",
+    });
+    await manager.play("https://audio.invalid/default-after-unsupported.mp3");
+    expect(lastContext().setSinkId).not.toHaveBeenCalled();
+  });
+  it("returns a real routing failure and allows a later request and default reset", async () => {
+    await manager.play("https://audio.invalid/device.mp3");
+    const context = lastContext();
+    const denied = new DOMException("device denied", "NotAllowedError");
+    context.setSinkId.mockRejectedValueOnce(denied);
+    await expect(manager.setSinkId("missing")).rejects.toBe(denied);
+    await manager.setSinkId("speakers");
+    await manager.setSinkId("default");
+    expect(context.setSinkId.mock.calls.map(([device]) => device)).toEqual([
+      "missing",
+      "speakers",
+      "",
+    ]);
+  });
+  it("leaves a fresh output on the system default without asking WebKit to select a device", async () => {
+    await manager.setSinkId("default");
+    expect(lastMedia().setSinkId).not.toHaveBeenCalled();
+  });
+  it("reports unsupported explicit device selection instead of claiming success", async () => {
+    await manager.play("https://audio.invalid/cors.mp3");
+    Reflect.set(lastContext(), "setSinkId", undefined);
+    await expect(manager.setSinkId("speakers")).rejects.toMatchObject({
+      name: "NotSupportedError",
+    });
+  });
   it("retains ordinary playback for sources without CORS and never binds the plain element", async () => {
     fetcher.mockRejectedValueOnce(new TypeError("synthetic CORS failure"));
     manager.setVolume(0.4);
@@ -263,7 +369,7 @@ describe("production AudioManager Web Audio consumption", () => {
     await manager.play("https://audio.invalid/plain-next.mp3");
     expect(lastMedia().setSinkId).toHaveBeenCalledExactlyOnceWith("speakers");
     await manager.setSinkId("default");
-    expect(lastMedia().setSinkId).toHaveBeenLastCalledWith("default");
+    expect(lastMedia().setSinkId).toHaveBeenLastCalledWith("");
   });
   it("preserves the Electron graph path without running a CORS probe", async () => {
     host.isElectron = true;

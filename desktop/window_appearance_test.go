@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -25,7 +26,7 @@ func TestWindowAppearanceDefaultAndStartupMapping(t *testing.T) {
 	if err != nil || !loaded.UseBorderless || !applied.Applied || applied.Pending || applied.RestartRequired {
 		t.Fatalf("startup load = %#v, %#v, %v", loaded, applied, err)
 	}
-	if options := WindowAppearanceOptions(loaded); !options.Frameless {
+	if options := WindowAppearanceOptions(loaded); options.Frameless != (runtime.GOOS != "darwin") {
 		t.Fatalf("startup options did not map frameless: %#v", options)
 	}
 }

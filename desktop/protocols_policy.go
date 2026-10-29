@@ -27,6 +27,7 @@ type ProtocolResult struct {
 	Selected   bool   `json:"selected"`
 	Registered bool   `json:"registered"`
 	Status     string `json:"status"`
+	Reason     string `json:"reason,omitempty"`
 }
 type ProtocolStatus struct {
 	Epoch   uint64           `json:"epoch"`
@@ -234,11 +235,19 @@ func (s *protocolState) sync(ctx context.Context, epoch uint64, schemes []string
 		if selected[scheme] {
 			if err := s.backend.RegisterURLScheme(scheme); err != nil {
 				result.Status = "registration-failed"
+				result.Reason = "association-failed"
+				var failure interface{ ProtocolRegistrationReason() string }
+				if errors.As(err, &failure) {
+					switch reason := failure.ProtocolRegistrationReason(); reason {
+					case "missing-declaration", "bundle-registration-failed":
+						result.Reason = reason
+					}
+				}
 			} else {
 				result.Status = "registered"
 			}
 		} else if s.goos == "darwin" {
-			result.Status = "unsupported"
+			result.Status = "disabled"
 		} else if err := s.backend.UnregisterURLScheme(scheme); err != nil {
 			result.Status = "unregistration-failed"
 		} else {
@@ -247,6 +256,7 @@ func (s *protocolState) sync(ctx context.Context, epoch uint64, schemes []string
 		result.Registered = s.backend.IsURLSchemeRegistered(scheme)
 		if result.Status == "registered" && !result.Registered {
 			result.Status = "registration-failed"
+			result.Reason = "not-default"
 		}
 		if result.Status == "unregistered" && result.Registered {
 			result.Status = "unregistration-failed"

@@ -59,7 +59,17 @@ export function createShellProtocolSession(provider: PlatformProtocols | undefin
     (intent, current) => {
       void handle(intent, current);
     },
-    () => window.$message?.warning(t("mygo.protocols.association_failed")),
+    (results) => {
+      const reasons = new Set(results?.map((result) => result.reason));
+      const key = reasons.has("missing-declaration")
+        ? "mygo.protocols.missing_declaration"
+        : reasons.has("bundle-registration-failed")
+          ? "mygo.protocols.bundle_registration_failed"
+          : reasons.has("not-default")
+            ? "mygo.protocols.not_default"
+            : "mygo.protocols.association_failed";
+      window.$message?.warning(t(key));
+    },
   );
   return {
     async start() {

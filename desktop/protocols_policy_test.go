@@ -124,7 +124,7 @@ func TestProtocolFailureAndBounds(t *testing.T) {
 	ctx := context.Background()
 	epoch, _ := s.begin(ctx)
 	status, _, err := s.sync(ctx, epoch, []string{"kuwo"})
-	if err != nil || status.Results[0].Status != "unsupported" || status.Results[1].Status != "registration-failed" {
+	if err != nil || status.Results[0].Status != "disabled" || status.Results[1].Status != "registration-failed" {
 		t.Fatal("false success")
 	}
 	if s.enabled["kuwo"] {

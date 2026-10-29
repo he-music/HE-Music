@@ -48,6 +48,29 @@ function fixture() {
 }
 
 describe("ProtocolSession", () => {
+  it("does not report macOS retained associations as a failure when handling is disabled", async () => {
+    const failure = vi.fn();
+    const execute = vi.fn();
+    let listener: (intent: ProtocolIntent) => void = () => {};
+    const provider: PlatformProtocols = {
+      begin: async () => ({ epoch: 1 }),
+      sync: async () => ({
+        epoch: 2,
+        results: [{ scheme: "orpheus", selected: false, registered: true, status: "disabled" }],
+      }),
+      teardown: async () => {},
+      onIntent: (fn) => {
+        listener = fn;
+        return () => {};
+      },
+    };
+    const session = new ProtocolSession(provider, execute, failure);
+    await session.start([]);
+    listener({ epoch: 2, sequence: 1, platform: "netease", songId: "123" });
+    expect(failure).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+    await session.dispose();
+  });
   it("retains pre-ACK events and rejects duplicate/old epoch events", async () => {
     const f = fixture();
     const start = f.session.start(["orpheus"]);

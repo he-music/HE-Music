@@ -358,6 +358,7 @@ export interface ProtocolResult {
   selected: boolean;
   registered: boolean;
   status: string;
+  reason?: string;
 }
 
 export interface ProtocolSession {

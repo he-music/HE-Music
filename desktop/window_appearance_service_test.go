@@ -19,7 +19,7 @@ func TestWindowAppearanceServiceUsesSavedSettingsOnlyAtStartup(t *testing.T) {
 	}
 	next := &WindowAppearanceService{}
 	appearance, err := next.initialize(path)
-	if err != nil || !WindowAppearanceOptions(appearance).Frameless || next.snapshot().RestartRequired {
+	if err != nil || !appearance.UseBorderless || !next.snapshot().AppliedUseBorderless || next.snapshot().RestartRequired {
 		t.Fatalf("next=%+v err=%v", next.snapshot(), err)
 	}
 	restored, err := service.save(false)

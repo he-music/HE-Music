@@ -16,6 +16,14 @@ export async function canUseWebAudioSource(
   options: AudioSourceProbeOptions = {},
 ): Promise<boolean> {
   if (!/^https?:\/\//i.test(url) || options.signal?.aborted) return false;
+  // These Kuwo media responses allow ordinary playback but reject CORS reads.
+  // Avoid a known-to-fail browser fetch; keep other sources eligible for processing.
+  try {
+    const hostname = new URL(url).hostname.toLowerCase().replace(/\.$/, "");
+    if (hostname === "kw-lv.kuwo.cn") return false;
+  } catch {
+    return false;
+  }
 
   const fetcher = options.fetcher ?? globalThis.fetch;
   if (typeof fetcher !== "function") return false;

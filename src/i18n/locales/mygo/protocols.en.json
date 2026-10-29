@@ -1,3 +1,6 @@
 {
+  "missing_declaration": "This app bundle does not declare the URL schemes. Use a rebuilt macOS app bundle.",
+  "bundle_registration_failed": "macOS could not register this app bundle. Check its location and retry.",
+  "not_default": "macOS has not made this app the default protocol handler. Retry the association.",
   "association_failed": "Protocol association settings could not be completed. Disabled protocols will no longer trigger playback."
 }
