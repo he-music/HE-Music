@@ -5,7 +5,8 @@
         'desktop-lyric',
         {
           locked: lyricConfig.isLock,
-          hovered: isHovered,
+          hovered:
+            isNative && lyricConfig.isLock ? consumer.windowState.value?.hoverUnlock : isHovered,
           'no-animation': !lyricConfig.animation,
         },
       ]"
@@ -41,6 +42,7 @@
           </div>
           <div
             v-if="isNative"
+            ref="nativeUnlockButton"
             class="menu-btn lock-btn"
             :title="
               consumer.operationError.value
@@ -170,6 +172,7 @@
 </template>
 
 <script setup lang="ts">
+import { nextTick } from "vue";
 import { LyricLine, LyricWord } from "@applemusic-like-lyrics/lyric";
 import { calculateLyricIndex } from "@/utils/calc";
 import { LyricConfig, LyricData, RenderLine } from "@/types/desktop-lyric";
@@ -249,6 +252,7 @@ const lyricConfig = reactive<LyricConfig>({
 
 // hover 状态控制
 const isHovered = ref<boolean>(false);
+const nativeUnlockButton = ref<HTMLElement>();
 
 // 初始化状态
 const isInitializing = ref(true);
@@ -765,6 +769,26 @@ const onDocPointerUp = () => {
 
 // 监听窗口大小变化
 const { height: winHeight, width: winWidth } = useWindowSize();
+watch(
+  [() => consumer.status.value, () => consumer.windowState.value?.epoch, winWidth, winHeight],
+  async () => {
+    await nextTick();
+    if (disposed || !isNative || consumer.status.value !== "connected") return;
+    const button = nativeUnlockButton.value;
+    if (!button || typeof button.getBoundingClientRect !== "function") return;
+    const rect = button.getBoundingClientRect();
+    const width = winWidth.value;
+    const height = winHeight.value;
+    if (width <= 0 || height <= 0 || rect.width <= 0 || rect.height <= 0) return;
+    await consumer.setUnlockRegion({
+      x: rect.x / width,
+      y: rect.y / height,
+      width: rect.width / width,
+      height: rect.height / height,
+    });
+  },
+  { flush: "post" },
+);
 
 // 更新缓存边界
 watch([winWidth, winHeight], ([w, h]) => {

@@ -112,6 +112,12 @@ function providerFixture() {
       ...windowState(2),
       bounds,
     })),
+    setUnlockRegion: vi.fn<
+      (
+        epoch: number,
+        region: { x: number; y: number; width: number; height: number },
+      ) => Promise<void>
+    >(async () => {}),
     setLocked: vi.fn(async (_epoch: number, locked: boolean) => ({
       ...windowState(2),
       locked,
@@ -144,6 +150,9 @@ class HostNode {
   text = "";
   clientWidth = 800;
   scrollWidth = 800;
+  getBoundingClientRect() {
+    return { x: 700, y: 12, width: 36, height: 36 };
+  }
   constructor(readonly tag: string) {}
 }
 interface ViewState {
@@ -364,6 +373,44 @@ function mountView(kind: "mygo" | "electron" | "web", fixture = providerFixture(
 }
 
 describe("DesktopLyric production SFC", () => {
+  it("锁定透传时以原生悬浮显示解锁按钮，注册实际按钮区域并保持原生回执驱动", async () => {
+    const view = mountView("mygo");
+    view.fixture.attachment.resolve({
+      window: { ...windowState(2), locked: true },
+      snapshot: snapshot(),
+    });
+    await flush();
+    expect(view.fixture.provider.setUnlockRegion).toHaveBeenCalledExactlyOnceWith(7, {
+      x: 700 / 800,
+      y: 12 / 180,
+      width: 36 / 800,
+      height: 36 / 180,
+    });
+    const root = () =>
+      allNodes(view.root).find((node) => String(node.props.class).includes("desktop-lyric"));
+    expect(String(root()?.props.class)).not.toContain("hovered");
+    view.fixture.emitWindow({ ...windowState(3), locked: true, hoverUnlock: true });
+    await flush();
+    expect(String(root()?.props.class)).toContain("hovered");
+    vi.advanceTimersByTime(1500);
+    await flush();
+    expect(String(root()?.props.class)).toContain("hovered");
+    expect(view.fixture.provider.setUnlockRegion).toHaveBeenCalledOnce();
+    const response = deferred<LyricsWindowState>();
+    view.fixture.provider.setLocked.mockImplementationOnce(() => response.promise);
+    view.state.toggleLyricLock();
+    expect(view.fixture.provider.setLocked).toHaveBeenCalledExactlyOnceWith(7, false);
+    expect(view.state.lyricConfig.isLock).toBe(true);
+    response.resolve(windowState(4));
+    await flush();
+    expect(view.state.lyricConfig.isLock).toBe(false);
+    view.fixture.emitWindow({ ...windowState(5), locked: true, hoverUnlock: false });
+    await flush();
+    expect(String(root()?.props.class)).not.toContain("hovered");
+    view.unmount();
+    view.fixture.emitWindow({ ...windowState(6), locked: true, hoverUnlock: true });
+    expect(view.fixture.provider.setUnlockRegion).toHaveBeenCalledOnce();
+  });
   it("完整快照应用文字设置并在原节点更新，clock和窗口高度不覆盖字号，工作区用于拖动边界", async () => {
     const view = mountView("mygo");
     const options = desktopLyricOptions.createDefaultDesktopLyricOptions();

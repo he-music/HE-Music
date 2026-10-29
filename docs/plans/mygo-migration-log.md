@@ -642,3 +642,10 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 初轮生产SFC测试宿主缺新模块映射导致14失败、旧测试预期选项隐藏导致1失败，更新宿主映射与新功能预期后通过。一次相邻anchor插入/替换批次重叠被工具拒绝，零写，合并为不重叠范围后成功。审查并行任务首轮output字段不受该API接受，零子代理启动，按同工具脚本工作流纠正。官方CLI在隔离快照 `0c686e5` 生成新增合同与ResetPosition，父hashline复制并完整cmp。
 - 原生父审查 `757fa393` No issues/OK。前端审查 `9aa4f7f1` 找到编辑草稿隔离P2：共用sync回填使恢复style清掉未提交font，恢复options清掉未提交color。父补两交错反例实际2failed（分别system-ui与#fe7971替代草稿），拆分两组watch/回填/保存/失败恢复，选项控件改调独立options保存，Electron仍回原全配置保存；修后3文件20项、Node/Web类型与相关lint/格式通过，`44f71804` 窄复核Closed/No issues/OK。
 - 最终父全量107文件1051项通过；Node/Web类型、相关13个TS ESLint、16个源/locale Prettier、Go全包/vet/gofmt及官方binding完整cmp通过。全量1051为P2修后结果，原1049仅初版历史；Go/绑定未受P2修改，没有重复已过检查。所有验证均未启动App/Vite、真实picker/用户库/声音/字体枚举/OS窗口/Windows；不将stub模板、fake策略与源码审查当作实际字体或多屏窗口验收。
+
+### 桌面歌词锁定后的悬浮解锁
+
+- 用户实测反馈：Electron锁定后悬浮会出现解锁按钮，mygo没有。源码确认Electron使用setIgnoreMouseEvents(true, { forward: true })继续向页面转发mousemove；固定mygo SDK只有布尔透传，之前HoverUnlock一直为false，单靠DOM hover无法显示锁定解锁按钮。
+- 使用现有官方Screen.CursorScreenPoint及窗口bounds，在可见、已Attach且锁定期间每75ms采样一次；调度至main线程且最多一个待处理tick。HoverUnlock只在进入/离开区域边沿更新revision，不把鼠标坐标持续传入renderer。解锁、关闭与撤销会取消采样，watcher私有sequence和当前窗口/generation阻止已排队的旧tick在重新锁定后复活；锁定仍禁止移动，托盘外部解锁保留。
+- 子页通过实际按钮getBoundingClientRect相对viewport登记小区域，新SetUnlockRegion仅允许当前已Attach子页、当前epoch且有限0..1矩形，实际最多64×64逻辑像素。正文区域仅显示按钮且继续透传；只有指针进入按钮才暂时接收输入，移出恢复透传。native锁定时根hovered class使用原生HoverUnlock，停留不会被页面一秒计时器隐藏；点击仍经SetLocked原生回执，不乐观解锁。未改歌词结构、动画、RAF或焦点，Electron转发与临时解锁逻辑保留。
+- 新Go fake tick测试覆盖正文透传、按钮输入、离开、stationary不重复通知、stop/start与旧tick、失效owner、非法/nil区域。生产SFC验证实际geometry一次登记、原生悬浮class、超过1秒仍显示、点击等待回执及卸载；暂还原旧DOM hover绑定时真实1failed（desktop-lyric locked缺hovered），恢复后全量107文件1052项通过。Node/Web类型、相关3个TS ESLint、4个源文件Prettier、Go全包/vet/gofmt通过；官方CLI在隔离快照16d7e82生成新区域合同与方法，父hashline复制并完整cmp通过。18a7e701独立只读审查No issues/OK with notes，父已完整读取并完成审查所提最终格式复查；未启动App/Vite、真实OS鼠标/多屏/字体、用户库/音频或Windows，尚不声称实机交互验收。

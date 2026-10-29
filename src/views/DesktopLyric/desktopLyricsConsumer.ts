@@ -1,4 +1,5 @@
 import { ref, shallowRef } from "vue";
+import type { LyricsUnlockRegion } from "@/platform/mygo.bindings";
 import type {
   LyricsAction,
   LyricsBounds,
@@ -14,6 +15,7 @@ type PageProvider = Pick<
   | "getState"
   | "setBounds"
   | "setLocked"
+  | "setUnlockRegion"
   | "close"
   | "command"
   | "onSnapshot"
@@ -171,6 +173,15 @@ export function createDesktopLyricsConsumer(provider: PageProvider | undefined) 
       recordOperationError(error, request);
     }
   }
+  async function setUnlockRegion(region: LyricsUnlockRegion) {
+    if (disposed || status.value !== "connected" || !provider?.setUnlockRegion || !epoch) return;
+    const request = { epoch, revision: windowState.value?.revision };
+    try {
+      await provider.setUnlockRegion(request.epoch, region);
+    } catch (error) {
+      recordOperationError(error, request);
+    }
+  }
   async function refreshBounds() {
     if (disposed || status.value !== "connected" || !provider || !epoch) return;
     const request = { epoch, revision: windowState.value?.revision };
@@ -211,6 +222,7 @@ export function createDesktopLyricsConsumer(provider: PageProvider | undefined) 
     command,
     setBounds,
     setLocked,
+    setUnlockRegion,
     refreshBounds,
     close,
     dispose,

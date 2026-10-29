@@ -27,6 +27,8 @@ type DesktopLyrics struct {
 	timer           *time.Timer
 	stopChild       func() bool
 	appliedFontSize int
+	unlockRegion    *LyricsUnlockRegion
+	hoverWatcher    *lyricsHoverWatcher
 }
 
 func init() { mygo.Bind(desktopLyrics) }
@@ -118,6 +120,7 @@ func (l *DesktopLyrics) setLocked(locked bool) error {
 		_ = l.state.setLocked(false, false)
 		return errors.New("desktop lyrics unlock menu unavailable")
 	}
+	l.stopHoverUnlock()
 	l.win.SetMovable(!locked)
 	l.win.SetIgnoreMouseEvents(locked)
 	if !locked {
@@ -126,6 +129,9 @@ func (l *DesktopLyrics) setLocked(locked bool) error {
 		}
 	}
 	l.emitWindow()
+	if locked {
+		l.startHoverUnlock()
+	}
 	return nil
 }
 
@@ -406,6 +412,8 @@ func (l *DesktopLyrics) closeWindow(generation uint64, failure string) {
 	if !l.state.close(generation, failure) {
 		return
 	}
+	l.stopHoverUnlock()
+	l.unlockRegion = nil
 	l.emitWindow()
 	if l.timer != nil {
 		l.timer.Stop()
@@ -430,6 +438,7 @@ func (l *DesktopLyrics) closeWindow(generation uint64, failure string) {
 
 // Lifecycle revocation is synchronous and does not wait for renderer replies.
 func (l *DesktopLyrics) revoke() {
+	l.stopHoverUnlock()
 	l.closeWindow(l.state.generation, "")
 	l.state.revoke()
 	desktopLifecycle.updateMenu()

@@ -245,6 +245,17 @@ export interface LyricsStyle {
 }
 
 /**
+ * The child reports its actual unlock button as a viewport-relative rectangle.
+ * Native code alone decides when that small region accepts mouse input.
+ */
+export interface LyricsUnlockRegion {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
  * Visible means the native window has been shown; Pending means ready/Attach
  * is still outstanding. A failed asynchronous open reports Failure and false.
  * Locked windows ignore mouse events; a native tray action always permits unlocking.
@@ -662,6 +673,9 @@ export const DesktopLyrics = {
   },
   setLocked(epoch: number, locked: boolean): Promise<LyricsWindowState> {
     return call("DesktopLyrics.SetLocked", epoch, locked);
+  },
+  setUnlockRegion(epoch: number, region: LyricsUnlockRegion): Promise<void> {
+    return call("DesktopLyrics.SetUnlockRegion", epoch, region);
   },
   /**
    * SetVisible returns immediately with Pending=true on first creation. Only a

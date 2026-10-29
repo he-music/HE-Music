@@ -21,9 +21,10 @@ export type {
 
 /** Native provider with explicit window state, locking and external tray recovery. */
 export interface PlatformDesktopLyrics extends Readonly<
-  Omit<typeof DesktopLyrics, "resetPosition">
+  Omit<typeof DesktopLyrics, "resetPosition" | "setUnlockRegion">
 > {
   resetPosition?: typeof DesktopLyrics.resetPosition;
+  setUnlockRegion?: typeof DesktopLyrics.setUnlockRegion;
   onWindow(listener: (state: LyricsWindowState) => void): () => void;
   onSnapshot(listener: (snapshot: LyricsSnapshot) => void): () => void;
   onClock(listener: (clock: LyricsClock) => void): () => void;
