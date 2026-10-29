@@ -3,7 +3,7 @@
   <div ref="imgContainer" :key="src" class="s-image">
     <!-- 加载图片 -->
     <Transition name="fade">
-      <img v-if="!isLoaded" :src="defaultSrc" class="loading" alt="loading" />
+      <img v-if="!isLoaded" :src="resolvedDefaultSrc" class="loading" alt="loading" />
     </Transition>
     <!-- 真实图片 -->
     <img
@@ -22,6 +22,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 const props = withDefaults(
   defineProps<{
     src: string | undefined;
@@ -44,6 +45,10 @@ const props = withDefaults(
     nativeLazy: true,
   },
 );
+const resolvedSrc = computed(() =>
+  props.src === undefined ? undefined : gatewayProxyUrl(props.src),
+);
+const resolvedDefaultSrc = computed(() => gatewayProxyUrl(props.defaultSrc));
 
 const emit = defineEmits<{
   // 加载完成
@@ -85,8 +90,8 @@ const imageError = (e: Event) => {
   if (currentToken.value !== loadToken.value) return;
   isLoaded.value = false;
   // 避免默认图也反复触发导致死循环
-  if (imgSrc.value !== props.defaultSrc) {
-    imgSrc.value = props.defaultSrc;
+  if (imgSrc.value !== resolvedDefaultSrc.value) {
+    imgSrc.value = resolvedDefaultSrc.value;
   }
   emit("error", e);
 };
@@ -103,10 +108,10 @@ watch(
     }
     if (show) {
       // 进入可视区再加载，避免重复赋值
-      if (imgSrc.value !== props.src) {
+      if (imgSrc.value !== resolvedSrc.value) {
         loadToken.value += 1;
         currentToken.value = loadToken.value;
-        imgSrc.value = props.src;
+        imgSrc.value = resolvedSrc.value;
       }
     } else if (props.releaseOnHide) {
       // 释放图片以回收内存
@@ -118,7 +123,7 @@ watch(
 
 // 监听 src 变化
 watch(
-  () => props.src,
+  resolvedSrc,
   (val) => {
     isLoaded.value = false;
     // 不同值时才进行赋值，减少重绘

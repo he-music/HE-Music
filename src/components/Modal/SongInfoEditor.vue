@@ -130,7 +130,7 @@
       </n-tab-pane>
       <n-tab-pane name="cover" :tab="t('common.cover')" display-directive="show">
         <n-image
-          :src="coverData"
+          :src="gatewayProxyUrl(coverData)"
           :preview-disabled="true"
           width="300"
           height="300"
@@ -156,6 +156,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import type { FormInst, FormRules } from "naive-ui";
 import { useDataStore, useMusicStore, useSettingStore } from "@/stores";
 import { useFormRule } from "@/utils/rules";

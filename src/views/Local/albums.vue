@@ -12,7 +12,7 @@
           <n-image
             :key="item?.[0]?.cover"
             v-visible.once="(show: boolean) => loadAlbumCover(show, key)"
-            :src="item?.[0]?.cover || '/images/album.jpg?asset'"
+            :src="gatewayProxyUrl(item?.[0]?.cover || '/images/album.jpg?asset')"
             preview-disabled
             class="cover"
           />
@@ -35,6 +35,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { groupSongs } from "@/utils/songGroup";
 import blob from "@/utils/blob";
 import type { SongInfo } from "@/types/main.hemusic";

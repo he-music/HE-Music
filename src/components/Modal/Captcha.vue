@@ -45,6 +45,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { Click, Rotate, Slide, SlideRegion } from "go-captcha-vue";
 import {
   CAPTCHA_METHOD_CAP,
@@ -134,6 +135,8 @@ const loadImage = async () => {
     const image = await getCaptchaImage(props.scene, props.meta, sessionId.value);
     data.value = {
       ...image,
+      image: gatewayProxyUrl(image.image),
+      thumb: gatewayProxyUrl(image.thumb),
       thumbX: image.thumb_x,
       thumbY: image.thumb_y,
       thumbWidth: image.thumb_width,

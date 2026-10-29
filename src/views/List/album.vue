@@ -11,9 +11,9 @@
       <div v-if="albumDetailData" class="detail">
         <div class="cover">
           <n-image
-            :src="albumDetailData.cover"
+            :src="gatewayProxyUrl(albumDetailData.cover || '')"
             :previewed-img-props="{ style: { borderRadius: '8px' } }"
-            :preview-src="albumDetailData.cover"
+            :preview-src="gatewayProxyUrl(albumDetailData.cover || '')"
             :render-toolbar="renderToolbar"
             show-toolbar-tooltip
             class="cover-img"
@@ -26,7 +26,11 @@
             </template>
           </n-image>
           <!-- 封面背板 -->
-          <n-image class="cover-shadow" preview-disabled :src="albumDetailData.cover" />
+          <n-image
+            class="cover-shadow"
+            preview-disabled
+            :src="gatewayProxyUrl(albumDetailData.cover || '')"
+          />
         </div>
         <div class="data">
           <n-h2 class="name">
@@ -173,6 +177,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import AsyncContent from "@/components/Page/AsyncContent.vue";
 import { albumDetail } from "@/api/album";
 import { copyData, coverLoaded, getShareUrl, renderIcon } from "@/utils/helper";

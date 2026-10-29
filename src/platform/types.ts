@@ -7,6 +7,7 @@ import type { PlatformSystemFonts } from "./systemFonts";
 import type { PlatformProtocols } from "./protocolSession";
 import type { TaskbarProvider } from "./taskbarSession";
 import type { PlatformNetworkProxy } from "./networkProxy";
+import type { GatewayProvider } from "./gateway";
 import type { PlatformWindowAppearance } from "./windowAppearance";
 import type {
   CloseRequested,
@@ -65,6 +66,7 @@ export interface PlatformAdapter {
   readonly protocols?: PlatformProtocols;
   readonly taskbar?: TaskbarProvider;
   readonly networkProxy?: PlatformNetworkProxy;
+  readonly gateway?: GatewayProvider;
   readonly windowAppearance?: PlatformWindowAppearance;
 }
 

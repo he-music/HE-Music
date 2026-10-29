@@ -18,7 +18,7 @@ export interface NetworkProxySettingsStore {
 export function networkProxyReceiptMessage(receipt: NetworkProxyReceipt): string {
   if (!receipt.saved) return "mygo.proxy.save_failed";
   if (receipt.restartRequired) return "mygo.proxy.restart";
-  if (!receipt.webviewApplied) return "mygo.proxy.unsupported";
+  if (!receipt.gatewayApplied) return "mygo.proxy.unsupported";
   if (!receipt.downloadsApplied) return "mygo.proxy.partial";
   return "mygo.proxy.applied";
 }
@@ -64,7 +64,7 @@ export function useMygoNetworkProxySettings(
     if (!receipt) return t("mygo.proxy.scope");
     return [
       t("mygo.proxy.scope"),
-      t(receipt.webviewApplied ? "mygo.proxy.web_applied" : "mygo.proxy.web_unapplied"),
+      t(receipt.gatewayApplied ? "mygo.proxy.web_applied" : "mygo.proxy.web_unapplied"),
       t(
         receipt.downloadsApplied
           ? "mygo.proxy.downloads_applied"
@@ -106,7 +106,7 @@ export function useMygoNetworkProxySettings(
       store.proxyPort = config.port;
     }
     const message = t(networkProxyReceiptMessage(receipt));
-    if (receipt.webviewApplied && receipt.downloadsApplied && !receipt.restartRequired)
+    if (receipt.gatewayApplied && receipt.downloadsApplied && !receipt.restartRequired)
       window.$message.success(message);
     else window.$message.warning(message);
   };

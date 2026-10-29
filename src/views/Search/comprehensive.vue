@@ -40,7 +40,7 @@
           >
             <div class="primary-cover-wrap">
               <img
-                :src="getItemCover(displayPrimary)"
+                :src="gatewayProxyUrl(getItemCover(displayPrimary))"
                 :alt="getItemName(displayPrimary)"
                 width="160"
                 height="160"
@@ -86,7 +86,7 @@
             >
               <div class="recommend-cover-wrap">
                 <img
-                  :src="getItemCover(item)"
+                  :src="gatewayProxyUrl(getItemCover(item))"
                   :alt="getItemName(item)"
                   width="48"
                   height="48"
@@ -202,6 +202,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import AsyncContent from "@/components/Page/AsyncContent.vue";
 import { useAsyncRequest } from "@/composables/useAsyncRequest";
 import { comprehensiveSearch } from "@/api/search";

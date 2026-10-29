@@ -3,6 +3,7 @@ import { getCoverColorData, MONOTONOUS_THEME } from "./color";
 import type { CoverColors } from "@/types/main";
 import type { Link, SongInfo } from "@/types/main.hemusic";
 import { songUrl } from "@/api/song";
+import { gatewayProxyUrl } from "@/platform/gateway";
 
 /**
  * 歌曲解锁服务器
@@ -116,7 +117,7 @@ class SongManager {
         } // 跨域画布读取失败时保留回退配色。
       };
       image.onerror = () => finish(null);
-      image.src = coverUrl;
+      image.src = gatewayProxyUrl(coverUrl);
     });
     if (theme) {
       if (this.coverThemeCache.size >= 32) {

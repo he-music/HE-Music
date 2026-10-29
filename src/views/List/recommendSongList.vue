@@ -17,13 +17,13 @@
       <div class="detail">
         <div class="cover">
           <n-image
-            :src="cover"
-            :preview-src="cover"
+            :src="gatewayProxyUrl(cover)"
+            :preview-src="gatewayProxyUrl(cover)"
             :previewed-img-props="{ style: { borderRadius: '8px' } }"
             show-toolbar-tooltip
             class="cover-img"
           />
-          <n-image :src="cover" preview-disabled class="cover-shadow" />
+          <n-image :src="gatewayProxyUrl(cover)" preview-disabled class="cover-shadow" />
         </div>
         <div class="data">
           <n-h2 class="name">
@@ -135,6 +135,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { getRecommendSongList } from "@/api/page";
 import SongList from "@/components/List/SongList.vue";
 import SvgIcon from "@/components/Global/SvgIcon.vue";

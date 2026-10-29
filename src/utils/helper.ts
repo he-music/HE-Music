@@ -1,3 +1,4 @@
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { NTooltip, SelectOption } from "naive-ui";
 import { h, VNode } from "vue";
 import { useClipboard } from "@vueuse/core";
@@ -102,7 +103,7 @@ export const formatFileSize = (bytes: number): string => {
 
 // 将图片链接转为 BlobUrl
 export const convertImageUrlToBlobUrl = async (imageUrl: string) => {
-  const response = await fetch(imageUrl);
+  const response = await fetch(gatewayProxyUrl(imageUrl));
   if (!response.ok) {
     throw new Error("Network response was not ok");
   }

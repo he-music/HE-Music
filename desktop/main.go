@@ -16,11 +16,10 @@ func main() {
 	defer stopProtocols()
 	gatewayOrigin, stopGateway, gatewayErr := startDesktopGateway()
 	if gatewayErr != nil {
-		log.Print("启动本机资源网关失败，继续使用原始请求地址: ", gatewayErr)
-		gatewayOrigin = ""
-	} else {
-		defer stopGateway()
+		log.Print("启动本机网络网关失败: ", gatewayErr)
+		return
 	}
+	defer stopGateway()
 	mygo.App.WhenReady(func() {
 		appearance := WindowAppearance{}
 		directory, directoryErr := mygo.App.Path(mygo.PathUserData)
@@ -32,9 +31,13 @@ func main() {
 			}
 			if proxyErr := prepareNetworkProxyStartup(directory); proxyErr != nil {
 				log.Print("读取代理配置失败")
+				mygo.App.Quit()
+				return
 			}
 		} else {
 			log.Print("读取应用配置目录失败")
+			mygo.App.Quit()
+			return
 		}
 		options := WindowAppearanceOptions(appearance)
 		options.Title, options.Width, options.Height = "HE-Music", 1280, 800
@@ -46,12 +49,10 @@ func main() {
 			log.Print("设置 macOS 原生窗口按钮悬停失败，保留可见按钮: ", hoverErr)
 		}
 		desktopLifecycle.attachMainWindow(win, true)
-		if _, proxyErr := restoreNetworkProxyWebview(); proxyErr != nil {
-			log.Print("恢复代理配置失败")
-		}
 		win.Page().LoadURL("/")
 	})
 	err := mygo.App.Run()
+	stopGateway()
 	if cleanupErr := desktopFiles.shutdownLocalAudio(); cleanupErr != nil {
 		log.Print("本地音频服务清理失败")
 	}

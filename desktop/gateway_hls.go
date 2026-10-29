@@ -57,6 +57,12 @@ func (g *NetworkGateway) writeManifest(w http.ResponseWriter, r *http.Request, r
 }
 
 func rewriteGatewayManifest(manifest string, base *url.URL, prefix string) (string, error) {
+	// Variable imports and secondary JSON documents need a shared rewriting
+	// context. Reject them explicitly until that context is implemented; never
+	// return a playlist that lets the player silently leave the Go gateway.
+	if strings.Contains(manifest, "{$") {
+		return "", errors.New("HLS variables are unsupported")
+	}
 	rewrite := func(raw string) (string, error) {
 		uri, err := url.Parse(raw)
 		if err != nil {
@@ -90,6 +96,11 @@ func rewriteGatewayManifest(manifest string, base *url.URL, prefix string) (stri
 		// I-FRAME-STREAM-INF, SESSION-KEY and future tags using the same grammar.
 		if !strings.HasPrefix(trimmed, "#EXT") {
 			continue
+		}
+		if strings.HasPrefix(trimmed, "#EXT-X-DEFINE:") ||
+			strings.HasPrefix(trimmed, "#EXT-X-CONTENT-STEERING:") ||
+			strings.Contains(trimmed, "X-ASSET-URI=") || strings.Contains(trimmed, "X-ASSET-LIST=") {
+			return "", errors.New("unsupported HLS secondary resources")
 		}
 		var rewriteErr error
 		lines[i] = gatewayURIAttribute.ReplaceAllStringFunc(line, func(attribute string) string {

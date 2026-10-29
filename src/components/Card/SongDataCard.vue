@@ -1,6 +1,12 @@
 <template>
   <n-card class="song-data-card">
-    <n-image :src="getSizeCover(data, 300)" class="cover" preview-disabled lazy @load="coverLoaded">
+    <n-image
+      :src="gatewayProxyUrl(getSizeCover(data, 300))"
+      class="cover"
+      preview-disabled
+      lazy
+      @load="coverLoaded"
+    >
       <template #placeholder>
         <div class="cover-loading">
           <img src="/images/song.jpg?asset" class="loading-img" alt="loading-img" />
@@ -54,6 +60,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { FeatureSupportFlag } from "@/api/platform";
 import { coverLoaded } from "@/utils/helper";
 import { isObject } from "lodash-es";

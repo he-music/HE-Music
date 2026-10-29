@@ -1,3 +1,4 @@
+import { gatewayProxyUrl } from "@/platform/gateway";
 import type { CoverColors } from "@/types/main";
 import {
   themeFromSourceColor,
@@ -169,7 +170,7 @@ export const getCoverColor = async (coverUrl: string) => {
   // 创建图像元素
   const image = new Image();
   image.crossOrigin = "Anonymous";
-  image.src = coverUrl;
+  image.src = gatewayProxyUrl(coverUrl);
   // 图像加载完成
   image.onload = () => {
     // 获取图片数据

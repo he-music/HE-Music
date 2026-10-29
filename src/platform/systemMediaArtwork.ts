@@ -1,3 +1,4 @@
+import { gatewayProxyUrl } from "@/platform/gateway";
 const MAX_BYTES = 2 * 1024 * 1024;
 const MAX_BASE64 = 4 * Math.ceil(MAX_BYTES / 3);
 const MAX_EDGE = 2048;
@@ -107,7 +108,7 @@ async function validateImage(blob: Blob, signal: AbortSignal): Promise<void> {
 export async function loadSystemMediaArtwork(source: string, signal: AbortSignal): Promise<string> {
   if (signal.aborted) throw abortError();
   const url = imageURL(source);
-  const response = await fetch(url.href, {
+  const response = await fetch(gatewayProxyUrl(url.href), {
     signal,
     credentials: "omit",
     referrerPolicy: "no-referrer",

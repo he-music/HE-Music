@@ -126,9 +126,9 @@ describe("mygo network settings", () => {
       "mygo.proxy.restart",
     );
     expect(
-      networkProxyReceiptMessage({ ...partial, webviewApplied: true, downloadsApplied: false }),
+      networkProxyReceiptMessage({ ...partial, gatewayApplied: true, downloadsApplied: false }),
     ).toBe("mygo.proxy.partial");
-    expect(networkProxyReceiptMessage({ ...partial, webviewApplied: true })).toBe(
+    expect(networkProxyReceiptMessage({ ...partial, gatewayApplied: true })).toBe(
       "mygo.proxy.applied",
     );
     expect(networkProxyReceiptMessage({ ...partial, saved: false })).toBe("mygo.proxy.save_failed");

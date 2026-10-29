@@ -10,9 +10,9 @@
         <div v-if="artistDetailData" class="detail">
           <div class="cover">
             <n-image
-              :src="artistDetailData.cover"
+              :src="gatewayProxyUrl(artistDetailData.cover || '')"
               :previewed-img-props="{ style: { borderRadius: '8px' } }"
-              :preview-src="artistDetailData.cover"
+              :preview-src="gatewayProxyUrl(artistDetailData.cover || '')"
               :render-toolbar="renderToolbar"
               show-toolbar-tooltip
               class="cover-img"
@@ -25,7 +25,11 @@
               </template>
             </n-image>
             <!-- 封面背板 -->
-            <n-image class="cover-shadow" preview-disabled :src="artistDetailData.cover" />
+            <n-image
+              class="cover-shadow"
+              preview-disabled
+              :src="gatewayProxyUrl(artistDetailData.cover || '')"
+            />
           </div>
           <div class="data">
             <div class="name text-hidden">
@@ -157,6 +161,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import AsyncContent from "@/components/Page/AsyncContent.vue";
 import { useAsyncRequest } from "@/composables/useAsyncRequest";
 import { copyData, coverLoaded, renderIcon } from "@/utils/helper";

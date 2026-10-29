@@ -14,7 +14,7 @@
         <div class="avatar">
           <n-avatar
             v-if="dataStore.userLoginStatus"
-            :src="dataStore.userData?.avatar"
+            :src="gatewayProxyUrl(dataStore.userData?.avatar || '')"
             fallback-src="/images/avatar.jpg?asset"
             round
           />
@@ -90,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { useDataStore } from "@/stores";
 import {
   openUpdateUserInfo,

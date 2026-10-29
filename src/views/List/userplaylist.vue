@@ -6,9 +6,9 @@
         <div v-if="playlistDetailData" class="detail">
           <div class="cover">
             <n-image
-              :src="playlistDetailData.cover"
+              :src="gatewayProxyUrl(playlistDetailData.cover || '')"
               :previewed-img-props="{ style: { borderRadius: '8px' } }"
-              :preview-src="playlistDetailData.cover"
+              :preview-src="gatewayProxyUrl(playlistDetailData.cover || '')"
               :render-toolbar="renderToolbar"
               show-toolbar-tooltip
               class="cover-img"
@@ -21,7 +21,11 @@
               </template>
             </n-image>
             <!-- 封面背板 -->
-            <n-image class="cover-shadow" preview-disabled :src="playlistDetailData.cover" />
+            <n-image
+              class="cover-shadow"
+              preview-disabled
+              :src="gatewayProxyUrl(playlistDetailData.cover || '')"
+            />
             <!-- 遮罩 -->
             <div class="cover-mask" />
           </div>
@@ -176,6 +180,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import AsyncContent from "@/components/Page/AsyncContent.vue";
 import type { DropdownOption, MessageReactive } from "naive-ui";
 

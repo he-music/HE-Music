@@ -5,7 +5,6 @@ import type { SongInfo } from "@/types/main.hemusic";
 import { getCoverUrlStr } from "@/api/song";
 import { useDataStore, usePlatformStore } from "@/stores";
 
-import { gatewayProxyUrl } from "@/platform/gateway";
 type CoverDataType = {
   cover: string;
   coverSize?: {
@@ -264,12 +263,10 @@ export const getSizeCover = (song: SongInfo | null, size = 300) => {
   if (size < 0) size = 1000;
   const { cover = "", platform, id } = song;
   if (cover) {
-    return gatewayProxyUrl(
-      cover.replaceAll("{x}", size.toString()).replaceAll("{y}", size.toString()),
-    );
+    return cover.replaceAll("{x}", size.toString()).replaceAll("{y}", size.toString());
   }
   const dataStore = useDataStore();
-  return gatewayProxyUrl(getCoverUrlStr(platform, id, size, true, dataStore.token));
+  return getCoverUrlStr(platform, id, size, true, dataStore.token);
 };
 
 export { getLyricLanguage } from "./lyric/language";

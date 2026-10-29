@@ -21,6 +21,7 @@ type NetworkProxyConfig struct {
 
 type NetworkProxyReceipt struct {
 	Saved            bool   `json:"saved"`
+	GatewayApplied   bool   `json:"gatewayApplied"`
 	WebviewApplied   bool   `json:"webviewApplied"`
 	DownloadsApplied bool   `json:"downloadsApplied"`
 	RestartRequired  bool   `json:"restartRequired"`
@@ -68,26 +69,25 @@ func normalizedNetworkProxy(c NetworkProxyConfig) NetworkProxyConfig {
 	return c
 }
 
-type networkProxyApply func(NetworkProxyConfig) (webviewApplied bool, restartRequired bool, errorCode string, err error)
+type networkProxyApply func(NetworkProxyConfig) (gatewayApplied bool, restartRequired bool, errorCode string, err error)
 type NetworkProxy struct {
 	mu            sync.RWMutex
 	config        NetworkProxyConfig
 	downloads     bool
 	save          func(NetworkProxyConfig) error
-	applyWebview  networkProxyApply
+	applyRoute    networkProxyApply
 	testTransport func(NetworkProxyConfig) http.RoundTripper
 }
 
 func newNetworkProxy(save func(NetworkProxyConfig) error, apply networkProxyApply) *NetworkProxy {
-	return &NetworkProxy{config: NetworkProxyConfig{Protocol: "off"}, save: save, applyWebview: apply, testTransport: func(c NetworkProxyConfig) http.RoundTripper {
+	return &NetworkProxy{config: NetworkProxyConfig{Protocol: "off"}, save: save, applyRoute: apply, testTransport: func(c NetworkProxyConfig) http.RoundTripper {
 		u, _ := networkProxyURL(c)
 		return &http.Transport{Proxy: http.ProxyURL(u), TLSHandshakeTimeout: 3 * time.Second, ResponseHeaderTimeout: 3 * time.Second, DisableKeepAlives: true}
 	}}
 }
 
 // apply is serialized on the lifecycle main thread by the bound entry point.
-// Native failure does not persist. Persistence failure restores the prior native
-// configuration and leaves download routing untouched, reporting rollback errors.
+// Only persisted configurations become visible to subsequent Go requests.
 func (p *NetworkProxy) apply(c NetworkProxyConfig) (NetworkProxyReceipt, error) {
 	receipt := NetworkProxyReceipt{}
 	if _, err := networkProxyURL(c); err != nil {
@@ -97,19 +97,19 @@ func (p *NetworkProxy) apply(c NetworkProxyConfig) (NetworkProxyReceipt, error) 
 	p.mu.RLock()
 	old := p.config
 	p.mu.RUnlock()
-	web, restart, code, err := p.applyWebview(c)
+	gateway, restart, code, err := p.applyRoute(c)
 	if err != nil {
 		return receipt, err
 	}
 	if err = p.save(c); err != nil {
-		_, _, _, rollbackErr := p.applyWebview(old)
+		_, _, _, rollbackErr := p.applyRoute(old)
 		return receipt, errors.Join(err, rollbackErr)
 	}
 	p.mu.Lock()
 	p.config = c
 	downloads := p.downloads
 	p.mu.Unlock()
-	return NetworkProxyReceipt{Saved: true, WebviewApplied: web, DownloadsApplied: downloads, RestartRequired: restart, ErrorCode: code}, nil
+	return NetworkProxyReceipt{Saved: true, GatewayApplied: gateway, DownloadsApplied: downloads, RestartRequired: restart, ErrorCode: code}, nil
 }
 
 // networkProxyDirect reports destinations that must stay on the local route.

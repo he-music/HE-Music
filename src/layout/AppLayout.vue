@@ -15,7 +15,7 @@
           v-if="statusStore.themeBackgroundMode === 'image'"
           class="background-image"
           :style="{
-            backgroundImage: `url(${statusStore.backgroundImageUrl})`,
+            backgroundImage: `url(${gatewayProxyUrl(statusStore.backgroundImageUrl || '')})`,
             transform: `scale(${statusStore.backgroundConfig.scale})`,
             filter: `blur(${statusStore.backgroundConfig.blur}px)`,
           }"
@@ -23,7 +23,7 @@
         <video
           v-else-if="statusStore.themeBackgroundMode === 'video'"
           class="background-image"
-          :src="statusStore.backgroundImageUrl"
+          :src="gatewayProxyUrl(statusStore.backgroundImageUrl || '')"
           autoplay
           loop
           muted
@@ -127,6 +127,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { useMusicStore, useStatusStore, useSettingStore, useDataStore } from "@/stores";
 import { useMobile } from "@/composables/useMobile";
 import init from "@/utils/init";

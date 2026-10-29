@@ -1,12 +1,64 @@
 import type { AxiosRequestConfig } from "axios";
 
-const GATEWAY_ORIGIN_KEY = "__HE_MUSIC_GATEWAY_ORIGIN__";
+declare global {
+  interface Window {
+    readonly __HE_MUSIC_GATEWAY_ORIGIN__?: string;
+  }
+}
 
-type GatewayWindow = Window & { [GATEWAY_ORIGIN_KEY]?: string };
+declare module "axios" {
+  interface AxiosRequestConfig {
+    /** Original application URL, retained when Axios retries a gateway request. */
+    gatewayOriginalURL?: string;
+  }
+}
 
+export interface GatewayAPIConfig {
+  hemusic: string;
+  netease: string;
+  unblock: string;
+}
+export interface GatewayProvider {
+  configure(config: GatewayAPIConfig): Promise<void>;
+}
+
+type APIRoute = keyof GatewayAPIConfig;
+let apiBases: GatewayAPIConfig | undefined;
+
+/** This capability is injected by mygo, never by the standalone Web build. */
 export function mygoGatewayOrigin(): string {
   if (typeof window === "undefined") return "";
-  return (window as GatewayWindow)[GATEWAY_ORIGIN_KEY] ?? "";
+  return window.__HE_MUSIC_GATEWAY_ORIGIN__?.replace(/\/+$/, "") ?? "";
+}
+
+function upstreamBase(value: string, fallback?: string): string {
+  const url = fallback ? new URL(value, fallback) : new URL(value);
+  if (!/^https?:$/.test(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error("Invalid gateway API base URL");
+  }
+  return url.href.replace(/\/+$/, "");
+}
+
+export function gatewayAPIConfig(hemusic: string, netease: string): GatewayAPIConfig {
+  const base = upstreamBase(hemusic);
+  return {
+    hemusic: base,
+    netease: upstreamBase(netease || "/api/netease", `${base}/`),
+    unblock: upstreamBase("/api/unblock", `${base}/`),
+  };
+}
+
+/** Configure fixed API routes before mounting any application consumers. */
+export async function initializeGateway(
+  provider: GatewayProvider | undefined,
+  hemusic: string,
+  netease: string,
+): Promise<void> {
+  if (!mygoGatewayOrigin()) return;
+  if (!provider) throw new Error("The mygo network gateway is unavailable");
+  const config = gatewayAPIConfig(hemusic, netease);
+  await provider.configure(config);
+  apiBases = config;
 }
 
 function encodeTarget(value: string): string {
@@ -16,59 +68,83 @@ function encodeTarget(value: string): string {
   return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
 }
 
-function isLoopbackHost(hostname: string): boolean {
-  const host = hostname.toLowerCase().replace(/\.$/, "");
+function localHost(hostname: string): boolean {
+  const host = hostname
+    .toLowerCase()
+    .replace(/^\[|\]$/g, "")
+    .replace(/\.$/, "");
   return (
-    host === "localhost" || host === "127.0.0.1" || host === "::1" || host.endsWith(".localhost")
+    host === "localhost" || host.endsWith(".localhost") || host === "::1" || /^127\./.test(host)
   );
 }
 
-export function gatewayProxyUrl(url: string): string {
-  const origin = mygoGatewayOrigin();
-  if (!origin || !/^https?:\/\//i.test(url)) return url;
+/** URL rewriting is synchronous; no resource registration or media buffering. */
+export function gatewayProxyUrl(value: string): string {
+  const gateway = mygoGatewayOrigin();
+  if (!gateway || !value || /^(?:blob:|data:|file:|mygo:)/i.test(value)) return value;
+  if (value === gateway || value.startsWith(`${gateway}/`)) return value;
+  // Relative paths address bundled application assets, not remote resources.
+  if (!/^(?:https?:)?\/\//i.test(value)) return value;
+  let target: URL;
   try {
-    const target = new URL(url);
-    if (isLoopbackHost(target.hostname) || target.origin === origin) return url;
+    target = new URL(value, "https://resource.invalid");
   } catch {
-    return url;
+    return value;
   }
-  return `${origin}/__proxy?target=${encodeTarget(url)}`;
+  if (!/^https?:$/.test(target.protocol) || localHost(target.hostname)) return value;
+  const fragment = target.hash;
+  target.hash = "";
+  return `${gateway}/__proxy?target=${encodeTarget(target.href)}${fragment}`;
 }
 
-function appendParams(url: string, params: AxiosRequestConfig["params"]): string {
-  if (!params) return url;
-  const target = new URL(url);
-  if (params instanceof URLSearchParams) {
-    for (const [key, value] of params) target.searchParams.append(key, value);
-  } else if (typeof params === "object") {
-    for (const [key, value] of Object.entries(params)) {
-      if (value == null) continue;
-      if (Array.isArray(value))
-        value.forEach((item) => target.searchParams.append(key, String(item)));
-      else if (value instanceof Date) target.searchParams.set(key, value.toISOString());
-      else if (typeof value === "object") target.searchParams.set(key, JSON.stringify(value));
-      else target.searchParams.set(key, String(value));
-    }
-  }
-  return target.toString();
+function combineURL(base: string, value: string): URL {
+  if (/^https?:\/\//i.test(value)) return new URL(value);
+  if (value.startsWith("//")) return new URL(`https:${value}`);
+  // Axios joins a leading slash to baseURL instead of discarding the base path.
+  return new URL(`${base.replace(/\/+$/, "")}/${value.replace(/^\/+/, "")}`);
 }
 
-export function rewriteRequestToGateway(
-  config: AxiosRequestConfig,
-  baseURL: string | undefined,
-): AxiosRequestConfig {
-  const origin = mygoGatewayOrigin();
-  if (!origin || !config.url) return config;
-  const fallback = typeof location === "undefined" ? "http://127.0.0.1/" : location.origin;
-  const configuredBase = config.baseURL ?? baseURL ?? fallback;
-  const resolvedBase = /^[a-z][a-z\d+.-]*:/i.test(configuredBase)
-    ? configuredBase
-    : new URL(configuredBase, fallback).toString();
-  const target = new URL(config.url, resolvedBase).toString();
-  const targetWithParams = appendParams(target, config.params);
-  config.baseURL = origin;
-  config.url = "/__proxy";
-  config.params = { target: encodeTarget(targetWithParams) };
-  config.paramsSerializer = undefined;
+function requestRoute(config: AxiosRequestConfig, defaultRoute: APIRoute): APIRoute {
+  if (config.baseURL === "/api/unblock") return "unblock";
+  return defaultRoute;
+}
+
+export function gatewayAPIUrl(url: string): string {
+  if (!mygoGatewayOrigin()) return url;
+  return rewriteRequestToGateway({ url }, undefined).url;
+}
+export function gatewayRequestURL(config: AxiosRequestConfig | undefined): string | undefined {
+  return config?.gatewayOriginalURL ?? config?.url;
+}
+
+/** Keep params, serializer, body and AxiosHeaders intact, including on retries. */
+export function rewriteRequestToGateway<T extends AxiosRequestConfig>(
+  config: T,
+  _baseURL: string | undefined,
+  defaultRoute: APIRoute = "hemusic",
+): T {
+  const gateway = mygoGatewayOrigin();
+  if (!gateway || !config.url) return config;
+  if (config.gatewayOriginalURL && config.url.startsWith(`${gateway}/__api/`)) return config;
+  if (!apiBases) throw new Error("The mygo gateway API routes have not been configured");
+  const route = requestRoute(config, defaultRoute);
+  const registeredBase = apiBases[route];
+  const selectedBase =
+    config.baseURL && /^https?:\/\//i.test(config.baseURL)
+      ? upstreamBase(config.baseURL)
+      : registeredBase;
+  const target = combineURL(selectedBase, config.url);
+  const base = new URL(registeredBase);
+  const prefix = base.pathname.replace(/\/+$/, "");
+  if (
+    target.origin !== base.origin ||
+    (prefix && target.pathname !== prefix && !target.pathname.startsWith(`${prefix}/`))
+  ) {
+    throw new Error("The request does not belong to a configured gateway API");
+  }
+  const relative = target.pathname.slice(prefix.length).replace(/^\/+/, "");
+  config.gatewayOriginalURL = config.url;
+  config.url = `${gateway}/__api/${route}/${relative}${target.search}${target.hash}`;
+  config.baseURL = undefined;
   return config;
 }

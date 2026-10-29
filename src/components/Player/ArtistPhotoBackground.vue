@@ -14,13 +14,17 @@
       v-model:current-index="currentIndex"
     >
       <div v-for="img in musicStore.artistPhoto.urls" :key="img" class="carousel-item">
-        <div class="background-image" :style="{ backgroundImage: `url(${img})` }"></div>
+        <div
+          class="background-image"
+          :style="{ backgroundImage: `url(${gatewayProxyUrl(img)})` }"
+        ></div>
       </div>
     </n-carousel>
   </div>
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { computed, watch, onMounted } from "vue";
 import { useMusicStore } from "@/stores";
 

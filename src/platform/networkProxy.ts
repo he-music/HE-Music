@@ -6,6 +6,7 @@ export interface NetworkProxyConfig {
 
 export interface NetworkProxyReceipt {
   saved: boolean;
+  gatewayApplied?: boolean;
   webviewApplied: boolean;
   downloadsApplied: boolean;
   restartRequired: boolean;

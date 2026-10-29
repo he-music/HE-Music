@@ -12,6 +12,7 @@ import {
   Protocols,
   Taskbar,
   NetworkProxy,
+  NetworkGateway,
   WindowAppearanceService,
   events,
 } from "./mygo.bindings";
@@ -55,6 +56,7 @@ export function createMygoPlatform(): PlatformAdapter {
           }
         : undefined,
     networkProxy: createNetworkProxyProvider(NetworkProxy),
+    gateway: NetworkGateway,
     windowAppearance: WindowAppearanceService,
     updates: {
       ...Updates,

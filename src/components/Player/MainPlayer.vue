@@ -19,7 +19,7 @@
           @click.stop="statusStore.showFullPlayer = true"
         >
           <n-image
-            :src="musicStore.songCover"
+            :src="gatewayProxyUrl(musicStore.songCover)"
             :alt="musicStore.songCover"
             class="cover-img"
             preview-disabled
@@ -190,6 +190,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import type { DropdownOption } from "naive-ui";
 import {
   useDataStore,

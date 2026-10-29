@@ -12,7 +12,13 @@
     <div class="content">
       <!-- 封面 -->
       <div class="cover">
-        <n-image v-if="cover" :src="cover" preview-disabled lazy @load="coverLoaded">
+        <n-image
+          v-if="cover"
+          :src="gatewayProxyUrl(cover)"
+          preview-disabled
+          lazy
+          @load="coverLoaded"
+        >
           <template #placeholder>
             <div class="cover-loading">
               <img src="/images/song.jpg?asset" class="loading-img" alt="loading-img" />
@@ -23,7 +29,7 @@
           <n-image
             v-for="item in songList"
             :key="`${item.id}-${item.platform}`"
-            :src="item.cover"
+            :src="gatewayProxyUrl(item.cover || '')"
             preview-disabled
             lazy
             @load="coverLoaded"
@@ -56,6 +62,7 @@
 </template>
 
 <script lang="ts" setup>
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { coverLoaded } from "@/utils/helper";
 import { sampleSize } from "lodash-es";
 import type { SongInfo } from "@/types/main.hemusic";

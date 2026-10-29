@@ -2,7 +2,7 @@
   <div class="comment">
     <n-flex :wrap="false" align="center" class="song-data">
       <n-image
-        :src="commentData.cover || '/images/song.jpg?asset'"
+        :src="gatewayProxyUrl(commentData.cover || '/images/song.jpg?asset')"
         :alt="commentData.cover || '/images/song.jpg?asset'"
         class="cover-img"
         preview-disabled
@@ -52,6 +52,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { useMusicStore, useStatusStore } from "@/stores";
 import CommentResult from "@/views/Comment/CommentResult.vue";
 import { coverLoaded } from "@/utils/helper";

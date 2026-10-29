@@ -6,7 +6,7 @@ import { openCaptcha, openUserLogin } from "@/utils/modal";
 import { refreshTokenApi } from "@/api/auth";
 import { getDeviceInfo } from "@/utils/device";
 
-import { mygoGatewayOrigin, rewriteRequestToGateway } from "@/platform/gateway";
+import { gatewayRequestURL, mygoGatewayOrigin, rewriteRequestToGateway } from "@/platform/gateway";
 export const API_URL = String(import.meta.env["VITE_API_URL"]);
 // 全局地址
 const baseURL: string = String(isDev ? "/api/netease" : import.meta.env["VITE_NETEASE_API_URL"]);
@@ -70,9 +70,7 @@ const serverHemusic: AxiosInstance = axios.create({
   timeout: 15000,
 });
 
-server.interceptors.request.use(
-  (request) => rewriteRequestToGateway(request, baseURL) as typeof request,
-);
+server.interceptors.request.use((request) => rewriteRequestToGateway(request, baseURL, "netease"));
 
 // 请求拦截器
 serverHemusic.interceptors.request.use(
@@ -123,9 +121,9 @@ serverHemusic.interceptors.response.use(
         const dataStore = useDataStore();
         const refreshToken = dataStore.refreshToken;
         // 刷新请求的 401 交给发起刷新流程的外层请求统一处理，避免重复登出
-        if (config?.url?.includes(REFRESH_TOKEN_URL)) return Promise.reject(error);
+        if (gatewayRequestURL(config)?.includes(REFRESH_TOKEN_URL)) return Promise.reject(error);
         // 有 refreshToken 且不是登录/刷新接口，尝试自动刷新
-        if (refreshToken && !isSkipRefreshUrl(config?.url)) {
+        if (refreshToken && !isSkipRefreshUrl(gatewayRequestURL(config))) {
           if (isRefreshing) {
             // 已有刷新请求在进行中，加入等待队列
             return new Promise((resolve, reject) => {
@@ -181,7 +179,7 @@ serverHemusic.interceptors.response.use(
       case 403: {
         const reason = (response?.data as { reason?: string } | undefined)?.reason;
         const captchaConfig = config as CaptchaRetryConfig | undefined;
-        const isLoginRequest = captchaConfig?.url?.includes("/v1/user/login");
+        const isLoginRequest = gatewayRequestURL(captchaConfig)?.includes("/v1/user/login");
         if (reason === "CAPTCHA_REQUIRED" && isLoginRequest && !captchaConfig?._captchaRetried) {
           const metadata = response?.data as {
             metadata?: { scene?: string; meta?: string };

@@ -22,7 +22,7 @@
       <n-image
         :key="currentUrl"
         class="score-page"
-        :src="currentUrl"
+        :src="gatewayProxyUrl(currentUrl)"
         :alt="t('sheet_music.page', { page: current + 1 })"
         :img-props="imageProps"
         preview-disabled
@@ -53,13 +53,14 @@
     <n-image-group
       v-model:show="previewShown"
       v-model:current="current"
-      :src-list="pages"
+      :src-list="previewPages"
       show-toolbar-tooltip
     />
   </section>
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { NImage, NImageGroup } from "naive-ui";
@@ -73,6 +74,7 @@ const previewShown = ref(false);
 const imageLoaded = ref(false);
 const imageFailed = ref(false);
 const currentUrl = computed(() => props.pages[current.value] ?? "");
+const previewPages = computed(() => props.pages.map(gatewayProxyUrl));
 const canPrevious = computed(() => current.value > 0);
 const canNext = computed(() => current.value < props.pages.length - 1);
 const imageProps = {

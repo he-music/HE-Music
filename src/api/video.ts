@@ -1,5 +1,4 @@
 import request, { API_URL, requestHemusic } from "@/utils/request";
-import { gatewayProxyUrl } from "@/platform/gateway";
 
 // 视频详情
 export const videoDetail = (id: string, platform: string) => {
@@ -41,16 +40,14 @@ export const getMVUrlStr = (
   redirect = true,
   token = "",
 ) =>
-  gatewayProxyUrl(
-    `${API_URL}/v1/mv/url?${new URLSearchParams({
-      id,
-      platform,
-      quality: quality.toString(),
-      format,
-      redirect: redirect.toString(),
-      token,
-    }).toString()}`,
-  );
+  `${API_URL}/v1/mv/url?${new URLSearchParams({
+    id,
+    platform,
+    quality: quality.toString(),
+    format,
+    redirect: redirect.toString(),
+    token,
+  }).toString()}`;
 
 /**
  * 全部 mv

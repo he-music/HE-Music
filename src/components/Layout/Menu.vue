@@ -17,6 +17,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import {
   type MenuGroupOption,
   type MenuInst,
@@ -222,7 +223,7 @@ const renderUserPlaylist = (playlist: UserPlaylistInfo[], showCover: boolean) =>
       showCover
         ? h("div", { class: "pl-cover" }, [
             h(NAvatar, {
-              src: playlist.cover,
+              src: gatewayProxyUrl(playlist.cover || ""),
               fallbackSrc: "/images/album.jpg?asset",
               lazy: true,
             }),
@@ -251,7 +252,7 @@ const renderPlaylist = (
       showCover
         ? h("div", { class: "pl-cover" }, [
             h(NAvatar, {
-              src: playlist.cover,
+              src: gatewayProxyUrl(playlist.cover || ""),
               fallbackSrc: "/images/album.jpg?asset",
               lazy: true,
             }),

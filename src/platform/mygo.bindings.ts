@@ -85,6 +85,13 @@ export interface FileSession {
   epoch: number;
 }
 
+/** Bases include their deployment prefix. Resolve relative bases in the caller. */
+export interface GatewayAPIConfig {
+  hemusic: string;
+  netease: string;
+  unblock: string;
+}
+
 /**
  * Info keeps performers separate from album artists. Zero audio properties mean
  * unknown or not applicable; no lossless classification is inferred from suffixes.
@@ -312,6 +319,7 @@ export interface NetworkProxyConfig {
 
 export interface NetworkProxyReceipt {
   saved: boolean;
+  gatewayApplied: boolean;
   webviewApplied: boolean;
   downloadsApplied: boolean;
   restartRequired: boolean;
@@ -672,6 +680,12 @@ export const NativeFiles = {
   },
   teardown(epoch: number): Promise<void> {
     return call("NativeFiles.Teardown", epoch);
+  },
+} as const;
+
+export const NetworkGateway = {
+  configure(config: GatewayAPIConfig): Promise<void> {
+    return call("NetworkGateway.Configure", config);
   },
 } as const;
 

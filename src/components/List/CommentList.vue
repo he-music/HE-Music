@@ -15,7 +15,9 @@
         <div class="user">
           <div class="avatar">
             <n-image
-              :src="item.user?.avatar && item.user.avatar.replace(/^http:/, 'https:')"
+              :src="
+                item.user?.avatar && gatewayProxyUrl(item.user.avatar.replace(/^http:/, 'https:'))
+              "
               class="cover"
               preview-disabled
               lazy
@@ -106,6 +108,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { coverLoaded } from "@/utils/helper";
 import { formatCommentTime } from "@/utils/time";
 import type { CommentInfo } from "@/types/main.hemusic";

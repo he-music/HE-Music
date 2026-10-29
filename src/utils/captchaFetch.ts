@@ -1,3 +1,4 @@
+import { gatewayAPIUrl, mygoGatewayOrigin } from "@/platform/gateway";
 const normalizeRedeemResponse = async (response: Response): Promise<Response> => {
   if (!response.ok) return response;
   let data: { success?: boolean; expires?: unknown };
@@ -46,7 +47,7 @@ export const createCaptchaFetch = (
     const headers = new Headers(init.headers);
     headers.set("Content-Type", "application/json");
     const request = () =>
-      fetchImpl(url, {
+      fetchImpl(mygoGatewayOrigin() ? gatewayAPIUrl(String(address)) : url, {
         ...init,
         headers,
         body: JSON.stringify({ ...payload, session_id: sessionId }),

@@ -7,7 +7,13 @@
         :disabled="!canGet || !sheet.id"
         @click="openDetail(sheet)"
       >
-        <img v-if="sheet.cover" :src="sheet.cover" alt="" loading="lazy" class="cover" />
+        <img
+          v-if="sheet.cover"
+          :src="gatewayProxyUrl(sheet.cover)"
+          alt=""
+          loading="lazy"
+          class="cover"
+        />
         <span class="sheet-info">
           <n-text strong class="sheet-title">{{
             sheet.title || sheet.song_name || t("sheet_music.untitled")
@@ -50,6 +56,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { computed } from "vue";
 import { useRouter } from "vue-router";
 import { useI18n } from "vue-i18n";

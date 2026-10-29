@@ -131,15 +131,13 @@ export const getCoverUrlStr = (
   redirect = true,
   token = "",
 ) =>
-  gatewayProxyUrl(
-    `${API_URL}/v1/song/cover?${new URLSearchParams({
-      id,
-      platform,
-      quality: quality.toString(),
-      redirect: redirect.toString(),
-      token,
-    }).toString()}`,
-  );
+  `${API_URL}/v1/song/cover?${new URLSearchParams({
+    id,
+    platform,
+    quality: quality.toString(),
+    redirect: redirect.toString(),
+    token,
+  }).toString()}`;
 
 /**
  * 获取歌曲 TTML 歌词
@@ -152,7 +150,7 @@ export const songLyricTTML = async (id: number) => {
   } else {
     const url = `https://amll-ttml-db.stevexmh.net/ncm/${id}`;
     try {
-      const response = await fetch(url);
+      const response = await fetch(gatewayProxyUrl(url));
       if (response === null || response.status !== 200) {
         return null;
       }

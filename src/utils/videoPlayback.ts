@@ -1,5 +1,6 @@
 import Plyr from "plyr";
 import Hls from "hls.js";
+import { gatewayProxyUrl } from "@/platform/gateway";
 
 export interface VideoSource {
   src: string;
@@ -38,8 +39,10 @@ export function createVideoPlayback(
     player.source = {
       type: "video",
       title,
-      poster,
-      sources: useHls ? [{ ...first, src: "" }] : sources,
+      poster: gatewayProxyUrl(poster),
+      sources: useHls
+        ? [{ ...first, src: "" }]
+        : sources.map((source) => ({ ...source, src: gatewayProxyUrl(source.src) })),
     };
     // source setter 会替换 video，必须重新读取 player.media。
     const currentMedia = host.querySelector("video");
@@ -71,7 +74,7 @@ export function createVideoPlayback(
         if (data.fatal && !disposed && generation === current) onError();
       });
       stream.attachMedia(currentMedia);
-      stream.loadSource(first.src);
+      stream.loadSource(gatewayProxyUrl(first.src));
     } else {
       play();
     }

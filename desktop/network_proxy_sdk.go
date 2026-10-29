@@ -15,11 +15,9 @@ import (
 var networkProxyStartupError = errors.New("network proxy storage not configured")
 var desktopNetworkProxy = newNetworkProxy(
 	func(NetworkProxyConfig) error { return errors.New("network proxy storage not configured") },
-	func(c NetworkProxyConfig) (bool, bool, string, error) {
-		if desktopLifecycle.main == nil {
-			return false, false, "webview-unsupported", nil
-		}
-		return applyNativeNetworkProxy(desktopLifecycle.main.NativeHandle(), c)
+	func(NetworkProxyConfig) (bool, bool, string, error) {
+		// Go transports read the committed configuration on each request.
+		return true, false, "", nil
 	},
 )
 
@@ -137,9 +135,6 @@ func prepareNetworkProxyStartup(directory string) (err error) {
 	if err != nil {
 		return err
 	}
-	if err = prepareNativeNetworkProxy(c); err != nil {
-		return err
-	}
 	desktopNetworkProxy.mu.Lock()
 	desktopNetworkProxy.config = c
 	desktopNetworkProxy.mu.Unlock()
@@ -156,8 +151,8 @@ func restoreNetworkProxyWebview() (NetworkProxyReceipt, error) {
 	c := desktopNetworkProxy.config
 	downloads := desktopNetworkProxy.downloads
 	desktopNetworkProxy.mu.RUnlock()
-	web, restart, code, err := desktopNetworkProxy.applyWebview(c)
-	return NetworkProxyReceipt{WebviewApplied: web, DownloadsApplied: downloads, RestartRequired: restart, ErrorCode: code}, err
+	web, restart, code, err := desktopNetworkProxy.applyRoute(c)
+	return NetworkProxyReceipt{GatewayApplied: web, DownloadsApplied: downloads, RestartRequired: restart, ErrorCode: code}, err
 }
 
 func configureDownloadProxyTransport(transport *http.Transport) {

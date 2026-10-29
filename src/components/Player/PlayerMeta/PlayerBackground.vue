@@ -20,7 +20,7 @@
       <!-- 流体效果 -->
       <BackgroundRender
         v-else-if="settingStore.playerBackgroundType === 'animation'"
-        :album="musicStore.songCover"
+        :album="gatewayProxyUrl(musicStore.songCover)"
         :fps="settingStore.playerBackgroundFps ?? 60"
         :flowSpeed="settingStore.playerBackgroundFlowSpeed ?? 4"
         :hasLyric="musicStore.isHasLrc"
@@ -31,6 +31,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { useMusicStore, useSettingStore } from "@/stores";
 
 const musicStore = useMusicStore();

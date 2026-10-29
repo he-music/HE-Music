@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AxiosHeaders } from "axios";
 import type { HemusicRequestConfig } from "./request";
 
 const mocks = vi.hoisted(() => {
@@ -28,7 +29,8 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("axios", () => ({
+vi.mock("axios", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("axios")>()),
   default: {
     create: mocks.axiosCreate,
     isAxiosError: (error: unknown) =>
@@ -118,6 +120,73 @@ describe("HE Music Token 刷新", () => {
     expect(mocks.hemusicServer.request).toHaveBeenCalledWith(
       expect.objectContaining({ skipErrorMessage: true }),
     );
+  });
+
+  it("mygo 的请求改写保留原地址，刷新后复用路由并更新令牌", async () => {
+    vi.stubGlobal("window", {
+      __HE_MUSIC_GATEWAY_ORIGIN__: "http://127.0.0.1:45123/session",
+      $message: { error: mocks.messageError },
+    });
+    const gateway = await import("@/platform/gateway");
+    const { API_URL } = await import("./request");
+    await gateway.initializeGateway({ configure: vi.fn(async () => {}) }, API_URL, "/api/netease");
+    const headers = new AxiosHeaders();
+    const setHeader = vi.spyOn(headers, "set");
+    const error = {
+      ...createHttpError(401),
+      config: { url: "/v1/page?keep=%2B", headers },
+    };
+    const config = gateway.rewriteRequestToGateway(error.config, API_URL);
+    expect(config.url).toContain("/session/__api/hemusic/v1/page?keep=%2B");
+    mocks.refreshTokenApi.mockResolvedValueOnce({
+      access_token: "renewed-access",
+      refresh_token: "renewed-refresh",
+      expires_at: 1000,
+    });
+    const response = { data: { ok: true } };
+    mocks.hemusicServer.request.mockImplementationOnce(async (retry) => {
+      expect(gateway.rewriteRequestToGateway(retry, API_URL).url).toBe(config.url);
+      return response;
+    });
+    await expect(handleResponseError(error)).resolves.toBe(response);
+    expect(setHeader).toHaveBeenCalledWith("Authorization", "Bearer renewed-access");
+    expect(gateway.gatewayRequestURL(config)).toBe("/v1/page?keep=%2B");
+  });
+
+  it("mygo 验证码重试仍能识别登录路径且保留请求体", async () => {
+    vi.stubGlobal("window", {
+      __HE_MUSIC_GATEWAY_ORIGIN__: "http://127.0.0.1:45123/session",
+      $message: { error: mocks.messageError },
+    });
+    const gateway = await import("@/platform/gateway");
+    const { API_URL } = await import("./request");
+    await gateway.initializeGateway({ configure: vi.fn(async () => {}) }, API_URL, "/api/netease");
+    const config = gateway.rewriteRequestToGateway(
+      {
+        url: "/v1/user/login",
+        data: JSON.stringify({ username: "fixture" }),
+      },
+      API_URL,
+    );
+    mocks.openCaptcha.mockResolvedValueOnce("ticket");
+    const response = { data: { ok: true } };
+    mocks.hemusicServer.request.mockResolvedValueOnce(response);
+    await expect(
+      handleResponseError({
+        config,
+        response: {
+          status: 403,
+          data: { reason: "CAPTCHA_REQUIRED", metadata: { scene: "1", meta: "fixture" } },
+        },
+      }),
+    ).resolves.toBe(response);
+    expect(mocks.hemusicServer.request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: config.url,
+        data: { username: "fixture", captcha_ticket: "ticket" },
+      }),
+    );
+    expect(mocks.openCaptcha).toHaveBeenCalledOnce();
   });
 
   it("歌曲URL旧四参调用继续沿用默认请求提示行为", async () => {

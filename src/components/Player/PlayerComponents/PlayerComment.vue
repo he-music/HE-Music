@@ -3,7 +3,7 @@
   <div class="player-comment">
     <n-flex :wrap="false" align="center" class="song-data">
       <n-image
-        :src="musicStore.songCover"
+        :src="gatewayProxyUrl(musicStore.songCover)"
         :alt="musicStore.songCover"
         class="cover-img"
         preview-disabled
@@ -72,6 +72,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { useMusicStore, useStatusStore } from "@/stores";
 import { getComment, getSubComment } from "@/api/comment";
 import { isEmpty } from "lodash-es";

@@ -683,7 +683,10 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 
 ### 第九轮：mygo 统一 Go 网关
 
-- 按用户确认的边界，纯 Web 保留原有 API 与资源请求；mygo 增加本机 `127.0.0.1:0` Go 网关。API、在线音频、封面和视频 URL 在 mygo 中改写为 `/__proxy?target=<base64url>`，Go 流式回源；页面静态资源和外部登录页面不经过网关。
-- 网关不使用额外短链申请，也不作为 WebView 普通 forward proxy。浏览器看到本机响应并获得精确 CORS 回执，解决资源跨域读取；Go 的 transport 动态读取应用代理设置，代理关闭直连，开启时回源使用 ProxyURL。Range、206、响应头、请求体、取消和健康检查均有 fake/httptest 覆盖。
-- 网关在主窗口创建前启动，origin 通过 mygo preload 注入；停止随应用退出。请求 API 时保留现有鉴权头和请求逻辑，mygo 才启用改写，Electron/Web 不变。后续可在 Go 上游读取与媒体响应之间加入音频解密，不改变当前播放器接口。
+- 按用户确认的边界，mygo 使用 `127.0.0.1:0` 本机 Go 网关，macOS／Windows／Linux 共用 HTTP transport、上游代理、重定向、Cookie 与媒体流代码。启动失败不再悄悄直连；生成绑定模式不监听。主页面通过 preload 获得包含随机会话路径的本机 base，初始化时用受 CallerPage 保护的 Configure 一次性配置 HE-Music／网易／解灰 API base。静态页面仍由 mygo 加载，网关响应单独处理 CORS。
+- API 使用固定 `/__api/{hemusic,netease,unblock}/...` 路由，媒体使用 `/__proxy?target=<base64url>`；不增加每个资源的短链申请。相对网易／解灰路径以配置的远端 HE-Music 地址解析，不再依赖 Vite／Node sidecar 提供后端。网关不实现旧网易／解灰服务，远端部署需提供相应路由。Axios 保留 base path、参数序列化、请求体和鉴权头；刷新／验证码重试保留原地址，mygo 不再把本机代理地址作为 `proxy` 参数发给业务后端。
+- Go 按 API origin 隔离内存 Cookie jar，同一配置的页面重载保留会话，变更 API 配置重建会话；浏览器本机 Cookie 不转发，上游 Set-Cookie 不落到本机域。重定向在 Go 内最多跟随十跳，跨 origin 剥除 Authorization／Cookie，离开原 API origin 后不恢复；媒体回源无 API 身份。32 MiB 以内的 API 正文可有界重放 307／308；普通音频／视频按 32 KiB 池化缓冲流式转发，保留 Range／206／416／HEAD、取消和连接复用，不缓存整首歌曲，不实现音频解密。
+- HLS 清单最多 4 MiB，依据最终上游地址重写普通 URI 行和 KEY／MAP／MEDIA 等 URI 属性。部分或显式压缩的清单，以及带变量、content steering、interstitial 二级资源的清单，明确返回错误；不把不能可靠改写的地址放给播放器直连。五个真实 HTTP 反例先返回 200 后在修复后统一返回 502。
+- 图片、头像、流体／写真／自定义背景、乐谱预览、视频／HLS、TTML、验证码和第三方更新日志均在消费入口派生地址；歌曲、收藏、分享、下载和设置模型保留原始 URL，不持久化会话路径。普通 Web／Electron 无 preload 能力时保留原请求路径。应用代理设置仅控制 Go 后续回源与授权下载，关闭明确直连，本地 loopback 目标绕过上游代理；不再调用各平台 WebView 代理设置，更新 SDK 和外部浏览器仍单独联网。
+- 首个接入提交 `178429a` 的独立审查阻断了重定向外漏／Cookie／本地代理问题，后续补齐固定 API 与媒体链；前端独立审查另发现流体背景、NAvatar 和 GitHub 更新日志遗漏，均有明确接线修复。真实组件消费、换歌／卸载、Token 刷新／验证码重试及 Web 保留已有自动化回归。
 - 当前验证：前端 129 文件 1212 项、Node/Web 类型、生产前端静态构建、Go 全包测试/vet、Darwin amd64/arm64 与 Windows amd64/arm64 静态编译通过。真实 API、音频、图片、视频和代理流量尚未在运行应用中验收；Cookie/重定向等真实登录边界需要首次网关验收时继续核对。

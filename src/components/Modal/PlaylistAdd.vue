@@ -19,7 +19,7 @@
         >
           <template #prefix>
             <n-image
-              :src="item.cover || '/images/album.jpg?asset'"
+              :src="gatewayProxyUrl(item.cover || '/images/album.jpg?asset')"
               class="cover"
               preview-disabled
               lazy
@@ -46,6 +46,7 @@
 </template>
 
 <script setup lang="ts">
+import { gatewayProxyUrl } from "@/platform/gateway";
 import type { MessageReactive } from "naive-ui";
 import { useDataStore } from "@/stores";
 import { coverLoaded } from "@/utils/helper";
