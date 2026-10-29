@@ -163,3 +163,11 @@ WebAudio 依据音源的 CORS 准入与实际图谱状态开放；普通播放�
 当前工作不启动／附着／停止用户 App，不执行真实 picker、音乐库 IO、声音、网络下载、更新安装或 Windows 程序。假 provider、Vue 生产 SFC 的 CPU host、离线验签与静态交叉编译分别记录，不能代替实际 WebView、OS、普通包或 Windows 验收。Electron 目录、依赖、分流及默认 `pnpm dev`／`pnpm build` 暂保留。
 
 第八轮按 macOS 实测反馈修正：无边框使用左上原生按钮悬停并隐藏右侧 Windows 风格按钮；协议设置前注册当前 `.app` 并准确区分失败原因，禁用处理不误报系统注销失败；已知无 CORS 的酷我 CDN 直接普通播放，默认音频设备不发不必要的切换请求，设备选择失败如实反馈。用户随后确认全局 `Command + Shift + Right` 在失焦时也生效，快捷键实现保持原样。本轮自动化与静态验证记录见迁移日志，不代替修复后真实 macOS 关联和鼠标交互验收。
+
+### 统一 Go 网络网关
+
+mygo 的 API、音频、图片、视频和授权下载统一由 Go 回源，macOS／Windows／Linux 共用 transport；设置中的代理作用于后续 Go 请求，关闭时直接连接。生产路径不再设置 WebView 代理。静态页面保留 mygo 加载方式，Web 独立构建和 Electron 请求逻辑保持原样。
+
+API 使用启动时配置的固定本机路由，媒体直接编码上游 URL，无逐资源短链申请。Go 管理按上游 origin 隔离的内存 Cookie、重定向、Range 和取消；原始资源 URL 保留在业务模型，只有消费时派生本机地址。普通媒体流式转发，不缓存整首歌曲，不实现音频解密。HLS 支持常规清单、分片和 URI 属性改写；变量、content steering、interstitial 二级资源及部分／显式压缩清单明确报错，待后续扩展。API 正文上限 32 MiB，HLS 清单上限 4 MiB。
+
+本轮独立审查发现的具体问题已修复并复核关闭，前端 134 文件 1234 项、Node／Web 类型、Go 全包测试／vet、桌面前端静态构建和 Linux／Windows 静态编译通过。真实登录、媒体、上游代理及三端运行验收仍待执行，静态结果不替代实机结果。
