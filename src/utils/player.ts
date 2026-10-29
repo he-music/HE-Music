@@ -19,6 +19,7 @@ import type { Link, SongInfo } from "@/types/main.hemusic";
 import { AxiosError } from "axios";
 import { createNativePlayModeCoordinator } from "./nativePlayMode";
 
+import { gatewayProxyUrl } from "@/platform/gateway";
 /**
  * 播放器核心
  * 基于 AudioManager 实现
@@ -634,6 +635,7 @@ class Player {
           return;
         }
         if (currentRequestId !== this.playRequestId) return;
+        if (playerUrl) playerUrl = gatewayProxyUrl(playerUrl);
         // 有有效 URL 才创建播放器
         if (playerUrl) {
           try {

@@ -14,6 +14,13 @@ func main() {
 		return
 	}
 	defer stopProtocols()
+	gatewayOrigin, stopGateway, gatewayErr := startDesktopGateway()
+	if gatewayErr != nil {
+		log.Print("启动本机资源网关失败，继续使用原始请求地址: ", gatewayErr)
+		gatewayOrigin = ""
+	} else {
+		defer stopGateway()
+	}
 	mygo.App.WhenReady(func() {
 		appearance := WindowAppearance{}
 		directory, directoryErr := mygo.App.Path(mygo.PathUserData)
@@ -31,6 +38,9 @@ func main() {
 		}
 		options := WindowAppearanceOptions(appearance)
 		options.Title, options.Width, options.Height = "HE-Music", 1280, 800
+		if gatewayOrigin != "" {
+			options.Page.PreloadScript = desktopGatewayPreloadScript(gatewayOrigin)
+		}
 		win := mygo.NewWindow(options)
 		if _, hoverErr := installWindowButtonsHover(win, appearance.UseBorderless); hoverErr != nil {
 			log.Print("设置 macOS 原生窗口按钮悬停失败，保留可见按钮: ", hoverErr)

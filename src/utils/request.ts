@@ -6,6 +6,7 @@ import { openCaptcha, openUserLogin } from "@/utils/modal";
 import { refreshTokenApi } from "@/api/auth";
 import { getDeviceInfo } from "@/utils/device";
 
+import { mygoGatewayOrigin, rewriteRequestToGateway } from "@/platform/gateway";
 export const API_URL = String(import.meta.env["VITE_API_URL"]);
 // 全局地址
 const baseURL: string = String(isDev ? "/api/netease" : import.meta.env["VITE_NETEASE_API_URL"]);
@@ -69,6 +70,10 @@ const serverHemusic: AxiosInstance = axios.create({
   timeout: 15000,
 });
 
+server.interceptors.request.use(
+  (request) => rewriteRequestToGateway(request, baseURL) as typeof request,
+);
+
 // 请求拦截器
 serverHemusic.interceptors.request.use(
   (request) => {
@@ -85,7 +90,7 @@ serverHemusic.interceptors.request.use(
       request.headers.set("Content-Type", "application/json");
     }
 
-    if (settingStore.proxyProtocol !== "off") {
+    if (settingStore.proxyProtocol !== "off" && !mygoGatewayOrigin()) {
       // proxy
       const protocol = settingStore.proxyProtocol.toLowerCase();
       const server = settingStore.proxyServe;
@@ -94,6 +99,7 @@ serverHemusic.interceptors.request.use(
       if (proxy) request.params.proxy = proxy;
     }
     // 发送请求
+    rewriteRequestToGateway(request, API_URL);
     return request;
   },
   (error: AxiosError) => {

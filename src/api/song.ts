@@ -1,4 +1,5 @@
 import request, { API_URL, requestHemusic, type HemusicRequestConfig } from "@/utils/request";
+import { gatewayProxyUrl } from "@/platform/gateway";
 import { isElectron } from "@/utils/env";
 import type { GetSongDetailResponse } from "@/types/main.hemusic";
 
@@ -130,13 +131,15 @@ export const getCoverUrlStr = (
   redirect = true,
   token = "",
 ) =>
-  `${API_URL}/v1/song/cover?${new URLSearchParams({
-    id,
-    platform,
-    quality: quality.toString(),
-    redirect: redirect.toString(),
-    token,
-  }).toString()}`;
+  gatewayProxyUrl(
+    `${API_URL}/v1/song/cover?${new URLSearchParams({
+      id,
+      platform,
+      quality: quality.toString(),
+      redirect: redirect.toString(),
+      token,
+    }).toString()}`,
+  );
 
 /**
  * 获取歌曲 TTML 歌词
