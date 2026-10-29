@@ -345,3 +345,274 @@ func TestFormatsOggOpusRoundTrip(t *testing.T) {
 		t.Fatal("Opus encoded packets changed")
 	}
 }
+
+// Change a real encoded audio page's timestamp, then restore its valid CRC.
+func TestFormatsOggNonEOSGranuleRejected(t *testing.T) {
+	if _, err := exec.LookPath("ffmpeg"); err != nil {
+		t.Skip("ffmpeg required for local synthetic fixtures")
+	}
+	for _, codec := range []string{"libopus", "vorbis"} {
+		t.Run(codec, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "timing.ogg")
+			if out, err := exec.Command("ffmpeg", "-v", "error", "-f", "lavfi", "-i", "sine=duration=3", "-ac", "2", "-c:a", codec, "-strict", "experimental", path).CombinedOutput(); err != nil {
+				t.Fatalf("synth: %v: %s", err, out)
+			}
+			original := mustRead(t, path)
+			changed := append([]byte(nil), original...)
+			found := false
+			for off := 0; off < len(changed); {
+				count := int(changed[off+26])
+				end := off + 27 + count
+				for _, n := range changed[off+27 : end] {
+					end += int(n)
+				}
+				granule := binary.LittleEndian.Uint64(changed[off+6 : off+14])
+				if changed[off+5]&4 == 0 && granule > 0 && granule != ^uint64(0) {
+					binary.LittleEndian.PutUint64(changed[off+6:off+14], granule+1)
+					clear(changed[off+22 : off+26])
+					binary.LittleEndian.PutUint32(changed[off+22:off+26], formatOggCRC(0, changed[off:end]))
+					found = true
+					break
+				}
+				off = end
+			}
+			if !found {
+				t.Fatal("no non-EOS audio page")
+			}
+			if err := CompareFormatAudioPayload(context.Background(), bytes.NewReader(changed), int64(len(changed)), bytes.NewReader(changed), int64(len(changed))); err != nil {
+				t.Fatalf("modified page must still be structurally valid: %v", err)
+			}
+			if err := CompareFormatAudioPayload(context.Background(), bytes.NewReader(original), int64(len(original)), bytes.NewReader(changed), int64(len(changed))); !errors.Is(err, ErrAudioPayloadChanged) {
+				t.Fatalf("changed granule accepted: %v", err)
+			}
+		})
+	}
+}
+
+type formatsCountReader struct {
+	*bytes.Reader
+	calls int
+	bytes int
+}
+
+func (r *formatsCountReader) ReadAt(p []byte, off int64) (int, error) {
+	r.calls++
+	r.bytes += len(p)
+	return r.Reader.ReadAt(p, off)
+}
+
+func formatsAtomBytes(kind string, body []byte) []byte {
+	b := make([]byte, 8+len(body))
+	binary.BigEndian.PutUint32(b, uint32(len(b)))
+	copy(b[4:], kind)
+	copy(b[8:], body)
+	return b
+}
+
+func TestFormatsMP4ChunkOffsetReadWork(t *testing.T) {
+	const count = 512
+	b := formatsAtomBytes("ftyp", []byte("M4A \x00\x00\x00\x00"))
+	for i := 0; i < count; i++ {
+		b = append(b, formatsAtomBytes("free", nil)...)
+	}
+	mediaStart := len(b) + 8
+	b = append(b, formatsAtomBytes("mdat", bytes.Repeat([]byte{7}, count))...)
+	offsets := make([]byte, 8+4*count)
+	binary.BigEndian.PutUint32(offsets[4:], count)
+	for i := 0; i < count; i++ {
+		binary.BigEndian.PutUint32(offsets[8+4*i:], uint32(mediaStart+i))
+	}
+	stbl := append(formatsAtomBytes("stsd", []byte{0, 0, 0, 0}), formatsAtomBytes("stco", offsets)...)
+	b = append(b, formatsAtomBytes("moov", formatsAtomBytes("stbl", stbl))...)
+	r := &formatsCountReader{Reader: bytes.NewReader(b)}
+	if err := CompareFormatAudioPayload(context.Background(), r, int64(len(b)), r, int64(len(b))); err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("free=%d chunks=%d calls=%d bytes=%d", count, count, r.calls, r.bytes)
+	if r.calls > 16*count || r.bytes > 128*count {
+		t.Fatalf("multiplicative header reads: calls=%d bytes=%d", r.calls, r.bytes)
+	}
+}
+
+// Sparse declared metadata bodies must never be read by validator selection.
+type formatsProbeReader struct {
+	head   []byte
+	at     int64
+	tail   []byte
+	calls  int
+	cancel context.CancelFunc
+}
+
+func (r *formatsProbeReader) ReadAt(p []byte, off int64) (int, error) {
+	r.calls++
+	if r.cancel != nil {
+		r.cancel()
+	}
+	if off == 0 && len(p) <= len(r.head) {
+		return copy(p, r.head), nil
+	}
+	if off == r.at && len(p) <= len(r.tail) {
+		return copy(p, r.tail), nil
+	}
+	return 0, errors.New("probe attempted to read metadata body")
+}
+
+func TestFormatsAdditionalPayloadFormatProbe(t *testing.T) {
+	ctx := context.Background()
+	for _, tc := range []struct {
+		name string
+		head []byte
+		want bool
+	}{
+		{"wave", []byte("RIFF\x00\x00\x00\x00WAVE"), true},
+		{"rf64", []byte("RF64\x00\x00\x00\x00WAVE"), true},
+		{"aiff", []byte("FORM\x00\x00\x00\x00AIFF"), true},
+		{"mp4", []byte("\x00\x00\x00\x10ftypM4A "), true},
+		{"ogg", []byte("OggS\x00\x00\x00\x00\x00\x00\x00\x00"), true},
+		{"mac", []byte("MAC \x00\x00\x00\x00\x00\x00\x00\x00"), true},
+		{"webm", []byte{0x1a, 0x45, 0xdf, 0xa3}, true},
+		{"adts", []byte{0xff, 0xf1}, true},
+		{"mp3", []byte{0xff, 0xfb}, false},
+		{"flac", []byte("fLaC"), false},
+		{"unknown", []byte("unknown"), false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := &formatsProbeReader{head: tc.head}
+			got, err := AdditionalPayloadFormat(ctx, r, int64(len(tc.head)))
+			if err != nil || got != tc.want || r.calls != 1 {
+				t.Fatalf("got=%v err=%v reads=%d", got, err, r.calls)
+			}
+		})
+	}
+	for _, footer := range []bool{false, true} {
+		const tagSize = 128 << 20
+		head := []byte{'I', 'D', '3', 4, 0, 0, 64, 0, 0, 0, 0, 0}
+		at := int64(10 + tagSize)
+		if footer {
+			head[5] = 0x10
+			at += 10
+		}
+		for _, tail := range [][]byte{{0xff, 0xf1}, {0xff, 0xfb}} {
+			r := &formatsProbeReader{head: head, at: at, tail: tail}
+			got, err := AdditionalPayloadFormat(ctx, r, at+1024)
+			if err != nil || got != (tail[1] == 0xf1) || r.calls != 2 {
+				t.Fatalf("ID3 footer=%v: got=%v err=%v reads=%d", footer, got, err, r.calls)
+			}
+		}
+	}
+	// A huge ilst/text body is irrelevant: selecting MP4 reads only its header.
+	r := &formatsProbeReader{head: []byte("\x00\x00\x00\x10ftypM4A ")}
+	if got, err := AdditionalPayloadFormat(ctx, r, 1<<40); err != nil || !got || r.calls != 1 {
+		t.Fatalf("large MP4: %v %v reads=%d", got, err, r.calls)
+	}
+	cancelled, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := AdditionalPayloadFormat(cancelled, r, 1<<40); !errors.Is(err, context.Canceled) || r.calls != 1 {
+		t.Fatalf("pre-cancel: %v reads=%d", err, r.calls)
+	}
+	mid, cancelMid := context.WithCancel(ctx)
+	r = &formatsProbeReader{head: []byte("OggS"), cancel: cancelMid}
+	if _, err := AdditionalPayloadFormat(mid, r, 4); !errors.Is(err, context.Canceled) || r.calls != 1 {
+		t.Fatalf("read cancellation: %v reads=%d", err, r.calls)
+	}
+	for _, b := range [][]byte{[]byte("ID3"), {'I', 'D', '3', 4, 0, 0, 127, 127, 127, 127}, {'I', 'D', '3', 4, 0, 0, 128, 0, 0, 0}} {
+		if _, err := AdditionalPayloadFormat(ctx, bytes.NewReader(b), int64(len(b))); err == nil {
+			t.Fatalf("malformed ID3 accepted: %x", b)
+		}
+	}
+}
+
+func TestFormatsMP4MediaIndexBoundaries(t *testing.T) {
+	ctx := context.Background()
+	for _, kind := range []string{"stco", "co64"} {
+		makeMP4 := func(gap int, delta int64) []byte {
+			b := formatsAtomBytes("ftyp", []byte("M4A \x00\x00\x00\x00"))
+			first := len(b) + 8
+			b = append(b, formatsAtomBytes("mdat", []byte{1, 2, 3})...)
+			b = append(b, formatsAtomBytes("free", make([]byte, gap))...)
+			second := len(b) + 8
+			b = append(b, formatsAtomBytes("mdat", []byte{4, 5, 6})...)
+			width := 4
+			if kind == "co64" {
+				width = 8
+			}
+			offsets := make([]byte, 8+3*width)
+			binary.BigEndian.PutUint32(offsets[4:], 3)
+			// Unsorted entries require searching by address, not a forward-only cursor.
+			for i, off := range []int64{int64(second) + delta, int64(first), int64(second + 2)} {
+				if width == 8 {
+					binary.BigEndian.PutUint64(offsets[8+i*width:], uint64(off))
+				} else {
+					binary.BigEndian.PutUint32(offsets[8+i*width:], uint32(off))
+				}
+			}
+			stbl := append(formatsAtomBytes("stsd", []byte{0, 0, 0, 0}), formatsAtomBytes(kind, offsets)...)
+			return append(b, formatsAtomBytes("moov", formatsAtomBytes("stbl", stbl))...)
+		}
+		left, right := makeMP4(0, 0), makeMP4(512, 0)
+		if err := CompareFormatAudioPayload(ctx, bytes.NewReader(left), int64(len(left)), bytes.NewReader(right), int64(len(right))); err != nil {
+			t.Fatalf("%s relocated mdat: %v", kind, err)
+		}
+		for _, delta := range []int64{-1, 3, 1 << 32} {
+			bad := makeMP4(512, delta)
+			// stco cannot express the 64-bit overflow case.
+			if kind == "stco" && delta == 1<<32 {
+				continue
+			}
+			if err := CompareFormatAudioPayload(ctx, bytes.NewReader(bad), int64(len(bad)), bytes.NewReader(bad), int64(len(bad))); !errors.Is(err, ErrInvalidPayload) {
+				t.Fatalf("%s delta=%d: %v", kind, delta, err)
+			}
+		}
+	}
+}
+
+func TestFormatsDifferentContainersRejected(t *testing.T) {
+	wav := mustRead(t, formatsFixture(t, "wav"))
+	aiff := mustRead(t, formatsFixture(t, "aiff"))
+	if err := CompareFormatAudioPayload(context.Background(), bytes.NewReader(wav), int64(len(wav)), bytes.NewReader(aiff), int64(len(aiff))); !errors.Is(err, ErrAudioPayloadChanged) {
+		t.Fatal(err)
+	}
+}
+
+// Structural pages isolate comment pagination from the SDK writer. Audio bytes
+// are opaque here; real encoded Opus/Vorbis coverage is in the tests above.
+func TestFormatsOggCommentRepagination(t *testing.T) {
+	page := func(seq uint32, flags byte, granule uint64, laces, body []byte) []byte {
+		b := make([]byte, 27+len(laces)+len(body))
+		copy(b, "OggS")
+		b[5] = flags
+		binary.LittleEndian.PutUint64(b[6:], granule)
+		binary.LittleEndian.PutUint32(b[14:], 123)
+		binary.LittleEndian.PutUint32(b[18:], seq)
+		b[26] = byte(len(laces))
+		copy(b[27:], laces)
+		copy(b[27+len(laces):], body)
+		binary.LittleEndian.PutUint32(b[22:], formatOggCRC(0, b))
+		return b
+	}
+	makeOgg := func(long bool, granule uint64) []byte {
+		head := []byte("OpusHeadabcdefghijk")
+		b := page(0, 2, 0, []byte{byte(len(head))}, head)
+		seq := uint32(1)
+		if long {
+			comment := append([]byte("OpusTags"), bytes.Repeat([]byte{'x'}, 292)...)
+			b = append(b, page(seq, 0, ^uint64(0), []byte{255}, comment[:255])...)
+			seq++
+			b = append(b, page(seq, 1, 0, []byte{45}, comment[255:])...)
+		} else {
+			b = append(b, page(seq, 0, 0, []byte{8}, []byte("OpusTags"))...)
+		}
+		seq++
+		b = append(b, page(seq, 0, granule, []byte{3}, []byte{1, 2, 3})...)
+		seq++
+		return append(b, page(seq, 4, 1920, []byte{3}, []byte{4, 5, 6})...)
+	}
+	left, right := makeOgg(false, 960), makeOgg(true, 960)
+	if err := CompareFormatAudioPayload(context.Background(), bytes.NewReader(left), int64(len(left)), bytes.NewReader(right), int64(len(right))); err != nil {
+		t.Fatal(err)
+	}
+	changed := makeOgg(true, 961)
+	if err := CompareFormatAudioPayload(context.Background(), bytes.NewReader(left), int64(len(left)), bytes.NewReader(changed), int64(len(changed))); !errors.Is(err, ErrAudioPayloadChanged) {
+		t.Fatal(err)
+	}
+}

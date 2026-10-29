@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"sort"
 
 	"github.com/tommyo123/mtag/ape"
 )
@@ -20,8 +21,9 @@ type formatPayloadHash struct {
 // CompareFormatAudioPayload protects metadata saves for the additional supported
 // containers. It compares encoded media and decoding configuration, without
 // decoding audio or trusting the metadata writer's output. MP3/FLAC keep their
-// stricter existing validators. Unsupported layouts fail closed. Memory use does
-// not grow with file size; readers must stay immutable throughout the comparison.
+// stricter existing validators. Unsupported layouts fail closed. Memory use
+// grows only with the number of MP4 mdat extents; media and tags are streamed.
+// Readers must stay immutable throughout the comparison.
 func CompareFormatAudioPayload(ctx context.Context, left io.ReaderAt, leftSize int64, right io.ReaderAt, rightSize int64) error {
 	var sums [2][32]byte
 	for i, s := range []payloadSource{{ctx, left, leftSize}, {ctx, right, rightSize}} {
@@ -69,26 +71,87 @@ func hashFormatSection(s payloadSource, h *formatPayloadHash, kind string, start
 	return hashFormatRange(s, h, start, end)
 }
 
-func hashFormatPayload(s payloadSource, h *formatPayloadHash) error {
+// AdditionalPayloadFormat probes only small headers through the cancellable reader.
+// It selects the additional validators, not media validity: false leaves MP3/FLAC
+// and unknown input to the existing strict validator. No tag body is parsed.
+func AdditionalPayloadFormat(ctx context.Context, r io.ReaderAt, size int64) (bool, error) {
+	kind, err := additionalPayloadKind(payloadSource{ctx, r, size})
+	return kind != "", err
+}
+
+func additionalPayloadKind(s payloadSource) (string, error) {
+	if err := s.ctx.Err(); err != nil {
+		return "", err
+	}
+	if s.r == nil || s.size <= 0 {
+		return "", ErrInvalidPayload
+	}
 	var b [12]byte
-	if err := s.read(0, b[:]); err != nil {
-		return err
+	if err := s.read(0, b[:min(s.size, int64(len(b)))]); err != nil {
+		return "", err
 	}
 	switch {
 	case (string(b[:4]) == "RIFF" || string(b[:4]) == "RF64" || string(b[:4]) == "BW64") && string(b[8:]) == "WAVE":
-		return hashIFFPayload(s, h, false)
+		return "wave", nil
 	case string(b[:4]) == "FORM" && (string(b[8:]) == "AIFF" || string(b[8:]) == "AIFC"):
-		return hashIFFPayload(s, h, true)
+		return "aiff", nil
 	case string(b[4:8]) == "ftyp":
-		return hashMP4Payload(s, h)
+		return "mp4", nil
 	case string(b[:4]) == "OggS":
-		return hashOggPayload(s, h)
+		return "ogg", nil
 	case string(b[:4]) == "MAC ":
-		return hashMACPayload(s, h)
+		return "mac", nil
 	case binary.BigEndian.Uint32(b[:4]) == 0x1a45dfa3:
+		return "webm", nil
+	}
+	if string(b[:3]) == "ID3" {
+		if s.size < 10 {
+			return "", ErrInvalidPayload
+		}
+		if b[3] < 2 || b[3] > 4 {
+			return "", ErrUnsupportedPayload
+		}
+		n, err := syncSafe(b[6:10])
+		if err != nil {
+			return "", err
+		}
+		off := 10 + n
+		if b[3] == 4 && b[5]&0x10 != 0 {
+			off += 10
+		}
+		if err := s.read(off, b[:2]); err != nil {
+			return "", err
+		}
+	}
+	// ADTS has layer 00; MPEG Layer III therefore stays on the old validator.
+	if b[0] == 0xff && b[1]&0xf6 == 0xf0 {
+		return "adts", nil
+	}
+	return "", nil
+}
+
+func hashFormatPayload(s payloadSource, h *formatPayloadHash) error {
+	kind, err := additionalPayloadKind(s)
+	if err != nil {
+		return err
+	}
+	switch kind {
+	case "wave":
+		return hashIFFPayload(s, h, false)
+	case "aiff":
+		return hashIFFPayload(s, h, true)
+	case "mp4":
+		return hashMP4Payload(s, h)
+	case "ogg":
+		return hashOggPayload(s, h)
+	case "mac":
+		return hashMACPayload(s, h)
+	case "webm":
 		return hashWebMPayload(s, h)
-	default:
+	case "adts":
 		return hashADTSPayload(s, h)
+	default:
+		return ErrUnsupportedPayload
 	}
 }
 
@@ -330,6 +393,23 @@ func formatAtom(s payloadSource, off, end int64) (string, int64, int64, error) {
 }
 func hashMP4Payload(s payloadSource, h *formatPayloadHash) error {
 	h.Write([]byte("mp4"))
+	// Build the ordered media index once, even when moov precedes mdat.
+	var mediaRanges []formatMP4MediaRange
+	base := int64(0)
+	for off := int64(0); off < s.size; {
+		kind, body, next, err := formatAtom(s, off, s.size)
+		if err != nil {
+			return err
+		}
+		if kind == "mdat" {
+			if body == next {
+				return ErrInvalidPayload
+			}
+			mediaRanges = append(mediaRanges, formatMP4MediaRange{body, next, base})
+			base += next - body
+		}
+		off = next
+	}
 	// mdat is preserved byte-for-byte by mtag. The sample description and
 	// timing/size tables are protected too; chunk offsets may shift on save.
 	media, config, chunks := 0, 0, 0
@@ -365,7 +445,7 @@ func hashMP4Payload(s payloadSource, h *formatPayloadHash) error {
 				}
 			case "stco", "co64":
 				chunks++
-				if err := hashMP4ChunkOffsets(s, h, kind, body, next); err != nil {
+				if err := hashMP4ChunkOffsets(s, h, kind, body, next, mediaRanges); err != nil {
 					return err
 				}
 			case "moof":
@@ -450,6 +530,7 @@ func hashOggPayload(s payloadSource, h *formatPayloadHash) error {
 		if crc != expected {
 			return fmt.Errorf("%w: Ogg CRC", ErrInvalidPayload)
 		}
+		lastAudioPacket := -1
 		for _, n := range laces[:count] {
 			if !pending {
 				skip = packets == 1
@@ -509,13 +590,28 @@ func hashOggPayload(s payloadSource, h *formatPayloadHash) error {
 					binary.BigEndian.PutUint64(length[:], uint64(packetBytes))
 					h.Write(length[:])
 				}
+				audioStart := 2
+				if codec == "vorbis" {
+					audioStart = 3
+				}
+				if packets >= audioStart {
+					lastAudioPacket = packets
+				}
 				packets++
 			}
 		}
 		eos = b[5]&4 != 0
-		if eos {
+		granule := binary.LittleEndian.Uint64(b[6:14])
+		if lastAudioPacket >= 0 && granule != ^uint64(0) {
 			h.Write([]byte("granule"))
+			var packet [8]byte
+			binary.BigEndian.PutUint64(packet[:], uint64(lastAudioPacket))
+			h.Write(packet[:])
 			h.Write(b[6:14])
+		} else if eos {
+			// EOS without a completed, positioned audio packet cannot be
+			// normalized reliably across metadata pagination.
+			return ErrUnsupportedPayload
 		}
 		off = pageEnd
 	}
@@ -675,8 +771,10 @@ func hashWebMPayload(s payloadSource, h *formatPayloadHash) error {
 
 // Absolute MP4 chunk offsets legitimately change when moov grows. Normalize each
 // to its position in the concatenation of mdat bodies, and reject pointers that
-// no longer address media. The scan uses constant memory even for large tables.
-func hashMP4ChunkOffsets(s payloadSource, h *formatPayloadHash, kind string, start, end int64) error {
+// no longer address media. The index grows with mdat count, never chunk count.
+type formatMP4MediaRange struct{ start, end, base int64 }
+
+func hashMP4ChunkOffsets(s payloadSource, h *formatPayloadHash, kind string, start, end int64, mediaRanges []formatMP4MediaRange) error {
 	var b [8]byte
 	if end-start < 8 {
 		return ErrInvalidPayload
@@ -702,27 +800,15 @@ func hashMP4ChunkOffsets(s payloadSource, h *formatPayloadHash, kind string, sta
 		if width == 8 {
 			offset = binary.BigEndian.Uint64(b[:])
 		}
-		base := int64(0)
-		found := false
-		for off := int64(0); off < s.size; {
-			name, body, next, err := formatAtom(s, off, s.size)
-			if err != nil {
-				return err
-			}
-			if name == "mdat" {
-				if offset >= uint64(body) && offset < uint64(next) {
-					binary.BigEndian.PutUint64(b[:], uint64(base)+offset-uint64(body))
-					h.Write(b[:])
-					found = true
-					break
-				}
-				base += next - body
-			}
-			off = next
-		}
-		if !found {
+		i := sort.Search(len(mediaRanges), func(i int) bool {
+			return uint64(mediaRanges[i].end) > offset
+		})
+		if i == len(mediaRanges) || offset < uint64(mediaRanges[i].start) {
 			return fmt.Errorf("%w: MP4 chunk offset outside mdat", ErrInvalidPayload)
 		}
+		media := mediaRanges[i]
+		binary.BigEndian.PutUint64(b[:], uint64(media.base)+offset-uint64(media.start))
+		h.Write(b[:])
 	}
 	return nil
 }

@@ -15,7 +15,7 @@
 | AIFF/AIFC | FORM 内 ID3 chunk；saveRIFFContainer | 开放，新增 COMM/SSND 校验 |
 | FLAC | Vorbis comments/pictures；saveFLAC | 保留既有完整性校验 |
 | MP4/M4A | ilst、mdta、chapters；saveMP4 | 开放，新增 mdat、解码/时间/sample tables、规范化 stco/co64 校验 |
-| OGG | Vorbis/Opus/Speex comment；saveOGG | 开放，新增 packet/CRC/末尾 granule 校验 |
+| OGG | Vorbis/Opus/Speex comment；saveOGG | 开放，新增 packet/CRC/音频页 granule 与完成 packet 序号校验 |
 | MAC（.ape） | native APEv2；saveMAC | 开放，新增非标签区域与 descriptor extent 校验 |
 | AAC（raw ADTS） | 前置 ID3、可选尾部 APE/ID3v1；saveMP3 | 开放，SDK 保持真实 ContainerAAC，逐 ADTS frame 校验 |
 | AC3 | raw ID3/APE；saveMP3 | SDK 可读写，非本次 payload validator 范围 |
@@ -48,9 +48,9 @@ SDK 对单个标签/图片/Matroska element/Ogg packet 仍有内存保护，这�
 func CompareFormatAudioPayload(ctx context.Context, left io.ReaderAt, leftSize int64, right io.ReaderAt, rightSize int64) error
 ```
 
-仅比较用户新增容器的 encoded media 和必要解码配置；无路径权限、无写权限、无 ffmpeg 运行依赖。Reader 必须在整个调用期间保持不变。使用 32KiB buffer 流式 SHA256，文件大小无人工上限。取消、越界、截断、错误 framing、非支持布局立即失败；内容不同返回 `ErrAudioPayloadChanged`。MP3/FLAC 留给旧校验器。
+仅比较用户新增容器的 encoded media 和必要解码配置；无路径权限、无写权限、无 ffmpeg 运行依赖。Reader 必须在整个调用期间保持不变。使用 32KiB buffer 流式 SHA256，文件大小无人工上限；MP4 另缓存按文件位置排序的 mdat 范围，内存仅随 mdat 数增长，不随文本标签长度、媒体大小或 chunk 项数增长。取消、越界、截断、错误 framing、非支持布局立即失败；内容不同返回 `ErrAudioPayloadChanged`。MP3/FLAC 留给旧校验器。
 
-MP4 的绝对 chunk offsets 会因 moov 标签增长而改变，故规范化为连续 mdat bodies 内偏移，并验证仍指向 mdat；不能简单忽略 stco/co64。Ogg 会因 comment 增长重分页，因此按 logical packet（跳过已确认的 comment）比对，而非按整个 page bytes。CRC 与 EOS granule 仍单独保护。WebM 比较完整 Tracks 与 Cluster bytes，同时保护 TimecodeScale；不把图片 attachment 混入媒体 hash。
+MP4 的绝对 chunk offsets 会因 moov 标签增长而改变，故规范化为连续 mdat bodies 内偏移，并验证仍指向 mdat；不能简单忽略 stco/co64。Ogg 会因 comment 增长重分页，因此按 logical packet（跳过已确认的 comment）比对，而非按整个 page bytes。CRC 与每个音频页的有效 granule、该页最后完成的逻辑 packet 序号单独保护；纯 metadata 页排除，无法规范化的 EOS 布局返回 unsupported。WebM 比较完整 Tracks 与 Cluster bytes，同时保护 TimecodeScale；不把图片 attachment 混入媒体 hash。
 
 边界：fragmented MP4、chained/multiplexed Ogg、未知大小的 Matroska Cluster、RF64 ds64 扩展表、部分旧/未来 MAC 布局会明确 unsupported/invalid。普通已验证变体有实际读写路径，绝非全部 unsupported。该校验不提供新 decoder，不能证明任意原始输入可被系统 codec 播放。扫描必须允许解析失败时以文件名收录，播放独立于标签读取。
 
@@ -112,7 +112,7 @@ if s.size <= 0 {
 }
 ```
 
-删除 `MaxPayloadFileSize` 常量和其“Larger files are refused”注释，更新旧 size-limit test。CompareAudioPayload 最前先识别 MP3/FLAC 路由，保持旧二者严格校验，其余调用本 helper；父可以用 mtag WithReadOnly + WithSkipPictures + WithSkipAttachments 的真实 container 判定，避免仅看 `.aac` 后缀或 `ID3` 魔数就误判为 MP3。两个 reader 的真实种类必须一致，新 helper 也会把容器种类写入 hash。
+删除 `MaxPayloadFileSize` 常量和其“Larger files are refused”注释，更新旧 size-limit test。CompareAudioPayload 最前先识别 MP3/FLAC 路由，保持旧二者严格校验，其余调用本 helper；父应调用下述 `AdditionalPayloadFormat` 小 header 探测，避免仅看 `.aac` 后缀或 `ID3` 魔数就误判为 MP3。禁止用 `ParseScan` 或完整 metadata parser 作 validator 分派（普通文本标签仍会按长度分配）。返回 true 转交 `CompareFormatAudioPayload`，false 保留旧 MP3/FLAC 校验路径；error 直接返回。两个 reader 均独立识别并严格验证，新 helper 的 hash 包含容器种类，跨类型会失败。
 
 ### desktop/files_metadata.go
 
@@ -211,3 +211,47 @@ go test -mod=readonly ./desktop/metadata -run '^TestFormats(MalformedAndCancelle
 - APE：本机 ffmpeg 无 APE encoder、无 mac 命令。测试仅自行构造 MAC descriptor/header/seek table + 明确不声称可解码的 opaque frame bytes，验证真实 APEv2 标签 read/write、封面、歌词、音频区域保留与篡改拒绝。没有使用 SDK 的真实音频 fixture。不能把结构测试外推为实际 APE 编码/解码测试。
 - 上述最终检查均通过；首次无 overlay 的完整新增测试因父白名单尚未接入而失败，不能报告当前仓库完整集成已通过。首次 WebM ffprobe CombinedOutput 混入 stderr 的测试问题已通过只解析 stdout 修正；长标题改为不带末尾空格，避免 SDK 正常 trim 造成错误断言。
 - 没有真实 App、系统播放、UI、网络或用户文件验证。文件允许扫描/发放播放 URL 不保证系统 codec 能解码；需要展示真实失败。
+
+
+## 独立 review 修复（本轮）
+
+仅修改本 leaf 原先新增的三个文件；没有修改 `payload.go`、`metadata.go`、SDK、依赖缓存或父主树。
+
+新增导出合同：
+
+```go
+func AdditionalPayloadFormat(ctx context.Context, r io.ReaderAt, size int64) (bool, error)
+```
+
+它只经 `payloadSource.read` 读取至多 12-byte 起始 header；前置 ID3 按 syncsafe 宣告长度及 v2.4 footer 跳过，然后再读 2-byte ADTS signature。最多两次小读取，不解析/分配 tag body，支持任意合法文件大小。MP3、FLAC、unknown 返回 false；被截断或长度非法的 ID3 返回 error。探测成功只选择 validator，真正结构合法性由对应 validator 决定。预取消与读取中取消均返回 context 错误；不触发原始 reader 的无 context ParseScan。
+
+Ogg：在每页已完成的音频 packet 中记录最后一个逻辑序号（Vorbis 排除 identification/comment/setup，Opus/Speex 排除前两个 header），将该序号与有效 granule 纳入 hash。纯 metadata 页不进入时间定位 hash，CRC、packet framing 和单逻辑流检查保留。无可用音频定位的 EOS 明确 unsupported。
+
+MP4：在遍历 sample table 前仅扫描一次顶层 atoms，缓存 mdat 的 `[body,end)` 与累计媒体基址；每个 stco/co64 项二分查询区间，保留严格边界、无符号 64-bit offset、完整 table extent 校验。时间读取量从 chunk×atom 改为 atom+chunk，查找 CPU 为 chunk×log(mdat)。索引内存 O(mdat)，没有为 chunk 或文本标签建表。
+
+### 先红后绿与验证
+
+固定 Go 环境与上节一致。无 overlay 的确定性回归命令：
+
+```sh
+go test -mod=readonly ./desktop/metadata -run '^TestFormats(OggNonEOSGranuleRejected|MP4ChunkOffsetReadWork)$' -count=1 -v
+```
+
+先红：真实 ffmpeg 合成的 Opus、Vorbis 都在非 EOS 音频页 granule+1 并重算正确 CRC 后错误返回 nil（测试还验证被改文件与自身比较成功，排除结构损坏造成假阳性）；512 个 chunk+512 个空 free atom 发生 528404 次、4224144 bytes 读取，超出线性工作量断言。最初尝试 libvorbis encoder 不存在，已改为本机可用的原生 vorbis，后续两个 codec 均实际复现并通过修复测试。
+
+后绿：同命令两 codec 均正确返回 ErrAudioPayloadChanged；MP4 读取降至 3098 次、21696 bytes。工作量测试以 countReader 记录请求次数/字节，不使用 walltime。
+
+最终实际通过：
+
+```sh
+go test -mod=readonly -overlay=/tmp/hemusic-formats-overlay.json ./desktop/metadata -run '^TestFormats' -count=1
+go test -mod=readonly ./desktop/metadata -run '^TestFormats(OggNonEOSGranuleRejected|MP4ChunkOffsetReadWork|AdditionalPayloadFormatProbe|MP4MediaIndexBoundaries|DifferentContainersRejected|OggCommentRepagination|MalformedAndCancelled|PayloadChangesRejected|MP4OffsetChangeRejected)$' -count=1 -v
+go vet -mod=readonly -overlay=/tmp/hemusic-formats-overlay.json ./desktop/metadata
+git diff --check
+```
+
+overlay 沿用上轮，只替换 metadata.go 的 supported 为 return nil 并移除因此未使用的 fmt import；仓库 baseline 未改。全套新增 TestFormats 在 overlay 下通过，父集成后仍需无 overlay 完整验证。
+
+新增额外证据：128MiB 稀疏 ID3（带/不带 footer）只作两次小读取即可区分 ADTS/MP3；1TiB 宣告 MP4 只读一次 header；body 读取会被测试 reader 直接拒绝。覆盖未知格式/MP3/FLAC false、非法 ID3、预取消和读取中取消、不同容器拒绝；stco/co64 多 mdat 的重定位、乱序 offset、header/gap/末尾越界及 64-bit 溢出；正确 continuation flag 的跨页 comment 改写通过，音频页 granule 改写失败。
+
+边界发现：临时把真实 Vorbis title 增至约 200KB 时，固定 SDK 输出 comment 连续 255-lace 页，但后页 continuation flag 仍为 0（实测 flags=0）；严格 framing 校验拒绝该输出。这是 SDK writer 既有边界，不放松 validator，也不改 SDK。临时调试与该试验已移除；结构正确的跨页 comment 夹具已单独保留。未声称此超长标签 writer 路径通过。无网络、真实 App、用户音乐库或依赖 cache 写入。
