@@ -194,7 +194,7 @@ class Player {
       };
       console.log("▶️ song canplay:");
       // 恢复均衡器
-      if (isElectron && statusStore.eqEnabled) {
+      if (statusStore.eqEnabled) {
         // 简单恢复 EQ 增益
         const bands = statusStore.eqBands;
         if (bands && bands.length === 10) {
@@ -694,7 +694,6 @@ class Player {
   public async pause(changeStatus: boolean = true) {
     const statusStore = useStatusStore();
     const settingStore = useSettingStore();
-    if (!audioManager.src) return;
     if (changeStatus) statusStore.playStatus = false;
     // 淡出
     const fadeTime = settingStore.getFadeTime ? settingStore.getFadeTime / 1000 : 0;
@@ -1027,14 +1026,14 @@ class Player {
     if (statusStore.radioMode) statusStore.radioMode = false;
     // 是否直接播放
     if (song && typeof song === "object" && "id" in song) {
+      // 列表变化后，即使复用当前音频也要更新歌曲在新列表中的位置。
+      statusStore.playIndex = processedData.findIndex(
+        (item) => item.id === song.id && item.platform === song.platform,
+      );
       // 是否为当前播放歌曲
       if (musicStore.playSong.id === song.id && musicStore.playSong.platform === song.platform) {
         if (play) await this.play();
       } else {
-        // 查找索引（在处理后的列表中查找）
-        statusStore.playIndex = processedData.findIndex(
-          (item) => item.id === song.id && item.platform === song.platform,
-        );
         // 播放
         await this.initPlayer();
       }

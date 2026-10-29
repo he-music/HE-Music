@@ -1,5 +1,5 @@
 import { fileURLToPath, URL } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
@@ -9,5 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    // These offline release checks use node:test and run through test:desktop:release.
+    exclude: [...configDefaults.exclude, "scripts/package/mygo-release*.test.mjs"],
   },
 });

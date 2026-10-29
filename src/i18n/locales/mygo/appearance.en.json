@@ -1,0 +1,9 @@
+{
+  "window_appearance": {
+    "restart_tip": "Saved changes apply the next time the app starts.",
+    "load_default": "The saved window appearance could not be read. This window uses the default frame; saving a new choice will apply it on the next launch.",
+    "load_failed": "Could not read the window appearance. Please reopen settings to retry.",
+    "save_failed": "Could not save the window appearance. The saved choice has not changed.",
+    "saved": "Window appearance saved."
+  }
+}

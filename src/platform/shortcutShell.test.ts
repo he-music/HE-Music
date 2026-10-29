@@ -1,4 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/composables/shellProtocols", () => ({ createShellProtocolSession: () => undefined }));
+vi.mock("@/composables/shellTaskbar", () => ({ createShellTaskbarSession: () => undefined }));
 import * as Vue from "vue";
 import type { PlatformAdapter } from "./types";
 import type { GlobalShortcutStatus, PlatformShortcuts } from "./shortcuts";

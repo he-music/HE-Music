@@ -8,12 +8,19 @@ import {
   SystemMedia,
   NativeFiles,
   Updates,
+  SystemFonts,
+  Protocols,
+  Taskbar,
+  NetworkProxy,
+  WindowAppearanceService,
   events,
 } from "./mygo.bindings";
 import { externalHttpURL, type PlatformAdapter } from "./types";
 import { playbackShortcutActions } from "./shortcuts";
 import { desktopLyricsSession } from "./desktopLyricsSession";
 import { filesSession } from "./filesSession";
+import { createSystemFontsProvider } from "./systemFonts";
+import { createNetworkProxyProvider } from "./networkProxy";
 
 export function createMygoPlatform(): PlatformAdapter {
   const os = runtime().platform;
@@ -33,6 +40,22 @@ export function createMygoPlatform(): PlatformAdapter {
     os: os === "darwin" || os === "win32" || os === "linux" ? os : "unknown",
     capabilities,
     files: NativeFiles,
+    systemFonts:
+      os === "darwin" || os === "win32" ? createSystemFontsProvider(SystemFonts) : undefined,
+    protocols: {
+      ...Protocols,
+      onIntent: (listener) => events.desktopProtocolIntent.on(listener),
+    },
+    taskbar:
+      os === "win32"
+        ? {
+            ...Taskbar,
+            onCommand: (listener) => events.desktopTaskbarCommand.on(listener),
+            onFailure: (listener) => events.desktopTaskbarFailure.on(listener),
+          }
+        : undefined,
+    networkProxy: createNetworkProxyProvider(NetworkProxy),
+    windowAppearance: WindowAppearanceService,
     updates: {
       ...Updates,
       onChange: (listener) => events.desktopUpdates.on(listener),

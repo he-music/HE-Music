@@ -146,7 +146,7 @@ const menuOptions = computed<MenuOption[] | MenuGroupOption[]>(() => {
         {
           key: "download",
           label: t("nav.download_manager"),
-          show: isElectron,
+          show: isElectron || platform.kind === "mygo",
           icon: renderIcon("Download"),
         },
         {

@@ -1,0 +1,8 @@
+{
+  "library": {
+    "pending": "Folders awaiting access",
+    "filter": "Filter by song, artist or album",
+    "play_filtered": "Play filtered songs",
+    "no_matches": "No matching songs"
+  }
+}

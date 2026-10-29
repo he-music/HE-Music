@@ -304,6 +304,25 @@ export interface MetadataSaveRequest {
   patch: Patch;
 }
 
+export interface NetworkProxyConfig {
+  protocol: string;
+  server: string;
+  port: number;
+}
+
+export interface NetworkProxyReceipt {
+  saved: boolean;
+  webviewApplied: boolean;
+  downloadsApplied: boolean;
+  restartRequired: boolean;
+  errorCode: string;
+}
+
+export interface NetworkProxyTestResult {
+  reachable: boolean;
+  scope: string;
+}
+
 /**
  * Patch uses nil to preserve a field, and a pointer to an empty value to clear
  * it. Pictures, when supplied, replaces all pictures (the editor's existing
@@ -325,6 +344,29 @@ export interface Picture {
   Type: number;
   Description: string;
   Data: string;
+}
+
+export interface ProtocolIntent {
+  epoch: number;
+  sequence: number;
+  platform: string;
+  songId: string;
+}
+
+export interface ProtocolResult {
+  scheme: string;
+  selected: boolean;
+  registered: boolean;
+  status: string;
+}
+
+export interface ProtocolSession {
+  epoch: number;
+}
+
+export interface ProtocolStatus {
+  epoch: number;
+  results: ProtocolResult[];
 }
 
 /**
@@ -443,6 +485,41 @@ export interface SystemMediaTrack {
   canNext: boolean;
 }
 
+export type TaskbarAction = "previous" | "toggle" | "next";
+
+export interface TaskbarCommand {
+  epoch: number;
+  seq: number;
+  action: TaskbarAction;
+}
+
+/**
+ * Failure reports native failure after a Sync RPC has already accepted queued work.
+ * Synchronous failures remain RPC errors and do not also emit this event.
+ */
+export interface TaskbarFailure {
+  epoch: number;
+  seq: number;
+  code: string;
+}
+
+export interface TaskbarLabels {
+  previous: string;
+  play: string;
+  pause: string;
+  next: string;
+}
+
+export interface TaskbarState {
+  epoch: number;
+  seq: number;
+  enabled: boolean;
+  playing: boolean;
+  positionMs: number;
+  durationMs: number;
+  labels: TaskbarLabels;
+}
+
 export type TrayAction = "previous" | "toggle" | "next" | "open-settings" | "set-favorite" | "set-play-mode";
 
 export type TrayPlayMode = "repeat" | "repeat-once" | "shuffle";
@@ -496,6 +573,14 @@ export interface UpdatesState {
   installBusy: boolean;
 }
 
+/** AppliedUseBorderless describes this window; UseBorderless is the saved next-start value. */
+export interface WindowAppearanceState {
+  useBorderless: boolean;
+  appliedUseBorderless: boolean;
+  restartRequired: boolean;
+  loadFailed: boolean;
+}
+
 // ---- Services ----
 
 /** AuthCallback exposes only loopback callback coordination, with no credentials or tokens. */
@@ -544,6 +629,9 @@ export const NativeFiles = {
   },
   exportSettings(epoch: number, settings: RendererSettings): Promise<SettingsExportResult> {
     return call("NativeFiles.ExportSettings", epoch, settings);
+  },
+  forgetDownload(epoch: number, operationID: string): Promise<boolean> {
+    return call("NativeFiles.ForgetDownload", epoch, operationID);
   },
   importSettings(epoch: number): Promise<SettingsImportResult> {
     return call("NativeFiles.ImportSettings", epoch);
@@ -689,11 +777,39 @@ export const DesktopLyrics = {
   },
 } as const;
 
+export const NetworkProxy = {
+  apply(c: NetworkProxyConfig): Promise<NetworkProxyReceipt> {
+    return call("NetworkProxy.Apply", c);
+  },
+  current(): Promise<NetworkProxyConfig> {
+    return call("NetworkProxy.Current");
+  },
+  /**
+   * Authorization is checked before starting and again after the isolated request.
+   * A response belonging to a replaced page owner is never returned as success.
+   */
+  test(c: NetworkProxyConfig): Promise<NetworkProxyTestResult> {
+    return call("NetworkProxy.Test", c);
+  },
+} as const;
+
 /** DesktopPlatform exposes only the desktop capabilities implemented in M2. */
 export const DesktopPlatform = {
   /** OpenExternal opens HTTP(S) links in the system browser. */
   openExternal(rawURL: string): Promise<void> {
     return call("DesktopPlatform.OpenExternal", rawURL);
+  },
+} as const;
+
+export const Protocols = {
+  begin(): Promise<ProtocolSession> {
+    return call("Protocols.Begin");
+  },
+  sync(epoch: number, schemes: string[]): Promise<ProtocolStatus> {
+    return call("Protocols.Sync", epoch, schemes);
+  },
+  teardown(epoch: number): Promise<void> {
+    return call("Protocols.Teardown", epoch);
   },
 } as const;
 
@@ -731,6 +847,16 @@ export const GlobalShortcuts = {
    */
   teardown(generation: number): Promise<void> {
     return call("GlobalShortcuts.Teardown", generation);
+  },
+} as const;
+
+/**
+ * SystemFonts exposes bounded family names to the renderer. Enumeration runs on
+ * the lifecycle main owner so a lyrics child cannot read the system list.
+ */
+export const SystemFonts = {
+  list(): Promise<string[]> {
+    return call("SystemFonts.List");
   },
 } as const;
 
@@ -779,6 +905,24 @@ export const SystemMedia = {
   },
 } as const;
 
+/** Taskbar shares the Ready main-page owner; construction never touches native APIs. */
+export const Taskbar = {
+  begin(): Promise<number> {
+    return call("Taskbar.Begin");
+  },
+  /**
+   * Sync acknowledges acceptance. Native application can complete later when COM
+   * reenters; only completion opens the command gate. An accepted native failure
+   * emits desktop:taskbar-failure with the matching epoch and sequence.
+   */
+  sync(state: TaskbarState): Promise<void> {
+    return call("Taskbar.Sync", state);
+  },
+  teardown(epoch: number): Promise<void> {
+    return call("Taskbar.Teardown", epoch);
+  },
+} as const;
+
 /**
  * Updates methods only enqueue short authorization/state work and return immediately.
  * RPC completion means queued, not authorized/successful. Subscribe to desktop:updates
@@ -814,6 +958,15 @@ export const Updates = {
   },
 } as const;
 
+export const WindowAppearanceService = {
+  current(): Promise<WindowAppearanceState> {
+    return call("WindowAppearanceService.Current");
+  },
+  save(useBorderless: boolean): Promise<WindowAppearanceState> {
+    return call("WindowAppearanceService.Save", useBorderless);
+  },
+} as const;
+
 // ---- Events ----
 
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
@@ -826,7 +979,10 @@ export const events = {
   desktopLyricsClock: event<LyricsClock>("desktop:lyrics-clock"),
   desktopLyricsCommand: event<LyricsCommand>("desktop:lyrics-command"),
   desktopWindowMaximized: event<boolean>("desktop:window-maximized"),
+  desktopProtocolIntent: event<ProtocolIntent>("desktop:protocol-intent"),
   desktopShortcutAction: event<ShortcutEvent>("desktop:shortcut-action"),
   desktopSystemMediaCommand: event<SystemMediaCommand>("desktop:system-media-command"),
+  desktopTaskbarCommand: event<TaskbarCommand>("desktop:taskbar-command"),
+  desktopTaskbarFailure: event<TaskbarFailure>("desktop:taskbar-failure"),
   desktopUpdates: event<UpdatesEvent>("desktop:updates"),
 } as const;

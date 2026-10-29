@@ -109,6 +109,34 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it.each([
+  { label: "当前歌曲移到筛选列表首位", list: [b, c] },
+  { label: "筛选列表只剩当前歌曲", list: [b] },
+])("$label 时同步索引并复用当前音频", async ({ list }) => {
+  const resume = vi.spyOn(player, "play").mockResolvedValue();
+  const initialize = vi.spyOn(player, "initPlayer").mockResolvedValue();
+  await player.updatePlayList(list, b, {}, { showTip: false, play: true });
+  expect(data.playList).toEqual(list);
+  expect(status.playIndex).toBe(0);
+  expect(data.playList[status.playIndex]).toMatchObject({ id: b.id, platform: b.platform });
+  expect(resume).toHaveBeenCalledOnce();
+  expect(initialize).not.toHaveBeenCalled();
+});
+
+it("同曲筛选播放在随机排序后同时按id与platform定位", async () => {
+  data.playList = [b, c, a];
+  status.playIndex = 0;
+  status.playSongMode = "shuffle";
+  const resume = vi.spyOn(player, "play").mockResolvedValue();
+  const initialize = vi.spyOn(player, "initPlayer").mockResolvedValue();
+  await player.updatePlayList([c, b, a], b, {}, { showTip: false, play: true });
+  expect(data.playList).toEqual([a, b, c]);
+  expect(status.playIndex).toBe(1);
+  expect(data.playList[status.playIndex]).toMatchObject({ id: b.id, platform: b.platform });
+  expect(resume).toHaveBeenCalledOnce();
+  expect(initialize).not.toHaveBeenCalled();
+});
+
 it("uses real stores to commit shuffle lists, mode and the platform-specific song index before persistence", async () => {
   const pending = gate<void>();
   mocks.write.mockImplementation(() => pending.promise);

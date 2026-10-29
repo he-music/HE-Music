@@ -1,5 +1,5 @@
 <template>
-  <n-layout-header class="nav">
+  <n-layout-header class="nav" :data-mygo-borderless="nativeBorderless || undefined">
     <!-- 页面导航 -->
     <n-flex class="page-control">
       <Logo v-if="!isDesktop" :size="40" @click="router.push('/')" />
@@ -58,11 +58,7 @@
       </n-flex>
     </n-flex>
     <!-- 客户端控制 -->
-    <n-flex
-      v-if="isElectron && platform.capabilities.windowControls && !isMac && !isSmallScreen"
-      align="center"
-      class="client-control"
-    >
+    <n-flex v-if="showWindowControls" align="center" class="client-control">
       <n-divider class="divider" vertical />
       <n-button :focusable="false" :title="t('nav.minimize')" tertiary circle @click="min">
         <template #icon>
@@ -138,9 +134,10 @@ import { platform } from "@/platform";
 import { openParseSourceUrl, openSetting, openThemeConfig } from "@/utils/modal";
 import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
 import { useI18n } from "vue-i18n";
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { useMobile } from "@/composables/useMobile";
 import Menu from "@/components/Layout/Menu.vue";
+import { windowAppearanceSession } from "@/platform/windowAppearance";
 import Logo from "@/components/Layout/Logo.vue";
 import { useDesktopLifecycle } from "@/composables/useDesktopLifecycle";
 
@@ -156,6 +153,19 @@ const rememberNotAsk = ref(false);
 const desktopLifecycle = useDesktopLifecycle({ showCloseModal, rememberNotAsk });
 // 是否启用无边框窗口
 const useBorderless = ref(true);
+// A failed optional appearance read must not hide controls on an already frameless window.
+const nativeBorderless = computed(
+  () =>
+    platform.kind === "mygo" &&
+    (windowAppearanceSession.value?.state.value?.appliedUseBorderless ?? true),
+);
+const showWindowControls = computed(
+  () =>
+    platform.capabilities.windowControls &&
+    (platform.kind === "mygo"
+      ? nativeBorderless.value
+      : isElectron && !isMac && !isSmallScreen.value),
+);
 // 当前窗口状态
 const isMax = ref(false);
 // 是否显示侧边栏
@@ -183,6 +193,11 @@ const hideOrClose = (action: "hide" | "exit") => {
 
 // 尝试关闭软件
 const tryClose = () => {
+  if (platform.lifecycle) {
+    // Native close owns the request ID, prompt policy and final resolution.
+    void platform.window?.close().catch(console.error);
+    return;
+  }
   if (!platform.capabilities.tray) {
     void platform.window?.close().catch(console.error);
     return;
@@ -327,10 +342,17 @@ onUnmounted(() => {
   padding: 0 1rem;
   background-color: transparent;
   -webkit-app-region: drag;
+  &[data-mygo-borderless] {
+    --app-region: drag;
+  }
+  .page-control {
+    --app-region: no-drag;
+  }
   .n-button {
     width: 40px;
     height: 40px;
     -webkit-app-region: no-drag;
+    --app-region: no-drag;
   }
   .nav-main {
     position: relative;

@@ -47,6 +47,7 @@ export interface FileDownloadAccess {
   start(request: DownloadRequest): Promise<DownloadOperation>;
   read(operationID: string): Promise<DownloadState>;
   cancel(operationID: string): Promise<DownloadState>;
+  forget?(operationID: string): Promise<boolean>;
 }
 
 export type FileOperationResult<T> =
@@ -274,7 +275,7 @@ export class FilesSession {
 
   downloadAccess(token: string): FileDownloadAccess | undefined {
     const grant = this.captureGrant(token);
-    const { startDownload, readDownloadState, cancelDownload } = this.provider;
+    const { startDownload, readDownloadState, cancelDownload, forgetDownload } = this.provider;
     if (!grant || !startDownload || !readDownloadState || !cancelDownload) return;
     const { epoch, current } = grant;
     return {
@@ -298,6 +299,14 @@ export class FilesSession {
         return state;
       },
       cancel: (operationID) => cancelDownload(epoch, operationID),
+      forget: forgetDownload
+        ? async (operationID) => {
+            if (!current()) throw new Error("Download authorization expired");
+            const forgotten = await forgetDownload(epoch, operationID);
+            if (!current()) throw new Error("Download authorization expired");
+            return forgotten;
+          }
+        : undefined,
     };
   }
 

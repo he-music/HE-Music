@@ -649,3 +649,24 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 使用现有官方Screen.CursorScreenPoint及窗口bounds，在可见、已Attach且锁定期间每75ms采样一次；调度至main线程且最多一个待处理tick。HoverUnlock只在进入/离开区域边沿更新revision，不把鼠标坐标持续传入renderer。解锁、关闭与撤销会取消采样，watcher私有sequence和当前窗口/generation阻止已排队的旧tick在重新锁定后复活；锁定仍禁止移动，托盘外部解锁保留。
 - 子页通过实际按钮getBoundingClientRect相对viewport登记小区域，新SetUnlockRegion仅允许当前已Attach子页、当前epoch且有限0..1矩形，实际最多64×64逻辑像素。正文区域仅显示按钮且继续透传；只有指针进入按钮才暂时接收输入，移出恢复透传。native锁定时根hovered class使用原生HoverUnlock，停留不会被页面一秒计时器隐藏；点击仍经SetLocked原生回执，不乐观解锁。未改歌词结构、动画、RAF或焦点，Electron转发与临时解锁逻辑保留。
 - 新Go fake tick测试覆盖正文透传、按钮输入、离开、stationary不重复通知、stop/start与旧tick、失效owner、非法/nil区域。生产SFC验证实际geometry一次登记、原生悬浮class、超过1秒仍显示、点击等待回执及卸载；暂还原旧DOM hover绑定时真实1failed（desktop-lyric locked缺hovered），恢复后全量107文件1052项通过。Node/Web类型、相关3个TS ESLint、4个源文件Prettier、Go全包/vet/gofmt通过；官方CLI在隔离快照16d7e82生成新区域合同与方法，父hashline复制并完整cmp通过。18a7e701独立只读审查No issues/OK with notes，父已完整读取并完成审查所提最终格式复查；未启动App/Vite、真实OS鼠标/多屏/字体、用户库/音频或Windows，尚不声称实机交互验收。
+- 后续用户明确反馈悬浮解锁效果已正常；该反馈覆盖此次锁定后悬浮显示及点击解锁交互，不扩展为其它平台或多屏场景通过。
+
+### 第七轮：剩余桌面能力与 Web 音效集成
+
+- 按用户授权使用独占 worktree 分工字体、协议、外观、任务栏、代理、本地库、下载、WebAudio 和发布工具；平台实机验收及 Electron 清理后置。主分支仍为 `feat/mygo-migration`，基线 `d22007a`，默认 Electron 开发与构建入口保留。
+- 本地库仅保存目录显示路径作为重新授权提示，不将路径当作持久权限；当前 Files owner 通过真实 picker 接受新 grant 后保存并扫描一次。歌曲行按 ScanEntry 稳定复用，支持歌名／歌手／专辑过滤和播放筛选结果；复用当前歌曲播放时按最终列表中的 `id + platform` 修正索引，三项旧实现失败回归修绿，独立复核关闭 P1。
+- 下载 manager 接入 mygo 菜单、布局及子路由，直接观察同一个 FilesSession 队列，不建立新 poller；关闭页面不撤销全局任务。Forget 只退役当前 owner/grant 下真正结束且清理完成的任务，保留有界 consumed ID 拒绝重放；丢 ACK 可重复确认。首次 Start 前未知 ID 返回 false 的 P2 由父实际红绿修复。
+- 字体枚举使用 CoreText／Windows GDI，当前主页面及 Ready owner 保护；Windows 固定单 callback 与 opaque collector，回调内扫描预算和结果上限，Darwin 库初始化缓存一次。字体 manager 接 native family 选择并写入现有全局／歌词字体模型；Web 仍走浏览器字体授权，关闭组件拒绝晚到结果。原 Windows callback 资源耗尽 P1、原始扫描及 Darwin 句柄 P2 均经独立复核关闭；pure collector 假测试及交叉编译不代表真实字体枚举。
+- 协议使用官方单实例与 OnOpenURL 输入，严格解析 orpheus／kuwo 后只传歌曲平台和 ID；最多 16 项 pending 去重，投递后允许再次唤起同曲，不设进程终身次数预算。恢复旧 Orpheus 一个尾斜杠形式并完成实际解析红绿测试；其它 Base64／JSON／ID 校验继续保留。
+- 外观独立原生文件保存，Desired 与 Applied 分开，保存只作用于下次启动；没有重建当前窗口或修改歌词焦点。Nav 依据 Applied 提供 mygo 的三种窗口控制，小屏也保留控制；采用 SDK 的 `--app-region`，按钮、搜索和用户区域不拖动。生产字体 SFC、真实外观 session／设置和 Nav 测试使用 Vue CPU host，不等于 Naive DOM 或真实标题栏验收。
+- 父补查发现自绘关闭按钮直接打开提示时没有 native request ID，导致显示提示和不提示两种设置下均无法完成关闭。两项生产 Nav setup 回归实际失败后，改为先调用 platform.window.close，由现有 native close／ACK／request ID／策略链路处理；修正后通过，独立窄复核关闭 P1，Electron 原分支保留。
+- 代理分别回执 WebView、授权下载与重启状态；macOS 使用公开 WKWebsiteDataStore 代理 API，Windows 仅在官方 loader 可证明消费时应用启动参数。窗口先恢复代理再首次导航；授权下载按请求目标绕过 loopback，防止本地音频 bearer 票据发送给代理。原 P1 和导航顺序 P2 已独立复核关闭，测试不发真实代理请求；SDK 更新服务不在代理覆盖范围。
+- WebAudio 为 Web 能力：保留 Electron 既有图谱路径，Web／mygo 按每个音源的可取消 Range GET CORS 探测结果创建独立 graph owner；无 CORS 时普通媒体播放保留。捕获过的元素不重作 plain，已使用的 plain 也随换源退役。均衡器和频谱移除宿主硬门控，当前源不可处理时提示原因；十段增益、倍速、音量、seek、设备选择和媒体事件跟随实际输出 owner，播放时钟不传播到无关页面。
+- 音频审查发现的探测期间 Player 暂停、pending graph play 拒绝误跳曲、渐出期间回退漏暂停三项 P1，以及 Gain 自动化／设备恢复两项 P2，均已修复并独立窄复核 OK。父真实 Player→Manager、同源回退及设备测试与驱动合计 85 项通过；这些 fake 结果不证明声音、实际 CORS 或 WebKit 输出设备支持。
+- 发布工具默认只检查配置，私钥只读环境并匹配公钥；真实 archive／delta 的 SHA-256 digest 经 Ed25519 验签，沿固定 SDK manifest。目录 symlink 越界及签名空白宽松问题已修复并独立复核 OK，独立 Node 离线套件 21 项通过。Vitest 明确排除这三个 `node:test` 文件，避免将两种测试运行器混用。真实 feed、公钥与 CI secret 尚未提供，生产更新仍不可用；本轮未构建／发布／安装更新。
+- 固定官方 CLI 初次在隔离快照 `0573ac9` 生成本轮绑定，新增任务栏 failure 事件后在 `e77d088` 生成增量；最后以最终 Go 合同快照 `c616128` 重新生成并完整 cmp 一致。生成文件保持 CLI 原样，Prettier 忽略该文件。Node 24.22.1、Go 1.27.3、pnpm 10.28.1 保持固定；未改 SDK/module cache 或引入 Node 运行时，go.mod／go.sum／pnpm-lock.yaml 无变更。
+- Windows 任务栏统一由生产共享 executor 按 close／clear／最新 sync 处理，每轮最多 32 个请求，超预算通过主线程消息续跑；Add 成功事实与逻辑 owner 分开，命令 gate 仅在有效 completion 后开放。RPC 成功表示接受，排队后的真实失败通过精确 epoch／seq 的 typed failure 事件终止前端会话，晚 ACK、过期拒绝和旧 owner 不会复活或撤销当前会话。Begin 接受仅由 queued leaf 组成的有效清理结果；真实错误与过期边界仍拒绝。
+- 构造 hook 双重移除失败保留最多两个 tracked owner，失败时不再安装第三个；销毁清理 Go tracking 且不删除复用 HWND 的新 record。父又补生产 helper 红测，复现 retry 提前移除旧 observer 的构造空窗，改为只清失败 replacement 并保留旧 observer，直到新 hook 安装后再交接；补充连续失败／重入／销毁用例，全包通过。独立复核 `00dab2e7` 关闭 Begin、双失败归属与 Pin／ABI 问题，`f5abb36a` 关闭 observer 空窗；后者未将随后新增的纯测试用例算作已审源码。
+- 父 Windows vet 发现 COM vtable 的 uintptr 转指针告警后，改为 unsafe.Pointer／unsafe.Add；局部按钮数组跨普通 Go wrapper 传 uintptr 前使用 runtime.Pinner。固定旧快照的编译逃逸分析没有 buttons heap 记录，新版明确 moved to heap；这仅证明编译与地址保持措施，不是 Windows COM 实机证明。前端 failure 接线由 `1d0af240` 独立复核通过，Nav 自绘关闭按钮由 `3333df63` 复核通过，音频、字体／代理、下载、本地索引及发布工具的既有具体审查项均已关闭。
+- 最终集成验证：Vitest 128 文件 1201 项、独立发布工具 21 项通过；Node／Web 类型、改动 TS／mjs ESLint、Prettier、git diff --check、Go 全包测试／vet／gofmt、Windows amd64／arm64 测试二进制静态编译与 vet 通过。另有 Darwin amd64 静态测试编译通过。生产前端静态构建输出至临时目录并通过，未启动 App／Vite server；保留既有 chunk size 与 Fastify deprecation 提示。ESLint 当前没有 Vue 文件路由，显式调用时被忽略，Vue 通过类型检查、生产模板测试和静态构建验证，不声称 Vue lint 通过。
+- Go 全包曾因 PATH 缺 ffmpeg 夹具生成器失败，补入现有 Homebrew 工具路径后通过；未安装依赖或真实读取用户音乐库。发布配置检查按预期因缺真实 feed／公钥退出 1，生产更新仍不可用。真实字体、窗口／输入、音频／CORS／设备、系统代理流量、用户文件操作、下载安装与 Windows 运行均未在本轮验收；平台实机与 Electron 清理保持后置。

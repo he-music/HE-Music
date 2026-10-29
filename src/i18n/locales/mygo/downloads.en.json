@@ -1,0 +1,23 @@
+{
+  "downloads": {
+    "clearDone": "Clear finished tasks",
+    "sessionOnly": "Tasks are kept for this session. Downloads continue when you leave this page. Removing a task does not delete saved files.",
+    "unavailable": "Download management is unavailable. Please try again later.",
+    "empty": "No download tasks",
+    "progress": "Download progress",
+    "refresh": "Refresh status",
+    "cancel": "Cancel download",
+    "retry": "Retry download",
+    "remove": "Remove task",
+    "scanning": "File saved. Updating local music…",
+    "scanFailed": "File saved, but the local music list could not be updated. Please rescan in Local Music.",
+    "actionFailed": "The action did not complete. The task is still available; please try again later.",
+    "phase": {
+      "active": "Downloading",
+      "unknown": "Status unconfirmed. Refresh the status before continuing.",
+      "success": "Download complete",
+      "failed": "Download incomplete",
+      "saved": "The file may have been saved. Check the destination before downloading again."
+    }
+  }
+}

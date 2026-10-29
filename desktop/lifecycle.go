@@ -52,6 +52,8 @@ func (l *DesktopLifecycle) attachMainWindow(win *mygo.Window, enableTray bool) {
 		win.Page().OnRenderProcessGone(func(string) { l.revoke() }),
 		mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 			desktopShortcuts.revoke()
+			desktopProtocols.revoke()
+			desktopTaskbar.revoke()
 			desktopSystemMedia.revoke()
 			desktopFiles.revoke()
 			desktopUpdates.revoke()
@@ -260,6 +262,8 @@ func (l *DesktopLifecycle) stopPrompt() {
 
 func (l *DesktopLifecycle) revoke() {
 	desktopShortcuts.revoke()
+	desktopProtocols.revoke()
+	desktopTaskbar.revoke()
 	desktopSystemMedia.revoke()
 	desktopFiles.revoke()
 	desktopUpdates.revoke()
@@ -282,6 +286,8 @@ func (l *DesktopLifecycle) cleanup() {
 		return
 	}
 	desktopShortcuts.revoke()
+	desktopProtocols.revoke()
+	desktopTaskbar.shutdown()
 	desktopSystemMedia.revoke()
 	desktopFiles.revoke()
 	desktopUpdates.revoke()

@@ -1,0 +1,16 @@
+{
+  "proxy": {
+    "scope": "When supported, the proxy covers in-app web requests and authorized downloads. Check each result after saving. The update service is excluded. Testing checks one download request and does not verify player traffic.",
+    "unsupported": "Settings saved, but this device cannot apply the web proxy.",
+    "partial": "Settings saved and applied to web requests. The proxy has not been applied to authorized downloads.",
+    "applied": "Proxy applied to in-app web requests and authorized downloads.",
+    "restart": "Settings saved. The web proxy will take effect on the next launch.",
+    "web_applied": "Web proxy: applied.",
+    "web_unapplied": "Web proxy: not applied yet.",
+    "downloads_applied": "Authorized download proxy: applied.",
+    "downloads_unapplied": "Authorized download proxy: not applied yet.",
+    "invalid": "Choose HTTP or HTTPS, enter a hostname or IP address and an integer port from 1 to 65535. Credentials are not supported.",
+    "load_failed": "Could not read the saved proxy settings.",
+    "save_failed": "Could not save and apply the proxy. Please try again."
+  }
+}

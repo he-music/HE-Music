@@ -1,0 +1,8 @@
+{
+  "library": {
+    "pending": "待重新授权的目录",
+    "filter": "筛选歌曲名称、歌手或专辑",
+    "play_filtered": "播放筛选结果",
+    "no_matches": "没有匹配的歌曲"
+  }
+}

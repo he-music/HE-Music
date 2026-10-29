@@ -6,6 +6,7 @@ export interface LocalDownloadAccess {
   start(request: DownloadRequest): Promise<DownloadOperation>;
   read(id: string): Promise<DownloadState>;
   cancel(id: string): Promise<DownloadState>;
+  forget?(id: string): Promise<boolean>;
 }
 export interface LocalDownloadSource {
   readonly id: string;
@@ -66,6 +67,7 @@ interface RecordState {
   sequence: number;
   pending: Set<() => void>;
   retrying: boolean;
+  retiring?: boolean;
   recipe?: { quality: string; source: LocalDownloadSource; resolveURL: LocalDownloadResolver };
   expires: number;
   timer?: ReturnType<typeof setTimeout>;
@@ -178,7 +180,14 @@ export class LocalDownloadSession {
   async retry(id: string): Promise<string | undefined> {
     const record = this.records.get(id);
     const recipe = record?.recipe;
-    if (!record || !recipe || !this.current(record) || !record.task.retryable || record.retrying)
+    if (
+      !record ||
+      !recipe ||
+      !this.current(record) ||
+      !record.task.retryable ||
+      record.retrying ||
+      record.retiring
+    )
       return undefined;
     record.retrying = true;
     try {
@@ -213,6 +222,36 @@ export class LocalDownloadSession {
     }
   }
 
+  async retire(id: string): Promise<boolean> {
+    const record = this.records.get(id);
+    const forget = record?.access.forget;
+    if (
+      !record ||
+      !this.current(record) ||
+      !record.task.done ||
+      record.pending.size > 0 ||
+      record.retrying ||
+      record.retiring ||
+      record.task.refresh === "pending" ||
+      !forget
+    )
+      return false;
+    record.retiring = true;
+    try {
+      const forgotten = await this.bounded(() => forget(id), record);
+      if (!forgotten || !this.current(record)) return false;
+      this.records.delete(id);
+      clearTimeout(record.timer);
+      record.recipe = undefined;
+      record.token = "";
+      this.publish();
+      return true;
+    } catch {
+      return false;
+    } finally {
+      record.retiring = false;
+    }
+  }
   async refresh(id: string): Promise<void> {
     const record = this.records.get(id);
     if (!record || !this.current(record) || record.task.done) return;

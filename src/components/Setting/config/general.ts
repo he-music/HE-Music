@@ -94,7 +94,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
           },
           {
             key: "showTaskbarProgress",
-            show: isElectron,
+            show: isElectron || Boolean(platform.taskbar),
             label: t("setting.general.show_taskbar_progress"),
             type: "switch",
             description: t("setting.general.show_taskbar_progress_tip"),
@@ -108,7 +108,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
           },
           {
             key: "registryProtocols",
-            show: isElectron,
+            show: isElectron || Boolean(platform.protocols),
             label: t("setting.general.registry_protocols"),
             type: "select",
             options: [

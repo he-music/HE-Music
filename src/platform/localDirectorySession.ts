@@ -4,6 +4,9 @@ import { filesSession, type FilesSession, type FileOperationResult } from "./fil
 /** Modal state observes the shell's file owner; closing it never revokes that owner. */
 export function createLocalDirectorySession(
   current: Readonly<Ref<FilesSession | undefined>> = filesSession,
+  chooseDirectory: (session: FilesSession) => ReturnType<FilesSession["chooseDirectory"]> = (
+    session,
+  ) => session.chooseDirectory(),
 ) {
   const feedback = shallowRef("");
   const suggestion = shallowRef("");
@@ -43,12 +46,9 @@ export function createLocalDirectorySession(
     busy: computed(() => current.value?.busy.value ?? false),
     grants: computed(() => current.value?.directories.value ?? []),
     choose: () =>
-      perform(
-        (session) => session.chooseDirectory(),
-        (value) => {
-          feedback.value = value.status === "overlap" ? value.relation : value.status;
-        },
-      ),
+      perform(chooseDirectory, (value) => {
+        feedback.value = value.status === "overlap" ? value.relation : value.status;
+      }),
     showDefault: () =>
       perform(
         (session) => session.defaultDirectory("music"),

@@ -3,15 +3,35 @@ import { createMygoPlatform } from "./mygo";
 import type { LyricsClock, LyricsSnapshot, LyricsWindowState } from "./desktopLyrics";
 import type { TrayPlaybackState, TrayRequest } from "./mygo.bindings";
 import { DesktopLyricsSession } from "./desktopLyricsSession";
-const bridge = vi.hoisted(() => ({ call: vi.fn(), on: vi.fn() }));
+const bridge = vi.hoisted(() => ({ call: vi.fn(), on: vi.fn(), os: "darwin" }));
 vi.mock("mygo-runtime", () => ({
-  runtime: () => ({ platform: "darwin" }),
+  runtime: () => ({ platform: bridge.os }),
   currentWindow: {},
   call: (...args: unknown[]) => bridge.call(...args),
   event: (name: string) => ({ on: (listener: unknown) => bridge.on(name, listener) }),
 }));
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  bridge.os = "darwin";
+});
 describe("mygo lifecycle capability", () => {
+  it("only exposes Windows taskbar providers and forwards exact deferred native failure events", async () => {
+    expect(createMygoPlatform().taskbar).toBeUndefined();
+    bridge.os = "win32";
+    const adapter = createMygoPlatform();
+    const taskbar = adapter.taskbar;
+    if (!taskbar?.onFailure) throw new Error("Missing deferred taskbar failure subscription");
+    const off = vi.fn();
+    bridge.on.mockReturnValueOnce(off);
+    const listener = vi.fn();
+    const stop = taskbar.onFailure(listener);
+    expect(bridge.on).toHaveBeenLastCalledWith("desktop:taskbar-failure", listener);
+    stop();
+    expect(off).toHaveBeenCalledOnce();
+    bridge.call.mockResolvedValueOnce(undefined);
+    await adapter.files?.forgetDownload?.(4, "operation");
+    expect(bridge.call).toHaveBeenLastCalledWith("NativeFiles.ForgetDownload", 4, "operation");
+  });
   it("forwards the full tray snapshot and typed favorite=false event and releases the exact subscription", async () => {
     const adapter = createMygoPlatform();
     const lifecycle = adapter.lifecycle;

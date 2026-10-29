@@ -1,5 +1,6 @@
 <template>
-  <div class="download">
+  <MygoDownloadManager v-if="platform.kind === 'mygo'" />
+  <div v-else class="download">
     <div class="title">
       <n-text class="keyword">{{ t("download.download_manager") }}</n-text>
       <n-flex class="status">
@@ -90,6 +91,8 @@ import type { MessageReactive } from "naive-ui";
 import DownloadManager from "@/utils/downloadManager";
 import type { SongInfo } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
+import { platform } from "@/platform";
+import MygoDownloadManager from "./MygoDownloadManager.vue";
 
 const { t } = useI18n();
 const router = useRouter();
@@ -127,6 +130,7 @@ const handleTabChange = (name: string) => {
 watch(
   () => route.name,
   (newName) => {
+    if (platform.kind === "mygo") return;
     if (newName && (newName as string).startsWith("download-")) {
       currentTab.value = newName as string;
       if (newName === "download-downloaded") {
@@ -137,6 +141,7 @@ watch(
 );
 
 const getDownloadMusic = async (showTip: boolean = false) => {
+  if (platform.kind === "mygo") return;
   try {
     const path = settingStore.downloadPath;
     if (!path) {

@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+vi.mock("@/composables/shellProtocols", () => ({ createShellProtocolSession: () => undefined }));
+vi.mock("@/composables/shellTaskbar", () => ({ createShellTaskbarSession: () => undefined }));
 import * as Vue from "vue";
 import { createPinia, setActivePinia } from "pinia";
 type DialogCallbacks = {

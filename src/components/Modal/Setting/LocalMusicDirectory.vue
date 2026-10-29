@@ -38,6 +38,7 @@
     <n-text v-if="!ready" role="status">{{ t("setting.local.directory_unavailable") }}</n-text>
     <n-text v-if="feedback" role="status">{{ t(`setting.local.directory_${feedback}`) }}</n-text>
     <section v-if="savedPaths.length">
+      <n-text>{{ t("mygo.library.pending") }}</n-text>
       <n-text>{{ t("setting.local.directory_reselect") }}</n-text>
       <p v-for="path in savedPaths" :key="path">{{ path }}</p>
     </section>
@@ -74,6 +75,7 @@
 import { computed } from "vue";
 import { isElectron, isMygo } from "@/utils/env";
 import { createLocalDirectorySession } from "@/platform/localDirectorySession";
+import { createLibraryDirectoryRecovery } from "@/platform/libraryDirectoryRecovery";
 import { useSettingStore } from "@/stores";
 import SvgIcon from "@/components/Global/SvgIcon.vue";
 import { changeLocalPath } from "@/utils/helper";
@@ -81,7 +83,15 @@ import { useI18n } from "vue-i18n";
 const { t } = useI18n();
 
 const settingStore = useSettingStore();
-const directory = isMygo ? createLocalDirectorySession() : undefined;
+const recovery = isMygo
+  ? createLibraryDirectoryRecovery({
+      read: () => settingStore.localFilesPath,
+      write: (paths) => {
+        settingStore.localFilesPath = paths;
+      },
+    })
+  : undefined;
+const directory = isMygo ? createLocalDirectorySession(undefined, recovery?.choose) : undefined;
 const feedback = computed(() => directory?.feedback.value ?? "");
 const suggestion = computed(() => directory?.suggestion.value ?? "");
 const ready = computed(() => directory?.ready.value ?? false);
@@ -91,7 +101,13 @@ const choose = () => directory?.choose();
 const showDefault = () => directory?.showDefault();
 const revoke = (token: string) => directory?.revoke(token);
 const savedPaths = computed(() => [
-  ...new Set([...settingStore.localFilesPath, settingStore.downloadPath].filter(Boolean)),
+  ...new Set([
+    ...(recovery?.pendingPaths.value ?? []),
+    ...(settingStore.downloadPath &&
+    !grants.value.some((grant) => grant.displayPath === settingStore.downloadPath)
+      ? [settingStore.downloadPath]
+      : []),
+  ]),
 ]);
 </script>
 

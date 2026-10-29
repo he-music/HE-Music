@@ -9,14 +9,37 @@ import (
 )
 
 func main() {
+	acquired, stopProtocols := installProtocolHooks()
+	if !acquired {
+		return
+	}
+	defer stopProtocols()
 	mygo.App.WhenReady(func() {
+		appearance := WindowAppearance{}
+		directory, directoryErr := mygo.App.Path(mygo.PathUserData)
+		if directoryErr == nil {
+			var appearanceErr error
+			appearance, appearanceErr = prepareWindowAppearance(directory)
+			if appearanceErr != nil {
+				log.Print("读取窗口外观配置失败，使用默认外观")
+			}
+			if proxyErr := prepareNetworkProxyStartup(directory); proxyErr != nil {
+				log.Print("读取代理配置失败")
+			}
+		} else {
+			log.Print("读取应用配置目录失败")
+		}
 		win := mygo.NewWindow(mygo.WindowOptions{
-			Title:  "HE-Music",
-			Width:  1280,
-			Height: 800,
-			URL:    "/",
+			Title:     "HE-Music",
+			Width:     1280,
+			Height:    800,
+			Frameless: WindowAppearanceOptions(appearance).Frameless,
 		})
 		desktopLifecycle.attachMainWindow(win, true)
+		if _, proxyErr := restoreNetworkProxyWebview(); proxyErr != nil {
+			log.Print("恢复代理配置失败")
+		}
+		win.Page().LoadURL("/")
 	})
 	err := mygo.App.Run()
 	if cleanupErr := desktopFiles.shutdownLocalAudio(); cleanupErr != nil {

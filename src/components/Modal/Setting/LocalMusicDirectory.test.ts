@@ -7,6 +7,7 @@ import type { PlatformFiles } from "@/platform/files";
 import type { DirectorySelection } from "@/platform/mygo.bindings";
 import { FilesSession, filesSession } from "@/platform/filesSession";
 import * as directoryModule from "@/platform/localDirectorySession";
+import * as recoveryModule from "@/platform/libraryDirectoryRecovery";
 
 const host = vi.hoisted(() => ({ electron: false, mygo: true }));
 const setting = vi.hoisted(() => ({
@@ -65,6 +66,7 @@ function mountDirectory() {
     "@/utils/helper": { changeLocalPath: legacy.change },
     "@/utils/env": { isElectron: host.electron, isMygo: host.mygo },
     "@/platform/localDirectorySession": directoryModule,
+    "@/platform/libraryDirectoryRecovery": recoveryModule,
   };
   const exports: { default?: Vue.Component } = {};
   new Function("require", "exports", code)((name: string) => {
@@ -170,6 +172,15 @@ function provider(): PlatformFiles {
     teardown: vi.fn(async () => {}),
     importSettings: vi.fn(async () => ({ status: "cancelled" as const, document: null })),
     exportSettings: vi.fn(async () => ({ status: "saved" as const })),
+    startScan: vi.fn(async () => ({ operationId: "scan-job" })),
+    readScanPage: vi.fn(async () => ({
+      operationId: "scan-job",
+      entries: [],
+      issues: [],
+      nextCursor: "1",
+      done: true,
+    })),
+    cancelFileOperation: vi.fn(async () => {}),
   };
 }
 afterEach(async () => {
@@ -177,6 +188,7 @@ afterEach(async () => {
   await filesSession.value?.dispose();
   host.electron = false;
   host.mygo = true;
+  setting.localFilesPath = ["/synthetic/imported"];
   vi.clearAllMocks();
 });
 
@@ -199,7 +211,7 @@ describe("LocalMusicDirectory真实SFC", () => {
     expect(keys).toContain("showDefaultLocalPath");
   });
 
-  it("选择/取消/移除/关闭重开通过生产模板连接；路径建议不授权、不扫描", async () => {
+  it("重新授权后保存提示并只自动扫描一次，取消与重开不重复扫描", async () => {
     const native = provider();
     const session = new FilesSession(native);
     await session.start();
@@ -211,6 +223,8 @@ describe("LocalMusicDirectory真实SFC", () => {
     expect(session.directories.value).toEqual([]);
     await ui.click("choose");
     expect(ui.text()).toContain("/synthetic/selected");
+    expect(native.startScan).toHaveBeenCalledExactlyOnceWith(1, "synthetic-token");
+    expect(setting.localFilesPath).toEqual(["/synthetic/imported", "/synthetic/selected"]);
     vi.mocked(native.chooseDirectory).mockResolvedValueOnce({
       status: "cancelled",
       grant: null,
@@ -220,6 +234,7 @@ describe("LocalMusicDirectory真实SFC", () => {
     await ui.click("choose");
     expect(ui.text()).toContain("setting.local.directory_cancelled");
     expect(session.directories.value).toHaveLength(1);
+    expect(native.startScan).toHaveBeenCalledOnce();
     ui.close();
     const reopened = mountDirectory();
     expect(reopened.text()).toContain("/synthetic/selected");
@@ -232,7 +247,7 @@ describe("LocalMusicDirectory真实SFC", () => {
     await reopened.click("revoke");
     expect(session.directories.value).toEqual([]);
     expect(legacy.change).not.toHaveBeenCalled();
-    expect(setting.localFilesPath).toEqual(["/synthetic/imported"]);
+    expect(setting.localFilesPath).toEqual(["/synthetic/imported", "/synthetic/selected"]);
   });
 
   it("无会话禁用按钮、Web安全；Electron目录操作仍调用旧helper", async () => {

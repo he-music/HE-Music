@@ -4,5 +4,7 @@ pnpm-lock.yaml
 LICENSE.md
 auto-imports.d.ts
 components.d.ts
+# Preserve the pinned mygo CLI generator output byte for byte.
+src/platform/mygo.bindings.ts
 # tsconfig.json
 # tsconfig.*.json

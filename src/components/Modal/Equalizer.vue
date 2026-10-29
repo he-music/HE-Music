@@ -1,6 +1,9 @@
 <template>
   <n-flex class="equalizer" size="large" vertical>
     <n-alert :show-icon="false"> {{ t("common.experimental_function_tip") }} </n-alert>
+    <n-alert v-if="!audioProcessingAvailable" :show-icon="false">{{
+      t("mygo.audio.effects_unavailable")
+    }}</n-alert>
     <n-flex align="center" justify="space-between" :size="8">
       <n-flex wrap :size="8" class="eq-presets">
         <n-tag
@@ -15,7 +18,7 @@
           {{ preset.label }}
         </n-tag>
       </n-flex>
-      <n-switch v-model:value="enabled" :round="false" :disabled="!isElectron" />
+      <n-switch v-model:value="enabled" :round="false" :disabled="!audioProcessingAvailable" />
     </n-flex>
 
     <div class="eq-sliders">
@@ -26,7 +29,7 @@
           :min="-12"
           :max="12"
           :step="0.1"
-          :disabled="!enabled || !isElectron"
+          :disabled="!enabled || !audioProcessingAvailable"
           vertical
           @update:value="onBandChange(i, $event)"
         />
@@ -37,7 +40,7 @@
 </template>
 
 <script setup lang="ts">
-import { isElectron } from "@/utils/env";
+import { audioProcessingAvailable } from "@/utils/audioManager";
 import { useStatusStore } from "@/stores";
 import { usePlayer } from "@/utils/player";
 import { useI18n } from "vue-i18n";
@@ -100,7 +103,7 @@ const applyPreset = (key: PresetKey) => {
  * 根据当前开关状态应用/移除 EQ
  */
 const applyEq = () => {
-  if (!isElectron) return;
+  if (!audioProcessingAvailable.value) return;
   statusStore.setEqEnabled(enabled.value);
   statusStore.setEqBands(bands.value);
   if (enabled.value) {

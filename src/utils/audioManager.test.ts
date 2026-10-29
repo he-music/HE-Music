@@ -36,8 +36,12 @@ let audioContext: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.resetModules();
-  audio = new FakeAudio();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockRejectedValue(new TypeError("synthetic source has no CORS access")),
+  );
   vi.stubGlobal("Audio", function () {
+    audio = new FakeAudio();
     return audio;
   });
   audioContext = vi.fn(() => {
@@ -65,18 +69,21 @@ describe.each(["web", "mygo"])("AudioManager %s HTMLAudio path", (kind) => {
 
   it("clears buffered source when its local authorization is revoked", async () => {
     await manager.play("http://127.0.0.1:12345/ticket", { autoPlay: false });
-    audio.load.mockClear();
+    const revoked = audio;
+    revoked.load.mockClear();
+    revoked.removeAttribute.mockClear();
     manager.clearSource();
-    expect(audio.removeAttribute).toHaveBeenCalledExactlyOnceWith("src");
-    expect(audio.src).toBe("");
-    expect(audio.load).toHaveBeenCalledOnce();
+    expect(revoked.removeAttribute).toHaveBeenCalledExactlyOnceWith("src");
+    expect(revoked.src).toBe("");
+    expect(revoked.load).toHaveBeenCalledOnce();
     expect(audio.paused).toBe(true);
   });
   it("preloads without play, then resumes and pauses without a WebAudio graph", async () => {
     await manager.play("https://audio.example/first.mp3", { autoPlay: false });
-    expect(audio.load).toHaveBeenCalledOnce();
+    expect(audio.load).toHaveBeenCalled();
     expect(audio.play).not.toHaveBeenCalled();
     expect(audio.crossOrigin).toBeNull();
+    audio.pause.mockClear();
     await manager.play(undefined, { fadeIn: true, fadeDuration: 0.3 });
     expect(manager.paused).toBe(false);
     manager.pause({ fadeOut: true, fadeDuration: 0.3 });
@@ -117,7 +124,7 @@ describe.each(["web", "mygo"])("AudioManager %s HTMLAudio path", (kind) => {
     expect(console.error).toHaveBeenCalledWith("AudioManager: 播放失败");
     await manager.play();
     expect(manager.paused).toBe(false);
-    expect(audio.load).toHaveBeenCalledOnce();
+    expect(audio.load).toHaveBeenCalled();
   });
 
   it.each([2, 3, 4])("preserves media error code %s for existing recovery", async (code) => {

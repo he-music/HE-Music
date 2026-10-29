@@ -64,7 +64,16 @@ router.beforeEach((to, from, next) => {
   }
   // 需要客户端
   const localMusicRoute = to.matched.some((route) => route.name === "local");
-  if (to.meta.needApp && !isElectron && !(localMusicRoute && platform.capabilities.localMusic)) {
+  const nativeDownloadRoute =
+    platform.kind === "mygo" &&
+    Boolean(platform.files) &&
+    to.matched.some((route) => route.name === "download");
+  if (
+    to.meta.needApp &&
+    !isElectron &&
+    !(localMusicRoute && platform.capabilities.localMusic) &&
+    !nativeDownloadRoute
+  ) {
     window.$message?.warning(t("message.client_only_function"));
     next("/403");
     return;

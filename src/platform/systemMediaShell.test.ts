@@ -1,4 +1,7 @@
 import { readFileSync } from "node:fs";
+import { windowAppearanceSession } from "./windowAppearance";
+vi.mock("@/composables/shellProtocols", () => ({ createShellProtocolSession: () => undefined }));
+vi.mock("@/composables/shellTaskbar", () => ({ createShellTaskbarSession: () => undefined }));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Vue from "vue";
 import { createPinia, setActivePinia } from "pinia";
@@ -161,10 +164,7 @@ function mountNav() {
   const source = readFileSync(
     new URL("../components/Layout/Nav.vue", import.meta.url),
     "utf8",
-  ).replace(
-    '<script setup lang="ts">',
-    '<script setup lang="ts">\nimport { computed } from "vue";\nconst useRouter = () => ({});',
-  );
+  ).replace('<script setup lang="ts">', '<script setup lang="ts">\nconst useRouter = () => ({});');
   const { descriptor } = parse(source);
   const compiled = compileScript(descriptor, { id: "Nav.vue" });
   const code = ts.transpileModule(compiled.content, {
@@ -183,6 +183,7 @@ function mountNav() {
       useMobile: () => ({ isDesktop: Vue.ref(true), isSmallScreen: Vue.ref(false) }),
     },
     "@/composables/useDesktopLifecycle": { useDesktopLifecycle },
+    "@/platform/windowAppearance": { windowAppearanceSession },
     "@/components/Layout/Menu.vue": {},
     "@/components/Layout/Logo.vue": {},
   };

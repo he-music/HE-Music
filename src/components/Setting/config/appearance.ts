@@ -4,6 +4,8 @@ import { openFontManager, openThemeConfig } from "@/utils/modal";
 import { SettingConfig } from "@/types/settings";
 import { computed, ref } from "vue";
 import { t } from "@/i18n";
+import { platform } from "@/platform";
+import { windowAppearanceSession } from "@/platform/windowAppearance";
 
 export const useAppearanceSettings = (): SettingConfig => {
   const settingStore = useSettingStore();
@@ -11,8 +13,35 @@ export const useAppearanceSettings = (): SettingConfig => {
 
   // --- Window / Borderless Logic (from general.ts) ---
   const useBorderless = ref(true);
+  let active = false;
+  let activation = 0;
 
   const handleBorderlessChange = async (val: boolean) => {
+    if (platform.kind === "mygo") {
+      const session = windowAppearanceSession.value;
+      if (!session) return;
+      const generation = activation;
+      try {
+        const state = await session.save(val);
+        if (
+          !state ||
+          !active ||
+          generation !== activation ||
+          windowAppearanceSession.value !== session
+        )
+          return;
+        if (state.restartRequired) {
+          window.$message.warning(t("message.setting_saved_and_restart_required"));
+        } else {
+          window.$message.success(t("mygo.window_appearance.saved"));
+        }
+      } catch {
+        if (active && generation === activation && windowAppearanceSession.value === session) {
+          window.$message.error(t("mygo.window_appearance.save_failed"));
+        }
+      }
+      return;
+    }
     if (!isElectron) return;
     const windowConfig = await window.api.store.get("window");
     window.api.store.set("window", {
@@ -23,6 +52,20 @@ export const useAppearanceSettings = (): SettingConfig => {
   };
 
   const onActivate = async () => {
+    active = true;
+    const generation = ++activation;
+    if (platform.kind === "mygo") {
+      const session = windowAppearanceSession.value;
+      if (!session) return;
+      try {
+        await session.refresh();
+      } catch {
+        if (active && generation === activation && windowAppearanceSession.value === session) {
+          window.$message.error(t("mygo.window_appearance.load_failed"));
+        }
+      }
+      return;
+    }
     if (isElectron) {
       const windowConfig = await window.api.store.get("window");
       useBorderless.value = windowConfig?.useBorderless ?? true;
@@ -31,6 +74,10 @@ export const useAppearanceSettings = (): SettingConfig => {
 
   return {
     onActivate,
+    onDeactivate: () => {
+      active = false;
+      activation++;
+    },
     groups: [
       {
         title: t("setting.general.theme_setting"),
@@ -90,12 +137,29 @@ export const useAppearanceSettings = (): SettingConfig => {
             key: "useBorderless",
             label: t("setting.appearance.borderless_windows"),
             type: "switch",
-            show: isElectron,
-            description: t("setting.appearance.borderless_windows_tip"),
+            show: isElectron || Boolean(platform.windowAppearance),
+            description: computed(() =>
+              platform.kind === "mygo"
+                ? t(
+                    windowAppearanceSession.value?.state.value?.loadFailed
+                      ? "mygo.window_appearance.load_default"
+                      : "mygo.window_appearance.restart_tip",
+                  )
+                : t("setting.appearance.borderless_windows_tip"),
+            ),
+            disabled: computed(
+              () =>
+                platform.kind === "mygo" &&
+                (!windowAppearanceSession.value?.state.value ||
+                  windowAppearanceSession.value.saving.value),
+            ),
             value: computed({
-              get: () => useBorderless.value,
+              get: () =>
+                platform.kind === "mygo"
+                  ? (windowAppearanceSession.value?.state.value?.useBorderless ?? false)
+                  : useBorderless.value,
               set: (v) => {
-                useBorderless.value = v;
+                if (isElectron) useBorderless.value = v;
                 handleBorderlessChange(v);
               },
             }),
@@ -251,7 +315,6 @@ export const useAppearanceSettings = (): SettingConfig => {
             key: "showSpectrums",
             label: t("setting.play.show_spectrum"),
             type: "switch",
-            show: isElectron,
             description: t("setting.play.show_spectrum_tip"),
             value: computed({
               get: () => settingStore.showSpectrums,

@@ -200,6 +200,7 @@ onMounted(async () => {
   position: absolute;
   left: 0;
   -webkit-app-region: no-drag;
+  --app-region: no-drag;
   transition:
     left 0.3s,
     width 0.3s;
@@ -244,6 +245,7 @@ onMounted(async () => {
     background-color: #00000040;
     backdrop-filter: blur(20px);
     -webkit-app-region: no-drag;
+    --app-region: no-drag;
   }
 }
 </style>

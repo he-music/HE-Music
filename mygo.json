@@ -11,5 +11,6 @@
   "devUrl": "http://127.0.0.1:14667",
   "devCommand": "pnpm run dev:desktop:frontend",
   "buildCommand": "pnpm run build:desktop:frontend",
-  "frontendDist": "dist/desktop"
+  "frontendDist": "dist/desktop",
+  "urlSchemes": ["orpheus", "kuwo"]
 }

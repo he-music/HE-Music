@@ -36,7 +36,7 @@
         />
       </n-card>
     </div>
-    <div class="set-list" v-if="isElectron">
+    <div class="set-list" v-if="isElectron || isMygo">
       <n-h3 prefix="bar">{{ t("common.desktop_lyrics") }}</n-h3>
       <n-card class="set-item">
         <div class="label">
@@ -135,8 +135,12 @@
 </template>
 
 <script setup lang="ts">
+import { ref, reactive, onMounted, onBeforeUnmount } from "vue";
+import { platform } from "@/platform";
+import { createSystemFontsSession } from "@/platform/systemFonts";
+import { parseDesktopLyricOptions } from "@/platform/desktopLyricOptions";
 import { useSettingStore } from "@/stores";
-import { isElectron } from "@/utils/env";
+import { isElectron, isMygo } from "@/utils/env";
 import type { SelectOption } from "naive-ui";
 import { LyricFontConfig, lyricFontConfigs } from "@/utils/lyric/lyricFontConfig";
 import { LyricConfig } from "@/types/desktop-lyric";
@@ -153,6 +157,13 @@ type LyricKey = LyricFontConfig["keySetting"] | "globalFont" | "desktopLyric";
 
 // 系统字体选项
 const systemFonts = ref<SelectOption[]>([]);
+const nativeFontsProvider = platform.systemFonts;
+const nativeFonts = nativeFontsProvider ? createSystemFontsSession(nativeFontsProvider) : undefined;
+let fontManagerDisposed = false;
+onBeforeUnmount(() => {
+  fontManagerDisposed = true;
+  nativeFonts?.dispose();
+});
 
 // 桌面歌词配置
 const desktopLyricConfig = reactive<LyricConfig>({ ...defaultDesktopLyricConfig });
@@ -190,6 +201,30 @@ const handleFontChange = (key: LyricKey, value: string, option: any) => {
 
 // 获取全部系统字体
 const getAllSystemFonts = async () => {
+  if (isMygo) {
+    if (!nativeFonts) return;
+    await nativeFonts.load();
+    if (fontManagerDisposed || platform.systemFonts !== nativeFontsProvider) return;
+    if (nativeFonts.error.value) {
+      window.$message.error(t("mygo.fonts.load_failed"));
+      return;
+    }
+    systemFonts.value = nativeFonts.fonts.value.map((family) => {
+      const selection: FontStyleSelection = {
+        family,
+        weight: 400,
+        style: "normal",
+        postscriptName: family,
+      };
+      return {
+        label: family,
+        value: family,
+        style: { fontFamily: family, fontWeight: 400, fontStyle: "normal" },
+        fontStyleSelection: selection,
+      };
+    });
+    return;
+  }
   await getWebSystemFonts();
   if (systemFonts.value.length > 0) return;
   if (!isElectron) {
@@ -256,6 +291,16 @@ const getWebSystemFonts = async () => {
 };
 // 获取桌面歌词配置
 const getDesktopLyricConfig = async () => {
+  if (isMygo) {
+    const font = settingStore.desktopLyricOptions.font;
+    Object.assign(desktopLyricConfig.font, {
+      family: font.family,
+      weight: font.weight,
+      style: font.style,
+      postScriptName: font.family,
+    });
+    return;
+  }
   if (!isElectron) return;
   const config = await window.electron.ipcRenderer.invoke("request-desktop-lyric-option");
   if (config) Object.assign(desktopLyricConfig, config);
@@ -269,6 +314,25 @@ const getDesktopLyricConfig = async () => {
 
 // 保存桌面歌词配置
 const saveDesktopLyricConfig = () => {
+  if (isMygo) {
+    const options = parseDesktopLyricOptions({
+      ...settingStore.desktopLyricOptions,
+      font: {
+        ...settingStore.desktopLyricOptions.font,
+        family: desktopLyricConfig.font.family,
+        weight: desktopLyricConfig.font.weight,
+        postScriptName: desktopLyricConfig.font.postScriptName,
+        style: desktopLyricConfig.font.style,
+      },
+    });
+    if (!options) {
+      window.$message.error(t("message.desktop_lyrics_save_fail"));
+      return;
+    }
+    settingStore.desktopLyricOptions = options;
+    window.$message.success(t("message.desktop_lyrics_save_success"));
+    return;
+  }
   try {
     if (!isElectron) return;
     window.electron.ipcRenderer.send(

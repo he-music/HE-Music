@@ -20,4 +20,5 @@ export interface PlatformFiles {
   startDownload?: typeof NativeFiles.startDownload;
   readDownloadState?: typeof NativeFiles.readDownloadState;
   cancelDownload?: typeof NativeFiles.cancelDownload;
+  forgetDownload?: typeof NativeFiles.forgetDownload;
 }

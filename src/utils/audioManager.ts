@@ -5,10 +5,15 @@
  */
 
 import { isElectron } from "@/utils/env";
+import { shallowRef } from "vue";
+import { AudioProcessingDriver } from "./audioCapability";
+
+/** Only source admission changes update this ref; playback clocks stay inside consumers. */
+export const audioProcessingAvailable = shallowRef(false);
 
 /** 扩充 AudioContext 接口以支持 setSinkId (实验性 API) */
 interface IExtendedAudioContext extends AudioContext {
-  setSinkId(deviceId: string): Promise<void>;
+  setSinkId?(deviceId: string): Promise<void>;
 }
 
 /**
@@ -27,7 +32,8 @@ export type AudioEventType =
   | "loadstart"
   | "volumechange"
   | "seeking"
-  | "seeked";
+  | "seeked"
+  | "processingchange";
 
 /**
  * 音频管理器类
@@ -36,7 +42,15 @@ class AudioManager {
   /** 核心上下文 */
   private audioCtx: IExtendedAudioContext | null = null;
   /** 音频元素 */
-  private audioElement: HTMLAudioElement | null = null;
+  private legacyElement: HTMLAudioElement | null = null;
+  private driver: AudioProcessingDriver | undefined;
+  private desiredGains = Array<number>(10).fill(0);
+  private desiredSinkId = "default";
+  private readonly sinkQueues = new WeakMap<object, Promise<void>>();
+  private readonly appliedSinks = new WeakMap<object, string>();
+  private get audioElement(): HTMLAudioElement | null {
+    return this.driver?.element ?? this.legacyElement;
+  }
 
   /** 音频源节点 */
   private sourceNode: MediaElementAudioSourceNode | null = null;
@@ -71,13 +85,35 @@ class AudioManager {
    * 构造函数
    */
   constructor() {
-    this.audioElement = new Audio();
     if (isElectron) {
-      this.audioElement.crossOrigin = "anonymous";
+      this.legacyElement = new Audio();
+      this.legacyElement.crossOrigin = "anonymous";
+    } else {
+      this.driver = new AudioProcessingDriver({
+        createElement: () => new Audio(),
+        frequencies: this.eqFrequencies,
+        volume: this.volume,
+        prepareOutput: (element, context) => this.applyOutputDevice(element, context),
+      });
+      this.driver.on("processingchange", () => this.syncProcessingGraph());
     }
     this.bindInternalEvents();
   }
 
+  private syncProcessingGraph() {
+    const driver = this.driver;
+    if (!driver) return;
+    this.audioCtx = driver.context ?? null;
+    this.sourceNode = null;
+    this.gainNode = driver.gain ?? null;
+    this.analyserNode = driver.analyser ?? null;
+    this.filters = [...driver.filters];
+    this.filters.forEach((filter, index) => {
+      filter.gain.value = this.desiredGains[index];
+    });
+    audioProcessingAvailable.value = driver.processingAvailable;
+    void this.applyOutputDevice(driver.element, driver.context);
+  }
   /**
    * 初始化 AudioContext 和音频图谱
    * 可以在用户交互时手动调用，或者在播放时自动调用
@@ -122,6 +158,10 @@ class AudioManager {
       }
 
       this.isInitialized = true;
+      audioProcessingAvailable.value = Boolean(this.analyserNode);
+      this.filters.forEach((filter, index) => {
+        filter.gain.value = this.desiredGains[index];
+      });
     } catch {
       console.error("AudioManager: 初始化 AudioContext 失败");
     }
@@ -137,6 +177,39 @@ class AudioManager {
     options: { fadeIn?: boolean; fadeDuration?: number; autoPlay?: boolean } = {},
   ) {
     this.clearFadeOutTimer();
+    if (this.driver) {
+      this.clearFadeOutTimer();
+      const driver = this.driver;
+      if (url) {
+        const loading = driver.load(url);
+        const generation = driver.loadGeneration;
+        const intent = driver.playIntentGeneration;
+        await loading;
+        if (!driver.isCurrent(generation) || driver.playIntentGeneration !== intent) return;
+      }
+      this.syncProcessingGraph();
+      if (!(options.autoPlay ?? true)) return;
+      if (this.gainNode && this.audioCtx) {
+        const now = this.audioCtx.currentTime;
+        this.gainNode.gain.cancelScheduledValues(now);
+        if (options.fadeIn) {
+          this.gainNode.gain.setValueAtTime(0, now);
+          this.gainNode.gain.linearRampToValueAtTime(
+            this.volume,
+            now + (options.fadeDuration || 1),
+          );
+        } else {
+          this.gainNode.gain.setValueAtTime(this.volume, now);
+        }
+      }
+      try {
+        await driver.play();
+      } catch (error) {
+        console.error("AudioManager: 播放失败");
+        throw error;
+      }
+      return;
+    }
     if (!this.isInitialized) this.init();
 
     // 如果上下文被挂起，则恢复
@@ -181,6 +254,13 @@ class AudioManager {
    */
   public pause(options: { fadeOut?: boolean; fadeDuration?: number } = {}) {
     this.clearFadeOutTimer();
+    const element = this.audioElement;
+    const sourceGeneration = this.driver?.loadGeneration;
+    if (this.driver && (!options.fadeOut || element?.paused)) {
+      this.driver.pause();
+      return;
+    }
+    this.driver?.cancelPendingPlay();
     if (options.fadeOut && this.gainNode && this.audioCtx) {
       const currentTime = this.audioCtx.currentTime;
       // 从当前值线性降低到 0
@@ -190,13 +270,18 @@ class AudioManager {
       // 等待渐出完成后暂停
       this.fadeOutTimer = setTimeout(
         () => {
-          this.audioElement?.pause();
+          if (this.driver) {
+            if (sourceGeneration === this.driver.loadGeneration) this.driver.pause();
+          } else {
+            element?.pause();
+          }
           this.fadeOutTimer = null;
         },
         (options.fadeDuration || 1) * 1000,
       );
     } else {
-      this.audioElement?.pause();
+      if (this.driver) this.driver.pause();
+      else this.audioElement?.pause();
     }
   }
 
@@ -223,6 +308,12 @@ class AudioManager {
   }
   /** Drop a revoked local source, including bytes already buffered by the element. */
   public clearSource() {
+    this.clearFadeOutTimer();
+    if (this.driver) {
+      this.driver.clearSource();
+      this.syncProcessingGraph();
+      return;
+    }
     this.pause();
     this.audioElement?.removeAttribute("src");
     this.audioElement?.load();
@@ -233,6 +324,10 @@ class AudioManager {
    * @param time 时间（秒）
    */
   public seek(time: number) {
+    if (this.driver) {
+      this.driver.seek(time);
+      return;
+    }
     if (this.audioElement) {
       this.audioElement.currentTime = time;
     }
@@ -244,6 +339,10 @@ class AudioManager {
    */
   public setVolume(value: number) {
     this.volume = Math.max(0, Math.min(1, value));
+    if (this.driver) {
+      this.driver.setVolume(this.volume);
+      return;
+    }
     if (this.gainNode && this.audioCtx) {
       this.gainNode.gain.cancelScheduledValues(this.audioCtx.currentTime);
       this.gainNode.gain.setValueAtTime(this.volume, this.audioCtx.currentTime);
@@ -257,6 +356,10 @@ class AudioManager {
    * @param value 速率 (0.5 - 2.0)
    */
   public setRate(value: number) {
+    if (this.driver) {
+      this.driver.setRate(value);
+      return;
+    }
     if (this.audioElement) {
       this.audioElement.defaultPlaybackRate = value;
       this.audioElement.playbackRate = value;
@@ -319,6 +422,7 @@ class AudioManager {
 
     const events: AudioEventType[] = [
       "play",
+      "playing",
       "pause",
       "ended",
       "timeupdate",
@@ -330,27 +434,26 @@ class AudioManager {
       "volumechange",
       "seeking",
       "seeked",
+      "processingchange",
     ];
-
     events.forEach((event) => {
-      this.audioElement!.addEventListener(event, (e) => {
-        // 传递错误码
-        if (event === "error" && this.audioElement) {
-          const errCode = this.getErrorCode();
-          const customEvent = new CustomEvent("error", {
-            detail: { originalEvent: e, errorCode: errCode },
-          });
-          const listeners = this.eventListeners.get(event);
-          if (listeners) {
-            listeners.forEach((cb) => cb(customEvent));
-          }
-        } else {
-          const listeners = this.eventListeners.get(event);
-          if (listeners) {
-            listeners.forEach((cb) => cb(e));
-          }
+      const forward = (e: Event) => {
+        const forwarded =
+          event === "error"
+            ? new CustomEvent("error", {
+                detail: { originalEvent: e, errorCode: this.getErrorCode() },
+              })
+            : e;
+        const driver = this.driver;
+        const generation = driver?.loadGeneration;
+        const element = this.audioElement;
+        for (const callback of [...(this.eventListeners.get(event) ?? [])]) {
+          if (driver && (driver.loadGeneration !== generation || driver.element !== element)) break;
+          callback(forwarded);
         }
-      });
+      };
+      if (this.driver) this.driver.on(event, forward);
+      else this.audioElement?.addEventListener(event, forward);
     });
   }
 
@@ -370,20 +473,37 @@ class AudioManager {
    * @param deviceId 设备 ID
    */
   public async setSinkId(deviceId: string) {
-    if (deviceId === "default") return;
-    try {
-      // 优先在 Context 上设置
-      if (this.isInitialized && this.audioCtx && typeof this.audioCtx.setSinkId === "function") {
-        await this.audioCtx.setSinkId(deviceId);
-        return;
-      }
-      // 回退到在 HTMLAudioElement 上设置
-      if (this.audioElement && typeof this.audioElement.setSinkId === "function") {
-        await this.audioElement.setSinkId(deviceId);
-      }
-    } catch {
-      console.error("AudioManager: 设置输出设备失败");
-    }
+    this.desiredSinkId = deviceId;
+    await this.applyOutputDevice(this.audioElement, this.audioCtx);
+  }
+
+  private async applyOutputDevice(
+    element: HTMLAudioElement | null,
+    context: AudioContext | null | undefined,
+  ) {
+    // Web Audio owns the physical output when a graph exists; an element sink cannot replace it.
+    const target: IExtendedAudioContext | HTMLAudioElement | null = context ?? element;
+    if (!target || typeof target.setSinkId !== "function") return;
+    const desired = this.desiredSinkId;
+    const previous = this.sinkQueues.get(target) ?? Promise.resolve();
+    const operation = previous
+      .then(async () => {
+        const current =
+          this.driver?.context ?? this.driver?.element ?? this.audioCtx ?? this.audioElement;
+        if (
+          target !== current ||
+          desired !== this.desiredSinkId ||
+          this.appliedSinks.get(target) === desired
+        )
+          return;
+        await target.setSinkId?.(desired);
+        this.appliedSinks.set(target, desired);
+      })
+      .catch(() => {
+        console.error("AudioManager: 设置输出设备失败");
+      });
+    this.sinkQueues.set(target, operation);
+    await operation;
   }
 
   /**
@@ -392,6 +512,9 @@ class AudioManager {
    * @param value 增益值 (-40 to 40)
    */
   public setFilterGain(index: number, value: number) {
+    if (!Number.isInteger(index) || index < 0 || index >= 10 || !Number.isFinite(value)) return;
+    value = Math.max(-40, Math.min(40, value));
+    this.desiredGains[index] = value;
     if (this.filters[index]) {
       this.filters[index].gain.value = value;
     }
@@ -402,7 +525,7 @@ class AudioManager {
    * @returns 各频段增益值数组
    */
   public getFilterGains(): number[] {
-    return this.filters.map((f) => f.gain.value);
+    return [...this.desiredGains];
   }
 
   /**
@@ -434,7 +557,7 @@ class AudioManager {
    * @returns 当前播放地址
    */
   public get src() {
-    return this.audioElement?.src || "";
+    return this.driver?.source ?? this.audioElement?.src ?? "";
   }
   /**
    * 获取音频错误码

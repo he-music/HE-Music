@@ -3,6 +3,11 @@ import type { PlatformSystemMedia } from "./systemMedia";
 import type { PlatformFiles } from "./files";
 import type { PlatformDesktopLyrics } from "./desktopLyrics";
 import type { PlatformUpdates } from "./updates";
+import type { PlatformSystemFonts } from "./systemFonts";
+import type { PlatformProtocols } from "./protocolSession";
+import type { TaskbarProvider } from "./taskbarSession";
+import type { PlatformNetworkProxy } from "./networkProxy";
+import type { PlatformWindowAppearance } from "./windowAppearance";
 import type {
   CloseRequested,
   CloseResolution,
@@ -56,6 +61,11 @@ export interface PlatformAdapter {
   readonly files?: PlatformFiles;
   readonly desktopLyrics?: PlatformDesktopLyrics;
   readonly updates?: PlatformUpdates;
+  readonly systemFonts?: PlatformSystemFonts;
+  readonly protocols?: PlatformProtocols;
+  readonly taskbar?: TaskbarProvider;
+  readonly networkProxy?: PlatformNetworkProxy;
+  readonly windowAppearance?: PlatformWindowAppearance;
 }
 
 export function systemFromUserAgent(userAgent: string): SystemPlatform {

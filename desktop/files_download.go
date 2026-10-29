@@ -64,12 +64,13 @@ type downloadJob struct {
 	stopOwner   func() bool
 }
 type downloadCoordinator struct {
-	mu     sync.Mutex
-	owner  context.Context
-	epoch  uint64
-	active int
-	jobs   map[string]*downloadJob
-	client *http.Client
+	mu        sync.Mutex
+	owner     context.Context
+	epoch     uint64
+	active    int
+	jobs      map[string]*downloadJob
+	forgotten map[string]struct{}
+	client    *http.Client
 }
 
 var downloadCoordinators = struct {
@@ -84,7 +85,7 @@ func downloadCoordinatorFor(s *nativeFilesState) *downloadCoordinator {
 	if c == nil {
 		// No cookie jar, credentials, application headers, proxy environment or logs.
 		transport := http.DefaultTransport.(*http.Transport).Clone()
-		transport.Proxy = nil
+		configureDownloadProxyTransport(transport)
 		c = &downloadCoordinator{jobs: make(map[string]*downloadJob), client: &http.Client{
 			Transport: transport, Timeout: downloadTimeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -157,7 +158,11 @@ func (s *nativeFilesState) startDownload(ctx context.Context, epoch uint64, req 
 				c.retireLocked(old)
 				delete(c.jobs, id)
 			}
+			c.forgotten = nil
 			c.owner, c.epoch = ctx, epoch
+		}
+		if _, forgotten := c.forgotten[req.OperationID]; forgotten {
+			return errDownload
 		}
 		if old := c.jobs[req.OperationID]; old != nil {
 			if old.retired || old.fingerprint != fingerprint {

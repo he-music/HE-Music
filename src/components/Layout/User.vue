@@ -177,6 +177,7 @@ onBeforeMount(() => {
   transition: background-color 0.3s;
   cursor: pointer;
   -webkit-app-region: no-drag;
+  --app-region: no-drag;
   .avatar {
     display: flex;
     align-items: center;

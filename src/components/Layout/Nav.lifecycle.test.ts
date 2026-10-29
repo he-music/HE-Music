@@ -6,6 +6,7 @@ import ts from "typescript";
 import { DesktopLyricsSession } from "@/platform/desktopLyricsSession";
 import type { LyricsWindowState, PlatformDesktopLyrics } from "@/platform/desktopLyrics";
 import type { TrayAction, TrayRequest, TrayPlaybackState } from "@/platform/mygo.bindings";
+import { WindowAppearanceSession, windowAppearanceSession } from "@/platform/windowAppearance";
 
 type ShellSessionStub = { start: () => Promise<void>; dispose: () => Promise<void> };
 type ArtworkSessionStub = { dispose: () => void };
@@ -43,6 +44,8 @@ vi.mock("@/composables/shellUpdates", () => ({ createShellUpdatesSession: () => 
 vi.mock("@/composables/shellLocalArtwork", () => ({
   createShellLocalArtworkSession: () => mocks.artwork,
 }));
+vi.mock("@/composables/shellProtocols", () => ({ createShellProtocolSession: () => undefined }));
+vi.mock("@/composables/shellTaskbar", () => ({ createShellTaskbarSession: () => undefined }));
 import { useDesktopLifecycle } from "@/composables/useDesktopLifecycle";
 
 const flush = async () => {
@@ -60,6 +63,9 @@ afterEach(async () => {
   mocks.updates = undefined;
   mocks.artwork = undefined;
   vi.unstubAllGlobals();
+  windowAppearanceSession.value?.dispose();
+  mocks.platform.capabilities.windowControls = false;
+  Reflect.deleteProperty(mocks.platform, "window");
 });
 
 function mountNav(options: { ready?: Promise<{ trayAvailable: boolean; epoch: number }> } = {}) {
@@ -94,7 +100,7 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean; epoch: nu
   vi.stubGlobal("window", { $message: { error: vi.fn() } });
   const source = readFileSync(new URL("./Nav.vue", import.meta.url), "utf8").replace(
     '<script setup lang="ts">',
-    '<script setup lang="ts">\nimport { computed } from "vue";\nconst useRouter = () => ({});',
+    '<script setup lang="ts">\nconst useRouter = () => ({});',
   );
   const { descriptor } = parse(source);
   const compiled = compileScript(descriptor, { id: "Nav.vue" });
@@ -114,6 +120,7 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean; epoch: nu
       useMobile: () => ({ isDesktop: Vue.ref(true), isSmallScreen: Vue.ref(false) }),
     },
     "@/composables/useDesktopLifecycle": { useDesktopLifecycle },
+    "@/platform/windowAppearance": { windowAppearanceSession },
     "@/components/Layout/Menu.vue": {},
     "@/components/Layout/Logo.vue": {},
   };
@@ -156,6 +163,9 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean; epoch: nu
     closeHandlers,
     actions,
     unmount,
+    requestClose: () => (state.tryClose as () => void)(),
+    nativeBorderless: () => Vue.unref(state.nativeBorderless),
+    windowControls: () => Vue.unref(state.showWindowControls),
     close(id = 1) {
       closeHandlers.forEach((handler) => handler({ requestId: id }));
     },
@@ -178,6 +188,57 @@ function mountNav(options: { ready?: Promise<{ trayAvailable: boolean; epoch: nu
 }
 
 describe("Nav native lifecycle setup", () => {
+  it.each([true, false])(
+    "routes the custom mygo close button through native lifecycle when showCloseAppTip=%s",
+    async (showCloseAppTip) => {
+      const closeWindow = vi.fn(async () => {});
+      Reflect.set(mocks.platform, "window", {
+        close: closeWindow,
+        onMaximized: () => () => {},
+        isMaximized: async () => false,
+      });
+      const nav = mountNav();
+      await flush();
+      mocks.setting.showCloseAppTip = showCloseAppTip;
+      nav.requestClose();
+      expect(closeWindow).toHaveBeenCalledOnce();
+      expect(nav.modal().value).toBe(false);
+      nav.close(9);
+      await flush();
+      expect(nav.modal().value).toBe(true);
+      nav.choose("exit");
+      await flush();
+      expect(nav.service.resolveClose).toHaveBeenCalledExactlyOnceWith(9, "exit");
+    },
+  );
+  it("keeps controls available if appearance loading fails, and changes them only with applied frame state", async () => {
+    mocks.platform.capabilities.windowControls = true;
+    const nav = mountNav();
+    expect(nav.nativeBorderless()).toBe(true);
+    expect(nav.windowControls()).toBe(true);
+    const service = {
+      current: vi.fn(async () => ({
+        useBorderless: true,
+        appliedUseBorderless: false,
+        restartRequired: true,
+        loadFailed: false,
+      })),
+      save: vi.fn(async () => ({
+        useBorderless: true,
+        appliedUseBorderless: false,
+        restartRequired: true,
+        loadFailed: false,
+      })),
+    };
+    const appearance = new WindowAppearanceSession(service);
+    await appearance.start();
+    expect(nav.nativeBorderless()).toBe(false);
+    expect(nav.windowControls()).toBe(false);
+    await appearance.save(true);
+    expect(nav.windowControls()).toBe(false);
+    appearance.dispose();
+    expect(nav.windowControls()).toBe(true);
+  });
   it("releases local artwork synchronously before main lifecycle teardown", async () => {
     const artwork = { dispose: vi.fn() };
     mocks.artwork = artwork;

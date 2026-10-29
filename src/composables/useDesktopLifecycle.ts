@@ -12,6 +12,9 @@ import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 import { createShellUpdatesSession } from "./shellUpdates";
 import { createShellTraySession } from "./shellTray";
 import { createShellLocalArtworkSession } from "./shellLocalArtwork";
+import { createShellProtocolSession } from "./shellProtocols";
+import { createShellTaskbarSession } from "./shellTaskbar";
+import { WindowAppearanceSession } from "@/platform/windowAppearance";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -27,6 +30,12 @@ export function useDesktopLifecycle(ui: {
     : undefined;
   const lyrics = lifecycle ? createShellDesktopLyricsSession() : undefined;
   const artwork = lifecycle ? createShellLocalArtworkSession() : undefined;
+  const protocols = lifecycle ? createShellProtocolSession(platform.protocols) : undefined;
+  const taskbar = lifecycle ? createShellTaskbarSession(platform.taskbar) : undefined;
+  const appearance =
+    lifecycle && platform.windowAppearance
+      ? new WindowAppearanceSession(platform.windowAppearance)
+      : undefined;
   if (!lifecycle) {
     let disposed = false;
     onMounted(() => {
@@ -143,6 +152,9 @@ export function useDesktopLifecycle(ui: {
         const nativeStatus = await lifecycle.ready(config());
         if (disposed) return;
         await tray.start(nativeStatus.epoch);
+        void protocols?.start().catch(() => console.error("应用协议会话初始化失败"));
+        void taskbar?.start().catch(() => console.error("任务栏会话初始化失败"));
+        void appearance?.start().catch(() => console.error("窗口外观会话初始化失败"));
         void updates?.start().catch(() => console.error("应用更新会话初始化或检查失败"));
         void files?.start();
         await shortcuts?.start();
@@ -159,6 +171,9 @@ export function useDesktopLifecycle(ui: {
         reportFailure();
         tray.dispose();
         artwork?.dispose();
+        appearance?.dispose();
+        await protocols?.dispose();
+        await taskbar?.dispose();
         await updates?.dispose();
         await lyrics?.dispose();
         await files?.dispose();
@@ -177,6 +192,9 @@ export function useDesktopLifecycle(ui: {
   onBeforeUnmount(() => {
     disposed = true;
     artwork?.dispose();
+    appearance?.dispose();
+    const protocolsCleanup = protocols?.dispose();
+    const taskbarCleanup = taskbar?.dispose();
     const updatesCleanup = updates?.dispose();
     const lyricsCleanup = lyrics?.dispose();
     const shortcutCleanup = shortcuts?.dispose();
@@ -187,6 +205,8 @@ export function useDesktopLifecycle(ui: {
     ui.showCloseModal.value = false;
     stops.splice(0).forEach((stop) => stop());
     shellTransition = shellTransition.then(async () => {
+      await protocolsCleanup;
+      await taskbarCleanup;
       await updatesCleanup;
       await lyricsCleanup;
       await shortcutCleanup;

@@ -4,10 +4,20 @@ import { SettingConfig } from "@/types/settings";
 import { computed, ref } from "vue";
 import { debounce } from "lodash-es";
 import { t } from "@/i18n";
+import { platform } from "@/platform";
+import { useMygoNetworkProxySettings } from "./networkProxy";
 
 export const useNetworkSettings = (): SettingConfig => {
   const settingStore = useSettingStore();
   const testProxyLoading = ref<boolean>(false);
+  if (platform.kind === "mygo" && platform.networkProxy) {
+    const proxy = useMygoNetworkProxySettings(platform.networkProxy, settingStore);
+    return {
+      groups: [proxy.group],
+      onActivate: proxy.onActivate,
+      onDeactivate: proxy.onDeactivate,
+    };
+  }
 
   // --- Network Proxy Logic (from other.ts) ---
   const proxyConfig = computed(() => ({
