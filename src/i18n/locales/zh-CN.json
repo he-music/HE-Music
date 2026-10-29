@@ -1085,6 +1085,9 @@
     "minutes_ago": "{count} 分钟前"
   },
   "local_metadata": {
+    "match_choose": "请选择匹配的歌曲，结果将填入下方供你编辑。",
+    "match_cancel": "取消匹配",
+    "match_review": "已填入匹配信息，请检查并编辑，点击保存后才会写入文件。",
     "title": "标题",
     "artists": "艺术家",
     "album": "专辑",
@@ -1129,6 +1132,18 @@
     "unknown_size": "未知大小",
     "bytes": "字节",
     "possibly_saved": "目标文件可能已保存。请检查此文件名；不会自动覆盖重试。",
+    "residual_file": "待检查的残留文件",
+    "warning": {
+      "durability_uncertain": "文件已保存，但无法确认写入已持久化。请先检查文件。",
+      "partial_committed": "音频已保存，部分封面或歌词文件未能保存。",
+      "sync_failed": "文件已保存，但同步到磁盘时发生错误。",
+      "cleanup_failed": "临时文件清理失败，请检查下载目录。",
+      "registration_failed": "文件已保存，但尚未加入本地音乐库。请重新扫描。",
+      "conflict": "目录中出现同名文件，请检查后重新扫描。",
+      "cancelled": "下载请求已取消，请检查任务最终的保存状态。",
+      "timeout": "下载请求已超时，请检查任务最终的保存状态。",
+      "revoked": "目录授权已变化，请重新授权并检查文件。"
+    },
     "refresh_pending": "正在刷新本地音乐库",
     "refresh_complete": "本地音乐库已刷新",
     "refresh_failed": "文件已落盘，但音乐库刷新失败，请稍后重新扫描。",

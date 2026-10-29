@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo"
 	"github.com/he-music/HE-Music/desktop/metadata"
+	"github.com/he-music/HE-Music/desktop/metadatadigest"
 )
 
 const metadataPrivatePrefix = ".hemusic-metadata-"
@@ -31,13 +32,15 @@ var metadataAudioDrain func(context.Context, *NativeFiles, os.FileInfo) (release
 // MetadataResult never transports OS errors or machine paths. SHA256 is the
 // complete source baseline required by SaveMetadata, not a stat fingerprint.
 type MetadataResult struct {
-	Code          string         `json:"code"`
-	Ref           *LocalFileRef  `json:"ref,omitempty"`
-	Info          *metadata.Info `json:"info,omitempty"`
-	SHA256        string         `json:"sha256,omitempty"`
-	ResidualNames []string       `json:"residualNames,omitempty"`
-	RecoveryName  string         `json:"recoveryName,omitempty"`
-	Committed     bool           `json:"committed"`
+	Code   string         `json:"code"`
+	Ref    *LocalFileRef  `json:"ref,omitempty"`
+	Info   *metadata.Info `json:"info,omitempty"`
+	SHA256 string         `json:"sha256,omitempty"`
+	// MD5 is only the legacy online-match key, never an authorization baseline.
+	MD5           string   `json:"md5,omitempty"`
+	ResidualNames []string `json:"residualNames,omitempty"`
+	RecoveryName  string   `json:"recoveryName,omitempty"`
+	Committed     bool     `json:"committed"`
 }
 
 type MetadataSaveRequest struct {
@@ -140,11 +143,11 @@ func metadataCode(err error) string {
 		return "cancelled"
 	case errors.Is(err, errFilesOwner), errors.Is(err, errFilesLease), errors.Is(err, errFilesToken):
 		return "revoked"
-	case errors.Is(err, errMetadataLimit):
+	case errors.Is(err, errMetadataLimit), errors.Is(err, metadatadigest.ErrEmpty):
 		return "limit"
 	case errors.Is(err, errMetadataOperation):
 		return "invalid_operation"
-	case errors.Is(err, errFilesChanged):
+	case errors.Is(err, errFilesChanged), errors.Is(err, metadatadigest.ErrChanged):
 		return "conflict"
 	case errors.Is(err, metadata.ErrUnsupportedContainer), errors.Is(err, metadata.ErrUnsupportedPayload):
 		return "unsupported"
@@ -219,7 +222,7 @@ func (f *NativeFiles) ReadMetadata(ctx context.Context, epoch uint64, ref LocalF
 		return MetadataResult{Code: metadataCode(err)}
 	}
 	defer source.Close()
-	hash, err := metadataHash(op, source)
+	digests, err := metadatadigest.Source(op, source)
 	if err != nil {
 		if errors.Is(err, errMetadataLimit) {
 			return MetadataResult{Code: "limit"}
@@ -241,7 +244,7 @@ func (f *NativeFiles) ReadMetadata(ctx context.Context, epoch uint64, ref LocalF
 	if err != nil {
 		return MetadataResult{Code: metadataCode(err)}
 	}
-	if final != hash {
+	if final != digests.SHA256 {
 		return MetadataResult{Code: "conflict"}
 	}
 	if err = f.state.checkLease(lease); err != nil {
@@ -250,7 +253,7 @@ func (f *NativeFiles) ReadMetadata(ctx context.Context, epoch uint64, ref LocalF
 	if err = op.Err(); err != nil {
 		return MetadataResult{Code: metadataCode(err)}
 	}
-	return MetadataResult{Code: "ok", Ref: &ref, Info: &parsed, SHA256: hash}
+	return MetadataResult{Code: "ok", Ref: &ref, Info: &parsed, SHA256: digests.SHA256, MD5: digests.MD5}
 }
 
 // OperationID is a caller-generated 32-byte hex nonce. Reusing it never writes

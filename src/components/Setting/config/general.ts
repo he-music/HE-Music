@@ -18,6 +18,10 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
 
   // 重置设置
   const resetSetting = () => {
+    if (platform.kind === "mygo") {
+      if (actions.disabled.value) return;
+      return actions.preferencesReset.request("settings");
+    }
     window.$dialog.warning({
       title: t("common.warning"),
       content: t("message.reset_setting_confirm"),
@@ -34,6 +38,10 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
 
   // 清除全部数据
   const clearAllData = () => {
+    if (platform.kind === "mygo") {
+      if (actions.disabled.value) return;
+      return actions.preferencesReset.request("all");
+    }
     window.$dialog.warning({
       title: t("common.warning"),
       content: t("message.clear_all_data_confirm"),
@@ -196,6 +204,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
             description: t("setting.other.reset_setting_tip"),
             buttonLabel: t("setting.other.reset_setting_btn"),
             action: resetSetting,
+            disabled: platform.kind === "mygo" ? actions.resetDisabled : undefined,
             componentProps: { type: "warning" },
           },
           {
@@ -205,6 +214,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
             description: t("setting.other.clear_all_data_tip"),
             buttonLabel: t("setting.other.clear_all_data_btn"),
             action: clearAllData,
+            disabled: platform.kind === "mygo" ? actions.resetDisabled : undefined,
             componentProps: { type: "error" },
           },
         ],

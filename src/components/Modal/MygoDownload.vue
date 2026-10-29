@@ -1,6 +1,5 @@
 <template>
   <div class="mygo-download">
-    <p>{{ t("local_download.notice") }}</p>
     <p v-if="session.persistenceError.value" role="alert">
       {{ t(session.persistenceError.value) }}
     </p>
@@ -19,6 +18,12 @@
       <li v-for="task in tasks" :key="task.id">
         <span>{{ task.label }} — {{ task.filename }}</span>
         <p role="status">{{ t(`local_download.phase_${task.phase}`) }}</p>
+        <p v-if="task.warning" role="alert">
+          {{ t(`local_download.warning.${task.warning}`) }}
+        </p>
+        <p v-if="task.residualName">
+          {{ t("local_download.residual_file") }}：{{ task.residualName }}
+        </p>
         <p>
           {{ task.received }} / {{ task.total || t("local_download.unknown_size") }}
           {{ t("local_download.bytes")
@@ -55,6 +60,12 @@
 
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, watch } from "vue";
+import { useSettingStore } from "@/stores";
+import {
+  createLocalDownloadPlan,
+  defaultGrantIndex,
+  normalizePortableFilename,
+} from "@/platform/localDownloadOptions";
 import { validLocalDownloadFormat } from "@/platform/localDownloadPersistence";
 import { useI18n } from "vue-i18n";
 import type { SongInfo } from "@/types/main.hemusic";
@@ -75,6 +86,7 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: [] }>();
 const { t } = useI18n();
+const settingStore = useSettingStore();
 const directory = ref(0);
 const quality = ref("");
 const filename = ref("");
@@ -96,14 +108,23 @@ const qualityOptions = computed(() =>
 const directoryOptions = computed(() =>
   props.grants.map((grant, index) => ({ label: grant.displayPath, value: index })),
 );
+const selectDefaultDirectory = () => {
+  const index = defaultGrantIndex(props.grants, settingStore.downloadPath);
+  directory.value = props.grants.length ? index : 0;
+};
 const tasks = computed(() => props.session.tasks.value);
 const retryTask = computed(() => tasks.value.find((task) => task.id === retry.value));
 const songSource = computed(() => localDownloadSource(props.song));
 const selected = computed(() => supported.value.find((link) => link.name === quality.value));
+const plan = computed(() => createLocalDownloadPlan(props.song, settingStore));
 const canStart = computed(
   () =>
     !!props.grants[directory.value] && !!selected.value && validDownloadFilename(filename.value),
 );
+watch(() => [props.grants, settingStore.downloadPath], selectDefaultDirectory, {
+  immediate: true,
+  deep: true,
+});
 watch(
   () => props.song,
   () => {
@@ -116,12 +137,10 @@ watch(
 watch(
   selected,
   (link) => {
-    filename.value = `${
-      props.song.name
-        .replace(/[\\/:<>"|?*\p{Cc}]/gu, "_")
-        .replace(/^\.+/, "_")
-        .trim() || "audio"
-    }.${link?.format.toLowerCase() ?? "mp3"}`;
+    filename.value = normalizePortableFilename(
+      plan.value.filenameStem,
+      link?.format.toLowerCase() ?? "mp3",
+    );
   },
   { immediate: true },
 );
@@ -133,6 +152,8 @@ watch(
     props.grants[directory.value]?.epoch,
     props.session,
     props.resolveURL,
+    settingStore.downloadPath,
+    plan.value,
     songSource.value,
   ],
   () => {
@@ -158,12 +179,18 @@ async function submit() {
   if (!grant || !link) return;
   const name = filename.value;
   const resolveURL = props.resolveURL;
+  const capturedPlan = plan.value;
   const label = source.name;
   const version = revision;
   busy.value = true;
   failure.value = "";
   try {
-    const result = await resolveURL(link.name, source);
+    const result = await resolveURL(
+      link.name,
+      source,
+      capturedPlan.options,
+      capturedPlan.resolveOptions,
+    );
     if (
       closed ||
       revision !== version ||
@@ -191,6 +218,10 @@ async function submit() {
       source,
       resolveURL,
       url: result.url,
+      options: result.metadata
+        ? { ...capturedPlan.options, metadata: result.metadata }
+        : capturedPlan.options,
+      resolveOptions: capturedPlan.resolveOptions,
     });
     if (!id) {
       if (!closed) failure.value = "start_rejected";

@@ -1,9 +1,25 @@
-import { platform } from "@/platform";
+import { isMyGo } from "mygo-runtime";
+import {
+  recoverPreferencesResetBeforeMount,
+  PreferencesResetRecoveryError,
+  showPreferencesResetRecoveryFailure,
+} from "@/platform/preferencesResetStartup";
 import { bootstrapWindow } from "./bootstrap/window";
 import { isDesktopLyricsWindow } from "./bootstrap/windowRole";
 import { initializeGateway } from "@/platform/gateway";
 
 async function start(): Promise<void> {
+  if (isMyGo() && !isDesktopLyricsWindow("mygo", location.hash)) {
+    const { DesktopPlatform } = await import("@/platform/mygo.bindings");
+    await recoverPreferencesResetBeforeMount(
+      {
+        pending: () => DesktopPlatform.pendingPreferencesReset(),
+        acknowledge: (id) => DesktopPlatform.acknowledgePreferencesReset(id),
+      },
+      { local: localStorage, session: sessionStorage },
+    );
+  }
+  const { platform } = await import("@/platform");
   if (platform.kind === "mygo" && !isDesktopLyricsWindow(platform.kind, location.hash)) {
     if (!window.__HE_MUSIC_GATEWAY_ORIGIN__) throw new Error("本机网络网关未启动");
     await initializeGateway(
@@ -17,4 +33,5 @@ async function start(): Promise<void> {
 
 void start().catch((error: unknown) => {
   console.error("应用初始化失败", error);
+  if (error instanceof PreferencesResetRecoveryError) showPreferencesResetRecoveryFailure(error);
 });

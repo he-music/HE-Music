@@ -97,6 +97,16 @@ export class LocalMetadataSession {
 
   constructor(private readonly deps: LocalMetadataSessionDeps) {}
 
+  /** Read-only authority check for pending online-match responses. */
+  ownsReference(ref: LocalFileRef): boolean {
+    if (this.disposed) return false;
+    try {
+      return this.deps.access(ref)?.current() === true;
+    } catch {
+      return false;
+    }
+  }
+
   async read(ref: LocalFileRef): Promise<MetadataResult | undefined> {
     if (this.disposed) return undefined;
     const revision = this.revision;

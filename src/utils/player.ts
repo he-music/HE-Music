@@ -50,7 +50,20 @@ class Player {
   }
   /** 播放请求递增序号，用于防止快速切歌异步竞态 */
   private playRequestId = 0;
-  private playbackAttempt?: { src: string; autoPlay: boolean; seek: number; requestId: number };
+  /** radio API 等待期尚无新 source request，须单独标识这次操作。 */
+  private radioOperation?: symbol;
+  // Playback intent is separate from source ownership: pause must not discard
+  // the pending preload or its metadata, but it must revoke future autoplay.
+  private autoPlayIntent = true;
+  private autoPlayOwner?: () => boolean;
+  private pendingAutoPlay?: { owner: () => boolean; requestId: number; src?: string };
+  private playbackAttempt?: {
+    src: string;
+    autoPlay: boolean;
+    seek: number;
+    requestId: number;
+    canAutoPlay?: () => boolean;
+  };
   private httpPlaybackDialog?: DialogReactive;
   private lastHttpRetrySrc = "";
   private localAudio?: LocalAudioSession;
@@ -270,14 +283,17 @@ class Player {
       },
       onNegativeClick: () => {
         if (!isCurrent()) return;
+        this.radioOperation = undefined;
         settled = true;
         this.httpPlaybackDialog = undefined;
-        void this.createPlayer(httpsUrl.href, attempt.autoPlay, seek).catch(() => {
-          if (attempt.requestId !== this.playRequestId) return;
-          console.error("HTTPS 重试播放失败:");
-          // 媒体 error 事件负责普通错误；没有媒体错误码时补上恢复逻辑。
-          if (audioManager.getErrorCode() === 0) void this.handlePlaybackError();
-        });
+        void this.createPlayer(httpsUrl.href, attempt.autoPlay, seek, attempt.canAutoPlay).catch(
+          () => {
+            if (attempt.requestId !== this.playRequestId) return;
+            console.error("HTTPS 重试播放失败:");
+            // 媒体 error 事件负责普通错误；没有媒体错误码时补上恢复逻辑。
+            if (audioManager.getErrorCode() === 0) void this.handlePlaybackError();
+          },
+        );
       },
       onClose: dismiss,
       onMaskClick: dismiss,
@@ -291,7 +307,12 @@ class Player {
    * @param autoPlay 是否自动播放
    * @param seek 播放位置
    */
-  private async createPlayer(src: string, autoPlay: boolean = true, seek: number = 0) {
+  private async createPlayer(
+    src: string,
+    autoPlay: boolean = true,
+    seek: number = 0,
+    canAutoPlay = this.autoPlayOwner,
+  ) {
     // 获取数据
     const dataStore = useDataStore();
     const musicStore = useMusicStore();
@@ -309,10 +330,26 @@ class Player {
       });
     }
     const requestId = this.playRequestId;
-    this.playbackAttempt = { src, autoPlay, seek, requestId };
+    this.playbackAttempt = { src, autoPlay, seek, requestId, canAutoPlay };
+    const pending = this.pendingAutoPlay;
+    if (pending && pending.owner === canAutoPlay && pending.requestId === requestId) {
+      pending.src = src;
+    }
+    const allowsAutoPlay = () =>
+      autoPlay &&
+      this.autoPlayIntent &&
+      requestId === this.playRequestId &&
+      (!canAutoPlay || canAutoPlay());
     // 加载并播放
     try {
-      await audioManager.play(src, { fadeIn: false, autoPlay });
+      // AudioManager reads autoPlay after its asynchronous source probe/load.
+      // A getter keeps explicit pause and owner revocation effective during it.
+      await audioManager.play(src, {
+        fadeIn: false,
+        get autoPlay() {
+          return allowsAutoPlay();
+        },
+      });
       if (requestId !== this.playRequestId) return;
       // 恢复进度
       if (seek && seek > 0) {
@@ -469,7 +506,9 @@ class Player {
     console.log("Playback retry", this.retryInfo.count, this.retryInfo.total);
     // 错误码 2：资源过期或临时网络错误，允许较少次数的刷新
     if (errCode === 2 && this.retryInfo.count <= 2) {
-      await this.initPlayer(true, this.getSeek());
+      if (this.autoPlayOwner)
+        await this.initPlayer(this.autoPlayIntent, this.getSeek(), "", this.autoPlayOwner);
+      else await this.initPlayer(this.autoPlayIntent, this.getSeek());
       return;
     }
 
@@ -479,7 +518,8 @@ class Player {
     }
     if (dataStore.playList.length > 1) {
       window.$message.error("当前歌曲播放失败，已跳至下一首");
-      await this.nextOrPrev("next");
+      if (this.autoPlayIntent && !this.autoPlayOwner) await this.nextOrPrev("next");
+      else await this.nextOrPrev("next", this.autoPlayIntent, false, this.autoPlayOwner);
     } else {
       window.$message.error(t("message.no_playable_song"));
     }
@@ -525,11 +565,12 @@ class Player {
   /**
    * 重置状态
    */
-  public resetStatus() {
+  public resetStatus(isCurrent?: () => boolean) {
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
     const settingStore = useSettingStore();
-    // 重置状态
+    // radio 的同步订阅也可能发起后继操作，每次提交前再次核对。
+    if (isCurrent && !isCurrent()) return;
     statusStore.$patch({
       currentTime: 0,
       duration: 0,
@@ -538,10 +579,13 @@ class Player {
       playStatus: false,
       playLoading: false,
     });
+    if (isCurrent && !isCurrent()) return;
     musicStore.$patch({
       playPlaylist: {},
     });
+    if (isCurrent && !isCurrent()) return;
     musicStore.resetMusicData();
+    if (isCurrent && !isCurrent()) return;
     if (settingStore.showTaskbarProgress) {
       window.electron.ipcRenderer.send("set-bar", "none");
     }
@@ -552,10 +596,22 @@ class Player {
    * @param autoPlay 是否自动播放
    * @param seek 播放位置
    * @param quality 音质
+   * @param canAutoPlay HTTP shell owner 存活检查，独立于歌曲切换 stamp
    */
-  public async initPlayer(autoPlay: boolean = true, seek: number = 0, quality: string = "") {
+  public async initPlayer(
+    autoPlay: boolean = true,
+    seek: number = 0,
+    quality: string = "",
+    canAutoPlay?: () => boolean,
+  ) {
+    this.radioOperation = undefined;
+    this.autoPlayIntent = autoPlay;
+    this.autoPlayOwner = canAutoPlay;
     this.localAudio?.clear();
     const currentRequestId = ++this.playRequestId;
+    this.pendingAutoPlay = canAutoPlay
+      ? { owner: canAutoPlay, requestId: currentRequestId }
+      : undefined;
     this.httpPlaybackDialog?.destroy();
     this.httpPlaybackDialog = undefined;
     this.playbackAttempt = undefined;
@@ -667,17 +723,32 @@ class Player {
   /**
    * 播放
    */
-  async play() {
+  async play(canAutoPlay?: () => boolean) {
+    if (canAutoPlay && !canAutoPlay()) return;
+    const pendingRadio = this.radioOperation !== undefined;
+    this.radioOperation = undefined;
     const statusStore = useStatusStore();
+    if (pendingRadio) statusStore.playLoading = false;
     if (!isElectron && useMusicStore().playSong?.path && !this.localAudio?.active) {
       statusStore.playStatus = false;
       return;
     }
     const settingStore = useSettingStore();
     // 检查播放器状态
-    if (!audioManager.src) {
+    const src = audioManager.src;
+    if (!src) {
       window.$message.warning("播放器未就绪，请稍后重试");
       return;
+    }
+    const requestId = this.playRequestId;
+    this.autoPlayIntent = true;
+    this.autoPlayOwner = canAutoPlay;
+    // Direct HTTP resumes enter Driver.prepareOutput too: retain their owner
+    // for cancellation, while an ordinary no-argument UI play takes ownership.
+    this.pendingAutoPlay = canAutoPlay ? { owner: canAutoPlay, requestId, src } : undefined;
+    if (this.playbackAttempt) {
+      this.playbackAttempt.autoPlay = true;
+      this.playbackAttempt.canAutoPlay = canAutoPlay;
     }
     // 已在播放
     if (!audioManager.paused) {
@@ -685,12 +756,29 @@ class Player {
       return;
     }
     const fadeTime = settingStore.getFadeTime ? settingStore.getFadeTime / 1000 : 0;
-    const requestId = this.playRequestId;
     try {
       await audioManager.play(undefined, { fadeIn: !!fadeTime, fadeDuration: fadeTime });
     } catch (error) {
       if (requestId !== this.playRequestId) return;
       if (!this.handlePlayRejection(error)) throw error;
+    }
+  }
+  /** Revoke one shell's pending start without pausing an already playing source. */
+  public cancelPendingAutoplay(owner: () => boolean): void {
+    const pending = this.pendingAutoPlay;
+    if (
+      !pending ||
+      pending.owner !== owner ||
+      this.autoPlayOwner !== owner ||
+      pending.requestId !== this.playRequestId
+    )
+      return;
+    this.autoPlayIntent = false;
+    if (this.playbackAttempt?.requestId === pending.requestId)
+      this.playbackAttempt.autoPlay = false;
+    if (pending.src && pending.src === audioManager.src && audioManager.paused) {
+      // No fade: cancel Driver.prepareOutput/element.play immediately, retaining the preload.
+      audioManager.pause();
     }
   }
   /**
@@ -700,7 +788,11 @@ class Player {
   public async pause(changeStatus: boolean = true) {
     const statusStore = useStatusStore();
     const settingStore = useSettingStore();
-    if (changeStatus) statusStore.playStatus = false;
+    if (changeStatus) {
+      this.autoPlayIntent = false;
+      if (this.playbackAttempt) this.playbackAttempt.autoPlay = false;
+      statusStore.playStatus = false;
+    }
     // 淡出
     const fadeTime = settingStore.getFadeTime ? settingStore.getFadeTime / 1000 : 0;
     audioManager.pause({ fadeOut: !!fadeTime, fadeDuration: fadeTime });
@@ -708,22 +800,28 @@ class Player {
   /**
    * 播放或暂停
    */
-  public async playOrPause() {
+  public async playOrPause(canAutoPlay?: () => boolean) {
+    if (canAutoPlay && !canAutoPlay()) return;
     const statusStore = useStatusStore();
     if (statusStore.playStatus) await this.pause();
-    else await this.play();
+    else await this.play(canAutoPlay);
   }
   /**
    * 下一首或上一首
    * @param type 切换类别 next 下一首 prev 上一首
    * @param play 是否立即播放
    * @param autoEnd 是否为歌曲自动播放结束
+   * @param canAutoPlay HTTP shell owner 存活检查
    */
   public async nextOrPrev(
     type: "next" | "prev" = "next",
     play: boolean = true,
     autoEnd: boolean = false,
+    canAutoPlay?: () => boolean,
   ) {
+    this.radioOperation = undefined;
+    this.autoPlayIntent = play;
+    this.autoPlayOwner = canAutoPlay;
     const statusStore = useStatusStore();
     const dataStore = useDataStore();
     try {
@@ -735,7 +833,7 @@ class Player {
       const { playSongMode } = statusStore;
       // 若为私人FM
       if (statusStore.radioMode) {
-        await this.nextRadio(false, true);
+        await this.nextRadio(false, true, canAutoPlay, play);
         return;
       }
       // 列表长度
@@ -749,14 +847,14 @@ class Player {
       if (playListLength === 1) {
         statusStore.playLoading = false;
         this.setSeek(0);
-        await this.play();
+        await this.play(canAutoPlay);
         return;
       }
       // 单曲循环
       if (playSongMode === "repeat-once" && autoEnd) {
         statusStore.playLoading = false;
         this.setSeek(0);
-        await this.play();
+        await this.play(canAutoPlay);
         return;
       }
       // 列表循环、单曲循环（手动切歌）、处于心动模式或随机模式
@@ -779,7 +877,7 @@ class Player {
       statusStore.currentTime = 0;
       statusStore.progress = 0;
       // 初始化播放器（不传入seek参数，确保从头开始播放）
-      await this.initPlayer(play, 0);
+      await this.initPlayer(play, 0, "", canAutoPlay);
     } catch (error) {
       console.error("Error in nextOrPrev:");
       statusStore.playLoading = false;
@@ -1174,6 +1272,7 @@ class Player {
    * 清空播放列表
    */
   public async cleanPlayList() {
+    this.radioOperation = undefined;
     ++this.playRequestId;
     this.localAudio?.clear();
     this.httpPlaybackDialog?.destroy();
@@ -1318,49 +1417,59 @@ class Player {
    * @param init 是否初始化
    * @param playNext 是否播放下一首
    */
-  async nextRadio(init: boolean = true, playNext: boolean = false) {
+  async nextRadio(
+    init: boolean = true,
+    playNext: boolean = false,
+    canAutoPlay?: () => boolean,
+    autoPlay: boolean = true,
+  ) {
+    const operation = Symbol("radio");
+    this.radioOperation = operation;
+    this.autoPlayIntent = autoPlay;
+    this.autoPlayOwner = canAutoPlay;
+    const requestId = this.playRequestId;
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
+    const radio = musicStore.radio;
+    const { id, platform } = radio;
+    const isCurrent = () =>
+      this.radioOperation === operation &&
+      requestId === this.playRequestId &&
+      musicStore.radio === radio &&
+      radio.id === id &&
+      radio.platform === platform;
     try {
-      // 获取并重置
-      const getPersonalFmData = async () => {
-        const result = await listRadioSongs(
-          musicStore.radio.id,
-          musicStore.radio.platform,
-          musicStore.radio.pageIndex || 1,
-        );
-        console.log("🌐 radio loaded");
-        musicStore.radio.playIndex = 0;
-        musicStore.radio.list = result.list;
-        musicStore.radio.pageIndex = result.page_index || musicStore.radio.pageIndex;
+      const loadPage = async (page: number) => {
+        const result = await listRadioSongs(id, platform, page);
+        // No radio state is published until this exact pre-init operation wins.
+        if (!isCurrent()) return false;
+        radio.playIndex = 0;
+        if (!isCurrent()) return false;
+        radio.list = result.list;
+        if (!isCurrent()) return false;
+        radio.pageIndex = result.page_index || page;
+        return isCurrent();
       };
-      // 若为空
-      if (init || musicStore.radio.list.length === 0) {
-        musicStore.radio.pageIndex = 1;
+      if (init || radio.list.length === 0) {
+        if (!(await loadPage(1))) return;
+        if (!isCurrent()) return;
         statusStore.radioMode = true;
-        await getPersonalFmData();
-        // 清理并播放
-        this.resetStatus();
-        await this.initPlayer();
-        return;
-      }
-      // 若需播放下一首
-      if (playNext) {
-        // 更改索引
-        if (musicStore.radio.playIndex < musicStore.radio.list.length - 1) {
-          musicStore.radio.playIndex++;
-        } else {
-          musicStore.radio.pageIndex++;
-          await getPersonalFmData();
-        }
-        // 清理并播放
-        this.resetStatus();
-        await this.initPlayer();
-      }
+      } else if (playNext) {
+        if (radio.playIndex < radio.list.length - 1) {
+          if (!isCurrent()) return;
+          radio.playIndex++;
+        } else if (!(await loadPage(radio.pageIndex + 1 || 1))) return;
+      } else return;
+      if (!isCurrent()) return;
+      this.resetStatus(isCurrent);
+      if (!isCurrent()) return;
+      // initPlayer consumes the token as it acquires a new source request.
+      await this.initPlayer(this.autoPlayIntent, 0, "", canAutoPlay);
     } catch {
-      console.error("Failed to initialize radio:");
+      if (isCurrent()) console.error("Failed to initialize radio:");
     }
   }
+
   /**
    * 开始定时关闭
    */

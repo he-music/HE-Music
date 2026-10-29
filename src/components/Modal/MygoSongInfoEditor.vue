@@ -9,7 +9,29 @@
     <p v-if="recoveryNames.length">
       {{ t("local_metadata.recovery_files") }}: {{ recoveryNames.join(", ") }}
     </p>
-    <fieldset :disabled="busy">
+    <section>
+      <button
+        type="button"
+        :disabled="busy || matching || !!session.operation || !loaded || !baselineMD5"
+        @click="onlineMatch"
+      >
+        {{ t("modal.auto_match_tag") }}
+      </button>
+      <p v-if="matchOptions.length">{{ t("local_metadata.match_choose") }}</p>
+      <button
+        v-for="option in matchOptions"
+        :key="option.id"
+        type="button"
+        :disabled="busy || matching"
+        @click="chooseMatch(option.id)"
+      >
+        {{ option.title }} — {{ option.artists.join(" / ") }} — {{ option.album }}
+      </button>
+      <button v-if="matching || matchOptions.length" type="button" @click="cancelMatch">
+        {{ t("local_metadata.match_cancel") }}
+      </button>
+    </section>
+    <fieldset :disabled="busy || matching">
       <label>{{ t("local_metadata.title") }}<input v-model="form.title" /></label>
       <label>{{ t("local_metadata.artists") }}<input v-model="artistsText" /></label>
       <label>{{ t("local_metadata.album") }}<input v-model="form.album" /></label>
@@ -28,11 +50,11 @@
       </section>
     </fieldset>
     <p>{{ t("local_metadata.save_warning") }}</p>
-    <button type="button" @click="emit('close')">{{ t("common.cancel") }}</button>
-    <button type="button" :disabled="busy || !operationId" @click="reconcile">
+    <button type="button" @click="closeEditor">{{ t("common.cancel") }}</button>
+    <button type="button" :disabled="busy || matching || !operationId" @click="reconcile">
       {{ t("local_metadata.reconcile") }}
     </button>
-    <button type="submit" :disabled="busy || !loaded">{{ t("common.save") }}</button>
+    <button type="submit" :disabled="busy || matching || !loaded">{{ t("common.save") }}</button>
   </form>
 </template>
 
@@ -45,6 +67,9 @@ import type {
   MetadataSessionResult,
 } from "@/platform/localMetadataSession";
 import type { LocalFileRef, Patch, Picture, ScanEntry } from "@/platform/mygo.bindings";
+import { useSettingStore } from "@/stores";
+import { LocalMetadataMatch, type MetadataMatchCandidate } from "@/platform/localMetadataMatch";
+import { createMetadataMatchAPI } from "@/platform/localMetadataMatchAPI";
 
 const MAX_PICTURE_BYTES = 4 * 1024 * 1024;
 const MAX_PICTURE_TOTAL = 8 * 1024 * 1024;
@@ -52,6 +77,11 @@ const ALLOWED_MIME = new Set(["image/jpeg", "image/png", "image/gif", "image/web
 const { t } = useI18n();
 const props = defineProps<{ entry: ScanEntry; session: LocalMetadataSession }>();
 const emit = defineEmits<{ close: [] }>();
+const settingStore = useSettingStore();
+const baselineMD5 = ref("");
+const matching = ref(false);
+const matchOptions = ref<MetadataMatchCandidate[]>([]);
+let matchScope: LocalMetadataMatch | undefined;
 
 const loaded = ref(false);
 const mounted = ref(false);
@@ -121,7 +151,94 @@ function applyInfo(info: Info, sha256: string | undefined): void {
   coverMode.value = "preserve";
 }
 
+function cancelMatch(): void {
+  matchScope?.cancel();
+  matchScope = undefined;
+  matching.value = false;
+  matchOptions.value = [];
+}
+
+function closeEditor(): void {
+  cancelMatch();
+  emit("close");
+}
+
+async function onlineMatch(): Promise<void> {
+  if (
+    busy.value ||
+    matching.value ||
+    props.session.operation ||
+    !loaded.value ||
+    !baseline.value ||
+    !baselineMD5.value
+  )
+    return;
+  cancelMatch();
+  const owner = props.session;
+  const openedEntry = props.entry;
+  const expected = refKey(props.entry);
+  const generation = viewGeneration.value;
+  const capturedRef = { ...props.entry.ref };
+  const scope = new LocalMetadataMatch(
+    createMetadataMatchAPI(() => settingStore),
+    () =>
+      mounted.value &&
+      props.session === owner &&
+      props.entry === openedEntry &&
+      generation === viewGeneration.value &&
+      expected === refKey(props.entry) &&
+      !owner.operation &&
+      owner.ownsReference(capturedRef),
+  );
+  matchScope = scope;
+  matching.value = true;
+  error.value = "";
+  try {
+    const options = await scope.search(
+      { ...baseline.value, Title: form.title, Artists: [...form.artists], Album: form.album },
+      baselineMD5.value,
+    );
+    if (matchScope !== scope || !scope.isCurrent()) return;
+    matchOptions.value = options ?? [];
+    if (options && !options.length) error.value = t("message.match_fail");
+  } catch {
+    if (matchScope === scope && scope.isCurrent()) error.value = t("message.match_fail");
+  } finally {
+    if (matchScope === scope) matching.value = false;
+  }
+}
+
+async function chooseMatch(id: number): Promise<void> {
+  const scope = matchScope;
+  if (!scope || busy.value || matching.value) return;
+  matching.value = true;
+  error.value = "";
+  try {
+    const draft = await scope.choose(id);
+    if (!draft || matchScope !== scope || !scope.isCurrent()) return;
+    form.title = draft.title;
+    form.artists = [...draft.artists];
+    form.album = draft.album;
+    form.comment = draft.comment;
+    form.lyrics = draft.lyrics;
+    if (draft.picture) {
+      fileGeneration.value++;
+      pictures.value = [{ ...draft.picture }];
+      coverPreview.value = `data:${draft.picture.MIME};base64,${draft.picture.Data}`;
+      coverMode.value = "replace";
+    }
+    matchOptions.value = [];
+    message.value = t("local_metadata.match_review");
+  } catch {
+    if (matchScope === scope && scope.isCurrent()) error.value = t("message.match_fail");
+  } finally {
+    if (matchScope === scope) matching.value = false;
+  }
+}
+
 async function load(): Promise<void> {
+  cancelMatch();
+  baselineMD5.value = "";
   const generation = ++viewGeneration.value;
   finalResultPresented = false;
   fileGeneration.value++;
@@ -133,13 +250,19 @@ async function load(): Promise<void> {
   loaded.value = false;
   try {
     const result = await owner.read({ ...props.entry.ref });
-    if (!mounted.value || generation !== viewGeneration.value || expected !== refKey(props.entry))
+    if (
+      !mounted.value ||
+      props.session !== owner ||
+      generation !== viewGeneration.value ||
+      expected !== refKey(props.entry)
+    )
       return;
     if (!result?.info || !result.sha256) {
       error.value = t("local_metadata.read_failed");
       return;
     }
     applyInfo(result.info, result.sha256);
+    baselineMD5.value = result.md5 ?? "";
     error.value = result.code === "read_ref_conflict" ? t("local_metadata.ref_conflict") : "";
     loaded.value = true;
   } catch {
@@ -215,6 +338,8 @@ function presentResult(result: MetadataSessionResult, final = false): void {
   error.value = "";
   message.value = "";
   if (result.committed) {
+    cancelMatch();
+    baselineMD5.value = "";
     viewGeneration.value++;
     fileGeneration.value++;
     busy.value = false;
@@ -267,7 +392,7 @@ async function reconcile(): Promise<void> {
 
 async function save(): Promise<void> {
   const original = baseline.value;
-  if (!loaded.value || !original || !baselineSha256.value) return;
+  if (busy.value || matching.value || !loaded.value || !original || !baselineSha256.value) return;
   const expected = refKey(props.entry);
   const generation = viewGeneration.value;
   const sha256 = baselineSha256.value;
@@ -303,7 +428,7 @@ async function save(): Promise<void> {
   }
 }
 
-watch(() => [props.session, refKey(props.entry)], load);
+watch(() => [props.session, props.entry, refKey(props.entry)], load, { flush: "sync" });
 watch(
   () => [props.session.operation, viewGeneration.value] as const,
   ([operation, generation]) => {
@@ -329,6 +454,7 @@ onMounted(() => {
   void load();
 });
 onUnmounted(() => {
+  cancelMatch();
   mounted.value = false;
   viewGeneration.value++;
   fileGeneration.value++;

@@ -3,13 +3,15 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import * as Vue from "vue";
 import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
+import { createMygoDownloadResolver } from "../../utils/localDownloadResolver";
+vi.mock("@/api/song", () => ({ songDetail: vi.fn(), songLyric: vi.fn(), songUrl: vi.fn() }));
 import {
   LocalDownloadSession,
   validDownloadFilename,
   localDownloadSource,
   type LocalDownloadAccess,
-} from "@/platform/localDownloadSession";
-import { validLocalDownloadFormat } from "@/platform/localDownloadPersistence";
+} from "../../platform/localDownloadSession";
+import { validLocalDownloadFormat } from "../../platform/localDownloadPersistence";
 import type { DownloadState, DirectoryGrant } from "@/platform/mygo.bindings";
 import type { SongInfo } from "@/types/main.hemusic";
 type Element = {
@@ -67,6 +69,41 @@ function mount(props: object) {
       LocalDownloadSession,
       validDownloadFilename,
       localDownloadSource,
+    },
+    "@/platform/localDownloadOptions": {
+      createLocalDownloadPlan: (song: SongInfo) => ({
+        filenameStem: song.name,
+        options: {
+          writeMetadata: true,
+          writeCover: true,
+          writeLyrics: true,
+          saveSidecars: false,
+          metadata: {
+            title: song.name,
+            artists: ["Artist"],
+            album: "Album",
+            lyrics: "",
+            coverURL: "https://img.test/cover",
+          },
+        },
+        resolveOptions: { writeLyricTranslation: true, writeLyricRomaji: true },
+      }),
+      defaultGrantIndex: () => 0,
+      normalizePortableFilename: (stem: string, format: string) => `${stem}.${format}`,
+    },
+    "@/stores": {
+      useSettingStore: () => ({
+        downloadPath: "Music",
+        fileNameFormat: "title",
+        folderStrategy: "none",
+        downloadMeta: true,
+        downloadCover: true,
+        downloadLyric: true,
+        downloadLyricTran: true,
+        downloadLyricRoma: true,
+        saveMetaFile: false,
+        showLocalCover: true,
+      }),
     },
   };
   const exports: { default?: Vue.Component } = {};
@@ -228,7 +265,12 @@ it("mounts the actual SFC, chooses grants/quality, edits basename and uses a fre
   expect(chooseDirectory).toHaveBeenCalledTimes(1);
   await view.click("local_download.start");
   await flush();
-  expect(resolveURL).toHaveBeenCalledWith("lossless", localDownloadSource(song));
+  expect(resolveURL).toHaveBeenCalledWith(
+    "lossless",
+    localDownloadSource(song),
+    expect.any(Object),
+    expect.any(Object),
+  );
   expect(access.start).toHaveBeenCalledWith(
     expect.objectContaining({
       grantToken: grants[1].token,
@@ -357,13 +399,19 @@ it("shows committed cancellation and refresh failure without retry or internal d
   await flush();
   expect(access.cancel).toHaveBeenCalledWith(session.tasks.value[0].id);
   expect(session.tasks.value[0].done).toBe(false);
-  snapshot = { done: true, code: "sync_failed", committed: true };
+  snapshot = {
+    done: true,
+    code: "sync_failed",
+    committed: true,
+    filename: "Song.mp3",
+    ref: { grantToken: grants[0].token, relativePath: "Song.mp3", fileId: "fresh", version: "v1" },
+  };
   await session.refresh(session.tasks.value[0].id);
   await flush();
   expect(view.text()).toContain("local_download.possibly_saved");
   expect(view.text()).toContain("local_download.phase_saved");
   expect(view.text()).toContain("local_download.refresh_failed");
-  expect(view.text()).not.toContain("sync_failed");
+  expect(view.text()).toContain("local_download.warning.sync_failed");
   expect(() => view.button("local_download.retry")).toThrow();
   const source = readFileSync(new URL("./MygoDownload.vue", import.meta.url), "utf8");
   expect(source).not.toMatch(/window\.|electron|file-saver|localStorage|dataStore/);
@@ -434,7 +482,12 @@ it("retries original A after closing its modal and opening unrelated B", async (
   await flush();
   expect(resolveB).not.toHaveBeenCalled();
   expect(resolveA).toHaveBeenCalledTimes(2);
-  expect(resolveA).toHaveBeenLastCalledWith("320mp3", localDownloadSource(song));
+  expect(resolveA).toHaveBeenLastCalledWith(
+    "320mp3",
+    localDownloadSource(song),
+    expect.any(Object),
+    expect.any(Object),
+  );
   const source = vi.mocked(resolveA).mock.calls[1];
   expect(JSON.stringify(source)).not.toContain('"url":');
   expect(access.start).toHaveBeenLastCalledWith(
@@ -498,4 +551,24 @@ it("invalidates even a reverted filename edit during URL resolution", async () =
   finish({ url: "https://example.test/old", format: "mp3" });
   await pending;
   expect(access.start).not.toHaveBeenCalled();
+});
+
+it.each([
+  "file:///unsafe.jpg",
+  "https://%65xample.com/cover.jpg",
+  "http:opaque",
+  "https://user:pass@img.test/c",
+  "https://img.test/c#fragment",
+])("actual SFC and resolver reject invalid cover before native Start: %s", async (cover) => {
+  const resolveURL = createMygoDownloadResolver(
+    async () => ({ url: "https://cdn.test/audio", format: "mp3" }),
+    async () => ({ song: { ...song, cover } }),
+    async () => ({ lyric: "line" }),
+  );
+  const view = mount({ song, session, grants, chooseDirectory: async () => {}, resolveURL });
+  await view.click("local_download.start");
+  await flush();
+  expect(access.start).not.toHaveBeenCalled();
+  expect(session.tasks.value).toEqual([]);
+  expect(view.text()).toContain("local_download.operation_failed");
 });

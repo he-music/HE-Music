@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"sync"
 	"unicode"
@@ -25,17 +26,18 @@ var errDownload = errors.New("download request rejected")
 // OperationID is a caller-generated 32-byte hex idempotency key. A retry needs
 // a new ID and a newly validated request; existing IDs never start a second IO.
 type DownloadRequest struct {
-	OperationID string `json:"operationId"`
-	GrantToken  string `json:"grantToken"`
-	URL         string `json:"url"`
-	Filename    string `json:"filename"`
+	OperationID string           `json:"operationId"`
+	GrantToken  string           `json:"grantToken"`
+	URL         string           `json:"url"`
+	Filename    string           `json:"filename"`
+	Options     *DownloadOptions `json:"options,omitempty"`
 }
 type DownloadOperation struct {
 	OperationID string `json:"operationId"`
 }
 
-// Total is zero when unknown. Received counts accepted bytes and never exceeds
-// the hard limit. Clients must use Done && Code == "ok", not byte equality.
+// Total is zero when unknown. Received counts streamed audio bytes without a
+// song-size cap. Clients must inspect Done, Code and Committed, not byte equality.
 type DownloadState struct {
 	OperationID  string        `json:"operationId"`
 	Code         string        `json:"code"`
@@ -58,6 +60,8 @@ type downloadJob struct {
 	retired     bool
 	stopGrant   func() bool
 	stopOwner   func() bool
+	options     *DownloadOptions
+	io          downloadIO
 }
 type downloadCoordinator struct {
 	mu        sync.Mutex
@@ -67,6 +71,7 @@ type downloadCoordinator struct {
 	jobs      map[string]*downloadJob
 	forgotten map[string]struct{}
 	client    *http.Client
+	io        downloadIO
 }
 
 var downloadCoordinators = struct {
@@ -139,7 +144,17 @@ func (s *nativeFilesState) startDownload(ctx context.Context, epoch uint64, req 
 		return DownloadOperation{}, err
 	}
 	c := downloadCoordinatorFor(s)
-	fingerprint := sha256.Sum256([]byte(req.GrantToken + "\x00" + req.Filename + "\x00" + req.URL))
+	options, targetErr := downloadNativeOptionsSnapshot(req.Options)
+	if targetErr != nil {
+		lease.Release()
+		return DownloadOperation{}, errDownload
+	}
+	target, targetErr := downloadNativeTarget(req.Filename, options)
+	if targetErr != nil {
+		lease.Release()
+		return DownloadOperation{}, errDownload
+	}
+	fingerprint := sha256.Sum256([]byte(req.GrantToken + "\x00" + target + "\x00" + req.URL + "\x00" + downloadNativeOptionsFingerprint(options)))
 	var job *downloadJob
 	fresh := false
 	err = s.main(ctx, func(parent *mygo.Window) error {
@@ -169,7 +184,7 @@ func (s *nativeFilesState) startDownload(ctx context.Context, epoch uint64, req 
 			return errFilesBusy
 		}
 		op, cancel := context.WithCancel(lease.Context())
-		job = &downloadJob{lease: lease, fingerprint: fingerprint, ctx: op, cancel: cancel, commit: newFileCommit(), done: make(chan struct{}), state: DownloadState{OperationID: req.OperationID, Code: "running", Filename: req.Filename}}
+		job = &downloadJob{lease: lease, fingerprint: fingerprint, ctx: op, cancel: cancel, commit: newFileCommit(), done: make(chan struct{}), state: DownloadState{OperationID: req.OperationID, Code: "running", Filename: req.Filename}, options: options, io: c.io}
 		c.jobs[req.OperationID] = job
 		c.active++
 		fresh = true
@@ -249,6 +264,7 @@ func (c *downloadCoordinator) run(s *nativeFilesState, j *downloadJob, rawURL st
 			result.Code = "revoked"
 		}
 		result.Done = true
+		j.options = nil
 		j.state = result
 		c.active--
 		close(j.done)
@@ -269,31 +285,37 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	c.mu.Unlock()
 	out.Code = "io_error"
 	root := j.lease.handle.root
-	nonce, err := newDirectoryToken()
+	target, err := downloadNativeTarget(j.state.Filename, j.options)
 	if err != nil {
+		out.Code = "invalid_request"
 		return
 	}
-	tmp := downloadPrivatePrefix + nonce
-	file, err := root.OpenFile(tmp, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	workRoot, targetName, err := downloadNativeOpenTarget(root, target)
 	if err != nil {
+		out.Code = "invalid_request"
 		return
 	}
-	// Cleanup finishes before run releases the lease, returns a permit or closes done.
-	var closeFileOnce sync.Once
-	var fileCloseErr error
-	closeFile := func() { closeFileOnce.Do(func() { fileCloseErr = file.Close() }) }
-	stopFile := context.AfterFunc(j.ctx, closeFile)
-	defer func() {
-		stopFile()
-		closeFile()
-		if err := fileCloseErr; err != nil && out.Code == "ok" {
-			out.Code = "cleanup_failed"
-			out.Ref = nil
+	workParentInfo, err := workRoot.Stat(".")
+	if err != nil {
+		if workRoot != root {
+			_ = workRoot.Close()
 		}
-		if err := root.Remove(tmp); err != nil {
-			out.ResidualName = tmp
-			out.Code = "cleanup_failed"
-			out.Ref = nil
+		out.Code = "invalid_request"
+		return
+	}
+	if workRoot != root {
+		defer workRoot.Close()
+	}
+	root = workRoot
+	var owned []*downloadOwnedPrivate
+	defer func() {
+		for _, private := range owned {
+			if err := private.cleanup(); err != nil {
+				out.Code = "cleanup_failed"
+				if private.residual {
+					out.ResidualName = path.Join(path.Dir(target), private.name)
+				}
+			}
 		}
 		if j.ctx.Err() != nil {
 			out.Code = "cancelled"
@@ -303,6 +325,20 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 			out.Ref = nil
 		}
 	}()
+	work, err := downloadNewPrivate(root, "work", j.io)
+	if work != nil {
+		owned = append(owned, work)
+	}
+	if err != nil {
+		return
+	}
+	file, tmp := work.file, work.name
+	stopFile := context.AfterFunc(j.ctx, func() {
+		if j.commit.phase.Load() != fileCommitClaimed {
+			_ = work.close()
+		}
+	})
+	defer stopFile()
 	req, err := http.NewRequestWithContext(j.ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		out.Code = "invalid_request"
@@ -321,9 +357,11 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	defer func() {
 		stopBody()
 		closeBody()
-		if bodyCloseErr != nil && out.Code == "ok" {
+		if bodyCloseErr != nil && (out.Code == "ok" || out.Code == "durability_uncertain") {
 			out.Code = "cleanup_failed"
-			out.Ref = nil
+			if !out.Committed {
+				out.Ref = nil
+			}
 		}
 	}()
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Range") != "" || resp.Uncompressed || (resp.Header.Get("Content-Encoding") != "" && resp.Header.Get("Content-Encoding") != "identity") {
@@ -374,7 +412,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		out.Code = "payload_rejected"
 		return
 	}
-	if !localAudioContainerMatches(info.Container, out.Filename) {
+	if !localAudioContainerMatches(info.Container, path.Base(target)) {
 		out.Code = "unsupported"
 		return
 	}
@@ -384,14 +422,84 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		out.Code = "payload_rejected"
 		return
 	}
-	if file.Sync() != nil {
+	source, sourceErr := downloadNewPrivate(root, "source", j.io)
+	if source != nil {
+		owned = append(owned, source)
+	}
+	if sourceErr != nil {
+		return
+	}
+	if err = j.io.before("source", "copy"); err != nil {
+		return
+	}
+	if err = j.io.before("source", "write"); err != nil {
+		return
+	}
+	if _, err = io.Copy(source.file, io.NewSectionReader(file, 0, out.Received)); err != nil {
+		return
+	}
+	if err = source.sync(); err != nil {
+		return
+	}
+	originalAudio := source.file
+	originalInfo, originalErr := originalAudio.Stat()
+	if originalErr != nil {
+		return
+	}
+	if err = downloadNativeMetadata(j.ctx, c.client, root, file, tmp, j.options); err != nil {
+		out.Code = "unsupported"
+		return
+	}
+	editedInfo, editStatErr := file.Stat()
+	currentSource, sourceStatErr := originalAudio.Stat()
+	if editStatErr != nil || sourceStatErr != nil || !os.SameFile(currentSource, originalInfo) {
+		out.Code = "payload_rejected"
+
+		return
+	}
+	compareErr := metadata.CompareAudioPayload(j.ctx, originalAudio, originalInfo.Size(), file, editedInfo.Size())
+	if compareErr != nil {
+		out.Code = "payload_rejected"
+
+		return
+	}
+	if work.sync() != nil {
+		return
+	}
+	sidecars, sidecarErr := downloadNativePrepareSidecars(j.ctx, c.client, root, targetName, j.options, j.io, &owned)
+	if sidecarErr != nil {
+		out.Code = "io_error"
+		return
+	}
+	if err = j.io.before("commit", "before_claim"); err != nil {
+		return
+	}
+	if err = downloadNativeVerifyRoute(j.lease.handle.root, target); err != nil {
+		out.Code = "conflict"
+		return
+	}
+	authorizedParent, parentErr := downloadNativeParentInfo(j.lease.handle.root, target)
+	if parentErr != nil || !os.SameFile(workParentInfo, authorizedParent) {
+		out.Code = "conflict"
 		return
 	}
 	if err = s.claimDownloadCommit(j); err != nil {
 		out.Code = "revoked"
 		return
 	}
-	if err = root.Link(tmp, out.Filename); err != nil {
+	if err = j.io.before("commit", "after_claim"); err != nil {
+		return
+	}
+	if err = downloadNativeVerifyRoute(j.lease.handle.root, target); err != nil {
+		out.Code = "conflict"
+		return
+	}
+	authorizedParent, parentErr = downloadNativeParentInfo(j.lease.handle.root, target)
+	if parentErr != nil || !os.SameFile(workParentInfo, authorizedParent) {
+		out.Code = "conflict"
+		return
+	}
+	if err = work.publish(targetName); err != nil {
 		out.Code = "atomic_commit_failed"
 		if errors.Is(err, os.ErrExist) {
 			out.Code = "conflict"
@@ -402,37 +510,62 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	c.mu.Lock()
 	j.state.Committed = true
 	c.mu.Unlock()
+	if err = j.io.before("commit", "after_audio"); err != nil {
+		out.Code = "partial_committed"
+		return
+	}
 	// Never delete or roll back the published name after this point.
-	published, err := root.Lstat(out.Filename)
+	published, err := root.Lstat(targetName)
 	original, statErr := file.Stat()
 	if err != nil || statErr != nil || !sameLocalFileInfo(published, original) {
 		out.Code = "conflict"
 		return
 	}
-	dir, err := root.Open(".")
-	if err != nil {
-		out.Code = "sync_failed"
-		return
-	}
-	syncErr := dir.Sync()
-	closeErr := dir.Close()
-	if syncErr != nil || closeErr != nil {
-		out.Code = "sync_failed"
-		return
-	}
-	ref, registered, err := s.registerLocalFile(j.lease, out.Filename)
+	ref, registered, err := s.registerLocalFile(j.lease, target)
 	if err != nil {
 		out.Code = "registration_failed"
 		return
 	}
 	registeredInfo, statErr := registered.Stat()
-	closeErr = registered.Close()
-	if statErr != nil || closeErr != nil || !sameLocalFileInfo(original, registeredInfo) {
+	registeredCloseErr := registered.Close()
+	if statErr != nil || registeredCloseErr != nil || !sameLocalFileInfo(original, registeredInfo) {
 		out.Code = "conflict"
 		return
 	}
+	registeredParent, parentErr := downloadNativeParentInfo(j.lease.handle.root, target)
+	if parentErr != nil || !os.SameFile(workParentInfo, registeredParent) {
+		out.Code = "registration_failed"
+		return
+	}
 	out.Ref = ref
-	out.Code = "ok"
+	for _, sidecar := range sidecars {
+		if err = j.io.before("sidecar", "publish"); err == nil {
+			err = sidecar.private.publish(sidecar.public)
+		}
+		if err != nil {
+			out.Code = "partial_committed"
+			return
+		}
+	}
+	if err = j.io.before("commit", "after_sidecars"); err != nil {
+		out.Code = "partial_committed"
+		return
+	}
+	durability := j.io.DirectoryDurability
+	if durability == nil {
+		durability = downloadCommitDirectoryDurability
+	}
+	durable, durabilityErr := durability(root)
+	if durabilityErr != nil {
+		out.Code = "sync_failed"
+		return
+	}
+	if durable {
+		out.Code = "ok"
+	} else {
+		out.Code = "durability_uncertain"
+	}
+
 	return
 }
 
@@ -458,4 +591,152 @@ func (s *nativeFilesState) claimDownloadCommit(j *downloadJob) error {
 		j.commit.phase.Store(fileCommitClaimed)
 		return nil
 	})
+}
+
+// downloadNativeOpenTarget to obtain a Root for the validated child directory.
+func downloadNativeParentInfo(root *os.Root, target string) (os.FileInfo, error) {
+	dir := path.Dir(target)
+	if dir == "." {
+		return root.Stat(".")
+	}
+	parent, err := root.OpenRoot(dir)
+	if err != nil {
+		return nil, err
+	}
+	defer parent.Close()
+	return parent.Stat(".")
+}
+
+func downloadNativeVerifyRoute(root *os.Root, target string) error {
+	directory := path.Dir(target)
+	if directory == "." {
+		return nil
+	}
+	prefix := ""
+	for _, part := range strings.Split(directory, "/") {
+		if prefix == "" {
+			prefix = part
+		} else {
+			prefix += "/" + part
+		}
+		info, err := root.Lstat(prefix)
+		if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			return errFilesChanged
+		}
+		next, err := root.OpenRoot(prefix)
+		if err != nil {
+			return errFilesChanged
+		}
+		after, err := next.Stat(".")
+		_ = next.Close()
+		if err != nil || !os.SameFile(info, after) {
+			return errFilesChanged
+		}
+	}
+	return nil
+}
+
+// downloadNativeOpenTarget creates and opens only validated relative children.
+// No renderer path is passed to os.Open or filepath operations.
+func downloadNativeOpenTarget(root *os.Root, target string) (*os.Root, string, error) {
+	if err := validateLocalRelativePath(target); err != nil {
+		return nil, "", errDownloadOptions
+	}
+	directory := path.Dir(target)
+	if directory == "." {
+		return root, path.Base(target), nil
+	}
+	current := root
+	parts := strings.Split(directory, "/")
+	opened := make([]*os.Root, 0, len(parts))
+	owned := true
+	defer func() {
+		if owned {
+			for _, r := range opened {
+				_ = r.Close()
+			}
+		}
+	}()
+	for _, part := range parts {
+		before, err := current.Lstat(part)
+		if errors.Is(err, os.ErrNotExist) {
+			if mkdirErr := current.Mkdir(part, 0700); mkdirErr != nil && !errors.Is(mkdirErr, os.ErrExist) {
+				return nil, "", mkdirErr
+			}
+			before, err = current.Lstat(part)
+		}
+		if err != nil || !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+			return nil, "", errDownloadOptions
+		}
+		next, err := current.OpenRoot(part)
+		if err != nil {
+			return nil, "", errDownloadOptions
+		}
+		after, err := next.Stat(".")
+		if err != nil || !os.SameFile(before, after) {
+			_ = next.Close()
+			return nil, "", errFilesChanged
+		}
+		opened = append(opened, next)
+		current = next
+	}
+	// Transfer owns the returned child; close only the intermediate handles.
+	child := current
+	for _, r := range opened[:len(opened)-1] {
+		_ = r.Close()
+	}
+	owned = false
+	return child, path.Base(target), nil
+}
+
+// downloadNativeMetadata stages metadata on the private audio file. Empty
+// lyrics are intentionally skipped: WriteLyrics requests an optional value and
+// must not reject an otherwise valid audio download.
+func downloadNativeMetadata(ctx context.Context, client *http.Client, root *os.Root, audio *os.File, name string, options *DownloadOptions) error {
+	if options == nil || options.Metadata == nil {
+		return nil
+	}
+	m := options.Metadata
+	var picture *metadata.Picture
+	if options.WriteCover && m.CoverURL != "" {
+		data, mime, err := downloadNativeFetchCover(ctx, client, m.CoverURL)
+		if err != nil {
+			return err
+		}
+		picture = &metadata.Picture{MIME: mime, Type: 3, Data: data}
+	}
+
+	patch := metadata.Patch{}
+	if options.WriteMetadata {
+		patch.Title, patch.Album, patch.Artists = &m.Title, &m.Album, &m.Artists
+	}
+	if options.WriteLyrics && m.Lyrics != "" {
+		patch.Lyrics = &m.Lyrics
+	}
+	if picture != nil {
+		pictures := []metadata.Picture{*picture}
+		patch.Pictures = &pictures
+	}
+	if patch.Title == nil && patch.Album == nil && patch.Artists == nil && patch.Lyrics == nil && patch.Pictures == nil {
+		return nil
+	}
+	info, err := audio.Stat()
+	if err != nil {
+		return err
+	}
+	if !metadataPatchWithinLimit(patch) {
+		return errDownloadOptions
+	}
+	if err := metadata.EditWorkingCopy(ctx, audio, info.Size(), patch); err != nil {
+		return err
+	}
+	edited, err := audio.Stat()
+	if err != nil {
+		return err
+	}
+	parsed, err := metadata.Parse(audio, edited.Size())
+	if err != nil || !metadataPatchMatches(parsed, patch) {
+		return errDownloadOptions
+	}
+	return nil
 }

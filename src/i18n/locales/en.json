@@ -1085,6 +1085,9 @@
     "minutes_ago": "{count} minute ago | {count} minutes ago"
   },
   "local_metadata": {
+    "match_choose": "Choose a matching song to fill the editable fields below.",
+    "match_cancel": "Cancel matching",
+    "match_review": "Match filled in. Review and edit the information, then save to write the file.",
     "title": "Title",
     "artists": "Artists",
     "album": "Album",
@@ -1129,6 +1132,18 @@
     "unknown_size": "Unknown size",
     "bytes": "bytes",
     "possibly_saved": "The destination file may already be saved. Check this filename; it will not be overwritten by an automatic retry.",
+    "residual_file": "Remaining file to check",
+    "warning": {
+      "durability_uncertain": "The file was saved, but durable storage could not be confirmed. Check the file first.",
+      "partial_committed": "The audio was saved, but some cover or lyric files could not be saved.",
+      "sync_failed": "The file was saved, but syncing it to disk failed.",
+      "cleanup_failed": "Temporary file cleanup failed. Check the download directory.",
+      "registration_failed": "The file was saved but has not been added to the local library. Scan the library again.",
+      "conflict": "A file with the same name appeared. Check it and scan the library again.",
+      "cancelled": "The download was cancelled. Check the task's final saved state.",
+      "timeout": "The download timed out. Check the task's final saved state.",
+      "revoked": "Directory access changed. Authorize the directory again and check the file."
+    },
     "refresh_pending": "Refreshing the local music library",
     "refresh_complete": "Local music library refreshed",
     "refresh_failed": "The file was saved, but the library refresh failed. Scan the library again later.",

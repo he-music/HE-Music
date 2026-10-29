@@ -1,3 +1,4 @@
+import type { ControlProvider } from "./controlSession";
 import type { PlatformShortcuts } from "./shortcuts";
 import type { PlatformSystemMedia } from "./systemMedia";
 import type { PlatformFiles } from "./files";
@@ -9,6 +10,7 @@ import type { TaskbarProvider } from "./taskbarSession";
 import type { PlatformNetworkProxy } from "./networkProxy";
 import type { GatewayProvider } from "./gateway";
 import type { PlatformWindowAppearance } from "./windowAppearance";
+import type { PlatformPreferencesReset } from "./preferencesReset";
 import type {
   CloseRequested,
   CloseResolution,
@@ -58,6 +60,8 @@ export interface PlatformAdapter {
   openExternal(url: string, target?: "_self" | "_blank"): Promise<void>;
   readonly deviceName?: () => Promise<string>;
   readonly lifecycle?: PlatformLifecycle;
+  readonly playbackControl?: ControlProvider;
+  readonly preferencesReset?: PlatformPreferencesReset;
   readonly shortcuts?: PlatformShortcuts;
   readonly systemMedia?: PlatformSystemMedia;
   readonly files?: PlatformFiles;

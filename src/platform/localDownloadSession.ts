@@ -1,5 +1,12 @@
 import { computed, shallowRef } from "vue";
-import type { DownloadOperation, DownloadRequest, DownloadState } from "./mygo.bindings";
+import type {
+  DownloadMetadata,
+  DownloadOperation,
+  DownloadOptions,
+  DownloadRequest,
+  DownloadState,
+} from "@/platform/mygo.bindings";
+export type { DownloadMetadata, DownloadOptions } from "@/platform/mygo.bindings";
 import {
   localDownloadSnapshot,
   validLocalDownloadFormat,
@@ -28,7 +35,9 @@ export interface LocalDownloadSource {
 export type LocalDownloadResolver = (
   quality: string,
   source: LocalDownloadSource,
-) => Promise<{ url: string; format: string }>;
+  options?: DownloadOptions,
+  resolveOptions?: DownloadResolveOptions,
+) => Promise<{ url: string; format: string; metadata?: DownloadMetadata }>;
 
 /** Copy only resolver inputs; link URLs and song credentials never become retry data. */
 export function localDownloadSource(source: LocalDownloadSource): LocalDownloadSource {
@@ -43,6 +52,11 @@ export function localDownloadSource(source: LocalDownloadSource): LocalDownloadS
     ),
   });
 }
+export interface DownloadResolveOptions {
+  readonly writeLyricTranslation: boolean;
+  readonly writeLyricRomaji: boolean;
+}
+
 export interface LocalDownloadInput {
   grantToken: string;
   filename: string;
@@ -51,7 +65,20 @@ export interface LocalDownloadInput {
   quality: string;
   source: LocalDownloadSource;
   resolveURL: LocalDownloadResolver;
+  options?: DownloadOptions;
+  resolveOptions?: DownloadResolveOptions;
 }
+export type DownloadWarningCode =
+  | "durability_uncertain"
+  | "partial_committed"
+  | "sync_failed"
+  | "cleanup_failed"
+  | "registration_failed"
+  | "conflict"
+  | "cancelled"
+  | "timeout"
+  | "revoked";
+
 export interface LocalDownloadTask {
   readonly id: string;
   readonly filename: string;
@@ -66,6 +93,8 @@ export interface LocalDownloadTask {
   readonly refresh: "none" | "pending" | "complete" | "failed";
   readonly retryable: boolean;
   readonly interrupted?: boolean;
+  readonly warning?: DownloadWarningCode;
+  readonly residualName?: string;
 }
 interface RecordState {
   task: LocalDownloadTask;
@@ -79,12 +108,129 @@ interface RecordState {
     quality: string;
     source: LocalDownloadSource;
     resolveURL: LocalDownloadResolver;
+    options?: DownloadOptions;
+    resolveOptions?: DownloadResolveOptions;
   };
   targetDirectory: string;
+  options?: DownloadOptions;
+  resolveOptions?: DownloadResolveOptions;
   timer?: ReturnType<typeof setTimeout>;
 }
+function isWellFormedUnicode(value: string): boolean {
+  for (let index = 0; index < value.length; index++) {
+    const code = value.charCodeAt(index);
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1);
+      if (!Number.isFinite(next) || next < 0xdc00 || next > 0xdfff) return false;
+      index++;
+    } else if (code >= 0xdc00 && code <= 0xdfff) return false;
+  }
+  return true;
+}
+
+export function validDownloadHTTPURL(value: string): boolean {
+  if (
+    !isWellFormedUnicode(value) ||
+    new TextEncoder().encode(value).length > 8192 ||
+    value !== value.trim()
+  )
+    return false;
+  if (
+    !/^https?:\/\/[^/\\?#]+/i.test(value) ||
+    Array.from(value).some((character) => {
+      const code = character.codePointAt(0) ?? 0;
+      return code <= 0x20 || (code >= 0x7f && code <= 0x9f);
+    })
+  )
+    return false;
+  const authority = value.match(/^https?:\/\/([^/?#]+)/i)?.[1];
+  if (
+    !authority ||
+    authority.includes("@") ||
+    authority.includes("%") ||
+    value.includes("\\") ||
+    /%(?![0-9a-f]{2})/i.test(value)
+  )
+    return false;
+  try {
+    const url = new URL(value);
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      !!url.hostname &&
+      !!url.host &&
+      !url.username &&
+      !url.password &&
+      !url.hash
+    );
+  } catch {
+    return false;
+  }
+}
+
+function validDownloadRelativePath(value: string): boolean {
+  return (
+    value.length > 0 &&
+    new TextEncoder().encode(value).length <= 240 &&
+    !value.startsWith("/") &&
+    !/^[A-Za-z]:/.test(value) &&
+    !value.includes("\\") &&
+    !value.includes(":") &&
+    !value.includes(String.fromCharCode(0)) &&
+    !value.split("/").some((part) => !part || part === "." || part === "..")
+  );
+}
+
+export function validDownloadOptions(options: DownloadOptions | undefined): boolean {
+  if (!options) return true;
+  if (
+    options.relativeDirectory !== undefined &&
+    options.relativeDirectory !== "" &&
+    !validDownloadRelativePath(options.relativeDirectory)
+  )
+    return false;
+  if (
+    !options.writeMetadata &&
+    !options.writeCover &&
+    !options.writeLyrics &&
+    !options.saveSidecars
+  )
+    return true;
+  const metadata = options.metadata;
+  if (
+    !metadata ||
+    !isWellFormedUnicode(metadata.title) ||
+    !isWellFormedUnicode(metadata.album) ||
+    !isWellFormedUnicode(metadata.lyrics) ||
+    metadata.artists.length > 64
+  )
+    return false;
+  const encoder = new TextEncoder();
+  if (
+    encoder.encode(metadata.title).length > 4096 ||
+    encoder.encode(metadata.album).length > 4096 ||
+    encoder.encode(metadata.lyrics).length > 1 << 20 ||
+    metadata.artists.some(
+      (artist) => !isWellFormedUnicode(artist) || encoder.encode(artist).length > 4096,
+    )
+  )
+    return false;
+  const coverBytes = metadata.coverURL ? encoder.encode(metadata.coverURL).length : 0;
+  if (coverBytes > 8192) return false;
+  const total =
+    encoder.encode(metadata.title).length +
+    encoder.encode(metadata.album).length +
+    encoder.encode(metadata.lyrics).length +
+    coverBytes +
+    metadata.artists.reduce((sum, artist) => sum + encoder.encode(artist).length, 0);
+  return (
+    total <= 2 << 20 &&
+    (!options.writeCover || (!!metadata.coverURL && validDownloadHTTPURL(metadata.coverURL)))
+  );
+}
+
 export function validDownloadFilename(name: string): boolean {
   return (
+    isWellFormedUnicode(name) &&
     new TextEncoder().encode(name).length <= 240 &&
     name.trim() === name &&
     !name.startsWith(".") &&
@@ -94,17 +240,6 @@ export function validDownloadFilename(name: string): boolean {
     name.includes(".")
   );
 }
-function validURL(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (
-      ["https:", "http:"].includes(url.protocol) && !url.username && !url.password && !url.hash
-    );
-  } catch {
-    return false;
-  }
-}
-
 /** Owned by FilesSession; closing a view must not dispose this queue. */
 export class LocalDownloadSession {
   private readonly list = shallowRef<readonly LocalDownloadTask[]>([]);
@@ -188,8 +323,11 @@ export class LocalDownloadSession {
             : undefined,
       refresh: "none",
       interrupted,
+      ...(snapshot.warning ? { warning: snapshot.warning } : {}),
+      ...(snapshot.residualName ? { residualName: snapshot.residualName } : {}),
       retryable:
         !snapshot.committed &&
+        snapshot.warning !== "cleanup_failed" &&
         !!snapshot.source &&
         !!snapshot.targetDirectory &&
         !!this.deps.directoryToken &&
@@ -209,7 +347,8 @@ export class LocalDownloadSession {
       ) ||
       [...this.records.values()].filter((record) => !record.task.done).length >= 2 ||
       !validDownloadFilename(input.filename) ||
-      !validURL(input.url)
+      !validDownloadHTTPURL(input.url) ||
+      !validDownloadOptions(input.options)
     )
       return undefined;
     const access = this.deps.access(input.grantToken);
@@ -241,8 +380,12 @@ export class LocalDownloadSession {
         quality: input.quality,
         source: localDownloadSource(input.source),
         resolveURL: input.resolveURL,
+        options: input.options,
+        resolveOptions: input.resolveOptions,
       },
       targetDirectory: this.deps.directoryPath?.(input.grantToken) ?? "",
+      options: input.options,
+      resolveOptions: input.resolveOptions,
     };
     this.records.set(id, record);
     this.touched.add(id);
@@ -250,12 +393,16 @@ export class LocalDownloadSession {
     try {
       const result = await this.bounded(
         () =>
-          access.start({
-            operationId: id,
-            grantToken: input.grantToken,
-            filename: input.filename,
-            url: input.url,
-          }),
+          (() => {
+            const request = {
+              operationId: id,
+              grantToken: input.grantToken,
+              filename: input.filename,
+              url: input.url,
+              ...(input.options ? { options: input.options } : {}),
+            };
+            return access.start(request);
+          })(),
         record,
       );
       if (this.current(record) && result.operationId !== id) this.unknown(record);
@@ -288,7 +435,11 @@ export class LocalDownloadSession {
       links: snapshot.source.links.map((link) => ({ ...link, size: "" })),
     });
     try {
-      const result = await this.bounded(() => resolveURL(snapshot.quality, source));
+      const result = await this.bounded(() =>
+        snapshot.options || snapshot.resolveOptions
+          ? resolveURL(snapshot.quality, source, snapshot.options, snapshot.resolveOptions)
+          : resolveURL(snapshot.quality, source),
+      );
       if (
         this.disposed ||
         this.archived.get(id) !== snapshot ||
@@ -305,6 +456,8 @@ export class LocalDownloadSession {
         source,
         resolveURL,
         url: result.url,
+        options: this.withResolvedMetadata(snapshot.options, result.metadata),
+        resolveOptions: snapshot.resolveOptions,
       });
     } catch {
       return undefined;
@@ -345,7 +498,15 @@ export class LocalDownloadSession {
     record.retrying = true;
     try {
       const result = await this.bounded(
-        () => recipe.resolveURL(recipe.quality, recipe.source),
+        () =>
+          recipe.options || recipe.resolveOptions
+            ? recipe.resolveURL(
+                recipe.quality,
+                recipe.source,
+                recipe.options,
+                recipe.resolveOptions,
+              )
+            : recipe.resolveURL(recipe.quality, recipe.source),
         record,
       );
       if (
@@ -367,6 +528,8 @@ export class LocalDownloadSession {
         quality: recipe.quality,
         source: recipe.source,
         resolveURL: recipe.resolveURL,
+        options: this.withResolvedMetadata(recipe.options, result.metadata),
+        resolveOptions: recipe.resolveOptions,
         url: result.url,
       });
     } catch {
@@ -441,6 +604,8 @@ export class LocalDownloadSession {
               ...record.task,
               source: record.recipe?.source,
               targetDirectory: record.targetDirectory,
+              options: record.recipe?.options,
+              resolveOptions: record.recipe?.resolveOptions,
             }),
           );
         } catch {
@@ -487,6 +652,8 @@ export class LocalDownloadSession {
             ...record.task,
             source: record.recipe?.source,
             targetDirectory: record.targetDirectory,
+            options: record.recipe?.options,
+            resolveOptions: record.recipe?.resolveOptions,
           }),
         ),
         ...[...this.archived.values()].map(localDownloadSnapshot),
@@ -550,20 +717,31 @@ export class LocalDownloadSession {
         this.unknown(record);
         return;
       }
-      const success = state.done && state.code === "ok" && state.committed && !!state.ref;
+      const saved = this.isSavedOutcome(state);
+      const warning = state.code === "ok" ? undefined : this.warningCode(state.code);
       record.task = {
         ...record.task,
         done: state.done,
         committed: state.committed,
         received: state.received,
         total: state.total,
-        percent: success
+        percent: saved
           ? 100
           : state.total
             ? Math.min(99, Math.floor((state.received / state.total) * 100))
             : undefined,
-        phase: success ? "success" : state.done ? (state.committed ? "saved" : "failed") : "active",
-        retryable: state.done && !state.committed && state.code !== "ok",
+        phase: saved
+          ? state.code === "ok"
+            ? "success"
+            : "saved"
+          : state.done
+            ? state.committed
+              ? "saved"
+              : "failed"
+            : "active",
+        retryable: this.isRetryable(state),
+        ...(warning ? { warning } : {}),
+        ...(state.residualName ? { residualName: state.residualName } : {}),
       };
       if (state.done && state.committed) {
         record.task = { ...record.task, refresh: "pending" };
@@ -583,6 +761,73 @@ export class LocalDownloadSession {
       if (this.current(record)) this.schedule(record);
     }
   }
+  private withResolvedMetadata(
+    options: DownloadOptions | undefined,
+    metadata: DownloadMetadata | undefined,
+  ): DownloadOptions | undefined {
+    return options && metadata
+      ? {
+          ...options,
+          metadata: { ...options.metadata, ...metadata, artists: [...metadata.artists] },
+        }
+      : options;
+  }
+
+  private relativePath(filename: string, options?: DownloadOptions): string {
+    const directory = options?.relativeDirectory?.trim().replace(/^[\\/]+|[\\/]+$/g, "");
+    return directory ? `${directory}/${filename}` : filename;
+  }
+
+  private validRelativePath(value: string): boolean {
+    return (
+      value.length > 0 &&
+      !value.startsWith("/") &&
+      !/^[A-Za-z]:/.test(value) &&
+      !value.includes("\\") &&
+      !value.includes(":") &&
+      !value.includes(String.fromCharCode(0)) &&
+      !value.split("/").some((part) => !part || part === "." || part === "..")
+    );
+  }
+
+  private warningCode(code: string): DownloadWarningCode | undefined {
+    return new Set<DownloadWarningCode>([
+      "durability_uncertain",
+      "partial_committed",
+      "sync_failed",
+      "cleanup_failed",
+      "registration_failed",
+      "conflict",
+      "cancelled",
+      "timeout",
+      "revoked",
+    ]).has(code as DownloadWarningCode)
+      ? (code as DownloadWarningCode)
+      : undefined;
+  }
+
+  private isSavedOutcome(state: DownloadState): boolean {
+    if (!state.done || !state.committed) return false;
+    if (["ok", "durability_uncertain", "partial_committed", "sync_failed"].includes(state.code))
+      return !!state.ref;
+    return [
+      "cleanup_failed",
+      "registration_failed",
+      "conflict",
+      "cancelled",
+      "timeout",
+      "revoked",
+    ].includes(state.code);
+  }
+
+  private isRetryable(state: DownloadState): boolean {
+    return (
+      state.done &&
+      !state.committed &&
+      !["cleanup_failed", "registration_failed", "revoked"].includes(state.code)
+    );
+  }
+
   private validState(record: RecordState, state: DownloadState): boolean {
     const previous = record.task;
     return (
@@ -603,10 +848,14 @@ export class LocalDownloadSession {
         "sync_failed",
         "registration_failed",
         "cleanup_failed",
+        "durability_uncertain",
+        "partial_committed",
+        "sync_failed",
         "cancelled",
         "timeout",
       ]).has(state.code) &&
       !(state.done && state.code === "running") &&
+      !(state.code === "durability_uncertain" && (!state.done || !state.committed || !state.ref)) &&
       typeof state.done === "boolean" &&
       typeof state.committed === "boolean" &&
       Number.isSafeInteger(state.received) &&
@@ -616,17 +865,20 @@ export class LocalDownloadSession {
       (state.total === 0 || state.received <= state.total) &&
       (!previous.committed || state.committed) &&
       (state.filename === undefined || state.filename === previous.filename) &&
+      (state.residualName === undefined || this.validRelativePath(state.residualName)) &&
       (!state.ref ||
         (state.ref.grantToken === record.token &&
-          state.ref.relativePath === previous.filename &&
+          state.ref.relativePath === this.relativePath(previous.filename, record.recipe?.options) &&
           typeof state.ref.fileId === "string" &&
           !!state.ref.fileId &&
           typeof state.ref.version === "string" &&
           !!state.ref.version)) &&
       !(
         state.done &&
-        state.code === "ok" &&
-        (!state.committed || !state.ref || state.filename !== previous.filename)
+        ["ok", "durability_uncertain", "partial_committed", "sync_failed"].includes(state.code) &&
+        (!state.committed ||
+          !state.ref ||
+          (state.filename !== undefined && state.filename !== previous.filename))
       )
     );
   }

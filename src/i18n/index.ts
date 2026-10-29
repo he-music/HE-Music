@@ -17,6 +17,8 @@ import appearanceEN from "./locales/mygo/appearance.en.json";
 import appearanceZH from "./locales/mygo/appearance.zh-CN.json";
 import audioEN from "./locales/mygo/audio.en.json";
 import audioZH from "./locales/mygo/audio.zh-CN.json";
+import preferencesResetEN from "./locales/mygo/preferencesReset.en.json";
+import preferencesResetZH from "./locales/mygo/preferencesReset.zh-CN.json";
 
 const numberFormats = {
   en: {
@@ -54,6 +56,7 @@ const i18n = createI18n({
         ...taskbarEN,
         ...appearanceEN,
         ...audioEN,
+        ...preferencesResetEN,
         protocols: protocolsEN,
       },
     },
@@ -67,6 +70,7 @@ const i18n = createI18n({
         ...taskbarZH,
         ...appearanceZH,
         ...audioZH,
+        ...preferencesResetZH,
         protocols: protocolsZH,
       },
     },

@@ -111,6 +111,7 @@ beforeEach(() => {
   Object.assign(host.platform, {
     kind: "mygo",
     lifecycle: undefined,
+    preferencesReset: undefined,
     files: undefined,
     systemMedia: undefined,
     shortcuts: undefined,
@@ -211,6 +212,39 @@ function lifecycle(ready = Promise.resolve({ trayAvailable: false, epoch: 1 })) 
 }
 
 describe("actual General settings file actions", () => {
+  it("keeps file export independent from reset availability and locks it only during a reset action", async () => {
+    const native = provider();
+    const session = new FilesSession(native);
+    await session.start();
+    const unavailable = general();
+    expect(unavailable.disabled()).toBe(false);
+    expect(Vue.toValue(unavailable.item("resetSetting").disabled)).toBe(true);
+    unavailable.scope.stop();
+
+    const life = lifecycle();
+    const reset = vi.fn(async (mode: "settings" | "all") => ({
+      pending: true,
+      transactionId: "transaction",
+      mode,
+      restartRequired: true,
+    }));
+    host.platform.preferencesReset = { reset };
+    const page = general();
+    expect(Vue.toValue(page.item("resetSetting").disabled)).toBe(false);
+    page.item("resetSetting").action?.();
+    expect(page.disabled()).toBe(true);
+    await page.export();
+    page.import();
+    expect(native.exportSettings).not.toHaveBeenCalled();
+    expect(native.importSettings).not.toHaveBeenCalled();
+    confirm.onNegativeClick?.();
+    expect(page.disabled()).toBe(false);
+    await page.export();
+    expect(native.exportSettings).toHaveBeenCalledOnce();
+    expect(reset).not.toHaveBeenCalled();
+    expect(life.quit).not.toHaveBeenCalled();
+  });
+
   it.each(["web", "electron"] as const)(
     "does not call native files on %s without provider",
     async (kind) => {

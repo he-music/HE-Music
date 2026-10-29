@@ -201,6 +201,15 @@ describe("LocalMusicDirectory真实SFC", () => {
     expect(config.groups.flatMap((group) => group.items.map((item) => item.key))).toEqual([
       "localFilesPath",
       "showLocalCover",
+      "downloadPath",
+      "downloadMeta",
+      "downloadCover",
+      "downloadLyric",
+      "downloadLyricTran",
+      "downloadLyricRoma",
+      "saveMetaFile",
+      "fileNameFormat",
+      "folderStrategy",
     ]);
     const cover = config.groups
       .flatMap((group) => group.items)

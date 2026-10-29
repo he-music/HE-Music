@@ -1,12 +1,30 @@
-import { computed, onScopeDispose, ref } from "vue";
+import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
 import { isElectron } from "@/utils/env";
 import { platform } from "@/platform";
 import { t } from "@/i18n";
+import type { PreferencesResetFilesOwner } from "@/platform/preferencesResetOwner";
+import { filesSession } from "@/platform/filesSession";
+import { usePreferencesResetActions } from "./preferencesResetActions";
 import { useSettingsFiles } from "./settingsFiles";
 
 /** Create once in the owning settings page setup, outside config computed getters. */
 export function useGeneralSettingsActions() {
   const files = useSettingsFiles();
+  // Bind this settings scope to its first ready FilesSession, including when
+  // settings mount before shell startup finishes. Never rebind to a replacement.
+  const resetOwner = shallowRef<PreferencesResetFilesOwner>();
+  watch(
+    filesSession,
+    (session) => {
+      if (!resetOwner.value) resetOwner.value = session?.capturePreferencesResetOwner();
+    },
+    { immediate: true, flush: "sync" },
+  );
+  const preferencesReset = usePreferencesResetActions(
+    platform.preferencesReset,
+    platform.lifecycle,
+    resetOwner,
+  );
   const pending = ref(false);
   const reloading = ref(false);
   let disposed = false;
@@ -16,8 +34,11 @@ export function useGeneralSettingsActions() {
     if (reloadTimer !== undefined) clearTimeout(reloadTimer);
   });
   const disabled = computed(() =>
-    isElectron ? pending.value || reloading.value : files.disabled.value,
+    isElectron
+      ? pending.value || reloading.value
+      : files.disabled.value || (platform.kind === "mygo" && preferencesReset.pending.value),
   );
+  const resetDisabled = computed(() => disabled.value || preferencesReset.disabled.value);
   const exportSettings = async () => {
     if (disposed || disabled.value) return;
     if (platform.kind === "mygo") return files.exportSettings();
@@ -91,7 +112,7 @@ export function useGeneralSettingsActions() {
       },
     });
   };
-  return { disabled, exportSettings, importSettings };
+  return { disabled, resetDisabled, exportSettings, importSettings, preferencesReset };
 }
 
 export type GeneralSettingsActions = ReturnType<typeof useGeneralSettingsActions>;

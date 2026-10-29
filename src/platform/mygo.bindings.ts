@@ -24,6 +24,17 @@ export interface CloseRequested {
 
 export type CloseResolution = "cancel" | "hide" | "exit";
 
+export interface ControlCommand {
+  generation: number;
+  requestId: number;
+  action: string;
+}
+
+export interface ControlSession {
+  generation: number;
+  port: number;
+}
+
 export type DefaultDirectoryKind = "music" | "downloads";
 
 export interface DefaultDirectoryResult {
@@ -51,8 +62,26 @@ export interface DirectorySelection {
 
 export type DirectorySelectionStatus = "selected" | "cancelled" | "overlap";
 
+export interface DownloadMetadata {
+  title: string;
+  artists: string[];
+  album: string;
+  lyrics: string;
+  coverURL?: string;
+}
+
 export interface DownloadOperation {
   operationId: string;
+}
+
+/** DownloadOptions is the immutable, bounded native download configuration. */
+export interface DownloadOptions {
+  relativeDirectory?: string;
+  writeMetadata: boolean;
+  writeCover: boolean;
+  writeLyrics: boolean;
+  saveSidecars: boolean;
+  metadata?: DownloadMetadata;
 }
 
 /**
@@ -64,11 +93,12 @@ export interface DownloadRequest {
   grantToken: string;
   url: string;
   filename: string;
+  options?: DownloadOptions;
 }
 
 /**
- * Total is zero when unknown. Received counts accepted bytes and never exceeds
- * the hard limit. Clients must use Done && Code == "ok", not byte equality.
+ * Total is zero when unknown. Received counts streamed audio bytes without a
+ * song-size cap. Clients must inspect Done, Code and Committed, not byte equality.
  */
 export interface DownloadState {
   operationId: string;
@@ -309,6 +339,8 @@ export interface MetadataResult {
   ref?: LocalFileRef;
   info?: Info;
   sha256?: string;
+  /** MD5 is only the legacy online-match key, never an authorization baseline. */
+  md5?: string;
   residualNames?: string[];
   recoveryName?: string;
   committed: boolean;
@@ -362,6 +394,28 @@ export interface Picture {
   Type: number;
   Description: string;
   Data: string;
+}
+
+export type PreferencesResetMode = "settings" | "all";
+
+export type PreferencesResetPhase = "restart" | "renderer";
+
+/**
+ * PreferencesResetReceipt means reset intent is durable. Actual deletion occurs
+ * before stores/SDK geometry load in the next process, after shutdown writers.
+ */
+export interface PreferencesResetReceipt {
+  pending: boolean;
+  restartRequired: boolean;
+  transactionId: string;
+  mode: PreferencesResetMode;
+}
+
+export interface PreferencesResetTransaction {
+  version: number;
+  transactionId: string;
+  mode: PreferencesResetMode;
+  phase: PreferencesResetPhase;
 }
 
 export interface ProtocolIntent {
@@ -622,6 +676,26 @@ export const AuthCallback = {
 } as const;
 
 /**
+ * PlaybackControl acquires its loopback listener only after the shell subscribes.
+ * Binding generation neither opens sockets nor touches native resources.
+ */
+export const PlaybackControl = {
+  receipt(generation: number, requestID: number, applied: boolean): Promise<void> {
+    return call("PlaybackControl.Receipt", generation, requestID, applied);
+  },
+  /**
+   * Start runs listener acquisition on the binding goroutine after main-thread
+   * ownership validation. port=0 selects the legacy 25666 default.
+   */
+  start(port: number): Promise<ControlSession> {
+    return call("PlaybackControl.Start", port);
+  },
+  teardown(generation: number): Promise<void> {
+    return call("PlaybackControl.Teardown", generation);
+  },
+} as const;
+
+/**
  * NativeFiles scopes IO to selected directories and restores private selection records.
  * Paths never act as renderer capabilities; every session creates fresh grants and refs.
  */
@@ -857,6 +931,9 @@ export const NetworkProxy = {
 
 /** DesktopPlatform exposes only the desktop capabilities implemented in M2. */
 export const DesktopPlatform = {
+  acknowledgePreferencesReset(transactionID: string): Promise<void> {
+    return call("DesktopPlatform.AcknowledgePreferencesReset", transactionID);
+  },
   /**
    * DeviceName preserves the native desktop device label used by authentication.
    * It exposes a hardware model label, never the user's hostname or a file path.
@@ -867,6 +944,20 @@ export const DesktopPlatform = {
   /** OpenExternal opens HTTP(S) links in the system browser. */
   openExternal(rawURL: string): Promise<void> {
     return call("DesktopPlatform.OpenExternal", rawURL);
+  },
+  /**
+   * Before Pinia/platform/App imports, only the attached main top-level page may
+   * read pending startup intent. Readiness is intentionally not required yet.
+   */
+  pendingPreferencesReset(): Promise<PreferencesResetTransaction> {
+    return call("DesktopPlatform.PendingPreferencesReset");
+  },
+  /**
+   * ResetPreferences accepts no renderer path. The same top-level owner/context
+   * gate as all other native settings is checked before committing the marker.
+   */
+  resetPreferences(mode: PreferencesResetMode): Promise<PreferencesResetReceipt> {
+    return call("DesktopPlatform.ResetPreferences", mode);
   },
 } as const;
 
@@ -1041,6 +1132,7 @@ export const WindowAppearanceService = {
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
 export const events = {
   desktopAuthCallback: event<AuthCallbackReceived>("desktop:auth-callback"),
+  desktopControlCommand: event<ControlCommand>("desktop:control-command"),
   desktopTrayAction: event<TrayRequest>("desktop:tray-action"),
   desktopCloseRequested: event<CloseRequested>("desktop:close-requested"),
   desktopLyricsWindow: event<LyricsWindowState>("desktop:lyrics-window"),

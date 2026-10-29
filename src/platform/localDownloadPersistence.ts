@@ -1,3 +1,9 @@
+import type {
+  DownloadMetadata,
+  DownloadOptions,
+  DownloadResolveOptions,
+  DownloadWarningCode,
+} from "./localDownloadSession";
 import localforage from "localforage";
 
 export interface LocalDownloadSnapshotSource {
@@ -19,6 +25,10 @@ export interface LocalDownloadSnapshot {
   readonly quality: string;
   readonly source?: LocalDownloadSnapshotSource;
   readonly targetDirectory: string;
+  readonly options?: DownloadOptions;
+  readonly resolveOptions?: DownloadResolveOptions;
+  readonly warning?: DownloadWarningCode;
+  readonly residualName?: string;
   readonly phase: "active" | "unknown" | "success" | "failed" | "saved";
   readonly done: boolean;
   readonly committed: boolean;
@@ -62,6 +72,69 @@ const text = (value: unknown): value is string => typeof value === "string";
 const bytes = (value: unknown): value is number =>
   typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 
+function validatedResolveOptions(value: unknown): DownloadResolveOptions | undefined {
+  if (value === undefined) return undefined;
+  if (
+    !object(value) ||
+    typeof value.writeLyricTranslation !== "boolean" ||
+    typeof value.writeLyricRomaji !== "boolean"
+  )
+    throw invalid();
+  return {
+    writeLyricTranslation: value.writeLyricTranslation,
+    writeLyricRomaji: value.writeLyricRomaji,
+  };
+}
+
+function downloadOptions(value: unknown): DownloadOptions | undefined {
+  if (value === undefined) return undefined;
+  if (!object(value)) throw invalid();
+  if (
+    typeof value.writeMetadata !== "boolean" ||
+    typeof value.writeCover !== "boolean" ||
+    typeof value.writeLyrics !== "boolean" ||
+    typeof value.saveSidecars !== "boolean"
+  )
+    throw invalid();
+  if (
+    value.relativeDirectory !== undefined &&
+    (!text(value.relativeDirectory) ||
+      value.relativeDirectory.length > 240 ||
+      value.relativeDirectory.split("/").some((part) => !part || part === "." || part === ".."))
+  )
+    throw invalid();
+  let metadata: DownloadMetadata | undefined;
+  if (value.metadata !== undefined) {
+    const input = value.metadata;
+    if (
+      !object(input) ||
+      !text(input.title) ||
+      !Array.isArray(input.artists) ||
+      !input.artists.every(text) ||
+      !text(input.album) ||
+      !text(input.lyrics) ||
+      (input.coverURL !== undefined && !text(input.coverURL))
+    )
+      throw invalid();
+    metadata = {
+      title: input.title,
+      artists: [...input.artists],
+      album: input.album,
+      lyrics: input.lyrics,
+    };
+  }
+  return {
+    writeMetadata: value.writeMetadata,
+    writeCover: value.writeCover,
+    writeLyrics: value.writeLyrics,
+    saveSidecars: value.saveSidecars,
+    ...(value.relativeDirectory !== undefined
+      ? { relativeDirectory: value.relativeDirectory }
+      : {}),
+    ...(metadata ? { metadata } : {}),
+  };
+}
+
 /** Explicit projection also strips unknown runtime properties before every write. */
 export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
   if (
@@ -83,6 +156,36 @@ export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
     (["success", "saved", "failed"].includes(value.phase) && !value.done) ||
     (["success", "saved"].includes(value.phase) && !value.committed) ||
     (value.phase === "failed" && value.committed)
+  )
+    throw invalid();
+  const options = downloadOptions(value.options);
+  const resolveOptions = validatedResolveOptions(value.resolveOptions);
+  const warning = value.warning;
+  const validWarnings = [
+    "durability_uncertain",
+    "partial_committed",
+    "sync_failed",
+    "cleanup_failed",
+    "registration_failed",
+    "conflict",
+    "cancelled",
+    "timeout",
+    "revoked",
+  ] as const;
+  if (
+    warning !== undefined &&
+    (!text(warning) || !validWarnings.includes(warning as (typeof validWarnings)[number]))
+  )
+    throw invalid();
+  if (
+    value.residualName !== undefined &&
+    (!text(value.residualName) ||
+      value.residualName.startsWith("/") ||
+      /^[A-Za-z]:/.test(value.residualName) ||
+      value.residualName.includes("\\") ||
+      value.residualName.includes(":") ||
+      value.residualName.includes(String.fromCharCode(0)) ||
+      value.residualName.split("/").some((part) => !part || part === "." || part === ".."))
   )
     throw invalid();
   let source: LocalDownloadSnapshotSource | undefined;
@@ -128,6 +231,10 @@ export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
     quality: value.quality,
     ...(source ? { source } : {}),
     targetDirectory: value.targetDirectory,
+    ...(options ? { options } : {}),
+    ...(resolveOptions ? { resolveOptions } : {}),
+    ...(warning ? { warning: warning as DownloadWarningCode } : {}),
+    ...(value.residualName ? { residualName: value.residualName } : {}),
     phase,
     done: value.done,
     committed: value.committed,

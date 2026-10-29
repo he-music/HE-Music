@@ -312,17 +312,16 @@ func TestAuthCallbackOwnerIsolationAndPortConflict(t *testing.T) {
 	}
 }
 
-func TestAuthCallbackDefaultPort(t *testing.T) {
+func TestAuthCallbackSystemAssignedPort(t *testing.T) {
 	f := newAuthFixture(t)
-	p, err := f.callbacks.prepare(f.owner, 0, func(AuthCallbackReceived) error { return nil })
-	if err != nil {
-		if !strings.Contains(err.Error(), "25666 unavailable") {
-			t.Fatal("default port failed without explicit conflict")
-		}
-		return // A user's existing listener is never stopped or replaced.
+	p := f.prepare(t, 0)
+	u, err := url.Parse(p.CallbackURL)
+	if err != nil || u.Scheme != "http" || u.Hostname() != "127.0.0.1" || u.Path != authCallbackPath {
+		t.Fatal("unexpected callback URL")
 	}
-	if p.CallbackURL != "http://127.0.0.1:25666/login/success" {
-		t.Fatal("unexpected default callback URL")
+	port, err := strconv.Atoi(u.Port())
+	if err != nil || port < 1 || port > 65535 {
+		t.Fatal("system did not assign a callback port")
 	}
 }
 

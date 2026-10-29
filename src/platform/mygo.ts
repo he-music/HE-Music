@@ -2,6 +2,7 @@ import { shallowReactive } from "vue";
 import { currentWindow, runtime } from "mygo-runtime";
 import {
   DesktopLifecycle,
+  PlaybackControl,
   DesktopLyrics,
   DesktopPlatform,
   GlobalShortcuts,
@@ -42,6 +43,11 @@ export function createMygoPlatform(): PlatformAdapter {
     capabilities,
     files: NativeFiles,
     deviceName: DesktopPlatform.deviceName,
+    preferencesReset: { reset: (mode) => DesktopPlatform.resetPreferences(mode) },
+    playbackControl: {
+      ...PlaybackControl,
+      onCommand: (listener) => events.desktopControlCommand.on(listener),
+    },
     systemFonts:
       os === "darwin" || os === "win32" || os === "linux"
         ? createSystemFontsProvider(SystemFonts)

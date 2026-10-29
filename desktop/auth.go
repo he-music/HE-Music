@@ -20,7 +20,6 @@ import (
 
 const (
 	authCallbackPath   = "/login/success"
-	authDefaultPort    = 25666
 	authPrepareTimeout = time.Minute
 )
 
@@ -97,11 +96,10 @@ func (a *authCallbacks) prepare(owner context.Context, port int, emit func(AuthC
 	if a.closed || owner.Err() != nil {
 		return AuthCallbackPrepared{}, errors.New("auth callback owner unavailable")
 	}
-	if port == 0 {
-		port = authDefaultPort
-	}
-	if port < 1 || port > 65535 {
-		return AuthCallbackPrepared{}, errors.New("auth callback port must be between 1 and 65535")
+	// Zero asks the OS for an unused callback port. The long-lived playback
+	// control listener owns the legacy default, while OAuth uses this returned URL.
+	if port < 0 || port > 65535 {
+		return AuthCallbackPrepared{}, errors.New("auth callback port must be between 0 and 65535")
 	}
 	if old := a.sessions[owner]; old != nil {
 		a.releaseLocked(old, true)

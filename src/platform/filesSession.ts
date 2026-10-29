@@ -1,3 +1,4 @@
+import { capturePreferencesResetFilesOwner } from "./preferencesResetOwner";
 import { computed, shallowRef } from "vue";
 import type { PlatformFiles } from "./files";
 import { LocalFilesSession } from "./localFilesSession";
@@ -63,6 +64,7 @@ export type FileOperationResult<T> =
   { status: "completed"; value: T } | { status: "busy" | "unavailable" | "stale" | "failed" };
 
 const activeSession = shallowRef<FilesSession>();
+let filesOwnerGeneration = 0;
 export const filesSession = computed(() => activeSession.value);
 
 export interface FilesSessionDependencies {
@@ -165,6 +167,7 @@ export class FilesSession {
       }
       if (this.disposed || this.epoch !== epoch) return;
       this.ready.value = true;
+      filesOwnerGeneration++;
       activeSession.value = this;
       this.local = new LocalFilesSession(shallowRef(this));
       if (this.directoryGrants.value.length) await this.local.scan();
@@ -172,6 +175,17 @@ export class FilesSession {
       // File capability failure must not fail the media, shortcut or tray lifecycle.
       console.error("文件会话初始化失败");
     }
+  }
+
+  capturePreferencesResetOwner() {
+    const epoch = this.epoch;
+    if (epoch === undefined || this.disposed || activeSession.value !== this) return undefined;
+    return capturePreferencesResetFilesOwner({
+      ownsEpoch: () => !this.disposed && this.epoch === epoch && activeSession.value === this,
+      registryGeneration: () => filesOwnerGeneration,
+      registryEmpty: () => activeSession.value === undefined,
+      dispose: () => this.dispose(),
+    });
   }
 
   dispose(): Promise<void> {
@@ -183,7 +197,10 @@ export class FilesSession {
     this.local = undefined;
     this.ready.value = false;
     this.directoryGrants.value = [];
-    if (activeSession.value === this) activeSession.value = undefined;
+    if (activeSession.value === this) {
+      filesOwnerGeneration++;
+      activeSession.value = undefined;
+    }
     const epoch = this.epoch;
     this.epoch = undefined;
     // Do not wait for a pending picker before invalidating the native owner.

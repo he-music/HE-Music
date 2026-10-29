@@ -24,6 +24,11 @@ func main() {
 		appearance := WindowAppearance{}
 		directory, directoryErr := mygo.App.Path(mygo.PathUserData)
 		if directoryErr == nil {
+			if err := preparePreferencesResetStartup(directory); err != nil {
+				log.Print("恢复设置重置失败")
+				mygo.App.Quit()
+				return
+			}
 			if err := prepareLibraryPersistence(directory); err != nil {
 				log.Print("配置本地目录持久化失败")
 			}

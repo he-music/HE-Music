@@ -4,6 +4,8 @@ import { computed } from "vue";
 import { t } from "@/i18n";
 import { openLocalMusicDirectoryModal } from "@/utils/modal";
 import { isElectron, isMygo } from "@/utils/env";
+import { createMygoDownloadSettings } from "./localDownloadSettings";
+import { localFilesSession } from "@/platform/localFilesSession";
 
 export const useLocalSettings = (): SettingConfig => {
   const settingStore = useSettingStore();
@@ -38,6 +40,11 @@ export const useLocalSettings = (): SettingConfig => {
                 },
               ],
             },
+            ...createMygoDownloadSettings({
+              scanLibrary: async () => {
+                await localFilesSession.value?.scan();
+              },
+            }).groups,
           ]
         : [],
     };

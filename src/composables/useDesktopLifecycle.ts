@@ -16,6 +16,7 @@ import { createShellProtocolSession } from "./shellProtocols";
 import { createShellTaskbarSession } from "./shellTaskbar";
 import { WindowAppearanceSession } from "@/platform/windowAppearance";
 import { createMygoDownloadResolver } from "@/utils/localDownloadResolver";
+import { createShellControlSession } from "./shellControl";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -39,6 +40,7 @@ export function useDesktopLifecycle(ui: {
   const artwork = lifecycle ? createShellLocalArtworkSession() : undefined;
   const protocols = lifecycle ? createShellProtocolSession(platform.protocols) : undefined;
   const taskbar = lifecycle ? createShellTaskbarSession(platform.taskbar) : undefined;
+  const control = lifecycle ? createShellControlSession(platform.playbackControl) : undefined;
   const appearance =
     lifecycle && platform.windowAppearance
       ? new WindowAppearanceSession(platform.windowAppearance)
@@ -159,6 +161,7 @@ export function useDesktopLifecycle(ui: {
         const nativeStatus = await lifecycle.ready(config());
         if (disposed) return;
         await tray.start(nativeStatus.epoch);
+        void control?.start().catch(() => console.error("HTTP 播放控制初始化失败"));
         void protocols?.start().catch(() => console.error("应用协议会话初始化失败"));
         void taskbar?.start().catch(() => console.error("任务栏会话初始化失败"));
         void appearance?.start().catch(() => console.error("窗口外观会话初始化失败"));
@@ -179,6 +182,7 @@ export function useDesktopLifecycle(ui: {
         tray.dispose();
         artwork?.dispose();
         appearance?.dispose();
+        await control?.dispose().catch(reportFailure);
         await protocols?.dispose();
         await taskbar?.dispose();
         await updates?.dispose();
@@ -200,6 +204,7 @@ export function useDesktopLifecycle(ui: {
     disposed = true;
     artwork?.dispose();
     appearance?.dispose();
+    const controlCleanup = control?.dispose().catch(reportFailure);
     const protocolsCleanup = protocols?.dispose();
     const taskbarCleanup = taskbar?.dispose();
     const updatesCleanup = updates?.dispose();
@@ -212,6 +217,7 @@ export function useDesktopLifecycle(ui: {
     ui.showCloseModal.value = false;
     stops.splice(0).forEach((stop) => stop());
     shellTransition = shellTransition.then(async () => {
+      await controlCleanup;
       await protocolsCleanup;
       await taskbarCleanup;
       await updatesCleanup;
