@@ -116,10 +116,10 @@ func scanTestWrite(t *testing.T, path string, data []byte) {
 	}
 }
 
-func TestScanPagesIssuesAndCursor(t *testing.T) {
+func TestScanPagesEntriesAndCursor(t *testing.T) {
 	actor, ctx, epoch, token, path := scanTestGrant(t)
 	for n := 0; n < scanQueueSize+10; n++ {
-		scanTestWrite(t, filepath.Join(path, fmt.Sprintf("%03d.txt", n)), []byte("plain text, not audio"))
+		scanTestWrite(t, filepath.Join(path, fmt.Sprintf("%03d.mp3", n)), []byte("plain text, not audio"))
 	}
 	job := scanTestJob(t, actor.state, ctx, epoch, token)
 	if _, err := actor.state.readScanPage(ctx, epoch, job.id, "999"); !errors.Is(err, errFilesScanCursor) {
@@ -132,7 +132,10 @@ func TestScanPagesIssuesAndCursor(t *testing.T) {
 	if _, err := actor.state.readScanPage(ctx, epoch, job.id, ""); !errors.Is(err, errFilesScanCursor) {
 		t.Fatalf("replayed cursor: %v", err)
 	}
-	count := len(first.Issues)
+	if len(first.Issues) != 0 {
+		t.Fatalf("unexpected scan issues: %+v", first.Issues)
+	}
+	count := len(first.Entries)
 	cursor := first.NextCursor
 	deadline := time.After(5 * time.Second)
 	tick := time.NewTicker(time.Millisecond)
@@ -147,18 +150,18 @@ func TestScanPagesIssuesAndCursor(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if len(first.Entries) != 0 || len(first.Issues) > scanPageSize {
-			t.Fatal("suffix accepted or unbounded")
+		if len(first.Issues) != 0 || len(first.Entries) > scanPageSize {
+			t.Fatal("unexpected issues or unbounded entries")
 		}
-		count += len(first.Issues)
+		count += len(first.Entries)
 		cursor = first.NextCursor
 	}
 	if count != scanQueueSize+10 {
-		t.Fatalf("issues=%d", count)
+		t.Fatalf("entries=%d", count)
 	}
 }
 
-func TestScanReadOnlyEmbeddedTagsWithoutSuffix(t *testing.T) {
+func TestScanReadOnlyEmbeddedTagsWithSupportedSuffix(t *testing.T) {
 	for _, format := range []string{"mp3", "flac"} {
 		t.Run(format, func(t *testing.T) {
 			actor, ctx, epoch, token, path := scanTestGrant(t)
@@ -166,7 +169,7 @@ func TestScanReadOnlyEmbeddedTagsWithoutSuffix(t *testing.T) {
 			if err != nil {
 				t.Skip("ffmpeg required to generate short MP3/FLAC fixtures")
 			}
-			target := filepath.Join(path, "music.data")
+			target := filepath.Join(path, "music."+format)
 			codec := "libmp3lame"
 			if format == "flac" {
 				codec = "flac"
@@ -214,7 +217,7 @@ func TestScanReadOnlyEmbeddedTagsWithoutSuffix(t *testing.T) {
 			if entry.Metadata.PicturesLoaded || len(entry.Metadata.Pictures) != 0 {
 				t.Fatal("scan loaded pictures")
 			}
-			if entry.Ref.RelativePath != "music.data" || entry.Ref.GrantToken != token || entry.Size != int64(len(before)) {
+			if entry.Ref.RelativePath != "music."+format || entry.Ref.GrantToken != token || entry.Size != int64(len(before)) {
 				t.Fatalf("bad ref: %+v", entry)
 			}
 			lease, err := actor.state.acquireDirectory(ctx, epoch, token)

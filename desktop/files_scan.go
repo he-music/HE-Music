@@ -397,6 +397,11 @@ func (r scanReaderAt) ReadAt(p []byte, offset int64) (int, error) {
 }
 
 func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
+	// Restrict library candidates before parsing or consulting a legacy index.
+	// Content sniffing alone may classify unrelated files as supported audio.
+	if !supportedLocalAudioName(filename) {
+		return true
+	}
 	file, before, err := openGrantedRegular(j.lease, relative)
 	if err != nil {
 		return j.issue(relative, "path")
@@ -416,9 +421,6 @@ func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 		return j.issue(relative, "changed")
 	}
 	if parseErr != nil || info.SampleRateHz <= 0 || info.Channels <= 0 {
-		if !supportedLocalAudioName(filename) {
-			return j.issue(relative, "unsupported-or-corrupt")
-		}
 		// Tag parsing must not decide whether a supported filename can be played.
 		info = metadata.Info{Title: strings.TrimSuffix(filename, filepath.Ext(filename)), Artists: []string{}}
 	}
