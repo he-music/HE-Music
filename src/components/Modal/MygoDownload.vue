@@ -26,16 +26,16 @@
       </n-collapse-item>
       <n-collapse-item :title="t('modal.download_path')" name="path">
         <n-input-group>
-          <n-select
-            v-model:value="directory"
+          <n-input
+            :value="settingStore.downloadPath || t('modal.download_path_not_configured')"
             data-download-field="directory"
-            :options="directoryOptions"
-            :placeholder="t('modal.download_path_not_configured')"
-            :disabled="busy"
-          />
-          <n-button type="primary" strong secondary :disabled="busy" @click="choose">
-            <template #icon><SvgIcon name="Folder" /></template>
-            {{ t("local_download.choose_directory") }}
+            :disabled="true"
+          >
+            <template #prefix><SvgIcon name="Folder" /></template>
+          </n-input>
+          <n-button type="primary" strong secondary :disabled="busy" @click="configure">
+            <template #icon><SvgIcon name="Settings" /></template>
+            {{ t("setting.local.download_config") }}
           </n-button>
         </n-input-group>
       </n-collapse-item>
@@ -56,6 +56,7 @@
 import { computed, onScopeDispose, ref, watch } from "vue";
 import { useSettingStore, usePlatformStore } from "@/stores";
 import { formatFileSize } from "@/utils/helper";
+import { openSetting } from "@/utils/modal";
 import {
   createLocalDownloadPlan,
   defaultGrantIndex,
@@ -87,7 +88,7 @@ const qualityDescription = (name: string) => {
   const description = platformStore.getPlatformQualityDescription(props.song.platform, name);
   return description ? `${name}(${description})` : name;
 };
-const directory = ref(0);
+const directory = computed(() => defaultGrantIndex(props.grants, settingStore.downloadPath));
 const quality = ref("");
 const busy = ref(false);
 const failure = ref("");
@@ -100,13 +101,6 @@ onScopeDispose(() => {
 const supported = computed(() =>
   props.song.links.filter((link) => validLocalDownloadFormat(link.format)),
 );
-const directoryOptions = computed(() =>
-  props.grants.map((grant, index) => ({ label: grant.displayPath, value: index })),
-);
-const selectDefaultDirectory = () => {
-  const index = defaultGrantIndex(props.grants, settingStore.downloadPath);
-  directory.value = props.grants.length ? index : 0;
-};
 const songSource = computed(() => localDownloadSource(props.song));
 const selected = computed(() => supported.value.find((link) => link.name === quality.value));
 const plan = computed(() => createLocalDownloadPlan(props.song, settingStore));
@@ -117,15 +111,14 @@ const canStart = computed(
   () =>
     !!props.grants[directory.value] && !!selected.value && validDownloadFilename(filename.value),
 );
-watch(() => [props.grants, settingStore.downloadPath], selectDefaultDirectory, {
-  immediate: true,
-  deep: true,
-});
 watch(
   () => props.song,
   () => {
     revision++;
-    quality.value = supported.value[0]?.name ?? "";
+    quality.value =
+      supported.value.find((link) => link.name === "320mp3")?.name ??
+      supported.value.at(-1)?.name ??
+      "";
   },
   { immediate: true },
 );
@@ -146,14 +139,8 @@ watch(
   },
   { flush: "sync" },
 );
-async function choose() {
-  if (busy.value) return;
-  failure.value = "";
-  try {
-    await props.chooseDirectory();
-  } catch {
-    if (!closed) failure.value = "operation_failed";
-  }
+function configure(): void {
+  if (!closed && !busy.value) openSetting("local");
 }
 async function submit() {
   if (closed || busy.value || !canStart.value) return;
@@ -222,7 +209,10 @@ async function submit() {
       if (!closed) failure.value = "start_rejected";
       return;
     }
-    if (!closed && revision === version && props.session === session) close();
+    if (!closed && revision === version && props.session === session) {
+      window.$message?.success(t("message.download_added"));
+      close();
+    }
   } catch {
     if (!closed && revision === version && props.session === session)
       failure.value = "operation_failed";

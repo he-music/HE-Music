@@ -81,6 +81,8 @@ it("keeps captured song presentation across retries without persisting its cover
   display.artists = "changed";
   display.cover = "https://img.test/replaced";
   expect(session.tasks.value[0].display).toEqual(expected);
+  expect(session.tasks.value[0].song).toEqual({ id: "song", platform: "test" });
+  expect(access.start.mock.calls[0][0]).not.toHaveProperty("song");
   expect(session.tasks.value[0].target).toEqual({
     directory: "/Music",
     relativePath: "Artist/Album/Song.mp3",
@@ -98,6 +100,9 @@ it("keeps captured song presentation across retries without persisting its cover
   const restored = new LocalDownloadSession(deps);
   sessions.push(restored);
   await restored.restored;
+  expect(
+    restored.tasks.value.every((task) => task.song?.id === "song" && task.song.platform === "test"),
+  ).toBe(true);
   expect(
     restored.tasks.value.every((task) => task.target?.relativePath === "Artist/Album/Song.mp3"),
   ).toBe(true);

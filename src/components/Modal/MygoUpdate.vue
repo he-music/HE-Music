@@ -5,41 +5,46 @@
       <SvgIcon name="Right" />
       <n-tag :bordered="false" type="warning">{{ state?.version || "—" }}</n-tag>
     </n-flex>
-    <n-text role="status">{{ t(`updates.phase_${phase}`) }}</n-text>
     <n-scrollbar style="max-height: 500px">
-      <div class="notes">{{ state?.notes || t("modal.no_update_log") }}</div>
+      <div
+        v-if="renderedNotes"
+        v-dompurify-html="renderedNotes"
+        class="markdown-body"
+        @click="jumpLink"
+      />
+      <div v-else class="markdown-body">{{ t("modal.no_update_log") }}</div>
     </n-scrollbar>
-    <n-alert v-if="phase === 'available' || phase === 'installing'" type="info" :show-icon="false">
-      {{ t("updates.apply_notice") }}
-    </n-alert>
+    <n-text v-if="phase !== 'available' && phase !== 'installing'" role="status">{{
+      t(`updates.phase_${phase}`)
+    }}</n-text>
     <n-alert v-if="failure" type="warning" :show-icon="false">{{ failure }}</n-alert>
     <n-flex class="menu" justify="end">
-      <n-button strong secondary :disabled="!current || busy" @click="run('check')">
-        {{ t("setting.about.check_update") }}
-      </n-button>
-      <n-button strong secondary :disabled="!current || acting" @click="run('refresh')">
-        {{ t("updates.refresh") }}
-      </n-button>
+      <n-button strong secondary :disabled="busy" @click="emit('close')">{{
+        t("common.cancel")
+      }}</n-button>
+      <n-button type="warning" strong secondary :disabled="busy" @click="goDownload">{{
+        t("modal.click_download")
+      }}</n-button>
       <n-button
-        v-if="phase === 'available'"
+        v-if="phase === 'available' || phase === 'installing'"
         type="primary"
+        :loading="busy"
         :disabled="!current || busy"
         @click="confirmInstall"
+        >{{ t(phase === "installing" ? "updates.phase_installing" : "modal.update_now") }}</n-button
       >
-        {{ t("updates.apply") }}
-      </n-button>
-      <n-button v-if="owner" strong secondary @click="emit('close')">{{
-        t("common.close")
-      }}</n-button>
     </n-flex>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onScopeDispose, ref } from "vue";
+import { computed, onScopeDispose, ref, watch } from "vue";
 import packageJson from "@/../package.json";
 import { useI18n } from "vue-i18n";
+import { marked } from "marked";
+import { platform } from "@/platform";
 import { UpdatesSession, updatesSession } from "@/platform/updatesSession";
+import "github-markdown-css/github-markdown.css";
 
 const props = defineProps<{ owner?: UpdatesSession }>();
 const emit = defineEmits<{ close: [] }>();
@@ -51,56 +56,81 @@ const current = computed(() => {
 });
 const state = computed(() => (current.value ? session.value?.state.value : undefined));
 const phase = computed(() => state.value?.phase ?? "unavailable");
-const acting = ref(false);
 const confirming = ref(false);
 const failure = ref("");
-const busy = computed(() => acting.value || confirming.value || session.value?.busy.value === true);
+const busy = computed(
+  () => confirming.value || session.value?.busy.value === true || phase.value === "installing",
+);
+const renderedNotes = computed(() =>
+  state.value?.notes ? marked.parse(state.value.notes, { async: false }) : "",
+);
 let disposed = false;
 onScopeDispose(() => {
   disposed = true;
 });
-
-async function run(operation: "check" | "refresh" | "install") {
-  const value = session.value;
-  if (disposed || !current.value || !value || acting.value) return;
-  failure.value = "";
-  acting.value = true;
+watch(phase, (next, previous) => {
+  if (next === "installed" && previous === "installing" && !disposed && current.value) {
+    window.$message?.success(t("message.update_download_complete"));
+    emit("close");
+  }
+});
+async function openExternal(url: string): Promise<boolean> {
   try {
-    await value[operation]();
+    await platform.openExternal(url);
+    return true;
   } catch {
     if (!disposed && current.value) failure.value = t("updates.operation_failed");
-  } finally {
-    acting.value = false;
+    return false;
   }
 }
-
-function confirmInstall() {
+async function goDownload(): Promise<void> {
+  if (disposed || busy.value) return;
+  if (await openExternal(`${packageJson.github}/releases`)) {
+    if (!disposed) emit("close");
+  }
+}
+function jumpLink(event: MouseEvent): void {
+  const target = event.target;
+  const link = target instanceof Element ? target.closest("a") : null;
+  if (!(link instanceof HTMLAnchorElement)) return;
+  event.preventDefault();
+  if (!disposed && /^https?:\/\//i.test(link.href)) void openExternal(link.href);
+}
+function confirmInstall(): void {
   if (disposed || !current.value || busy.value || phase.value !== "available") return;
+  const owner = session.value;
   const candidate = state.value;
-  if (!candidate) return;
+  if (!candidate || !owner) return;
   confirming.value = true;
   const release = () => {
     confirming.value = false;
   };
   window.$dialog.warning({
-    title: t("updates.apply"),
+    title: t("modal.update_now"),
     content: `${t("updates.version", { version: candidate.version })}\n\n${t("updates.apply_notice")}`,
-    positiveText: t("updates.apply"),
+    positiveText: t("modal.update_now"),
     negativeText: t("common.cancel"),
     onNegativeClick: release,
     onClose: release,
     onAfterLeave: release,
     onPositiveClick: async () => {
       release();
+      if (disposed || !current.value || session.value !== owner) return;
       if (
         state.value?.phase !== "available" ||
         state.value.operationRevision !== candidate.operationRevision ||
         state.value.version !== candidate.version
       ) {
-        if (!disposed && current.value) failure.value = t("updates.candidate_changed");
+        failure.value = t("updates.candidate_changed");
         return;
       }
-      await run("install");
+      try {
+        failure.value = "";
+        await owner.install();
+      } catch {
+        if (!disposed && current.value && session.value === owner)
+          failure.value = t("updates.operation_failed");
+      }
     },
   });
 }
@@ -117,9 +147,8 @@ function confirmInstall() {
   .menu {
     margin-top: 20px;
   }
-  .notes {
-    white-space: pre-wrap;
-    overflow-wrap: anywhere;
+  .markdown-body {
+    margin-top: 0 !important;
   }
   .n-alert {
     margin-top: 16px;

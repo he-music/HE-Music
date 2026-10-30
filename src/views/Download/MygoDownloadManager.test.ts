@@ -39,8 +39,16 @@ function mount(owner: Vue.ShallowRef<Owner | undefined>, initialRoute = "downloa
   const navigate = vi.fn(async ({ name }: { name: string }) => {
     route.name = name;
   });
+  const settings = Vue.reactive({ downloadPath: "/Music", language: "en" });
+  const play = vi.fn();
+  const songUpdates = vi.fn();
+  const refresh = vi.fn(async () => {});
+  const local = Vue.shallowRef({ scanning: Vue.shallowRef(false), refreshAfterDownload: refresh });
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/stores": { useSettingStore: () => settings },
+    "@/utils/player": { usePlayer: () => ({ updatePlayList: play }) },
+    "@/platform/localFilesSession": { localFilesSession: local },
     "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
     "vue-router": { useRoute: () => route, useRouter: () => ({ push: navigate }) },
     "@/platform/filesSession": { filesSession: owner },
@@ -49,7 +57,10 @@ function mount(owner: Vue.ShallowRef<Owner | undefined>, initialRoute = "downloa
     "@/components/List/SongList.vue": {
       default: Vue.defineComponent({
         props: ["data", "loading"],
-        setup: (props) => () => Vue.h("song-list", { data: props.data, loading: props.loading }),
+        setup: (props) => {
+          Vue.onUpdated(songUpdates);
+          return () => Vue.h("song-list", { data: props.data, loading: props.loading });
+        },
       }),
     },
   };
@@ -159,6 +170,11 @@ function mount(owner: Vue.ShallowRef<Owner | undefined>, initialRoute = "downloa
       ),
     route,
     navigate,
+    settings,
+    play,
+    songUpdates,
+    refresh,
+    local,
     all,
     text,
     button(key: string, target = root) {
@@ -316,6 +332,45 @@ it("supplies only scanned songs to the original SongList and clears synchronousl
   view.unmount();
 });
 
+it("plays directory songs, refreshes, retries all eligible tasks and keeps files after clearing history", async () => {
+  vi.stubGlobal("window", { $message: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } });
+  const f = fixture();
+  f.queue.tasks.value = [task("history", { done: true, committed: true, phase: "success" })];
+  f.owner.value = { ...f.owner.value!, libraryEntries: [scannedEntry()] };
+  const view = mount(f.owner, "download-downloaded");
+  for (let n = 0; n < 8; n++) await Promise.resolve();
+  await Vue.nextTick();
+  const songs = view.byTag("song-list")[0].props.data;
+  const updates = view.songUpdates.mock.calls.length;
+  await view.click("common.play");
+  expect(view.play).toHaveBeenCalledWith(songs);
+  await view.click("mygo.downloads.refresh");
+  expect(view.refresh).toHaveBeenCalledTimes(2);
+  await Vue.nextTick();
+  const settledUpdates = view.songUpdates.mock.calls.length;
+  expect(settledUpdates).toBeGreaterThanOrEqual(updates);
+  f.queue.tasks.value = [
+    task("active", { received: 255, percent: 99 }),
+    task("failed", { done: true, phase: "failed", retryable: true }),
+  ];
+  await Vue.nextTick();
+  expect(view.byTag("song-list")[0].props.data).toBe(songs);
+  expect(view.songUpdates).toHaveBeenCalledTimes(settledUpdates);
+  await view.click("download.downloading");
+  await Vue.nextTick();
+  await view.click("download.retry");
+  expect(f.queue.retry).toHaveBeenCalledExactlyOnceWith("failed");
+  await view.click("mygo.downloads.clearDone");
+  expect(f.queue.retire).toHaveBeenCalledWith("failed");
+  await view.click("common.completed");
+  await Vue.nextTick();
+  expect(view.byTag("song-list")[0].props.data).toBe(songs);
+  view.settings.downloadPath = "/missing";
+  await Vue.nextTick();
+  expect(view.byTag("song-list")[0].props.data).toEqual([]);
+  view.unmount();
+  vi.unstubAllGlobals();
+});
 it("does not offer retry for committed warnings even if a malformed task says retryable", () => {
   const f = fixture();
   f.queue.tasks.value = [
@@ -427,7 +482,7 @@ it("synchronizes tabs without adding library-scan instructions to download pages
   expect(view.text()).not.toContain("mygo.downloads.scanning");
   expect(view.text()).toContain("song.part");
   expect(view.button("mygo.downloads.remove")?.props.disabled).toBe(true);
-  expect(view.button("mygo.downloads.clearDone")?.props.disabled).toBe(true);
+  expect(view.button("mygo.downloads.clearDone")).toBeUndefined();
   expect(view.byTag("s-image")).toHaveLength(0);
   view.route.name = "download-downloading";
   await Vue.nextTick();

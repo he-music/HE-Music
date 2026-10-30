@@ -12,22 +12,12 @@
             {{ packageJson.version }}
           </n-tag>
         </n-flex>
-        <n-button
-          v-if="platform.kind !== 'mygo'"
-          :loading="statusStore.updateCheck"
-          type="primary"
-          strong
-          secondary
-          @click="checkUpdate"
-        >
+        <n-button :loading="checkingUpdate" type="primary" strong secondary @click="checkUpdate">
           {{
-            statusStore.updateCheck
-              ? t("setting.about.checking_update")
-              : t("setting.about.check_update")
+            checkingUpdate ? t("setting.about.checking_update") : t("setting.about.check_update")
           }}
         </n-button>
       </n-card>
-      <n-card v-if="platform.kind === 'mygo'"><MygoUpdate /></n-card>
       <n-card class="set-item mobile-client">
         <n-flex :wrap="false" align="center" class="mobile-client-info">
           <div class="mobile-client-icon">
@@ -148,11 +138,19 @@ import packageJson from "@/../package.json";
 import { useI18n } from "vue-i18n";
 import { isElectron } from "@/utils/env";
 import { platform } from "@/platform";
-import MygoUpdate from "@/components/Modal/MygoUpdate.vue";
+import { updatesSession } from "@/platform/updatesSession";
+import { openMygoUpdate } from "@/utils/mygoUpdateModal";
 import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
 
 const { t } = useI18n();
 const statusStore = useStatusStore();
+const checkingUpdate = computed(() =>
+  platform.kind === "mygo" ? updatesSession.value?.busy.value === true : statusStore.updateCheck,
+);
+let active = true;
+onScopeDispose(() => {
+  active = false;
+});
 
 // 特别鸣谢
 const contributors = [
@@ -222,7 +220,24 @@ const oldVersion = computed<UpdateLogType[]>(() => {
 
 // 检查更新
 const checkUpdate = debounce(
-  () => {
+  async () => {
+    if (platform.kind === "mygo") {
+      const session = updatesSession.value;
+      if (!session?.ready.value || session.busy.value) return;
+      try {
+        await session.check();
+        if (!active || updatesSession.value !== session || !session.ready.value) return;
+        if (session.state.value?.phase === "available") await openMygoUpdate(session);
+        else if (session.state.value?.phase === "no-update")
+          window.$message?.success(t("message.already_latest_version"));
+        else if (session.state.value?.phase === "error")
+          window.$message?.error(t("updates.operation_failed"));
+      } catch {
+        if (active && updatesSession.value === session && session.ready.value)
+          window.$message?.error(t("updates.operation_failed"));
+      }
+      return;
+    }
     if (!isElectron) {
       window.open(packageJson.github + "/releases", "_blank");
       return;
@@ -233,6 +248,7 @@ const checkUpdate = debounce(
   300,
   { leading: true, trailing: false },
 );
+onScopeDispose(() => checkUpdate.cancel());
 
 // 链接跳转
 const jumpLink = (e: MouseEvent) => {

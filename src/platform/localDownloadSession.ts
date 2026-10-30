@@ -92,6 +92,7 @@ export interface LocalDownloadTask {
   readonly filename: string;
   readonly label: string;
   readonly quality: string;
+  readonly song?: { readonly id: string; readonly platform: string };
   readonly display?: LocalDownloadDisplay;
   readonly target?: { readonly directory: string; readonly relativePath: string };
   readonly phase: "active" | "unknown" | "success" | "failed" | "saved";
@@ -320,6 +321,9 @@ export class LocalDownloadSession {
       filename: snapshot.filename,
       label: snapshot.label,
       quality: snapshot.quality,
+      ...(snapshot.source
+        ? { song: Object.freeze({ id: snapshot.source.id, platform: snapshot.source.platform }) }
+        : {}),
       ...(snapshot.targetDirectory
         ? {
             target: {
@@ -391,6 +395,7 @@ export class LocalDownloadSession {
         filename: input.filename,
         label: input.label,
         quality: input.quality,
+        song: Object.freeze({ id: input.source.id, platform: input.source.platform }),
         ...(input.display
           ? {
               display: Object.freeze({

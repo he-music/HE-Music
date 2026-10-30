@@ -95,6 +95,10 @@ function mount(session: object, api?: MetadataMatchAPI) {
   }).outputText;
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/utils/helper": { copyData: vi.fn() },
+    "@/utils/rules": {
+      useFormRule: () => ({ textRule: { required: true, message: "rule.required" } }),
+    },
     "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
     "@/platform/localMetadataSession": {},
     "@/stores": { useSettingStore: () => ({}) },
@@ -138,12 +142,14 @@ function mount(session: object, api?: MetadataMatchAPI) {
   const root = node("root");
   if (!exports.default) throw new Error("Missing compiled production component");
   const component = exports.default;
+  const onClose = vi.fn();
+  const validate = vi.fn(async () => {});
   const currentEntry = Vue.shallowRef(entry);
   const currentSession = Vue.shallowRef(session);
   const app = renderer.createApp(
     Vue.defineComponent({
       setup: () => () =>
-        Vue.h(component, { entry: currentEntry.value, session: currentSession.value }),
+        Vue.h(component, { entry: currentEntry.value, session: currentSession.value, onClose }),
     }),
   );
   const passthrough = Vue.defineComponent({
@@ -160,18 +166,21 @@ function mount(session: object, api?: MetadataMatchAPI) {
           Vue.h(attrs.type === "textarea" ? "textarea" : "input", {
             ...attrs,
             value: Array.isArray(attrs.value) ? attrs.value.join(", ") : attrs.value,
-            "onUpdate:modelValue": (value: string) => {
-              const update = attrs["onUpdate:value"];
-              if (typeof update === "function")
-                update(
-                  tags
-                    ? value
-                        .split(",")
-                        .map((v) => v.trim())
-                        .filter(Boolean)
-                    : value,
-                );
-            },
+            "onUpdate:modelValue":
+              typeof attrs["onUpdate:value"] === "function"
+                ? (value: string) => {
+                    const update = attrs["onUpdate:value"];
+                    if (typeof update === "function")
+                      update(
+                        tags
+                          ? value
+                              .split(",")
+                              .map((v) => v.trim())
+                              .filter(Boolean)
+                          : value,
+                      );
+                  }
+                : undefined,
           });
       },
     });
@@ -184,13 +193,23 @@ function mount(session: object, api?: MetadataMatchAPI) {
     "NList",
     "NListItem",
     "NScrollbar",
-    "NForm",
+    "NInputGroup",
     "NFormItem",
     "NFormItemGi",
     "NGrid",
     "SvgIcon",
   ])
     app.component(name, passthrough);
+  app.component(
+    "NForm",
+    Vue.defineComponent({
+      inheritAttrs: false,
+      setup(_props, { attrs, slots, expose }) {
+        expose({ validate });
+        return () => Vue.h("div", attrs, slots.default?.());
+      },
+    }),
+  );
   app.component("NInput", input());
   app.component("NInputNumber", input());
   app.component("NDynamicTags", input(true));
@@ -219,6 +238,8 @@ function mount(session: object, api?: MetadataMatchAPI) {
   };
   cleanups.push(close);
   return {
+    onClose,
+    validate,
     root,
     all,
     text,
@@ -319,7 +340,10 @@ function submit(ui: ReturnType<typeof mount>): Promise<void> {
   return handler({ preventDefault() {} });
 }
 function edit(ui: ReturnType<typeof mount>, value: string): void {
-  const handler = ui.all().find((item) => item.tag === "input")?.props["onUpdate:modelValue"];
+  const handler = ui
+    .all()
+    .find((item) => item.tag === "input" && typeof item.props["onUpdate:modelValue"] === "function")
+    ?.props["onUpdate:modelValue"];
   if (typeof handler !== "function") throw new Error("missing title model");
   handler(value);
 }
@@ -329,7 +353,7 @@ function select(ui: ReturnType<typeof mount>, mime: string, size: number): void 
   handler({ target: { files: [{ type: mime, size }], value: "fixture" } });
 }
 
-it("requires confirmation again when the form changes while confirmation is open", async () => {
+it("validates the form, saves on the explicit button without native confirm, and closes after success", async () => {
   const save = vi.fn(async () => ({
     committed: true,
     code: "ok",
@@ -338,24 +362,39 @@ it("requires confirmation again when the form changes while confirmation is open
   }));
   const ui = mount({ read: vi.fn(async () => readResult), save });
   await flush();
+  const confirm = vi.fn(() => false);
+  vi.stubGlobal("window", { confirm });
   edit(ui, "first");
-  vi.stubGlobal("window", {
-    confirm: vi.fn(() => {
-      edit(ui, "second");
-      return true;
-    }),
-  });
   await submit(ui);
-  expect(save).not.toHaveBeenCalled();
-  await flush();
-  expect(ui.text(ui.root)).toContain("local_metadata.confirm_changed");
-  vi.stubGlobal("window", { confirm: vi.fn(() => true) });
-  await submit(ui);
+  expect(ui.validate).toHaveBeenCalledOnce();
+  expect(confirm).not.toHaveBeenCalled();
   expect(save).toHaveBeenCalledWith(
     entry.ref,
     "sha",
-    expect.objectContaining({ Title: "second", Pictures: null }),
+    expect.objectContaining({ Title: "first", AlbumArtists: null, Pictures: null }),
   );
+  expect(ui.onClose).toHaveBeenCalledOnce();
+});
+
+it("discards a captured patch if the form changes during asynchronous validation", async () => {
+  const save = vi.fn();
+  const ui = mount({ read: vi.fn(async () => readResult), save });
+  await flush();
+  let complete!: () => void;
+  ui.validate.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        complete = resolve;
+      }),
+  );
+  edit(ui, "first");
+  const pending = submit(ui);
+  edit(ui, "second");
+  complete();
+  await pending;
+  expect(save).not.toHaveBeenCalled();
+  await submit(ui);
+  expect(save).toHaveBeenCalledWith(entry.ref, "sha", expect.objectContaining({ Title: "second" }));
 });
 
 it("ignores a read from a previous entry and a read after unmount", async () => {
@@ -371,7 +410,7 @@ it("ignores a read from a previous entry and a read after unmount", async () => 
   await flush();
   finish(readResult);
   await flush();
-  expect(ui.all().find((item) => item.tag === "input")?.value).toBe("new-view");
+  expect(titleValue(ui)).toBe("new-view");
   ui.close();
   await flush();
 });
@@ -423,6 +462,7 @@ it("keeps the close action independent from saving and never calls cancel", asyn
   vi.stubGlobal("window", { confirm: () => true });
   await flush();
   const pending = submit(ui);
+  await flush();
   ui.close();
   expect(save).toHaveBeenCalledOnce();
   expect(cancel).not.toHaveBeenCalled();
@@ -476,7 +516,7 @@ it("renders saved only after the real session refresh finishes", async () => {
   refreshDone();
   await saving;
   await flush();
-  expect(ui.text(ui.root)).toContain("local_metadata.saved");
+  expect(ui.onClose).toHaveBeenCalledOnce();
   expect(release).toHaveBeenCalledOnce();
 });
 
@@ -505,8 +545,7 @@ it("submits explicit empty values for cleared tags and covers while preserving u
   const ui = mount({ read: async () => readResult, save });
   vi.stubGlobal("window", { confirm: () => true });
   await flush();
-  edit(ui, "");
-  const artists = ui.all().filter((item) => item.tag === "input")[1]?.props["onUpdate:modelValue"];
+  const artists = ui.all().filter((item) => item.tag === "input")[2]?.props["onUpdate:modelValue"];
   if (typeof artists !== "function") throw new Error("missing artists");
   artists("");
   const clear = ui.all().find((item) => ui.text(item) === "local_metadata.clear_cover")
@@ -515,7 +554,7 @@ it("submits explicit empty values for cleared tags and covers while preserving u
   clear();
   await submit(ui);
   expect(save).toHaveBeenCalledWith(entry.ref, "sha", {
-    Title: "",
+    Title: null,
     Artists: [],
     Album: null,
     AlbumArtists: null,
@@ -604,7 +643,7 @@ it("reconciles the same grant and path after a read conflict with a different id
   await handler();
   await flush();
   expect(reconcile).toHaveBeenCalledWith("a".repeat(64));
-  expect(ui.text(ui.root)).toContain("local_metadata.saved");
+  expect(ui.onClose).toHaveBeenCalledOnce();
 });
 
 it("clears A recovery names immediately when the view changes to B even while its read hangs", async () => {
@@ -674,7 +713,7 @@ it("does not revive the old baseline when a pending read returns after save comp
   });
   await running;
   await flush();
-  expect(ui.text(ui.root)).toContain("local_metadata.saved");
+  expect(ui.onClose).toHaveBeenCalledOnce();
   read(readResult);
   await flush();
   expect(
@@ -728,7 +767,7 @@ it.each([false, true])(
     });
     await flush();
     expect(release).toHaveBeenCalledOnce();
-    expect(ui.text(ui.root).includes("local_metadata.saved")).toBe(!moveView);
+    expect(ui.onClose).toHaveBeenCalledTimes(moveView ? 0 : 1);
     expect(ui.text(ui.root)).not.toContain("local_metadata.pending");
   },
 );
@@ -783,10 +822,7 @@ describe("MygoSongInfoEditor online selection", () => {
     await flush();
     await click(ui, "modal.auto_match_tag");
     await flush();
-    expect(titleValue(ui)).toBe("old");
-    expect(session.save).not.toHaveBeenCalled();
-    await click(ui, "matched title");
-    await flush();
+    expect(api.details).toHaveBeenCalledExactlyOnceWith(matchOption, expect.any(AbortSignal));
     expect(titleValue(ui)).toBe("matched title");
     expect(session.save).not.toHaveBeenCalled();
     const input = ui
@@ -816,7 +852,7 @@ describe("MygoSongInfoEditor online selection", () => {
     await flush();
     const pending = click(ui, "modal.auto_match_tag");
     await click(ui, "modal.auto_match_tag");
-    await click(ui, "local_metadata.match_cancel");
+    await click(ui, "common.cancel");
     gate.resolve([matchOption]);
     await pending;
     await flush();
@@ -835,9 +871,8 @@ describe("MygoSongInfoEditor online selection", () => {
       const api = { search: vi.fn(async () => [matchOption]), details: vi.fn(() => gate.promise) };
       const ui = mount(session, api);
       await flush();
-      await click(ui, "modal.auto_match_tag");
+      const pending = click(ui, "modal.auto_match_tag");
       await flush();
-      const pending = click(ui, "matched title");
       if (kind === "owner") ui.setSession(matchSession());
       if (kind === "entry") ui.setEntry({ ...entry });
       if (kind === "ref") ui.setEntry({ ...entry, ref: { ...entry.ref, version: "two" } });
@@ -863,8 +898,6 @@ describe("MygoSongInfoEditor online selection", () => {
     const ui = mount(session, api);
     await flush();
     await click(ui, "modal.auto_match_tag");
-    await flush();
-    await click(ui, "matched title");
     await flush();
     expect(titleValue(ui)).toBe("old");
     expect(ui.text(ui.root)).toContain("message.match_fail");
@@ -907,10 +940,8 @@ it.each([
     await click(ui, "modal.auto_match_tag");
     await flush();
     expect(session.save).not.toHaveBeenCalled();
-    await click(ui, "selected song");
-    await flush();
     expect(session.save).not.toHaveBeenCalled();
-    const artistInput = ui.all().filter((item) => item.tag === "input")[1];
+    const artistInput = ui.all().filter((item) => item.tag === "input")[2];
     expect(artistInput.value).toBe(expected.join(", "));
     const form = ui.all().find((item) => item.tag === "form");
     await (form?.props.onSubmit as (event: { preventDefault(): void }) => Promise<void>)({

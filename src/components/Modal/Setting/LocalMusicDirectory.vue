@@ -1,22 +1,16 @@
 <template>
   <div v-if="isElectron" class="local-music-directory">
-    <n-text class="local-list-tip">
-      {{ t("setting.local.local_files_path") }}
-    </n-text>
+    <n-text class="local-list-tip">{{ t("setting.local.local_files_path") }}</n-text>
     <n-scrollbar style="max-height: 50vh">
       <n-list class="local-list" hoverable clickable bordered>
         <div v-if="!settingStore.localFilesPath.length" class="empty">
           <n-empty :description="t('local.none_folder')" />
         </div>
         <n-list-item v-for="(path, index) in settingStore.localFilesPath" :key="index">
-          <template #prefix>
-            <SvgIcon :size="20" name="Folder" />
-          </template>
+          <template #prefix><SvgIcon :size="20" name="Folder" /></template>
           <template #suffix>
             <n-button :focusable="false" quaternary @click="changeLocalPath(index)">
-              <template #icon>
-                <SvgIcon :size="20" name="Delete" />
-              </template>
+              <template #icon><SvgIcon :size="20" name="Delete" /></template>
             </n-button>
           </template>
           <n-thing :title="path" />
@@ -25,27 +19,26 @@
     </n-scrollbar>
     <n-flex justify="center" style="margin-top: 20px">
       <n-button class="add-path" strong secondary @click="changeLocalPath()">
-        <template #icon>
-          <SvgIcon name="FolderPlus" />
-        </template>
+        <template #icon><SvgIcon name="FolderPlus" /></template>
         {{ t("local.add_folder") }}
       </n-button>
     </n-flex>
   </div>
   <div v-else-if="isMygo" class="local-music-directory">
     <n-text class="local-list-tip">{{ t("setting.local.local_files_path") }}</n-text>
-    <n-text v-if="filesSession?.persistenceError.value" role="alert">{{
-      t("setting.local.directory_persist_failed")
-    }}</n-text>
+    <n-text v-if="filesSession?.persistenceError.value" role="alert">
+      {{ t("setting.local.directory_persist_failed") }}
+    </n-text>
     <n-text v-if="!ready" role="status">{{ t("setting.local.directory_unavailable") }}</n-text>
     <n-text v-if="feedback" role="status">{{ t(`setting.local.directory_${feedback}`) }}</n-text>
-    <section v-if="savedPaths.length">
-      <n-text>{{ t("mygo.library.pending") }}</n-text>
-      <n-text>{{ t("setting.local.directory_reselect") }}</n-text>
+    <n-scrollbar style="max-height: 50vh">
       <n-list class="local-list" hoverable clickable bordered>
-        <n-list-item v-for="path in savedPaths" :key="path">
+        <div v-if="!grants.length && !savedPaths.length" class="empty">
+          <n-empty :description="t('local.none_folder')" />
+        </div>
+        <n-list-item v-for="path in savedPaths" :key="`saved:${path}`">
           <template #prefix><SvgIcon :size="20" name="Folder" /></template>
-          <n-thing :title="path" :description="t('setting.local.directory_reselect')" />
+          <n-thing :title="path" />
           <template #suffix>
             <n-button
               :focusable="false"
@@ -59,14 +52,6 @@
             </n-button>
           </template>
         </n-list-item>
-      </n-list>
-    </section>
-    <p v-if="suggestion">{{ t("setting.local.directory_suggestion") }}: {{ suggestion }}</p>
-    <n-scrollbar style="max-height: 50vh">
-      <n-list class="local-list" hoverable clickable bordered>
-        <div v-if="!grants.length" class="empty">
-          <n-empty :description="t('local.none_folder')" />
-        </div>
         <n-list-item v-for="grant in grants" :key="grant.token">
           <template #prefix><SvgIcon :size="20" name="Folder" /></template>
           <n-thing :title="grant.displayPath" />
@@ -96,17 +81,7 @@
         @click="choose"
       >
         <template #icon><SvgIcon name="FolderPlus" /></template>
-        {{ t("setting.local.directory_choose") }}
-      </n-button>
-      <n-button
-        strong
-        secondary
-        data-directory-action="default"
-        :disabled="!ready || busy"
-        @click="showDefault"
-      >
-        <template #icon><SvgIcon name="FolderMusic" /></template>
-        {{ t("setting.local.directory_default") }}
+        {{ t("local.add_folder") }}
       </n-button>
     </n-flex>
   </div>
@@ -135,12 +110,10 @@ const recovery = isMygo
   : undefined;
 const directory = isMygo ? createLocalDirectorySession(undefined, recovery?.choose) : undefined;
 const feedback = computed(() => directory?.feedback.value ?? "");
-const suggestion = computed(() => directory?.suggestion.value ?? "");
 const ready = computed(() => directory?.ready.value ?? false);
 const busy = computed(() => directory?.busy.value ?? false);
 const grants = computed(() => directory?.grants.value ?? []);
 const choose = () => directory?.choose();
-const showDefault = () => directory?.showDefault();
 const revoke = async (token: string) => {
   const owner = filesSession.value;
   const path = grants.value.find((grant) => grant.token === token)?.displayPath;
@@ -186,12 +159,6 @@ const savedPaths = computed(() => [
     display: flex;
     align-items: center;
     justify-content: center;
-  }
-  :deep(.n-list-item__main) {
-    .n-thing-main__description {
-      font-size: 13px;
-      opacity: 0.6;
-    }
   }
   .empty {
     padding: 20px 0;

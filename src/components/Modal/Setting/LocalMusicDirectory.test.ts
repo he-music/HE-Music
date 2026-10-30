@@ -10,11 +10,19 @@ import * as directoryModule from "@/platform/localDirectorySession";
 import * as recoveryModule from "@/platform/libraryDirectoryRecovery";
 
 const host = vi.hoisted(() => ({ electron: false, mygo: true }));
-const setting = vi.hoisted(() => ({
+const rawSetting = vi.hoisted(() => ({
   localFilesPath: ["/synthetic/imported"],
   downloadPath: "/synthetic/imported-download",
   showLocalCover: true,
+  showDefaultLocalPath: true,
+  downloadMeta: true,
+  downloadCover: true,
+  downloadLyric: true,
+  downloadLyricTran: true,
+  downloadLyricRoma: true,
+  saveMetaFile: true,
 }));
+const setting = Vue.reactive(rawSetting);
 const legacy = vi.hoisted(() => ({ change: vi.fn(), open: vi.fn() }));
 vi.mock("@/stores", () => ({ useSettingStore: () => setting }));
 vi.mock("@/utils/env", () => ({
@@ -193,12 +201,39 @@ afterEach(async () => {
   setting.showLocalCover = true;
   vi.clearAllMocks();
 });
+it("updates dependent download switches and clears the configured path without revoking grants", async () => {
+  const config = useLocalSettings();
+  const items = config.groups.flatMap((group) => group.items);
+  const disabled = (key: string) => Vue.toValue(items.find((item) => item.key === key)?.disabled);
+  setting.downloadMeta = false;
+  for (const key of [
+    "downloadCover",
+    "downloadLyric",
+    "downloadLyricTran",
+    "downloadLyricRoma",
+    "saveMetaFile",
+  ])
+    expect(disabled(key)).toBe(true);
+  setting.downloadMeta = true;
+  setting.downloadLyric = false;
+  expect(disabled("downloadCover")).toBe(false);
+  expect(disabled("downloadLyricTran")).toBe(true);
+  setting.downloadLyric = true;
+  expect(disabled("downloadLyricTran")).toBe(false);
+  setting.downloadPath = "/synthetic/selected";
+  const clear = items.find((item) => item.key === "downloadPath")?.extraButton;
+  expect(Vue.toValue(clear?.show)).toBe(true);
+  clear?.action?.();
+  expect(setting.downloadPath).toBe("");
+  expect(Vue.toValue(clear?.show)).toBe(false);
+});
 
 describe("LocalMusicDirectory真实SFC", () => {
   it("设置入口开放授权目录与本地封面，Web隐藏且Electron保留旧组", () => {
     const config = useLocalSettings();
     expect(config.groups.flatMap((group) => group.items.map((item) => item.key))).toEqual([
       "localFilesPath",
+      "showDefaultLocalPath",
       "showLocalCover",
       "downloadPath",
       "downloadMeta",
@@ -236,8 +271,10 @@ describe("LocalMusicDirectory真实SFC", () => {
     const ui = mountDirectory();
     expect(ui.text()).toContain("/synthetic/imported");
     expect(session.directories.value).toEqual([]);
-    await ui.click("default");
-    expect(ui.text()).toContain("/synthetic/default");
+    expect(ui.buttons().some((button) => button.props["data-directory-action"] === "default")).toBe(
+      false,
+    );
+    expect(ui.text()).not.toContain("setting.local.directory_suggestion");
     expect(session.directories.value).toEqual([]);
     await ui.click("choose");
     expect(ui.text()).toContain("/synthetic/selected");

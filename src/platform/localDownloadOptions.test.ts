@@ -77,7 +77,7 @@ describe("local download options candidate", () => {
       { token: "b", epoch: 1, displayPath: "Downloads" },
     ];
     expect(defaultGrantIndex(grants, "Downloads")).toBe(1);
-    expect(defaultGrantIndex(grants, "missing")).toBe(0);
+    expect(defaultGrantIndex(grants, "missing")).toBe(-1);
   });
 
   it("disables dependent writes when metadata is disabled", () => {

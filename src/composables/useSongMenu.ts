@@ -21,6 +21,7 @@ import { isElectron, isMygo } from "@/utils/env";
 import { filesSession } from "@/platform/filesSession";
 import { nativeLocalEntry, localFilesSession } from "@/platform/localFilesSession";
 import { LocalFileActions } from "@/platform/localFileActions";
+import { mygoSongDownload } from "./mygoSongDownload";
 
 /** 歌曲菜单 */
 export const useSongMenu = () => {
@@ -147,9 +148,10 @@ export const useSongMenu = () => {
     const isCurrent = statusStore.playIndex === index;
     // 是否为用户歌单
     const isUserPlaylist = !!(playlist?.id && playlist?.type === "user-playlist");
-    // 仅桌面端使用下载管理状态
-    const isDownloading =
-      isElectron && dataStore.downloadingSongs.some((item) => songEqual(song, item.song));
+    const nativeDownload = isMygo ? mygoSongDownload(filesSession, song) : undefined;
+    const isDownloading = isMygo
+      ? !!nativeDownload && !nativeDownload.task.done
+      : isElectron && dataStore.downloadingSongs.some((item) => songEqual(song, item.song));
 
     return [
       {
@@ -373,8 +375,20 @@ export const useSongMenu = () => {
       {
         key: "retry-download",
         label: t("download.retry"),
-        show: isDownloading,
-        props: { onClick: () => DownloadManager.retryDownload(song) },
+        show: isMygo ? !!nativeDownload?.task.retryable : isDownloading,
+        props: {
+          onClick: async () => {
+            if (!isMygo) return DownloadManager.retryDownload(song);
+            if (!nativeDownload) return;
+            try {
+              if (!(await nativeDownload.retry()) && nativeDownload.current())
+                window.$message?.error(t("mygo.downloads.actionFailed"));
+            } catch {
+              if (nativeDownload.current())
+                window.$message?.error(t("mygo.downloads.actionFailed"));
+            }
+          },
+        },
         icon: renderIcon("Refresh"),
       },
     ];
@@ -389,9 +403,10 @@ export const useSongMenu = () => {
     const albumId = (typeof song?.album == "object" && song?.album.id) || null;
     const { artist, album } = songManager.getPlayerInfoObj(song) || {};
     const isLocal = !!song?.path;
-    // 仅桌面端使用下载管理状态
-    const isDownloading =
-      isElectron && dataStore.downloadingSongs.some((item) => songEqual(song, item.song));
+    const nativeDownload = isMygo ? mygoSongDownload(filesSession, song) : undefined;
+    const isDownloading = isMygo
+      ? !!nativeDownload && !nativeDownload.task.done
+      : isElectron && dataStore.downloadingSongs.some((item) => songEqual(song, item.song));
 
     return [
       {

@@ -126,5 +126,5 @@ export function createLocalDownloadPlan(
 
 export function defaultGrantIndex(grants: readonly DirectoryGrant[], displayPath: string): number {
   const index = grants.findIndex((grant) => grant.displayPath === displayPath);
-  return index >= 0 ? index : 0;
+  return index;
 }

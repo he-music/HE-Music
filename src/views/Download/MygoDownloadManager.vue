@@ -18,15 +18,32 @@
       <n-flex class="left" align="flex-end">
         <n-button
           :focusable="false"
-          :disabled="removable.length === 0"
+          :disabled="currentTab !== 'completed' || !songs.length || !filesSession?.ready.value"
           type="primary"
           strong
           secondary
           round
-          @click="clearDone"
+          @click="playDownloaded"
         >
-          <template #icon><SvgIcon name="Delete" /></template>
-          {{ t("mygo.downloads.clearDone") }}
+          <template #icon><SvgIcon name="Play" /></template>
+          {{ t("common.play") }}
+        </n-button>
+        <n-button
+          :focusable="false"
+          class="more"
+          :disabled="
+            !filesSession?.ready.value ||
+            (currentTab === 'downloading' && (!retryable.length || pending.size > 0))
+          "
+          :loading="currentTab === 'completed' ? scanning : pending.size > 0"
+          :title="t(currentTab === 'completed' ? 'mygo.downloads.refresh' : 'download.retry')"
+          :aria-label="t(currentTab === 'completed' ? 'mygo.downloads.refresh' : 'download.retry')"
+          strong
+          secondary
+          circle
+          @click="currentTab === 'completed' ? refreshDownloads() : retryAll()"
+        >
+          <template #icon><SvgIcon name="Refresh" /></template>
         </n-button>
       </n-flex>
       <n-flex class="right" justify="end">
@@ -65,7 +82,7 @@
           <template #icon><SvgIcon name="Close" /></template>
         </n-button>
       </div>
-      <SongList :data="songs" :loading="false" />
+      <SongList :data="songs" :loading="scanning" />
     </div>
     <div v-else-if="visibleTasks.length" class="download-list">
       <div class="list-header">
@@ -182,22 +199,31 @@
           </n-flex>
         </div>
       </n-scrollbar>
+      <n-button v-if="removable.length" class="clear-tasks" text size="small" @click="clearDone">
+        {{ t("mygo.downloads.clearDone") }}
+      </n-button>
     </div>
     <n-empty v-else :description="t('common.list_empty')" class="empty" role="status" />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onActivated, onScopeDispose, shallowRef, watch } from "vue";
 import SongList from "@/components/List/SongList.vue";
 import { useMygoDownloadedSongs } from "@/composables/mygoDownloadedSongs";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { filesSession } from "@/platform/filesSession";
 import { useMygoDownloadTasks } from "@/composables/mygoDownloadTasks";
+import { localFilesSession } from "@/platform/localFilesSession";
+import { useSettingStore } from "@/stores";
+import { usePlayer } from "@/utils/player";
 
 const { t } = useI18n();
-const { tasks, pending, errors, removable, run, clearDone } = useMygoDownloadTasks(filesSession);
+const { tasks, pending, errors, run, removable, clearDone, retryable, retryAll } =
+  useMygoDownloadTasks(filesSession);
+const settingStore = useSettingStore();
+const player = usePlayer();
 const route = useRoute();
 const router = useRouter();
 const currentTab = computed<"completed" | "downloading">({
@@ -207,7 +233,67 @@ const currentTab = computed<"completed" | "downloading">({
     if (route.name !== name) void router.push({ name });
   },
 });
-const { songs } = useMygoDownloadedSongs(filesSession, tasks);
+const downloadDirectory = computed(() => settingStore.downloadPath);
+const { songs } = useMygoDownloadedSongs(filesSession, downloadDirectory);
+const refreshing = shallowRef(false);
+const scanning = computed(
+  () => refreshing.value || localFilesSession.value?.scanning.value === true,
+);
+let scanRevision = 0;
+onScopeDispose(() => {
+  scanRevision++;
+});
+const grant = computed(() =>
+  filesSession.value?.directories.value.find(
+    (directory) => directory.displayPath === downloadDirectory.value,
+  ),
+);
+const playDownloaded = () => {
+  if (filesSession.value?.ready.value && songs.value.length)
+    void player.updatePlayList(songs.value);
+};
+async function refreshDownloads(showTip = true): Promise<void> {
+  const owner = filesSession.value;
+  const local = localFilesSession.value;
+  const path = downloadDirectory.value;
+  if (!owner?.ready.value || !local || refreshing.value) return;
+  if (!path || !grant.value) {
+    if (showTip) window.$message?.warning(t("message.please_set_download_path"));
+    return;
+  }
+  const revision = ++scanRevision;
+  const current = () =>
+    revision === scanRevision &&
+    filesSession.value === owner &&
+    owner.ready.value &&
+    localFilesSession.value === local &&
+    downloadDirectory.value === path;
+  refreshing.value = true;
+  try {
+    await local.refreshAfterDownload();
+    if (current() && showTip)
+      window.$message?.success(t("message.found_local_music_count", { count: songs.value.length }));
+  } catch {
+    if (current() && showTip) window.$message?.error(t("mygo.downloads.actionFailed"));
+  } finally {
+    if (revision === scanRevision) refreshing.value = false;
+  }
+}
+watch(
+  [filesSession, localFilesSession, downloadDirectory, grant],
+  () => {
+    scanRevision++;
+    refreshing.value = false;
+    if (currentTab.value === "completed" && !scanning.value) void refreshDownloads(false);
+  },
+  { immediate: true },
+);
+watch(currentTab, (tab) => {
+  if (tab === "completed" && !scanning.value) void refreshDownloads(false);
+});
+onActivated(() => {
+  if (currentTab.value === "completed" && !scanning.value) void refreshDownloads(false);
+});
 const completedTasks = computed(() => tasks.value.filter((task) => task.committed));
 const activeTasks = computed(() => {
   const priority = { active: 0, unknown: 1, failed: 2, saved: 2, success: 2 };
@@ -262,6 +348,9 @@ function bytes(value: number): string {
   .menu {
     width: 100%;
     margin-bottom: 20px;
+    .more {
+      width: 40px;
+    }
     .n-button {
       height: 40px;
     }
@@ -361,6 +450,9 @@ function bytes(value: number): string {
         border-radius: 8px;
       }
     }
+  }
+  .clear-tasks {
+    margin-top: 12px;
   }
   .download-downloaded {
     flex: 1;

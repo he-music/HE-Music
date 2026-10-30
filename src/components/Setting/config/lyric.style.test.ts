@@ -4,6 +4,7 @@ import { computed, effectScope, reactive, markRaw, toValue } from "vue";
 import { createDefaultDesktopLyricStyle } from "@/platform/desktopLyricStyle";
 import { createDefaultDesktopLyricOptions } from "@/platform/desktopLyricOptions";
 import type { SettingConfig } from "@/types/settings";
+import { openFontManager } from "@/utils/modal";
 
 const mocks = vi.hoisted(() => ({
   platform: { kind: "mygo" },
@@ -127,11 +128,15 @@ it("exposes native display options, retains the Electron font manager and hides 
     "desktopLyricShowYrc",
     "desktopLyricShowTran",
     "desktopLyricAnimation",
-    "desktopLyricNativeFont",
+    "desktopLyricFont",
   ]) {
     expect(toValue(item(native, key).show)).toBe(true);
   }
-  expect(toValue(item(native, "desktopLyricFont").show)).toBe(false);
+  expect(
+    native.groups
+      .flatMap((group) => group.items)
+      .some((item) => item.key === "desktopLyricNativeFont"),
+  ).toBe(false);
   mocks.platform.kind = "web";
   const web = config().value;
   expect(toValue(item(web, "desktopLyricPlayedColor").show)).toBe(false);
@@ -142,21 +147,11 @@ it("saves native font and display preferences, rejects invalid input and resets 
   const { value, scope } = config();
   const doubleLine = item(value, "desktopLyricDoubleLine");
   const size = item(value, "desktopLyricFontSize");
-  const family = item(value, "desktopLyricNativeFont");
-  if (!doubleLine.value || !size.value || !family.value) throw new Error("Missing native options");
+  if (!doubleLine.value || !size.value) throw new Error("Missing native options");
   doubleLine.value.value = false;
   size.value.value = 48;
   expect(store.desktopLyricOptions.isDoubleLine).toBe(false);
   expect(store.desktopLyricOptions.font.size).toBe(48);
-  family.value.value = "测试字体";
-  const blur = family.componentProps?.onBlur;
-  if (typeof blur !== "function") throw new Error("No font commit handler");
-  blur();
-  expect(store.desktopLyricOptions.font.family).toBe("测试字体");
-  family.value.value = "url(private)";
-  blur();
-  expect(store.desktopLyricOptions.font.family).toBe("测试字体");
-  expect(family.value.value).toBe("测试字体");
   store.desktopLyricOptions.font.size = 36;
   expect(size.value.value).toBe(36);
   store.desktopLyricStyle.playedColor = "#123456";
@@ -171,19 +166,17 @@ it("saves native font and display preferences, rejects invalid input and resets 
   expect(size.value.value).toBe(24);
 });
 
-it("keeps an uncommitted font draft when only colors are restored", () => {
+it("opens the shared font manager and keeps the selected font when colors alone are restored", () => {
   const store = useSettingStore();
   const { value } = config();
-  const font = item(value, "desktopLyricNativeFont");
-  if (!font.value) throw new Error("Missing font value");
-  font.value.value = "测试字体";
+  const font = item(value, "desktopLyricFont");
+  expect(font.type).toBe("button");
+  font.action?.();
+  expect(openFontManager).toHaveBeenCalledOnce();
+  store.desktopLyricOptions.font.family = "测试字体";
   item(value, "desktopLyricRestore").action?.();
   if (!confirm) throw new Error("Missing color reset confirmation");
   confirm();
-  expect(font.value.value).toBe("测试字体");
-  const blur = font.componentProps?.onBlur;
-  if (typeof blur !== "function") throw new Error("Missing font blur handler");
-  blur();
   expect(store.desktopLyricOptions.font.family).toBe("测试字体");
 });
 

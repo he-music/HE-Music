@@ -5,6 +5,8 @@ import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 import { UpdatesSession, updatesSession } from "@/platform/updatesSession";
 import type { PlatformUpdates, UpdatesEvent, UpdatesState } from "@/platform/updates";
+import { marked } from "marked";
+const openExternal = vi.fn(async () => {});
 
 type Element = {
   tag: string;
@@ -46,7 +48,10 @@ function mount(owner?: UpdatesSession) {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@/../package.json": { default: { version: "1.0.4" } },
+    marked: { marked },
+    "@/platform": { platform: { openExternal } },
+    "github-markdown-css/github-markdown.css": {},
+    "@/../package.json": { default: { version: "1.0.4", github: "https://github.test/music" } },
     "vue-i18n": {
       useI18n: () => ({
         t: (key: string, data?: { version?: string }) =>
@@ -96,6 +101,15 @@ function mount(owner?: UpdatesSession) {
   });
   if (!exports.default) throw new Error("Missing compiled update component");
   const app = renderer.createApp(exports.default, { owner });
+  // Record the sanitizer boundary; the browser checks use the real DOMPurify plugin.
+  app.directive("dompurify-html", {
+    mounted: (element: Element, binding: { value: string }) => {
+      element.props.markdown = binding.value;
+    },
+    updated: (element: Element, binding: { value: string }) => {
+      element.props.markdown = binding.value;
+    },
+  });
   for (const name of ["NText", "NAlert", "NFlex", "NButton", "NTag", "NScrollbar", "SvgIcon"])
     app.component(name, pass);
   const root = node("root");
@@ -191,22 +205,27 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
   session = new UpdatesSession(provider);
   await session.start();
   const ui = mount();
-  await ui.click("setting.about.check_update");
+  await session.check();
   await flush();
   expect(
     ui
       .all()
       .some(
-        (element) => element.text === "<img src=x onerror=alert(1)>" && !element.props.innerHTML,
+        (element) =>
+          typeof element.props.markdown === "string" &&
+          element.props.markdown.includes("onerror=alert(1)") &&
+          !element.props.innerHTML,
       ),
   ).toBe(true);
   const version = ui.all().find((element) => element.props.class === "version");
   const versionText = (element: Element): string =>
     element.text + element.children.map(versionText).join("");
   expect(version && versionText(version)).toBe("1.0.42.0.0");
+  await ui.click("modal.click_download");
+  expect(openExternal).toHaveBeenCalledWith("https://github.test/music/releases");
   expect(ui.all().map((element) => element.props.style)).toContainEqual({ "max-height": "500px" });
   expect(ui.all().some((element) => element.props.class === "menu")).toBe(true);
-  ui.click("updates.apply");
+  ui.click("modal.update_now");
   expect(provider.install).not.toHaveBeenCalled();
   const first = warning.mock.calls.at(-1)?.[0];
   if (!first) throw new Error("Missing confirmation");
@@ -216,7 +235,7 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
   await flush();
   expect(provider.install).not.toHaveBeenCalled();
   expect(ui.all().some((element) => element.text === "updates.candidate_changed")).toBe(true);
-  ui.click("updates.apply");
+  ui.click("modal.update_now");
   const second = warning.mock.calls.at(-1)?.[0];
   if (!second) throw new Error("Missing second confirmation");
   expect(second.content).toContain("3.0.0");
@@ -240,6 +259,6 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
   expect(dialog.all().some((element) => element.text === "updates.phase_installed")).toBe(true);
   await session.dispose();
   await flush();
-  expect(dialog.button("setting.about.check_update").props.disabled).toBe(true);
+  expect(dialog.all().some((element) => element.text === "modal.update_now")).toBe(false);
   expect(dialog.all().some((element) => element.text === "updates.phase_unavailable")).toBe(true);
 });

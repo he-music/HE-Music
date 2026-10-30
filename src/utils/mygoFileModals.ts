@@ -148,7 +148,23 @@ export function createMygoFileModals(deps: MygoFileModalDependencies) {
         title: deps.translate(kind === "editor" ? "modal.song_info_edit" : "common.download_song"),
         content: () =>
           kind === "editor"
-            ? h(component, { entry, session: metadata, onClose: close })
+            ? h(component, {
+                entry,
+                session: metadata,
+                displayPath: (() => {
+                  const root = owner.directories.value.find(
+                    (grant) => grant.token === entry?.ref.grantToken,
+                  )?.displayPath;
+                  if (!root || !entry) return entry?.relativePath;
+                  const separator = root.includes("\\") ? "\\" : "/";
+                  return (
+                    root.replace(/[\\/]$/, "") +
+                    separator +
+                    entry.relativePath.replaceAll("/", separator)
+                  );
+                })(),
+                onClose: close,
+              })
             : h(component, {
                 song,
                 session: downloads,

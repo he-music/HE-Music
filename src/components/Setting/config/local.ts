@@ -29,6 +29,15 @@ export const useLocalSettings = (): SettingConfig => {
               title: t("setting.local.local_music"),
               items: [
                 {
+                  key: "showDefaultLocalPath",
+                  label: t("setting.local.show_default_local_path"),
+                  type: "switch",
+                  value: computed({
+                    get: () => settingStore.showDefaultLocalPath,
+                    set: (value) => (settingStore.showDefaultLocalPath = value),
+                  }),
+                },
+                {
                   key: "showLocalCover",
                   label: t("setting.local.show_local_cover"),
                   description: t("setting.local.show_local_cover_tip"),

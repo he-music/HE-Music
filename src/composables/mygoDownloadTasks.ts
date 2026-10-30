@@ -66,6 +66,16 @@ export function useMygoDownloadTasks(owner: Readonly<Ref<MygoDownloadTasksOwner 
     }
   }
 
+  const retryable = computed(() => tasks.value.filter((task) => task.retryable && !task.committed));
+  async function retryAll(): Promise<void> {
+    const captured = queue.value;
+    const ids = retryable.value.map((task) => task.id);
+    for (const id of ids) {
+      if (!active || queue.value !== captured) return;
+      await run(id, "retry");
+    }
+  }
+
   const removable = computed(() =>
     tasks.value.filter((task) => task.done && task.refresh !== "pending"),
   );
@@ -77,5 +87,5 @@ export function useMygoDownloadTasks(owner: Readonly<Ref<MygoDownloadTasksOwner 
       await run(id, "retire");
     }
   }
-  return { tasks, pending, errors, removable, run, clearDone };
+  return { tasks, pending, errors, removable, run, clearDone, retryable, retryAll };
 }

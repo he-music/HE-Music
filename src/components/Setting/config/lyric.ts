@@ -803,27 +803,12 @@ export const useLyricSettings = (): SettingConfig => {
           },
           {
             key: "desktopLyricFont",
-            show: isElectron,
+            show: () => isElectron || (platform.kind === "mygo" && styleAvailable.value),
             label: t("setting.lyrics.desktop_lyrics_font_family"),
             type: "button",
             description: t("setting.lyrics.desktop_lyrics_font_family_tip"),
             buttonLabel: t("common.configuration"),
             action: openFontManager,
-          },
-          {
-            key: "desktopLyricNativeFont",
-            show: () => platform.kind === "mygo" && styleAvailable.value,
-            label: t("setting.lyrics.desktop_lyrics_font_family"),
-            type: "text-input",
-            description: t("setting.lyrics.desktop_lyrics_font_name_tip"),
-            componentProps: { onBlur: saveDesktopLyricOptions },
-            value: computed({
-              get: () => desktopLyricConfig.font.family,
-              set: (value: string) => {
-                desktopLyricConfig.font.family = value;
-                desktopLyricConfig.font.postScriptName = value;
-              },
-            }),
           },
           {
             key: "desktopLyricFontWeight",

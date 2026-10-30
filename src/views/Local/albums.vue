@@ -9,7 +9,11 @@
         @click="chooseAlbum = key"
       >
         <Transition name="fade" mode="out-in">
+          <LocalArtworkImage v-if="isMygo && item[0]" :song="item[0]" :alt="key" class="cover">
+            <img :src="gatewayProxyUrl(item[0].cover || '/images/album.jpg?asset')" :alt="key" />
+          </LocalArtworkImage>
           <n-image
+            v-else
             :key="item?.[0]?.cover"
             v-visible.once="(show: boolean) => loadAlbumCover(show, key)"
             :src="gatewayProxyUrl(item?.[0]?.cover || '/images/album.jpg?asset')"
@@ -35,6 +39,8 @@
 </template>
 
 <script setup lang="ts">
+import { isMygo } from "@/utils/env";
+import LocalArtworkImage from "@/components/Local/LocalArtworkImage.vue";
 import { gatewayProxyUrl } from "@/platform/gateway";
 import { groupSongs } from "@/utils/songGroup";
 import blob from "@/utils/blob";
@@ -63,7 +69,7 @@ watch(
 
 // 加载专辑封面
 const loadAlbumCover = async (show: boolean, key: string) => {
-  if (!show) return;
+  if (isMygo || !show) return;
   const song = albumData.value.get(key)?.[0];
   if (!song?.path) return;
   const coverData = await window.electron.ipcRenderer.invoke("get-music-cover", song.path);

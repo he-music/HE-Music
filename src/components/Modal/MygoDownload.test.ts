@@ -4,6 +4,10 @@ import * as Vue from "vue";
 import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 import { createMygoDownloadResolver } from "../../utils/localDownloadResolver";
+import { defaultGrantIndex } from "@/platform/localDownloadOptions";
+const settings = Vue.reactive({ downloadPath: "Music one" });
+const openSettings = vi.fn();
+const success = vi.fn();
 vi.mock("@/api/song", () => ({ songDetail: vi.fn(), songLyric: vi.fn(), songUrl: vi.fn() }));
 import {
   LocalDownloadSession,
@@ -57,6 +61,7 @@ function mount(props: object) {
     },
   });
   const modules: Record<string, unknown> = {
+    "@/utils/modal": { openSetting: openSettings },
     "@/utils/helper": { formatFileSize: (bytes: number) => `${bytes} B` },
     "@/platform/localDownloadPersistence": { validLocalDownloadFormat },
     vue: Vue,
@@ -89,7 +94,7 @@ function mount(props: object) {
         },
         resolveOptions: { writeLyricTranslation: true, writeLyricRomaji: true },
       }),
-      defaultGrantIndex: () => 0,
+      defaultGrantIndex,
       normalizePortableFilename: (stem: string, format: string) => `${stem}.${format}`,
     },
     "@/stores": {
@@ -97,7 +102,9 @@ function mount(props: object) {
         getPlatformQualityDescription: (_platform: string, name: string) => name,
       }),
       useSettingStore: () => ({
-        downloadPath: "Music",
+        get downloadPath() {
+          return settings.downloadPath;
+        },
         fileNameFormat: "title",
         folderStrategy: "none",
         downloadMeta: true,
@@ -225,6 +232,10 @@ const grants: DirectoryGrant[] = [
 let access: LocalDownloadAccess;
 let snapshot: Partial<DownloadState>;
 beforeEach(() => {
+  settings.downloadPath = "Music one";
+  openSettings.mockClear();
+  success.mockClear();
+  vi.stubGlobal("window", { $message: { success } });
   vi.useFakeTimers();
   snapshot = {};
   access = {
@@ -262,7 +273,8 @@ const controls = (view: ReturnType<typeof mount>) =>
     return control;
   });
 
-it("mounts the actual SFC, chooses grants/quality, uses configured filename and uses a freshly resolved URL", async () => {
+it("mounts the actual SFC, reads the configured grant, links to settings and freshly resolves quality", async () => {
+  settings.downloadPath = "Music two";
   const chooseDirectory = vi.fn(async () => {});
   const resolveURL = vi.fn(async () => ({
     url: "https://example.test/audio?SIGNED",
@@ -271,16 +283,15 @@ it("mounts the actual SFC, chooses grants/quality, uses configured filename and 
   const view = mount({ song, session, grants, chooseDirectory, resolveURL });
   await flush();
   const [directory, quality] = controls(view);
-  expect(directory.props.options).toEqual(
-    grants.map((grant, value) => ({ label: grant.displayPath, value })),
-  );
+  expect(directory.props.value).toBe("Music two");
+  expect(directory.props.disabled).toBe(true);
   expect(quality.props.name).toBe("level");
   expect(view.all().filter((element) => element.props.value === "lossless")).toHaveLength(1);
-  change(directory, 1);
   change(quality, "lossless");
   await flush();
-  await view.click("local_download.choose_directory");
-  expect(chooseDirectory).toHaveBeenCalledTimes(1);
+  await view.click("setting.local.download_config");
+  expect(openSettings).toHaveBeenCalledWith("local");
+  expect(chooseDirectory).not.toHaveBeenCalled();
   await view.click("download.add");
   await flush();
   expect(resolveURL).toHaveBeenCalledWith(
@@ -306,6 +317,29 @@ it("mounts the actual SFC, chooses grants/quality, uses configured filename and 
   );
 });
 
+it("uses the original quality preference and leaves a missing default directory unselected", async () => {
+  const resolveURL = vi.fn(async () => ({ url: "https://example.test/audio", format: "mp3" }));
+  settings.downloadPath = "missing";
+  const props = Vue.shallowReactive({
+    song,
+    session,
+    grants,
+    chooseDirectory: vi.fn(),
+    resolveURL,
+  });
+  const view = mount(props);
+  expect(controls(view)[1].props.value).toBe("320mp3");
+  expect(view.button("download.add").props.disabled).toBe(true);
+  await view.click("download.add");
+  expect(resolveURL).not.toHaveBeenCalled();
+  expect(access.start).not.toHaveBeenCalled();
+  settings.downloadPath = "Music two";
+  await flush();
+  expect(view.button("download.add").props.disabled).toBe(false);
+  props.song = { ...song, links: song.links.filter((link) => link.name !== "320mp3") };
+  await flush();
+  expect(controls(view)[1].props.value).toBe("other");
+});
 it("derives the filename from the current song when its quality links are reused", async () => {
   const props = Vue.shallowReactive({
     song,
@@ -337,6 +371,7 @@ it("only adds a task and closes, leaving progress and retries to the manager", a
   await view.click("download.add");
   await flush();
   expect(onClose).toHaveBeenCalledOnce();
+  expect(success).toHaveBeenCalledWith("message.download_added");
   const id = session.tasks.value[0].id;
   snapshot = { received: 5, total: 0 };
   await session.refresh(id);
@@ -375,8 +410,9 @@ it("reacts to grant props, rejects mismatched formats, and prevents a revoked pe
   // A host wrapper propagates reactive parent prop changes to the mounted SFC.
   const view = mount(properties);
   expect(view.button("download.add").props.disabled).toBe(true);
-  await view.click("local_download.choose_directory");
-  expect(properties.chooseDirectory).toHaveBeenCalledTimes(1);
+  await view.click("setting.local.download_config");
+  expect(openSettings).toHaveBeenCalledWith("local");
+  expect(properties.chooseDirectory).not.toHaveBeenCalled();
   properties.grants = grants;
   await flush();
   expect(view.button("download.add").props.disabled).toBe(false);
@@ -435,7 +471,7 @@ it("leaves committed warnings and scan failure in the queue after closing", asyn
   });
   expect(view.text()).not.toMatch(/local_download\.(possibly_saved|refresh_failed|warning|retry)/);
   const source = readFileSync(new URL("./MygoDownload.vue", import.meta.url), "utf8");
-  expect(source).not.toMatch(/window\.|electron|file-saver|localStorage|dataStore/);
+  expect(source).not.toMatch(/window\.electron|electron|file-saver|localStorage|dataStore/);
 });
 
 it.each(["quality", "grant"])("discards pending URL after changing %s", async (field) => {
@@ -455,13 +491,14 @@ it.each(["quality", "grant"])("discards pending URL after changing %s", async (f
   const [directory, quality] = controls(view);
   expect([directory, quality].every((control) => control.props.disabled === true)).toBe(true);
   if (field === "quality") change(quality, "lossless");
-  if (field === "grant") change(directory, 1);
+  if (field === "grant") settings.downloadPath = "Music two";
   await flush();
   finish({ url: "https://example.test/old", format: "mp3" });
   await pending;
   expect(access.start).not.toHaveBeenCalled();
   await flush();
-  expect(controls(view).every((control) => control.props.disabled === false)).toBe(true);
+  expect(controls(view)[0].props.disabled).toBe(true);
+  expect(controls(view)[1].props.disabled).toBe(false);
 });
 
 it("retries original A after closing its modal and opening unrelated B", async () => {
@@ -490,8 +527,8 @@ it("retries original A after closing its modal and opening unrelated B", async (
     chooseDirectory: async () => {},
     resolveURL: resolveB,
   });
-  const [directory, quality] = controls(second);
-  change(directory, 1);
+  const [, quality] = controls(second);
+  settings.downloadPath = "Music two";
   change(quality, "lossless");
   await flush();
   expect(() => second.button("local_download.retry")).toThrow();

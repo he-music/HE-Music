@@ -97,6 +97,25 @@ it("retries failed tasks, keeps retirement failures, clears only eligible done r
   expect(view.tasks.value).toHaveLength(4);
   scope.stop();
 });
+it("retries only unsaved retryable tasks and stops the snapshot when its owner changes", async () => {
+  const first = setup(
+    queue([
+      task("failed", { done: true, retryable: true }),
+      task("saved", { done: true, committed: true, retryable: true }),
+      task("active"),
+      task("second", { done: true, retryable: true }),
+    ]),
+  );
+  expect(first.view.retryable.value.map((item) => item.id)).toEqual(["failed", "second"]);
+  first.downloads.retry = vi.fn(async () => {
+    first.owner.value = { downloads: queue([task("second", { done: true, retryable: true })]) };
+    return "retried";
+  });
+  await first.view.retryAll();
+  expect(first.downloads.retry).toHaveBeenCalledExactlyOnceWith("failed");
+  expect(first.owner.value?.downloads?.retry).not.toHaveBeenCalled();
+  first.scope.stop();
+});
 it("clears a snapshot without retiring a replacement owner's IDs", async () => {
   const first = setup(queue([task("one", { done: true }), task("two", { done: true })]));
   first.downloads.retire = vi.fn(async () => {

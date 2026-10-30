@@ -19,7 +19,7 @@
         <n-button
           data-library-action="play-filtered"
           :focusable="false"
-          :disabled="!songs.length || !ready"
+          :disabled="!listData.length || !ready"
           type="primary"
           strong
           secondary
@@ -57,9 +57,6 @@
             <template #icon><SvgIcon name="List" /></template>
           </n-button>
         </n-dropdown>
-        <n-button v-if="scanning" secondary round @click="session?.cancel()">{{
-          t("common.cancel")
-        }}</n-button>
       </n-flex>
       <n-flex class="right" justify="end">
         <n-input
@@ -74,76 +71,114 @@
         >
           <template #prefix><SvgIcon name="Search" /></template>
         </n-input>
+        <n-tabs
+          :value="localType"
+          class="tabs"
+          type="segment"
+          @update:value="(name: string) => router.push({ name })"
+        >
+          <n-tab name="local-songs">{{ t("common.songs") }}</n-tab>
+          <n-tab :disabled="allSongs.length === 0" name="local-artists">
+            {{ t("common.artists") }}
+          </n-tab>
+          <n-tab :disabled="allSongs.length === 0" name="local-albums">
+            {{ t("common.albums") }}
+          </n-tab>
+        </n-tabs>
       </n-flex>
     </n-flex>
-    <n-text class="scan-status" role="status">{{
-      t(`local.scan_${phase}`, { count: allSongs.length })
-    }}</n-text>
-    <section v-if="pendingPaths.length" class="directory-recovery">
-      <n-text>{{ t("mygo.library.pending") }}</n-text>
-      <n-p>{{ t("setting.local.directory_reselect") }}</n-p>
-      <p v-for="path in pendingPaths" :key="path">{{ path }}</p>
-      <n-button :disabled="!ready" strong secondary @click="openLocalMusicDirectoryModal">
-        <template #icon><SvgIcon name="FolderCog" /></template>
-        {{ t("local.manage_local_music_folder") }}
-      </n-button>
-    </section>
     <n-alert v-if="phase === 'partial'" type="warning" :show-icon="false">
       {{ t("local.scan_partial_detail", { count: issueCount }) }}
     </n-alert>
-    <n-empty
-      v-if="!songs.length && !scanning"
-      class="library-empty"
-      :description="query.trim() ? t('mygo.library.no_matches') : t('local.scan_empty')"
-    />
-    <SongList
-      v-else
-      class="router-view"
-      :data="songs"
-      :loading="scanning"
-      :hidden-cover="!settingStore.showLocalCover"
-      :hidden-size="false"
-    />
+    <RouterView v-slot="{ Component }">
+      <Transition :name="`router-${settingStore.routeAnimation}`" mode="out-in">
+        <KeepAlive v-if="settingStore.useKeepAlive">
+          <component :is="Component" :data="listData" :loading="scanning" class="router-view" />
+        </KeepAlive>
+        <component
+          v-else
+          :is="Component"
+          :data="listData"
+          :loading="scanning"
+          class="router-view"
+        />
+      </Transition>
+    </RouterView>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, shallowRef } from "vue";
-import SongList from "@/components/List/SongList.vue";
+import { computed, KeepAlive, shallowRef, watch } from "vue";
+import { RouterView, useRoute, useRouter } from "vue-router";
 import type { DropdownOption } from "naive-ui";
-import { renderIcon } from "@/utils/helper";
 import { useI18n } from "vue-i18n";
+import { useSongSearch } from "@/composables/useSongSearch";
 import { filesSession } from "@/platform/filesSession";
 import { localFilesSession } from "@/platform/localFilesSession";
+import { createLibrarySongRows } from "@/platform/librarySongRows";
 import { openBatchList, openLocalMusicDirectoryModal } from "@/utils/modal";
+import { renderIcon } from "@/utils/helper";
 import { usePlayer } from "@/utils/player";
-import { createLibraryDirectoryRecovery } from "@/platform/libraryDirectoryRecovery";
-import { createLibrarySongRows, filterLibrarySongs } from "@/platform/librarySongRows";
 import { useSettingStore } from "@/stores";
 
 const { t } = useI18n();
+const router = useRouter();
+const route = useRoute();
 const player = usePlayer();
 const session = localFilesSession;
+const settingStore = useSettingStore();
 const ready = computed(() => filesSession.value?.ready.value ?? false);
 const grantCount = computed(() => filesSession.value?.directories.value.length ?? 0);
 const scanning = computed(() => session.value?.scanning.value ?? false);
 const phase = computed(() => session.value?.phase.value ?? "idle");
 const issueCount = computed(() => session.value?.issues.value.length ?? 0);
-const settingStore = useSettingStore();
-const recovery = createLibraryDirectoryRecovery({
-  read: () => settingStore.localFilesPath,
-  write: (paths) => {
-    settingStore.localFilesPath = paths;
-  },
-});
-const pendingPaths = recovery.pendingPaths;
+const localType = computed(() => String(route.name ?? "local-songs"));
 const query = shallowRef("");
-const entries = computed(() => session.value?.entries.value ?? []);
+const defaultMusicPath = shallowRef("");
+watch(
+  () => [filesSession.value, filesSession.value?.ready.value] as const,
+  async ([owner], _previous, onCleanup) => {
+    let active = true;
+    onCleanup(() => {
+      active = false;
+    });
+    defaultMusicPath.value = "";
+    if (!owner?.ready.value) return;
+    try {
+      const result = await owner.defaultDirectory("music");
+      if (
+        active &&
+        filesSession.value === owner &&
+        owner.ready.value &&
+        result.status === "completed"
+      )
+        defaultMusicPath.value = result.value?.displayPath ?? "";
+    } catch {
+      /* Directory suggestions cannot grant access. */
+    }
+  },
+  { immediate: true, flush: "sync" },
+);
+const entries = computed(() => {
+  const owner = filesSession.value;
+  if (!owner?.ready.value) return [];
+  const paths = new Set(settingStore.localFilesPath);
+  if (settingStore.showDefaultLocalPath && defaultMusicPath.value)
+    paths.add(defaultMusicPath.value);
+  const tokens = new Set(
+    owner.directories.value
+      .filter((grant) => paths.has(grant.displayPath))
+      .map((grant) => grant.token),
+  );
+  return session.value?.entries.value.filter((entry) => tokens.has(entry.ref.grantToken)) ?? [];
+});
 const allSongs = createLibrarySongRows(entries);
-const songs = computed(() => filterLibrarySongs(allSongs.value, query.value));
+const searchData = useSongSearch(allSongs, query);
+const listData = computed(() => (query.value.trim() ? searchData.value : allSongs.value));
+
 const playFiltered = () => {
-  const [first] = songs.value;
-  if (first) void player.updatePlayList(songs.value, first);
+  const [first] = listData.value;
+  if (first) void player.updatePlayList(listData.value, first);
 };
 const scan = () => void session.value?.scan();
 const allMusicSize = computed(() =>
@@ -162,8 +197,8 @@ const moreOptions = computed<DropdownOption[]>(() => [
   {
     label: t("common.batch_operation"),
     key: "batch",
-    disabled: !ready.value || !songs.value.length,
-    props: { onClick: () => openBatchList(songs.value, true) },
+    disabled: !ready.value || !listData.value.length,
+    props: { onClick: () => openBatchList(listData.value, true) },
     icon: renderIcon("Batch"),
   },
 ]);
@@ -230,17 +265,7 @@ const moreOptions = computed<DropdownOption[]>(() => [
     max-height: calc((var(--layout-height) - 132) * 1px);
   }
 }
-.scan-status {
-  margin-bottom: 12px;
-}
-.directory-recovery,
 .n-alert {
   margin-bottom: 16px;
-}
-.directory-recovery p {
-  overflow-wrap: anywhere;
-}
-.library-empty {
-  margin: 60px 0;
 }
 </style>

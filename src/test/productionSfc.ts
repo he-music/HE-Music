@@ -25,6 +25,7 @@ export function mountProductionSfc(
   modules: Record<string, unknown>,
   components: string[],
   scriptImports = "",
+  rootProps: Record<string, unknown> = {},
 ) {
   const source = readFileSync(file, "utf8").replace(
     '<script setup lang="ts">',
@@ -77,7 +78,7 @@ export function mountProductionSfc(
     },
   });
   const root = node("root");
-  const app = renderer.createApp(exports.default);
+  const app = renderer.createApp(exports.default, rootProps);
   for (const name of components) {
     app.component(
       name,

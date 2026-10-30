@@ -37,11 +37,15 @@ export interface MygoDownloadSettingsHooks {
 export function createMygoDownloadSettings(hooks: MygoDownloadSettingsHooks = {}): SettingConfig {
   const settings = useSettingStore();
   const choose = async () => {
-    const session = filesSession.value;
-    if (!session) return;
-    const result = await session.chooseDirectory();
-    if (result.status !== "completed" || result.value.status !== "selected" || !result.value.grant)
+    const owner = filesSession.value;
+    if (!owner) return;
+    const result = await owner.chooseDirectory();
+    if (owner !== filesSession.value) return;
+    if (result.status !== "completed") {
+      if (result.status === "failed") window.$message.error(t("setting.local.directory_failed"));
       return;
+    }
+    if (result.value.status !== "selected" || !result.value.grant) return;
     settings.downloadPath = result.value.grant.displayPath;
     await hooks.scanLibrary?.();
   };
@@ -59,12 +63,31 @@ export function createMygoDownloadSettings(hooks: MygoDownloadSettingsHooks = {}
             ),
             buttonLabel: t("common.change"),
             action: choose,
+            extraButton: {
+              label: t("common.clear_select"),
+              type: "primary",
+              secondary: true,
+              strong: true,
+              action: () => {
+                settings.downloadPath = "";
+              },
+              show: computed(() => !!settings.downloadPath),
+            },
           },
           ...legacyBooleanSettings.map(([key, label, description]) => ({
             key,
             label: t(label),
             type: "switch" as const,
             description: t(description),
+            disabled: computed(() =>
+              key === "downloadCover" || key === "downloadLyric"
+                ? !settings.downloadMeta
+                : key === "downloadLyricTran" || key === "downloadLyricRoma"
+                  ? !settings.downloadMeta || !settings.downloadLyric
+                  : key === "saveMetaFile"
+                    ? !settings.downloadMeta
+                    : false,
+            ),
             value: computed({
               get: () => settings[key],
               set: (value: boolean) => {
@@ -76,6 +99,7 @@ export function createMygoDownloadSettings(hooks: MygoDownloadSettingsHooks = {}
             key: "fileNameFormat",
             label: t("setting.local.file_naming_format"),
             type: "select" as const,
+            description: t("setting.local.file_naming_format_tip"),
             options: [
               { label: t("setting.local.download_file_naming_format_title"), value: "title" },
               {
@@ -98,6 +122,7 @@ export function createMygoDownloadSettings(hooks: MygoDownloadSettingsHooks = {}
             key: "folderStrategy",
             label: t("setting.local.folder_strategy"),
             type: "select" as const,
+            description: t("setting.local.folder_strategy_tip"),
             options: [
               { label: t("common.none"), value: "none" },
               { label: t("common.artist"), value: "artist" },

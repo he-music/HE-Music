@@ -9,6 +9,8 @@ import type { PlatformFiles } from "@/platform/files";
 import type { ScanEntry } from "@/platform/mygo.bindings";
 import * as recoveryModule from "@/platform/libraryDirectoryRecovery";
 import * as songRowsModule from "@/platform/librarySongRows";
+import * as VueRouter from "vue-router";
+import { useSongSearch } from "@/composables/useSongSearch";
 
 type Element = {
   tag: string;
@@ -27,14 +29,20 @@ const node = (tag: string, text = ""): Element => ({
 const play = vi.fn();
 const manage = vi.fn();
 const batch = vi.fn();
-const settings = Vue.reactive({ localFilesPath: ["/synthetic/remembered"], showLocalCover: true });
+const settings = Vue.reactive({
+  localFilesPath: ["/synthetic/remembered"],
+  showDefaultLocalPath: true,
+  showLocalCover: true,
+  useKeepAlive: true,
+  routeAnimation: "none",
+});
 const cleanups: Array<() => void> = [];
 const flush = async () => {
   for (let n = 0; n < 30; n++) await Promise.resolve();
   await Vue.nextTick();
 };
 
-function mount() {
+async function mount() {
   const { descriptor } = parse(readFileSync(new URL("./MygoLibrary.vue", import.meta.url), "utf8"));
   const script = compileScript(descriptor, { id: "MygoLibrary.vue", inlineTemplate: true });
   const compiled = ts.transpileModule(script.content, {
@@ -46,7 +54,18 @@ function mount() {
     },
   });
   const modules: Record<string, unknown> = {
-    vue: Vue,
+    vue: {
+      ...Vue,
+      Transition: Vue.defineComponent({
+        inheritAttrs: false,
+        setup:
+          (_props, { slots }) =>
+          () =>
+            slots.default?.(),
+      }),
+    },
+    "vue-router": VueRouter,
+    "@/composables/useSongSearch": { useSongSearch },
     "@/components/List/SongList.vue": {
       default: Vue.defineComponent({
         props: ["data", "loading", "hiddenCover", "hiddenSize"],
@@ -106,7 +125,44 @@ function mount() {
   });
   const root = node("root");
   if (!exports.default) throw new Error("Missing compiled library component");
-  const app = renderer.createApp(exports.default);
+  const songScript = compileScript(
+    parse(readFileSync(new URL("./song.vue", import.meta.url), "utf8")).descriptor,
+    { id: "song.vue", inlineTemplate: true },
+  );
+  const songExports: { default?: Vue.Component } = {};
+  new Function(
+    "require",
+    "exports",
+    ts.transpileModule(songScript.content, {
+      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    }).outputText,
+  )((name: string) => modules[name], songExports);
+  const group = (tag: string) =>
+    Vue.defineComponent({
+      props: ["data", "loading"],
+      setup: (props) => () => Vue.h(tag, { ...props }),
+    });
+  const router = VueRouter.createRouter({
+    history: VueRouter.createMemoryHistory(),
+    routes: [
+      {
+        path: "/local",
+        component: exports.default,
+        children: [
+          { path: "songs", name: "local-songs", component: songExports.default! },
+          { path: "artists", name: "local-artists", component: group("artist-view") },
+          { path: "albums", name: "local-albums", component: group("album-view") },
+        ],
+      },
+    ],
+  });
+  await router.push("/local/songs");
+  const app = renderer.createApp({ render: () => Vue.h(VueRouter.RouterView) });
+  app.use(router);
+  app.component(
+    "SongList",
+    (modules["@/components/List/SongList.vue"] as { default: Vue.Component }).default,
+  );
   for (const name of [
     "NFlex",
     "NButton",
@@ -117,6 +173,8 @@ function mount() {
     "NInput",
     "NDropdown",
     "NNumberAnimation",
+    "NTabs",
+    "NTab",
     "SvgIcon",
   ])
     app.component(name, pass);
@@ -126,7 +184,7 @@ function mount() {
     target,
     ...target.children.flatMap((child) => all(child)),
   ];
-  return { all, close: () => app.unmount() };
+  return { all, close: () => app.unmount(), router };
 }
 
 const entry: ScanEntry = {
@@ -158,9 +216,12 @@ afterEach(async () => {
   vi.clearAllMocks();
   settings.localFilesPath = ["/synthetic/remembered"];
   settings.showLocalCover = true;
+  settings.showDefaultLocalPath = true;
+  vi.useRealTimers();
 });
 
 it("the real local library template manages grants, scans transient rows and clears them on revoke", async () => {
+  vi.useFakeTimers();
   const provider: PlatformFiles = {
     begin: vi.fn(async () => ({ epoch: 1 })),
     chooseDirectory: vi.fn<PlatformFiles["chooseDirectory"]>(async () => ({
@@ -170,7 +231,11 @@ it("the real local library template manages grants, scans transient rows and cle
       existingToken: "",
     })),
     revokeDirectory: vi.fn(async () => {}),
-    defaultDirectory: vi.fn(),
+    defaultDirectory: vi.fn(async () => ({
+      kind: "music" as const,
+      displayPath: "/fixture",
+      authorized: false,
+    })),
     importSettings: vi.fn(),
     exportSettings: vi.fn(),
     teardown: vi.fn(async () => {}),
@@ -189,8 +254,8 @@ it("the real local library template manages grants, scans transient rows and cle
   };
   const files = new FilesSession(provider, { blockAudio: () => () => {} });
   await files.start();
-  const view = mount();
-  expect(view.all().some((element) => element.text === "/synthetic/remembered")).toBe(true);
+  const view = await mount();
+  expect(view.all().some((element) => element.text === "/synthetic/remembered")).toBe(false);
   const scanButton = () =>
     view.all().find((element) => element.props["data-library-action"] === "scan");
   expect(scanButton()?.props.disabled).toBe(true);
@@ -199,6 +264,7 @@ it("the real local library template manages grants, scans transient rows and cle
   options[0].props.onClick();
   expect(manage).toHaveBeenCalledOnce();
   await files.chooseDirectory();
+  settings.localFilesPath = ["/fixture"];
   await flush();
   expect(scanButton()?.props.disabled).toBe(false);
   const scanClick = scanButton()?.props.onClick;
@@ -248,8 +314,9 @@ it("the real local library template manages grants, scans transient rows and cle
   const filter = view.all().find((element) => "data-library-filter" in element.props);
   const updateFilter = filter?.props["onUpdate:value"];
   if (typeof updateFilter !== "function") throw new Error("Missing library filter");
-  for (const search of ["other", "gamma", "OTHER ALBUM"]) {
+  for (const search of ["other", "gamma", "OTHER ALBUM", "gama"]) {
     updateFilter(search);
+    await vi.advanceTimersByTimeAsync(300);
     await flush();
     const filtered = view.all().find((element) => element.tag === "song-list")?.props.data;
     expect(filtered).toEqual([allRows[1]]);
@@ -271,6 +338,22 @@ it("the real local library template manages grants, scans transient rows and cle
   updateFilter("");
   await flush();
   expect(view.all().find((element) => element.tag === "song-list")?.props.data).toBe(allRows);
+  for (const [name, tag] of [
+    ["local-artists", "artist-view"],
+    ["local-albums", "album-view"],
+  ]) {
+    await view.router.push({ name });
+    await flush();
+    expect(view.all().find((element) => element.tag === tag)?.props.data).toBe(allRows);
+  }
+  await view.router.push({ name: "local-songs" });
+  await flush();
+  settings.localFilesPath = [];
+  settings.showDefaultLocalPath = false;
+  await flush();
+  expect(view.all().find((element) => element.tag === "song-list")?.props.data).toEqual([]);
+  settings.showDefaultLocalPath = true;
+  await flush();
   vi.mocked(readPage).mockResolvedValueOnce({
     operationId: "job",
     entries: [entry],
@@ -286,5 +369,5 @@ it("the real local library template manages grants, scans transient rows and cle
   ]);
   await files.revokeDirectory("grant");
   await flush();
-  expect(view.all().some((element) => element.tag === "song-list")).toBe(false);
+  expect(view.all().find((element) => element.tag === "song-list")?.props.data).toEqual([]);
 });
