@@ -732,3 +732,14 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - Web 独立构建通过；同一冻结在隔离树完成正常 darwin/arm64 mygo 构建，32.3 秒、应用约 20.2 MB。codesign deep/strict 验证通过，但签名仅 ad hoc，跳过 DMG/公证；二进制为 Go1.27.3、CGO_ENABLED=0、固定 mygo/purego/mtag，生产标签仅 mygo_noinspector，包内仅主程序、图标、Info.plist、PkgInfo 和签名，无 Node/Electron/asar。构建采用占位 API 地址且未运行应用，不是可发布安装包或真实 API 验收。
 - Podman 对最终同一冻结 `ed057ea2c69a0b658ac193f249eb054b49c01496` 实际运行 Linux arm64/Go1.27.3/CGO=0：Auth/Control focused、Go 全包测试及 vet 通过；源码只读挂载后复制到 overlayfs，夹具使用内部 tmpfs，模块缓存只读，ffmpeg7.1.5/fontconfig 可用。JSON 审计唯一 skip 是根包没有测试文件的 package-level 事件，没有测试级 skip。记录位于 `/private/tmp/hemusic-linux-validation/artifacts/final-business-auth-control-validation-ed057ea2c69a0b658ac193f249eb054b49c01496.log`；前一冻结 `dfb6710` 另有完整下载/11格式/SELinux/fontconfig 重点日志。临时容器已清理，machine 保持运行，用户原有容器、App、音乐库与设备未操作。
 - 新增 `docs/plans/mygo-electron-removal-checklist.md`：列明 47 个 Electron 专用文件、四个根专用文件、前端旧分支、类型/脚本/CI/依赖清理顺序，以及网易/解灰外部后端、TTML、OAuth 和控制服务的实际去向。全部 Electron 继续保留；实际删除仍须用户最终确认，并须在删除后重新验证独立 Web/mygo。
+
+### 界面纠正：恢复原有前端结构
+
+- 按用户反馈纠正迁移时另写简化界面的偏差：后续以原 Electron 组件为展示基准，保留页面布局、Naive UI 控件和交互习惯，只适配宿主调用。Electron 移除继续暂停。
+- 下载管理恢复标题与数量、左右操作区、已完成/下载中分段页签、主题列表行、图标按钮和 Naive progress/empty/scrollbar。页签与现有 downloaded/downloading 路由同步；任务仍由原队列管理，saved warning、残留文件、扫描状态和明确重试限制保留。历史任务没有 fresh 授权时继续展示记录，不伪造成可播放歌曲。
+- 下载弹窗恢复 SongDataCard、音质 radio 与大小、目录折叠区及底部取消/添加按钮；目录授权保留原合同，文件名和任务恢复详情收进折叠区。解析期间禁用音质、目录和文件名；原 captured plan、fresh URL、revision、取消、连续重试和 required-cover 检查保留。
+- 元数据编辑器恢复信息/封面分段分页、Naive 表单、动态艺术家标签、只读音频信息、封面预览与底部菜单。只在存在未决保存时显示重新核验操作；草稿、明确确认、不可变 patch、SHA 基线、owner/ref/entry 防护和恢复文件反馈保留。
+- 本地音乐恢复原有标题/容量/歌曲数、播放/刷新/更多/搜索菜单，并复用 SongList 与 SongCard 的可见封面 lease、歌曲菜单和本地文件操作；目录管理恢复 Folder/Thing 与图标按钮；更新弹窗恢复版本 tag、滚动区和菜单，仍走签名更新流程。目录撤销仅在当前 owner 的明确 completed 结果后更新路径偏好，旧 owner 的成功和失败结果均有生产 SFC 回归。
+- 父侧验证：Node 24.22.1、pnpm 10.28.1；Vitest **159 文件 1462 项**、Node/Web 类型、变更 TS ESLint、全部变更 Vue/TS 格式检查、Web 与桌面前端静态构建通过。日志位于 `/tmp/hemusic-ui-restore-final-{tests,types,format,eslint,web-build,desktop-build}.log`。Vue ESLint 仍未配置；未改 Go、SDK、生成绑定或 Electron 专用入口，本轮未重复原生平台矩阵。
+- 两轮独立静态复核指出并关闭目录 owner、下载路由同步和音质 busy 禁用三项问题，最终限定范围无新 P1/P2；静态 reviewer 未执行测试，以上验证由父侧实际运行。
+- 另外使用 `/tmp/hemusic-ui-restore-preview` 的隔离模拟页面，以生产下载弹窗、元数据编辑器和下载管理配合真实 Naive UI 检查布局、分页及滚动区；确认解析期间 radio disabled，并检查信息/封面切换保留草稿。截图与浏览器结构记录保存于该目录，输出文件均核实存在。夹具替换了宿主、网络、状态与低层图片组件，不能代替实机主题/封面、长列表、OS 权限、真实下载和更新安装验收；未启动或附着用户 App、访问真实音乐 API、音乐库或播放声音。

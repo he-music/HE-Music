@@ -26,7 +26,7 @@ const node = (tag: string, text = ""): Element => ({
 });
 const play = vi.fn();
 const manage = vi.fn();
-const edit = vi.fn();
+const batch = vi.fn();
 const settings = Vue.reactive({ localFilesPath: ["/synthetic/remembered"], showLocalCover: true });
 const cleanups: Array<() => void> = [];
 const flush = async () => {
@@ -47,18 +47,23 @@ function mount() {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
-    "@/components/Local/LocalArtworkImage.vue": { default: pass },
-    "@/components/Local/LocalSongActions.vue": { default: pass },
-    "naive-ui": { NButton: pass },
+    "@/components/List/SongList.vue": {
+      default: Vue.defineComponent({
+        props: ["data", "loading", "hiddenCover", "hiddenSize"],
+        setup(props) {
+          return () => Vue.h("song-list", { ...props });
+        },
+      }),
+    },
+    "@/utils/helper": { renderIcon: () => () => null },
     "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
     "@/platform/filesSession": { filesSession },
     "@/platform/localFilesSession": { localFilesSession },
     "@/platform/libraryDirectoryRecovery": recoveryModule,
     "@/platform/librarySongRows": songRowsModule,
     "@/stores": { useSettingStore: () => settings },
-    "@/utils/modal": { openLocalMusicDirectoryModal: manage, openSongInfoEditor: edit },
+    "@/utils/modal": { openLocalMusicDirectoryModal: manage, openBatchList: batch },
     "@/utils/player": { usePlayer: () => ({ updatePlayList: play }) },
-    "@/utils/time": { secondsToTime: (seconds: number) => `${seconds}s` },
   };
   const exports: { default?: Vue.Component } = {};
   new Function("require", "exports", compiled)((name: string) => {
@@ -102,17 +107,19 @@ function mount() {
   const root = node("root");
   if (!exports.default) throw new Error("Missing compiled library component");
   const app = renderer.createApp(exports.default);
-  for (const name of ["NH1", "NFlex", "NButton", "NText", "NP", "NAlert", "NEmpty", "NInput"])
+  for (const name of [
+    "NFlex",
+    "NButton",
+    "NText",
+    "NP",
+    "NAlert",
+    "NEmpty",
+    "NInput",
+    "NDropdown",
+    "NNumberAnimation",
+    "SvgIcon",
+  ])
     app.component(name, pass);
-  app.component(
-    "NDataTable",
-    Vue.defineComponent({
-      props: ["data", "columns"],
-      setup(props) {
-        return () => Vue.h("table", { data: props.data, columns: props.columns });
-      },
-    }),
-  );
   app.mount(root);
   cleanups.push(() => app.unmount());
   const all = (target = root): Element[] => [
@@ -150,6 +157,7 @@ afterEach(async () => {
   await filesSession.value?.dispose();
   vi.clearAllMocks();
   settings.localFilesPath = ["/synthetic/remembered"];
+  settings.showLocalCover = true;
 });
 
 it("the real local library template manages grants, scans transient rows and clears them on revoke", async () => {
@@ -183,21 +191,21 @@ it("the real local library template manages grants, scans transient rows and cle
   await files.start();
   const view = mount();
   expect(view.all().some((element) => element.text === "/synthetic/remembered")).toBe(true);
-  const clickable = () =>
-    view.all().filter((element) => typeof element.props.onClick === "function");
-  expect(clickable()[1]?.props.disabled).toBe(true);
-  const manageClick = clickable()[0]?.props.onClick;
-  if (typeof manageClick !== "function") throw new Error("Missing directory action");
-  manageClick();
+  const scanButton = () =>
+    view.all().find((element) => element.props["data-library-action"] === "scan");
+  expect(scanButton()?.props.disabled).toBe(true);
+  const options = view.all().find((element) => Array.isArray(element.props.options))?.props.options;
+  if (!Array.isArray(options)) throw new Error("Missing directory menu");
+  options[0].props.onClick();
   expect(manage).toHaveBeenCalledOnce();
   await files.chooseDirectory();
   await flush();
-  expect(clickable()[1]?.props.disabled).toBe(false);
-  const scanClick = clickable()[1]?.props.onClick;
+  expect(scanButton()?.props.disabled).toBe(false);
+  const scanClick = scanButton()?.props.onClick;
   if (typeof scanClick !== "function") throw new Error("Missing scan action");
   scanClick();
   await flush();
-  const table = view.all().find((element) => element.tag === "table");
+  const table = view.all().find((element) => element.tag === "song-list");
   expect(table?.props.data).toMatchObject([
     {
       id: "mygo-local:path:%2Ffixture/song.mp3",
@@ -207,33 +215,15 @@ it("the real local library template manages grants, scans transient rows and cle
     },
   ]);
   expect(JSON.stringify(table?.props.data)).not.toContain("grantToken");
-  expect(table?.props.columns).toEqual(
-    expect.arrayContaining([expect.objectContaining({ key: "cover" })]),
-  );
+  expect(table?.props.hiddenCover).toBe(false);
+  expect(table?.props.hiddenSize).toBe(false);
+  settings.showLocalCover = false;
+  await flush();
+  expect(view.all().find((element) => element.tag === "song-list")?.props.hiddenCover).toBe(true);
+  settings.showLocalCover = true;
+  await flush();
+  expect(view.all().some((element) => element.tag === "n-data-table")).toBe(false);
   expect(view.all().some((element) => element.text === "local.scan_supported")).toBe(false);
-  const columns = table?.props.columns;
-  const rows = table?.props.data;
-  if (!Array.isArray(columns) || !Array.isArray(rows)) throw new Error("Missing table data");
-  const column: unknown = columns.find(
-    (value: unknown) =>
-      typeof value === "object" && value !== null && "key" in value && value.key === "edit",
-  );
-  if (
-    typeof column !== "object" ||
-    !column ||
-    !("render" in column) ||
-    typeof column.render !== "function"
-  ) {
-    throw new Error("Missing edit action");
-  }
-  const button: unknown = column.render(rows[0]);
-  if (!Vue.isVNode(button) || typeof button.props?.onClick !== "function")
-    throw new Error("Missing edit handler");
-  expect(button.props.disabled).toBe(false);
-  button.props.onClick();
-  expect(edit).toHaveBeenCalledWith(
-    expect.objectContaining({ id: "mygo-local:path:%2Ffixture/song.mp3", path: "song.mp3" }),
-  );
   const other: ScanEntry = {
     ...entry,
     ref: { ...entry.ref, fileId: "other", relativePath: "other.mp3" },
@@ -252,7 +242,7 @@ it("the real local library template manages grants, scans transient rows and cle
   });
   await localFilesSession.value?.scan();
   await flush();
-  const allRows = view.all().find((element) => element.tag === "table")?.props.data;
+  const allRows = view.all().find((element) => element.tag === "song-list")?.props.data;
   if (!Array.isArray(allRows)) throw new Error("Missing complete library rows");
   expect(allRows).toHaveLength(2);
   const filter = view.all().find((element) => "data-library-filter" in element.props);
@@ -261,7 +251,7 @@ it("the real local library template manages grants, scans transient rows and cle
   for (const search of ["other", "gamma", "OTHER ALBUM"]) {
     updateFilter(search);
     await flush();
-    const filtered = view.all().find((element) => element.tag === "table")?.props.data;
+    const filtered = view.all().find((element) => element.tag === "song-list")?.props.data;
     expect(filtered).toEqual([allRows[1]]);
     if (!Array.isArray(filtered)) throw new Error("Missing filtered rows");
     expect(filtered[0]).toBe(allRows[1]);
@@ -273,10 +263,28 @@ it("the real local library template manages grants, scans transient rows and cle
     throw new Error("Missing filtered playback");
   playFiltered.props.onClick();
   expect(play).toHaveBeenCalledWith([allRows[1]], allRows[1]);
+  const filteredOptions = view.all().find((element) => Array.isArray(element.props.options))
+    ?.props.options;
+  if (!Array.isArray(filteredOptions)) throw new Error("Missing filtered batch menu");
+  filteredOptions[1].props.onClick();
+  expect(batch).toHaveBeenCalledWith([allRows[1]], true);
   updateFilter("");
   await flush();
-  expect(view.all().find((element) => element.tag === "table")?.props.data).toBe(allRows);
+  expect(view.all().find((element) => element.tag === "song-list")?.props.data).toBe(allRows);
+  vi.mocked(readPage).mockResolvedValueOnce({
+    operationId: "job",
+    entries: [entry],
+    issues: [{ relativePath: "", code: "item-limit" }],
+    nextCursor: "1",
+    done: true,
+  });
+  await localFilesSession.value?.scan();
+  await flush();
+  expect(view.all().some((element) => element.text === "local.scan_partial_detail")).toBe(true);
+  expect(view.all().find((element) => element.tag === "song-list")?.props.data).toMatchObject([
+    { id: "mygo-local:path:%2Ffixture/song.mp3" },
+  ]);
   await files.revokeDirectory("grant");
   await flush();
-  expect(view.all().some((element) => element.tag === "table")).toBe(false);
+  expect(view.all().some((element) => element.tag === "song-list")).toBe(false);
 });

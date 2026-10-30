@@ -46,6 +46,7 @@ function mount(owner?: UpdatesSession) {
   });
   const modules: Record<string, unknown> = {
     vue: Vue,
+    "@/../package.json": { default: { version: "1.0.4" } },
     "vue-i18n": {
       useI18n: () => ({
         t: (key: string, data?: { version?: string }) =>
@@ -95,7 +96,8 @@ function mount(owner?: UpdatesSession) {
   });
   if (!exports.default) throw new Error("Missing compiled update component");
   const app = renderer.createApp(exports.default, { owner });
-  for (const name of ["NText", "NAlert", "NFlex", "NButton"]) app.component(name, pass);
+  for (const name of ["NText", "NAlert", "NFlex", "NButton", "NTag", "NScrollbar", "SvgIcon"])
+    app.component(name, pass);
   const root = node("root");
   app.mount(root);
   let closed = false;
@@ -198,6 +200,12 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
         (element) => element.text === "<img src=x onerror=alert(1)>" && !element.props.innerHTML,
       ),
   ).toBe(true);
+  const version = ui.all().find((element) => element.props.class === "version");
+  const versionText = (element: Element): string =>
+    element.text + element.children.map(versionText).join("");
+  expect(version && versionText(version)).toBe("1.0.42.0.0");
+  expect(ui.all().map((element) => element.props.style)).toContainEqual({ "max-height": "500px" });
+  expect(ui.all().some((element) => element.props.class === "menu")).toBe(true);
   ui.click("updates.apply");
   expect(provider.install).not.toHaveBeenCalled();
   const first = warning.mock.calls.at(-1)?.[0];

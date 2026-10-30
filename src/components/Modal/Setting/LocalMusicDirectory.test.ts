@@ -111,11 +111,10 @@ function mountDirectory() {
     inheritAttrs: false,
     setup(_props, { slots, attrs }) {
       return () =>
-        Vue.h(
-          "stub",
-          attrs,
-          Object.values(slots).flatMap((slot) => slot?.() ?? []),
-        );
+        Vue.h("stub", attrs, [
+          typeof attrs.title === "string" ? attrs.title : "",
+          ...Object.values(slots).flatMap((slot) => slot?.() ?? []),
+        ]);
     },
   });
   for (const name of [
@@ -269,6 +268,30 @@ describe("LocalMusicDirectory真实SFC", () => {
     expect(setting.localFilesPath).toEqual(["/synthetic/imported"]);
   });
 
+  it.each(["completed", "failed"])("旧目录撤销%s时不更改新owner的目录偏好", async (outcome) => {
+    const native = provider();
+    const original = new FilesSession(native);
+    await original.start();
+    await original.chooseDirectory();
+    setting.localFilesPath = ["/synthetic/selected"];
+    let finish: (() => void) | undefined;
+    vi.mocked(native.revokeDirectory).mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve, reject) => {
+          finish = () => (outcome === "completed" ? resolve() : reject(new Error("old request")));
+        }),
+    );
+    const ui = mountDirectory();
+    const pending = ui.click("revoke");
+    await flush();
+    const replacement = new FilesSession(provider());
+    await replacement.start();
+    finish?.();
+    await pending;
+    expect(filesSession.value).toBe(replacement);
+    expect(setting.localFilesPath).toEqual(["/synthetic/selected"]);
+    await original.dispose();
+  });
   it("无会话禁用按钮、Web安全；Electron目录操作仍调用旧helper", async () => {
     const ui = mountDirectory();
     expect(ui.text()).toContain("setting.local.directory_unavailable");

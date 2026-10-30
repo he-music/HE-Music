@@ -129,6 +129,7 @@ function mount(session: object, api?: MetadataMatchAPI) {
     },
     patchProp(target, key, _old, value) {
       target.props[key] = value;
+      if (key === "value") target.value = value;
     },
     parentNode: (target) => target.parent,
     nextSibling: (target) =>
@@ -143,6 +144,64 @@ function mount(session: object, api?: MetadataMatchAPI) {
     Vue.defineComponent({
       setup: () => () =>
         Vue.h(component, { entry: currentEntry.value, session: currentSession.value }),
+    }),
+  );
+  const passthrough = Vue.defineComponent({
+    inheritAttrs: false,
+    setup(_props, { attrs, slots }) {
+      return () => Vue.h("div", attrs, slots.default?.());
+    },
+  });
+  const input = (tags = false) =>
+    Vue.defineComponent({
+      inheritAttrs: false,
+      setup(_props, { attrs }) {
+        return () =>
+          Vue.h(attrs.type === "textarea" ? "textarea" : "input", {
+            ...attrs,
+            value: Array.isArray(attrs.value) ? attrs.value.join(", ") : attrs.value,
+            "onUpdate:modelValue": (value: string) => {
+              const update = attrs["onUpdate:value"];
+              if (typeof update === "function")
+                update(
+                  tags
+                    ? value
+                        .split(",")
+                        .map((v) => v.trim())
+                        .filter(Boolean)
+                    : value,
+                );
+            },
+          });
+      },
+    });
+  for (const name of [
+    "NAlert",
+    "NTabs",
+    "NTabPane",
+    "NFlex",
+    "NText",
+    "NList",
+    "NListItem",
+    "NScrollbar",
+    "NForm",
+    "NFormItem",
+    "NFormItemGi",
+    "NGrid",
+    "SvgIcon",
+  ])
+    app.component(name, passthrough);
+  app.component("NInput", input());
+  app.component("NInputNumber", input());
+  app.component("NDynamicTags", input(true));
+  app.component(
+    "NButton",
+    Vue.defineComponent({
+      inheritAttrs: false,
+      setup(_props, { attrs, slots }) {
+        return () =>
+          Vue.h("button", { ...attrs, type: attrs["attr-type"] ?? "button" }, slots.default?.());
+      },
     }),
   );
   app.mount(root);
@@ -347,7 +406,7 @@ it("rejects SVG, unknown MIME and over-limit covers and protects clear/unmount a
   Reader.readers[0].result = "data:image/png;base64,A";
   Reader.readers[0].onload?.();
   await flush();
-  expect(ui.all().find((item) => item.tag === "img")).toBeUndefined();
+  expect(ui.all().find((item) => item.tag === "img")?.props.src).toBe("/images/song.jpg?asset");
   select(ui, "image/png", 1);
   ui.close();
   Reader.readers[1].result = "data:image/png;base64,B";
@@ -572,7 +631,7 @@ it("clears A recovery names immediately when the view changes to B even while it
     ref: { ...entry.ref, relativePath: "B.mp3", fileId: "B" },
   });
   await flush();
-  expect(ui.text(ui.root)).toContain("B.mp3");
+  expect(ui.all().some((item) => item.props.value === "B.mp3")).toBe(true);
   expect(ui.text(ui.root)).not.toContain("A-backup.mp3");
   expect(ui.text(ui.root)).not.toContain("A-work.mp3");
 });

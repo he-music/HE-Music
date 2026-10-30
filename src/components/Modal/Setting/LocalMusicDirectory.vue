@@ -33,6 +33,7 @@
     </n-flex>
   </div>
   <div v-else-if="isMygo" class="local-music-directory">
+    <n-text class="local-list-tip">{{ t("setting.local.local_files_path") }}</n-text>
     <n-text v-if="filesSession?.persistenceError.value" role="alert">{{
       t("setting.local.directory_persist_failed")
     }}</n-text>
@@ -41,36 +42,70 @@
     <section v-if="savedPaths.length">
       <n-text>{{ t("mygo.library.pending") }}</n-text>
       <n-text>{{ t("setting.local.directory_reselect") }}</n-text>
-      <p v-for="path in savedPaths" :key="path">
-        {{ path }}
-        <n-button :disabled="!ready || busy" @click="forgetSaved(path)">{{
-          t("common.delete")
-        }}</n-button>
-      </p>
+      <n-list class="local-list" hoverable clickable bordered>
+        <n-list-item v-for="path in savedPaths" :key="path">
+          <template #prefix><SvgIcon :size="20" name="Folder" /></template>
+          <n-thing :title="path" :description="t('setting.local.directory_reselect')" />
+          <template #suffix>
+            <n-button
+              :focusable="false"
+              quaternary
+              :disabled="!ready || busy"
+              :title="t('common.delete')"
+              :aria-label="t('common.delete')"
+              @click="forgetSaved(path)"
+            >
+              <template #icon><SvgIcon :size="20" name="Delete" /></template>
+            </n-button>
+          </template>
+        </n-list-item>
+      </n-list>
     </section>
     <p v-if="suggestion">{{ t("setting.local.directory_suggestion") }}: {{ suggestion }}</p>
     <n-scrollbar style="max-height: 50vh">
-      <n-list class="local-list" bordered>
-        <n-empty v-if="!grants.length" :description="t('local.none_folder')" />
+      <n-list class="local-list" hoverable clickable bordered>
+        <div v-if="!grants.length" class="empty">
+          <n-empty :description="t('local.none_folder')" />
+        </div>
         <n-list-item v-for="grant in grants" :key="grant.token">
-          <n-text>{{ grant.displayPath }}</n-text>
+          <template #prefix><SvgIcon :size="20" name="Folder" /></template>
+          <n-thing :title="grant.displayPath" />
           <template #suffix>
             <n-button
               data-directory-action="revoke"
+              :focusable="false"
+              quaternary
+              :title="t('setting.local.directory_revoke')"
+              :aria-label="t('setting.local.directory_revoke')"
               :disabled="!ready || busy"
               @click="revoke(grant.token)"
             >
-              {{ t("setting.local.directory_revoke") }}
+              <template #icon><SvgIcon :size="20" name="Delete" /></template>
             </n-button>
           </template>
         </n-list-item>
       </n-list>
     </n-scrollbar>
     <n-flex justify="center" style="margin-top: 20px">
-      <n-button data-directory-action="choose" :disabled="!ready || busy" @click="choose">
+      <n-button
+        class="add-path"
+        strong
+        secondary
+        data-directory-action="choose"
+        :disabled="!ready || busy"
+        @click="choose"
+      >
+        <template #icon><SvgIcon name="FolderPlus" /></template>
         {{ t("setting.local.directory_choose") }}
       </n-button>
-      <n-button data-directory-action="default" :disabled="!ready || busy" @click="showDefault">
+      <n-button
+        strong
+        secondary
+        data-directory-action="default"
+        :disabled="!ready || busy"
+        @click="showDefault"
+      >
+        <template #icon><SvgIcon name="FolderMusic" /></template>
         {{ t("setting.local.directory_default") }}
       </n-button>
     </n-flex>
@@ -107,14 +142,22 @@ const grants = computed(() => directory?.grants.value ?? []);
 const choose = () => directory?.choose();
 const showDefault = () => directory?.showDefault();
 const revoke = async (token: string) => {
+  const owner = filesSession.value;
   const path = grants.value.find((grant) => grant.token === token)?.displayPath;
-  await directory?.revoke(token);
-  if (path && !grants.value.some((grant) => grant.token === token)) {
+  const result = await directory?.revoke(token);
+  if (
+    path &&
+    owner === filesSession.value &&
+    result?.status === "completed" &&
+    !grants.value.some((grant) => grant.token === token)
+  ) {
     settingStore.localFilesPath = settingStore.localFilesPath.filter((item) => item !== path);
   }
 };
 const forgetSaved = async (path: string) => {
-  const result = await filesSession.value?.forgetSavedDirectory(path);
+  const owner = filesSession.value;
+  const result = await owner?.forgetSavedDirectory(path);
+  if (owner !== filesSession.value) return;
   if (result?.status === "completed") {
     settingStore.localFilesPath = settingStore.localFilesPath.filter((item) => item !== path);
     if (settingStore.downloadPath === path) settingStore.downloadPath = "";

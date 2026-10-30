@@ -57,6 +57,7 @@ function mount(props: object) {
     },
   });
   const modules: Record<string, unknown> = {
+    "@/utils/helper": { formatFileSize: (bytes: number) => `${bytes} B` },
     "@/platform/localDownloadPersistence": { validLocalDownloadFormat },
     vue: Vue,
     "vue-i18n": {
@@ -92,6 +93,9 @@ function mount(props: object) {
       normalizePortableFilename: (stem: string, format: string) => `${stem}.${format}`,
     },
     "@/stores": {
+      usePlatformStore: () => ({
+        getPlatformQualityDescription: (_platform: string, name: string) => name,
+      }),
       useSettingStore: () => ({
         downloadPath: "Music",
         fileNameFormat: "title",
@@ -148,7 +152,22 @@ function mount(props: object) {
   if (!exports.default) throw new Error("Missing compiled update component");
   const component = exports.default;
   const app = renderer.createApp({ setup: () => () => Vue.h(component, props) });
-  for (const name of ["NSelect", "NInput", "NButton"]) app.component(name, pass);
+  for (const name of [
+    "NSelect",
+    "NInput",
+    "NButton",
+    "NRadioGroup",
+    "NRadio",
+    "NFlex",
+    "NText",
+    "NCollapse",
+    "NCollapseItem",
+    "NInputGroup",
+    "NAlert",
+    "SvgIcon",
+    "SongDataCard",
+  ])
+    app.component(name, pass);
   const root = node("root");
   app.mount(root);
   let closed = false;
@@ -166,7 +185,7 @@ function mount(props: object) {
   const text = (element: Element): string => element.text + element.children.map(text).join("");
   const button = (key: string) => {
     const found = all().find(
-      (element) => typeof element.props.onClick === "function" && text(element) === key,
+      (element) => typeof element.props.onClick === "function" && text(element).trim() === key,
     );
     if (!found) throw new Error(`Missing button ${key}`);
     return found;
@@ -237,7 +256,11 @@ const change = (element: Element, value: unknown) => {
   handler(value);
 };
 const controls = (view: ReturnType<typeof mount>) =>
-  view.all().filter((element) => "onUpdate:value" in element.props);
+  ["directory", "quality", "filename"].map((field) => {
+    const control = view.all().find((element) => element.props["data-download-field"] === field);
+    if (!control) throw new Error(`Missing download field ${field}`);
+    return control;
+  });
 
 it("mounts the actual SFC, chooses grants/quality, edits basename and uses a freshly resolved URL", async () => {
   const chooseDirectory = vi.fn(async () => {});
@@ -251,11 +274,8 @@ it("mounts the actual SFC, chooses grants/quality, edits basename and uses a fre
   expect(directory.props.options).toEqual(
     grants.map((grant, value) => ({ label: grant.displayPath, value })),
   );
-  expect(quality.props.options).toEqual([
-    { label: "320mp3", value: "320mp3" },
-    { label: "lossless", value: "lossless" },
-    { label: "other", value: "other" },
-  ]);
+  expect(quality.props.name).toBe("level");
+  expect(view.all().filter((element) => element.props.value === "lossless")).toHaveLength(1);
   change(directory, 1);
   change(quality, "lossless");
   await flush();
@@ -263,7 +283,7 @@ it("mounts the actual SFC, chooses grants/quality, edits basename and uses a fre
   await flush();
   await view.click("local_download.choose_directory");
   expect(chooseDirectory).toHaveBeenCalledTimes(1);
-  await view.click("local_download.start");
+  await view.click("download.add");
   await flush();
   expect(resolveURL).toHaveBeenCalledWith(
     "lossless",
@@ -279,7 +299,7 @@ it("mounts the actual SFC, chooses grants/quality, edits basename and uses a fre
     }),
   );
   expect(view.text()).not.toMatch(/SIGNED|private-grant|https|operationId/);
-  await view.click("local_download.start");
+  await view.click("download.add");
   await flush();
   expect(access.start).toHaveBeenCalledTimes(1);
   expect(view.text()).toContain("local_download.start_rejected");
@@ -299,7 +319,7 @@ it("renders real progress, unknown refresh, explicit retry with a new URL/id, an
     resolveURL,
     onClose,
   });
-  await view.click("local_download.start");
+  await view.click("download.add");
   await flush();
   const id = session.tasks.value[0].id;
   snapshot = { received: 5, total: 0 };
@@ -331,7 +351,7 @@ it("renders real progress, unknown refresh, explicit retry with a new URL/id, an
   expect(calls[0][0].operationId).not.toBe(calls[1][0].operationId);
   expect(calls[0][0].url).not.toBe(calls[1][0].url);
   const dispose = vi.spyOn(session, "dispose");
-  await view.click("local_download.close");
+  await view.click("common.cancel");
   view.close();
   expect(onClose).toHaveBeenCalledTimes(1);
   expect(dispose).not.toHaveBeenCalled();
@@ -355,13 +375,13 @@ it("reacts to grant props, rejects mismatched formats, and prevents a revoked pe
   });
   // A host wrapper propagates reactive parent prop changes to the mounted SFC.
   const view = mount(properties);
-  expect(view.button("local_download.start").props.disabled).toBe(true);
+  expect(view.button("download.add").props.disabled).toBe(true);
   await view.click("local_download.choose_directory");
   expect(properties.chooseDirectory).toHaveBeenCalledTimes(1);
   properties.grants = grants;
   await flush();
-  expect(view.button("local_download.start").props.disabled).toBe(false);
-  const pending = view.click("local_download.start");
+  expect(view.button("download.add").props.disabled).toBe(false);
+  const pending = view.click("download.add");
   await flush();
   properties.grants = [];
   await flush();
@@ -373,7 +393,7 @@ it("reacts to grant props, rejects mismatched formats, and prevents a revoked pe
     grants,
     resolveURL: async () => ({ url: "https://example.test/audio", format: "flac" }),
   });
-  await mismatch.click("local_download.start");
+  await mismatch.click("download.add");
   await flush();
   expect(mismatch.text()).toContain("local_download.operation_failed");
   expect(access.start).not.toHaveBeenCalled();
@@ -394,7 +414,7 @@ it("shows committed cancellation and refresh failure without retry or internal d
     chooseDirectory: async () => {},
     resolveURL: async () => ({ url: "https://example.test/audio", format: "mp3" }),
   });
-  await view.click("local_download.start");
+  await view.click("download.add");
   await view.click("local_download.cancel");
   await flush();
   expect(access.cancel).toHaveBeenCalledWith(session.tasks.value[0].id);
@@ -431,9 +451,12 @@ it.each(["quality", "filename", "grant"])(
           finish = resolve;
         }),
     });
-    const pending = view.click("local_download.start");
+    const pending = view.click("download.add");
     await flush();
     const [directory, quality, filename] = controls(view);
+    expect([directory, quality, filename].every((control) => control.props.disabled === true)).toBe(
+      true,
+    );
     if (field === "quality") change(quality, "lossless");
     if (field === "filename") change(filename, "changed.mp3");
     if (field === "grant") change(directory, 1);
@@ -441,6 +464,8 @@ it.each(["quality", "filename", "grant"])(
     finish({ url: "https://example.test/old", format: "mp3" });
     await pending;
     expect(access.start).not.toHaveBeenCalled();
+    await flush();
+    expect(controls(view).every((control) => control.props.disabled === false)).toBe(true);
   },
 );
 
@@ -456,7 +481,7 @@ it("retries original A after closing its modal and opening unrelated B", async (
     chooseDirectory: async () => {},
     resolveURL: resolveA,
   });
-  await first.click("local_download.start");
+  await first.click("download.add");
   const id = session.tasks.value[0].id;
   snapshot = { done: true, code: "network_error" };
   await session.refresh(id);
@@ -512,7 +537,7 @@ it.each(["song", "resolver", "session", "closed"])(
         }),
     });
     const view = mount(properties);
-    const pending = view.click("local_download.start");
+    const pending = view.click("download.add");
     await flush();
     let replacement: LocalDownloadSession | undefined;
     if (field === "song") properties.song = { ...song, id: "B", name: "B" };
@@ -543,7 +568,7 @@ it("invalidates even a reverted filename edit during URL resolution", async () =
         finish = resolve;
       }),
   });
-  const pending = view.click("local_download.start");
+  const pending = view.click("download.add");
   await flush();
   const filename = controls(view)[2];
   change(filename, "changed.mp3");
@@ -566,7 +591,7 @@ it.each([
     async () => ({ lyric: "line" }),
   );
   const view = mount({ song, session, grants, chooseDirectory: async () => {}, resolveURL });
-  await view.click("local_download.start");
+  await view.click("download.add");
   await flush();
   expect(access.start).not.toHaveBeenCalled();
   expect(session.tasks.value).toEqual([]);

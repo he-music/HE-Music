@@ -1,19 +1,23 @@
 <template>
-  <div class="mygo-update">
+  <div class="update-app">
+    <n-flex :size="10" class="version" align="center">
+      <n-tag :bordered="false" type="primary">{{ packageJson.version }}</n-tag>
+      <SvgIcon name="Right" />
+      <n-tag :bordered="false" type="warning">{{ state?.version || "—" }}</n-tag>
+    </n-flex>
     <n-text role="status">{{ t(`updates.phase_${phase}`) }}</n-text>
-    <n-text v-if="state?.version" class="version">{{
-      t("updates.version", { version: state.version })
-    }}</n-text>
-    <p v-if="state?.notes" class="notes">{{ state.notes }}</p>
+    <n-scrollbar style="max-height: 500px">
+      <div class="notes">{{ state?.notes || t("modal.no_update_log") }}</div>
+    </n-scrollbar>
     <n-alert v-if="phase === 'available' || phase === 'installing'" type="info" :show-icon="false">
       {{ t("updates.apply_notice") }}
     </n-alert>
     <n-alert v-if="failure" type="warning" :show-icon="false">{{ failure }}</n-alert>
-    <n-flex justify="end">
-      <n-button :disabled="!current || busy" @click="run('check')">
+    <n-flex class="menu" justify="end">
+      <n-button strong secondary :disabled="!current || busy" @click="run('check')">
         {{ t("setting.about.check_update") }}
       </n-button>
-      <n-button :disabled="!current || acting" @click="run('refresh')">
+      <n-button strong secondary :disabled="!current || acting" @click="run('refresh')">
         {{ t("updates.refresh") }}
       </n-button>
       <n-button
@@ -24,13 +28,16 @@
       >
         {{ t("updates.apply") }}
       </n-button>
-      <n-button v-if="owner" @click="emit('close')">{{ t("common.close") }}</n-button>
+      <n-button v-if="owner" strong secondary @click="emit('close')">{{
+        t("common.close")
+      }}</n-button>
     </n-flex>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onScopeDispose, ref } from "vue";
+import packageJson from "@/../package.json";
 import { useI18n } from "vue-i18n";
 import { UpdatesSession, updatesSession } from "@/platform/updatesSession";
 
@@ -100,16 +107,22 @@ function confirmInstall() {
 </script>
 
 <style scoped lang="scss">
-.mygo-update {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
+.update-app {
+  .version {
+    margin-bottom: 20px;
+    .n-tag {
+      border-radius: 6px;
+    }
+  }
+  .menu {
+    margin-top: 20px;
+  }
   .notes {
-    max-height: 300px;
-    margin: 0;
-    overflow: auto;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
+  }
+  .n-alert {
+    margin-top: 16px;
   }
 }
 </style>

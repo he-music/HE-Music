@@ -37,6 +37,7 @@ export function createLocalDirectorySession(
     if (!active || current.value !== session || revision !== request) return;
     if (result.status === "completed") complete(result.value);
     else feedback.value = result.status;
+    return result;
   }
 
   return {
