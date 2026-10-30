@@ -49,7 +49,7 @@ func loadNetworkProxyDarwin() error {
 
 // Only public NSWindow/NSView/WKWebView selectors are used. Traversal has a hard
 // node/depth budget, rejects ambiguity, and never inspects SDK object layouts.
-func networkProxyDataStore(handle uintptr) objc.ID {
+func nativeWebView(handle uintptr) objc.ID {
 	if handle == 0 {
 		return 0
 	}
@@ -74,10 +74,15 @@ func networkProxyDataStore(handle uintptr) objc.ID {
 		}
 		return match, result
 	})
-	if found == 0 {
+	return objc.ID(found)
+}
+
+func networkProxyDataStore(handle uintptr) objc.ID {
+	webview := nativeWebView(handle)
+	if webview == 0 {
 		return 0
 	}
-	configuration := objc.ID(found).Send(objc.RegisterName("configuration"))
+	configuration := webview.Send(objc.RegisterName("configuration"))
 	store := configuration.Send(objc.RegisterName("websiteDataStore"))
 	if store == 0 || !objc.Send[bool](store, objc.RegisterName("respondsToSelector:"), objc.RegisterName("setProxyConfigurations:")) || !objc.Send[bool](store, objc.RegisterName("respondsToSelector:"), objc.RegisterName("proxyConfigurations")) {
 		return 0

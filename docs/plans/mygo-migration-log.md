@@ -790,3 +790,11 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 字体方案只做编译对照，未接入生产：通过私有 Go overlay 将 macOS 字体枚举替换为固定 SDK 的 `ui.FontFamilies()`，同一私有 modfile、CGO=0、trimpath、mygo_noinspector 和 `-s -w` 下，原实现为 **14,185,602 字节**，SDK 方案为 **14,933,234 字节**，增加 **747,632 字节（约 730 KiB、5.27%）**；同时有缓存刷新和家族名行为差异。本轮保留现有三平台字体枚举，也不引入 fontscan 扫描与缓存。
 - 最终验证：`CGO_ENABLED=0 go test -mod=readonly ./...`、本机全包 vet 和 darwin/arm64 发布标志构建通过；Linux arm64 与 Windows amd64 全包 vet 通过；Linux/Windows 的 amd64/arm64 四组 desktop 测试二进制编译通过，Windows 二进制未运行。gofmt、`go mod verify` 和 `git diff --check` 通过。最终 macOS 二进制为 **14,185,730 字节**，比替换前增加 **128 字节**；构建元数据确认 CGO_ENABLED=0，产物位于临时目录，未运行客户端。
 - 执行中首次 Windows 静态编译与依赖整理并行，返回 setup failed，整理完成后串行重跑通过；首次 Linux 容器准备因 VM 不可见的宿主临时路径挂载及不存在的工作目录失败，均未执行测试。之后改用 stdin 传递自有测试二进制、在容器内创建目录，得到上述两组实际结果；未将准备失败记为功能失败或测试通过。常规检查日志为 `/tmp/hemusic-platform-libs-{host-tests,host-vet,host-build,linux-build,linux-amd64-build,windows-build,windows-arm64-build,linux-vet,windows-vet}.log`。
+
+### macOS WebView 媒体设备 API
+
+- 针对用户在 macOS 实测 `navigator.mediaDevices === undefined`，在主窗口创建后、首次加载主页面前，通过 purego 启用当前 WKPreferences 的 `MediaDevicesEnabled`。复用原网络代理的有界 NSWindow 视图遍历定位唯一 WKWebView，不读取 SDK 对象内存布局，也不修改 SDK 或生成的 bindings。
+- 使用 WebKit 私有 `_mediaDevicesEnabled` / `_setMediaDevicesEnabled:` 前先检测 selector，开启后读回验证，重复启用直接返回；配置不支持或未生效时记录失败并继续默认播放。其他平台为空操作。不修改页面安全上下文、协议、捕获权限处理器或现有 Web Audio 播放链。
+- 使用临时 Go overlay 将主函数替换为隔离能力探针，设置独立用户数据目录及唯一页面 origin，只加载自有静态 HTML，不加载播放器、请求媒体权限或播放声音。在 macOS 26.3 上，HTTP loopback 和 `mygo://` 两组对照均为安全上下文：原配置 `mediaDevices` / `enumerateDevices` 为 undefined，应用生产配置函数后分别变为 object / function。空句柄、空偏好对象、不支持 selector 的 NSObject 拒绝检查，以及重复启用检查符合预期。四个隐藏窗口和本机临时 HTTP 服务均随探针退出清理，结果见 `/tmp/hemusic-webview-media-probe-result.json`，stderr 为空。
+- 同次运行确认 `HTMLMediaElement.prototype.setSinkId` 为 function，`AudioContext.prototype.setSinkId` 为 undefined；本轮修复 API 暴露，不代表现有 Web Audio 图已能选择输出设备，也未通过设备枚举、实际路由或发声验收。
+- 验证通过：`CGO_ENABLED=0 go test -mod=readonly ./...`、全包 `go vet`、macOS arm64 / amd64 发布标志构建，Windows amd64 / Linux arm64 的 desktop 测试二进制交叉编译，以及 gofmt 与 `git diff --check`。跨平台二进制未运行，未启动用户客户端。

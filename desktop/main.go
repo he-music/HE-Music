@@ -57,6 +57,9 @@ func main() {
 			options.Page.PreloadScript = desktopGatewayPreloadScript(gatewayOrigin)
 		}
 		win := mygo.NewWindow(options)
+		if mediaErr := configureNativeWebViewMedia(win.NativeHandle()); mediaErr != nil {
+			log.Print("启用 WebView 媒体设备 API 失败，保留默认音频输出: ", mediaErr)
+		}
 		if _, hoverErr := installWindowButtonsHover(win, appearance.UseBorderless); hoverErr != nil {
 			log.Print("设置 macOS 原生窗口按钮悬停失败，保留可见按钮: ", hoverErr)
 		}
