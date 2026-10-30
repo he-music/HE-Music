@@ -269,4 +269,31 @@ describe("LocalFilesSession", () => {
     expect(f.local.phase.value).toBe("complete");
     expect(f.local.entries.value).toHaveLength(1);
   });
+
+  it("coalesces simultaneous download refreshes and scans again for a later commit", async () => {
+    const f = await fixture();
+    const firstPage = deferred<ScanPage>();
+    const lastPage = deferred<ScanPage>();
+    vi.mocked(f.provider.readScanPage!)
+      .mockReturnValueOnce(firstPage.promise)
+      .mockReturnValueOnce(lastPage.promise);
+    const first = f.local.refreshAfterDownload();
+    await flush();
+    const second = f.local.refreshAfterDownload();
+    expect(second).toBe(first);
+    firstPage.resolve(page());
+    await flush();
+    expect(f.provider.startScan).toHaveBeenCalledTimes(2);
+    const downloaded = {
+      ...entry(),
+      ref: { ...entry().ref, fileId: "downloaded", relativePath: "downloaded.mp3" },
+      relativePath: "downloaded.mp3",
+      filename: "downloaded.mp3",
+    };
+    lastPage.resolve(page([entry(), downloaded]));
+    await Promise.all([first, second]);
+    expect(f.local.entries.value).toEqual([entry(), downloaded]);
+    expect(f.local.phase.value).toBe("complete");
+    expect(f.provider.cancelFileOperation).not.toHaveBeenCalled();
+  });
 });

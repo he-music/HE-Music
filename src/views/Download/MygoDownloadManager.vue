@@ -46,9 +46,6 @@
       role="status"
     />
     <div v-else-if="currentTab === 'completed'" class="download-downloaded">
-      <n-text v-if="needsScan" class="scan-recovery" role="status">{{
-        t("local.scan_empty")
-      }}</n-text>
       <div v-for="task in completedNotices" :key="task.id" class="completed-notice" role="status">
         <n-text>{{ task.label }}</n-text>
         <n-text v-if="task.warning" type="warning">{{
@@ -57,8 +54,6 @@
         <n-text v-if="task.residualName" depth="3"
           >{{ t("local_download.residual_file") }}：{{ task.residualName }}</n-text
         >
-        <n-text v-if="task.refresh === 'pending'">{{ t("mygo.downloads.scanning") }}</n-text>
-        <n-text v-else-if="task.refresh === 'failed'">{{ t("mygo.downloads.scanFailed") }}</n-text>
         <n-text v-if="errors.has(task.id)" type="error" role="alert">{{
           t("mygo.downloads.actionFailed")
         }}</n-text>
@@ -130,10 +125,6 @@
               <n-text v-if="task.residualName" depth="3">
                 {{ t("local_download.residual_file") }}：{{ task.residualName }}
               </n-text>
-              <n-text v-if="task.refresh === 'pending'">{{ t("mygo.downloads.scanning") }}</n-text>
-              <n-text v-else-if="task.refresh === 'failed'" role="status">
-                {{ t("mygo.downloads.scanFailed") }}
-              </n-text>
               <n-text v-if="errors.has(task.id)" type="error" role="alert">
                 {{ t("mygo.downloads.actionFailed") }}
               </n-text>
@@ -192,7 +183,7 @@
         </div>
       </n-scrollbar>
     </div>
-    <n-empty v-else :description="t('mygo.downloads.empty')" class="empty" role="status" />
+    <n-empty v-else :description="t('common.list_empty')" class="empty" role="status" />
   </section>
 </template>
 
@@ -216,7 +207,7 @@ const currentTab = computed<"completed" | "downloading">({
     if (route.name !== name) void router.push({ name });
   },
 });
-const { songs, unmatched } = useMygoDownloadedSongs(filesSession, tasks);
+const { songs } = useMygoDownloadedSongs(filesSession, tasks);
 const completedTasks = computed(() => tasks.value.filter((task) => task.committed));
 const activeTasks = computed(() => {
   const priority = { active: 0, unknown: 1, failed: 2, saved: 2, success: 2 };
@@ -224,17 +215,9 @@ const activeTasks = computed(() => {
     .filter((task) => !task.committed)
     .sort((a, b) => priority[a.phase] - priority[b.phase]);
 });
-const needsScan = computed(() =>
-  unmatched.value.some((task) => task.refresh !== "pending" && task.refresh !== "failed"),
-);
 const completedNotices = computed(() =>
   completedTasks.value.filter(
-    (task) =>
-      task.warning ||
-      task.residualName ||
-      task.refresh === "pending" ||
-      task.refresh === "failed" ||
-      errors.value.has(task.id),
+    (task) => task.warning || task.residualName || errors.value.has(task.id),
   ),
 );
 const completedCount = computed(() => songs.value.length);

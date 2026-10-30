@@ -40,7 +40,13 @@ vi.mock("./routes", () => {
           { path: "downloaded", name: "download-downloaded", component },
         ],
       },
-      { path: "/local", name: "local", meta: { needApp: true }, component },
+      {
+        path: "/local",
+        name: "local",
+        meta: { needApp: true },
+        component,
+        children: [{ path: "songs", name: "local-songs", component }],
+      },
       { path: "/desktop-only", name: "desktop-only", meta: { needApp: true }, component },
     ],
   };
@@ -58,8 +64,8 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it.each(["download-downloading", "download-downloaded"])(
-  "mygo 的 %s 在文件会话尚未ready时仍能进入集中任务页面",
+it.each(["download-downloading", "download-downloaded", "local", "local-songs"])(
+  "mygo 的 %s 在文件会话尚未ready时仍能进入客户端页面",
   async (name) => {
     const router = (await import("./index")).default;
     await router.push({ name });
@@ -67,20 +73,20 @@ it.each(["download-downloading", "download-downloaded"])(
     expect(mocks.warning).not.toHaveBeenCalled();
   },
 );
-it("下载路由例外不放宽Web、无文件provider或其它桌面路由", async () => {
+it("文件路由例外不放宽Web、无文件provider或其它桌面路由", async () => {
   const router = (await import("./index")).default;
   for (const kind of ["web", "mygo"]) {
     mocks.platform.kind = kind;
     if (kind === "mygo") delete mocks.platform.files;
-    await router.push({ name: "download-downloading" });
-    expect(router.currentRoute.value.name).toBe("403");
+    for (const name of ["download-downloading", "local", "local-songs"]) {
+      await router.push({ name });
+      expect(router.currentRoute.value.name).toBe("403");
+    }
   }
   mocks.platform.files = {};
   await router.push({ name: "desktop-only" });
   expect(router.currentRoute.value.name).toBe("403");
-  await router.push({ name: "local" });
-  expect(router.currentRoute.value.name).toBe("403");
-  mocks.platform.capabilities.localMusic = true;
+  mocks.platform.kind = "mygo";
   await router.push({ name: "local" });
   expect(router.currentRoute.value.name).toBe("local");
 });

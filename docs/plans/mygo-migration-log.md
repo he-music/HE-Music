@@ -757,3 +757,10 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 已完成页直接复用原 SongList。任务仅提供目标目录/相对路径；当前 owner、有效 grant 和实际扫描 entry 共同确定本地歌曲，历史记录和展示数据不生成播放权限。FilesSession 提供响应式只读扫描入口；运行时封面/歌手展示不写入下载历史、不传给原生下载请求。稳定已提交目标集合，下载进度变化不重建已完成列表数据。
 - 父侧最终验证：Node 24.22.1、pnpm 10.28.1；Vitest **162 文件 1472 项**、Node/Web 类型、变更 Vue/TS 格式、变更 TS ESLint、Web 与桌面前端构建通过。日志 `/tmp/hemusic-download-items-{tests-final,types-final,format-final,eslint,web-build,desktop-build}.log`。补充覆盖当前歌曲复用音质 links 时的文件名、关闭时取消解析、展示信息不持久化、扫描初始化/重扫/撤权、历史匹配和进度隔离。
 - 使用隔离模拟页与真实 Naive UI、SImage 核查下载中歌曲行和添加弹窗；截图 `/tmp/hemusic-download-items-{manager,popup}.png` 均核实存在，进度色另用计算样式确认。该夹具替换宿主、状态、网络及未参与本次视觉检查的 SongList；已完成列表的接线通过生产 SFC 与 helper 回归验证，不宣称其真实界面/播放验收。未运行用户 App、访问真实音乐库/API、触发 picker 或播放声音。Electron 继续保留；Vue ESLint 尚未配置。
+
+### 下载页提示与热重载路由纠正
+
+- 用户指出下载页多出原 Electron 没有的“选择音乐目录并扫描”和“文件已保存但本地音乐列表更新失败”提示。已从已完成/下载中移除这两条及扫描过程说明，下载中空列表使用原有 `common.list_empty`；真实文件保存 warning、残留文件和明确操作失败仍保留。
+- 热重载停留在本地音乐路由时，首次导航早于 FilesSession ready，旧守卫将初始化中的 mygo 客户端误判为非客户端并跳转 403。改为以 mygo 文件 provider 是否存在决定页面入口，本地音乐与下载页面继续自行检查 ready、owner 与文件授权；Web、无文件 provider 和其它客户端专属路由不放宽。
+- 下载完成后的曲库刷新原来共用原生请求的 3 秒时限，慢扫描会误报失败；回归在修改前复现 `refresh: failed`。刷新改用 5 分钟扫描预算，原生 start/read/cancel 的 3 秒保护保留，补充超时末态和 dispose 清理回归。并发下载的刷新合并到同一轮，扫描期间新增提交会再扫一轮，避免互相取消。
+- 验证：Vitest **162 文件 1479 项**、Node/Web 类型、变更 TS ESLint、Vue/TS 格式、Web 与桌面前端构建通过，日志 `/tmp/hemusic-download-reload-{all-tests,types,eslint,format,web-build,desktop-build}.log`。隔离浏览器使用已保存但扫描失败的模拟任务切换两个页签，确认无上述说明，记录 `/tmp/hemusic-download-reload-ui-tabs.json`；夹具的 SongList 仍为边界占位，实际子组件接线由生产 SFC 回归验证。未启动用户 App、真实下载或操作音乐库，客户端热重载实机操作未验收。

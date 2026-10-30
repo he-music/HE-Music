@@ -63,17 +63,13 @@ router.beforeEach((to, from, next) => {
     return;
   }
   // 需要客户端
-  const localMusicRoute = to.matched.some((route) => route.name === "local");
-  const nativeDownloadRoute =
+  // Provider availability permits navigation while shell sessions initialize.
+  // The page owns its ready/authorization gates for actual file operations.
+  const nativeFilesRoute =
     platform.kind === "mygo" &&
     Boolean(platform.files) &&
-    to.matched.some((route) => route.name === "download");
-  if (
-    to.meta.needApp &&
-    !isElectron &&
-    !(localMusicRoute && platform.capabilities.localMusic) &&
-    !nativeDownloadRoute
-  ) {
+    to.matched.some((route) => route.name === "local" || route.name === "download");
+  if (to.meta.needApp && !isElectron && !nativeFilesRoute) {
     window.$message?.warning(t("message.client_only_function"));
     next("/403");
     return;

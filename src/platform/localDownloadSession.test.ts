@@ -62,6 +62,62 @@ afterEach(async () => {
   expect(vi.getTimerCount()).toBe(0);
   vi.useRealTimers();
 });
+it("waits for a saved file's background scan beyond the transport deadline", async () => {
+  const id = await session.start(input);
+  if (!id) throw new Error("Missing download task");
+  const scan = deferred<void>();
+  onCommitted.mockReturnValueOnce(scan.promise);
+  vi.mocked(access.read).mockResolvedValueOnce(
+    state(id, { code: "ok", done: true, committed: true, ref }),
+  );
+  const refreshing = session.refresh(id);
+  await vi.advanceTimersByTimeAsync(3001);
+  expect(session.tasks.value[0]).toMatchObject({
+    committed: true,
+    phase: "success",
+    refresh: "pending",
+  });
+  scan.resolve();
+  await refreshing;
+  expect(session.tasks.value[0].refresh).toBe("complete");
+});
+
+it("keeps the background scan bounded and ignores its late completion", async () => {
+  const id = await session.start(input);
+  if (!id) throw new Error("Missing download task");
+  const scan = deferred<void>();
+  onCommitted.mockReturnValueOnce(scan.promise);
+  vi.mocked(access.read).mockResolvedValueOnce(
+    state(id, { code: "ok", done: true, committed: true, ref }),
+  );
+  const refreshing = session.refresh(id);
+  await vi.advanceTimersByTimeAsync(300_001);
+  await refreshing;
+  expect(session.tasks.value[0]).toMatchObject({ committed: true, refresh: "failed" });
+  scan.resolve();
+  await Promise.resolve();
+  expect(session.tasks.value[0].refresh).toBe("failed");
+});
+
+it("disposes immediately while a saved file's background scan is pending", async () => {
+  const id = await session.start(input);
+  if (!id) throw new Error("Missing download task");
+  const scan = deferred<void>();
+  onCommitted.mockReturnValueOnce(scan.promise);
+  vi.mocked(access.read).mockResolvedValueOnce(
+    state(id, { code: "ok", done: true, committed: true, ref }),
+  );
+  const refreshing = session.refresh(id);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(session.tasks.value[0].refresh).toBe("pending");
+  await session.dispose();
+  await refreshing;
+  expect(session.tasks.value).toEqual([]);
+  expect(vi.getTimerCount()).toBe(0);
+  scan.reject(new Error("Late scan failure"));
+  await Promise.resolve();
+  expect(session.tasks.value).toEqual([]);
+});
 
 describe("localDownloadSession", () => {
   it("recovers lost and late Start only with original-ID reads, including notfound", async () => {

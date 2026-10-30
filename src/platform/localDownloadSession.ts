@@ -726,7 +726,7 @@ export class LocalDownloadSession {
     record.task = { ...record.task, phase: "unknown" };
     this.publish();
   }
-  private bounded<T>(run: () => Promise<T>, record?: RecordState): Promise<T> {
+  private bounded<T>(run: () => Promise<T>, record?: RecordState, timeout = 3000): Promise<T> {
     return new Promise((resolve, reject) => {
       let active = true;
       const stop = () => {
@@ -735,7 +735,7 @@ export class LocalDownloadSession {
         record?.pending.delete(stop);
         reject(new Error("Unavailable"));
       };
-      const timer = setTimeout(stop, 3000);
+      const timer = setTimeout(stop, timeout);
       record?.pending.add(stop);
       Promise.resolve()
         .then(() => {
@@ -795,7 +795,8 @@ export class LocalDownloadSession {
         record.task = { ...record.task, refresh: "pending" };
         this.publish();
         try {
-          await this.bounded(() => this.deps.onCommitted(), record);
+          // Library scanning uses the scan budget, separate from native request timeouts.
+          await this.bounded(() => this.deps.onCommitted(), record, 300_000);
           if (this.current(record)) record.task = { ...record.task, refresh: "complete" };
         } catch {
           if (this.current(record)) record.task = { ...record.task, refresh: "failed" };

@@ -134,7 +134,7 @@ export class FilesSession {
         onCommitted: async () => {
           const local = this.local;
           if (this.disposed || !this.ready.value || !local) throw new Error("Files unavailable");
-          await local.scan();
+          await local.refreshAfterDownload();
           if (
             this.disposed ||
             !this.ready.value ||

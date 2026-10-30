@@ -51,6 +51,8 @@ export class LocalFilesSession {
   private abort?: AbortController;
   private operation?: { access: FileScanAccess; id: string };
   private readonly stop: () => void;
+  private downloadRefresh?: Promise<void>;
+  private downloadRevision = 0;
 
   constructor(private readonly source: Readonly<Ref<FilesSession | undefined>>) {
     activeSession.value = this;
@@ -94,6 +96,27 @@ export class LocalFilesSession {
     this.stop();
     this.results.value = [];
     this.scanIssues.value = [];
+  }
+
+  /** Keep published refs while coalescing scans for newly committed downloads. */
+  refreshAfterDownload(): Promise<void> {
+    if (this.disposed) return Promise.reject(new Error("Library unavailable"));
+    this.downloadRevision++;
+    if (this.downloadRefresh) return this.downloadRefresh;
+    const refresh = async () => {
+      let revision: number;
+      do {
+        revision = this.downloadRevision;
+        await this.scan();
+        if (this.disposed || this.scanPhase.value !== "complete") {
+          throw new Error("Library refresh incomplete");
+        }
+      } while (revision !== this.downloadRevision);
+    };
+    this.downloadRefresh = refresh().finally(() => {
+      this.downloadRefresh = undefined;
+    });
+    return this.downloadRefresh;
   }
 
   async refreshAfterWrite(): Promise<void> {

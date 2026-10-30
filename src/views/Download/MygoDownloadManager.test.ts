@@ -305,7 +305,7 @@ it("supplies only scanned songs to the original SongList and clears synchronousl
   f.owner.value!.ready.value = false;
   await Vue.nextTick();
   expect(view.byTag("song-list")[0].props.data).toEqual([]);
-  expect(view.text()).toContain("local.scan_empty");
+  expect(view.text()).not.toContain("local.scan_empty");
   expect(view.text()).not.toContain("History title");
   f.owner.value = { ...f.owner.value!, ready: Vue.shallowRef(true), libraryEntries: [] };
   await Vue.nextTick();
@@ -392,7 +392,24 @@ it("keeps failed tasks in downloading with explicit retry and supports active re
   expect(f.queue.retire).toHaveBeenCalledWith("failed");
   view.unmount();
 });
-it("synchronizes route tabs and shows scanning warnings without success cards", async () => {
+it("uses the original empty state without scan or refresh instructions on either tab", async () => {
+  const f = fixture();
+  f.queue.tasks.value = [
+    task("saved", { done: true, committed: true, phase: "success", refresh: "failed" }),
+  ];
+  const view = mount(f.owner, "download-downloaded");
+  expect(view.byTag("song-list")[0].props.data).toEqual([]);
+  for (const name of ["download-downloaded", "download-downloading"]) {
+    view.route.name = name;
+    await Vue.nextTick();
+    expect(view.text()).not.toMatch(/local\.scan_empty|mygo\.downloads\.(scanFailed|scanning)/);
+    expect(view.text()).not.toContain("saved");
+  }
+  expect(view.text()).toContain("common.list_empty");
+  view.unmount();
+});
+
+it("synchronizes tabs without adding library-scan instructions to download pages", async () => {
   const f = fixture();
   f.queue.tasks.value = [
     task("saved", {
@@ -407,14 +424,14 @@ it("synchronizes route tabs and shows scanning warnings without success cards", 
   await view.click("common.completed");
   await Vue.nextTick();
   expect(view.navigate).toHaveBeenCalledWith({ name: "download-downloaded" });
-  expect(view.text()).toContain("mygo.downloads.scanning");
+  expect(view.text()).not.toContain("mygo.downloads.scanning");
   expect(view.text()).toContain("song.part");
   expect(view.button("mygo.downloads.remove")?.props.disabled).toBe(true);
   expect(view.button("mygo.downloads.clearDone")?.props.disabled).toBe(true);
   expect(view.byTag("s-image")).toHaveLength(0);
   view.route.name = "download-downloading";
   await Vue.nextTick();
-  expect(view.text()).toContain("mygo.downloads.empty");
+  expect(view.text()).toContain("common.list_empty");
   view.unmount();
 });
 it("retains removable task failures and isolates late callbacks after unmount", async () => {
