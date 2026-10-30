@@ -5,7 +5,7 @@
       <n-flex class="counts">
         <n-text class="item">
           <SvgIcon name="Download" :depth="3" />
-          {{ visibleTasks.length }}
+          {{ currentTab === "completed" ? songs.length : activeCount }}
         </n-text>
         <n-text class="item" depth="3">
           <SvgIcon :name="currentTab === 'completed' ? 'Download' : 'DownloadDone'" :depth="3" />
@@ -45,6 +45,33 @@
       class="empty"
       role="status"
     />
+    <div v-else-if="currentTab === 'completed'" class="download-downloaded">
+      <n-text v-if="needsScan" class="scan-recovery" role="status">{{
+        t("local.scan_empty")
+      }}</n-text>
+      <div v-for="task in completedNotices" :key="task.id" class="completed-notice" role="status">
+        <n-text>{{ task.label }}</n-text>
+        <n-text v-if="task.warning" type="warning">{{
+          t(`local_download.warning.${task.warning}`)
+        }}</n-text>
+        <n-text v-if="task.residualName" depth="3"
+          >{{ t("local_download.residual_file") }}：{{ task.residualName }}</n-text
+        >
+        <n-text v-if="task.refresh === 'pending'">{{ t("mygo.downloads.scanning") }}</n-text>
+        <n-text v-else-if="task.refresh === 'failed'">{{ t("mygo.downloads.scanFailed") }}</n-text>
+        <n-text v-if="errors.has(task.id)" type="error" role="alert">{{
+          t("mygo.downloads.actionFailed")
+        }}</n-text>
+        <n-button
+          :disabled="pending.has(task.id) || task.refresh === 'pending'"
+          :aria-label="t('mygo.downloads.remove')"
+          @click="run(task.id, 'retire')"
+        >
+          <template #icon><SvgIcon name="Close" /></template>
+        </n-button>
+      </div>
+      <SongList :data="songs" :loading="false" />
+    </div>
     <div v-else-if="visibleTasks.length" class="download-list">
       <div class="list-header">
         <n-text class="num">#</n-text>
@@ -58,35 +85,45 @@
             <n-text depth="3">{{ index + 1 }}</n-text>
           </div>
           <div class="task-title">
-            <div class="cover"><SvgIcon name="Download" :size="24" :depth="3" /></div>
+            <s-image :src="task.display?.cover || '/images/song.jpg?asset'" class="cover" />
             <div class="info">
               <n-text class="name-text" ellipsis :title="task.label">{{ task.label }}</n-text>
-              <n-text class="filename" depth="3">{{ task.filename }} · {{ task.quality }}</n-text>
+              <n-text class="artists text-hidden" depth="3">{{
+                task.display?.artists || ""
+              }}</n-text>
             </div>
           </div>
           <div class="status">
             <n-flex vertical :size="6">
-              <n-text :type="task.phase === 'failed' ? 'error' : undefined" role="status">
-                {{ t(`mygo.downloads.phase.${task.phase}`) }}
-              </n-text>
+              <n-flex justify="space-between">
+                <n-text
+                  :type="task.phase === 'failed' ? 'error' : undefined"
+                  :depth="task.phase === 'failed' ? undefined : '3'"
+                  role="status"
+                >
+                  {{
+                    task.phase === "active" && task.percent !== undefined
+                      ? `${task.percent}%`
+                      : t(`mygo.downloads.phase.${task.phase}`)
+                  }}
+                </n-text>
+                <n-text v-if="task.phase === 'active'" depth="3">
+                  {{ bytes(task.received) }} / {{ task.total > 0 ? bytes(task.total) : "—" }}
+                </n-text>
+              </n-flex>
+              <n-progress
+                type="line"
+                :color="task.phase === 'active' ? 'rgb(var(--primary))' : undefined"
+                :percentage="task.percent ?? 0"
+                :show-indicator="false"
+                :status="task.phase === 'failed' ? 'error' : undefined"
+                class="downloading-progress"
+                style="height: 4px"
+                :aria-label="t('mygo.downloads.progress')"
+              />
               <n-text v-if="task.interrupted" depth="3">{{
                 t("mygo.downloads.interrupted")
               }}</n-text>
-              <template v-if="!task.done">
-                <n-text depth="3">
-                  {{ bytes(task.received) }} / {{ task.total > 0 ? bytes(task.total) : "—" }}
-                </n-text>
-                <n-progress
-                  type="line"
-                  color="rgb(var(--primary))"
-                  :percentage="task.percent ?? 0"
-                  :processing="task.percent === undefined"
-                  :show-indicator="false"
-                  :status="task.phase === 'failed' ? 'error' : undefined"
-                  class="downloading-progress"
-                  :aria-label="t('mygo.downloads.progress')"
-                />
-              </template>
               <n-text v-if="task.warning" type="warning" role="status">
                 {{ t(`local_download.warning.${task.warning}`) }}
               </n-text>
@@ -128,7 +165,7 @@
               </n-button>
             </template>
             <n-button
-              v-if="task.retryable"
+              v-if="task.retryable && !task.committed"
               :disabled="pending.has(task.id)"
               :aria-label="t('mygo.downloads.retry')"
               :title="t('mygo.downloads.retry')"
@@ -149,7 +186,7 @@
               strong
               @click="run(task.id, 'retire')"
             >
-              <template #icon><SvgIcon name="Delete" /></template>
+              <template #icon><SvgIcon name="Close" /></template>
             </n-button>
           </n-flex>
         </div>
@@ -161,6 +198,8 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
+import SongList from "@/components/List/SongList.vue";
+import { useMygoDownloadedSongs } from "@/composables/mygoDownloadedSongs";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { filesSession } from "@/platform/filesSession";
@@ -177,14 +216,30 @@ const currentTab = computed<"completed" | "downloading">({
     if (route.name !== name) void router.push({ name });
   },
 });
-// Ended tasks remain records, including failures that can still be retried.
-const completedTasks = computed(() => tasks.value.filter((task) => task.done));
-const activeTasks = computed(() => tasks.value.filter((task) => !task.done));
-const completedCount = computed(() => completedTasks.value.length);
-const activeCount = computed(() => activeTasks.value.length);
-const visibleTasks = computed(() =>
-  currentTab.value === "completed" ? completedTasks.value : activeTasks.value,
+const { songs, unmatched } = useMygoDownloadedSongs(filesSession, tasks);
+const completedTasks = computed(() => tasks.value.filter((task) => task.committed));
+const activeTasks = computed(() => {
+  const priority = { active: 0, unknown: 1, failed: 2, saved: 2, success: 2 };
+  return tasks.value
+    .filter((task) => !task.committed)
+    .sort((a, b) => priority[a.phase] - priority[b.phase]);
+});
+const needsScan = computed(() =>
+  unmatched.value.some((task) => task.refresh !== "pending" && task.refresh !== "failed"),
 );
+const completedNotices = computed(() =>
+  completedTasks.value.filter(
+    (task) =>
+      task.warning ||
+      task.residualName ||
+      task.refresh === "pending" ||
+      task.refresh === "failed" ||
+      errors.value.has(task.id),
+  ),
+);
+const completedCount = computed(() => songs.value.length);
+const activeCount = computed(() => activeTasks.value.length);
+const visibleTasks = activeTasks;
 function bytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
@@ -297,19 +352,19 @@ function bytes(value: number): string {
           height: 50px;
           border-radius: 8px;
           margin-right: 12px;
-          background-color: rgba(var(--primary), 0.08);
+          overflow: hidden;
         }
         .info {
           display: flex;
           flex-direction: column;
           min-width: 0;
+          flex: 1;
           .name-text {
             font-size: 16px;
             margin-bottom: 4px;
           }
-          .filename {
+          .artists {
             font-size: 12px;
-            overflow-wrap: anywhere;
           }
         }
       }
@@ -323,6 +378,17 @@ function bytes(value: number): string {
         border-radius: 8px;
       }
     }
+  }
+  .download-downloaded {
+    flex: 1;
+    min-height: 0;
+  }
+  .completed-notice {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 12px;
   }
   .empty {
     margin-top: 60px;

@@ -749,3 +749,11 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 修复扫描只在标签解析失败时检查后缀的遗漏：现在进入文件解析和旧索引缓存之前，先按现有 11 种音频后缀筛选，大小写不敏感。XML、APK、图片、播放列表、无后缀及伪装成双后缀的非音频项静默跳过，不生成错误提示；目录继续递归，支持格式的标签失败仍按文件名收录。
 - 新回归在修复前实际失败，覆盖可解析音频内容使用非音频后缀、旧缓存误收录、大写音频后缀和带点目录中的标签失败回退；更新旧扫描夹具使用受支持后缀，保留分页/cursor、只读标签、私有事务文件排除检查。修复后扫描 focused 与 Go 全包测试、vet、构建、gofmt 检查通过，日志 `/tmp/hemusic-scan-format-{focused,go,vet,build,gofmt}.log`。未操作用户 App 或音乐库；运行新版后重新扫描可替换旧列表，不删除实际文件。
 - 按用户要求引入纯 Go 的 `github.com/bmatcuk/doublestar/v4@v4.10.4`，扫描改用 Electron 同款 `**/*.{mp3,wav,flac,aac,webm,m4a,mp4,ogg,aiff,aif,ape}` 表达式匹配相对路径，大小写不敏感；目录授权、受控遍历、取消、分页和扫描预算继续沿用。新增全部 11 格式在根目录及多层目录中的匹配回归，目录名包含方括号/花括号，XML/APK/旧缓存排除回归仍通过。Go 全包测试、vet、本机构建、Linux/Windows amd64 交叉构建、依赖完整性和 gofmt 检查通过，日志 `/tmp/hemusic-scan-glob-*.log`；未运行用户 App 或跨平台二进制。
+
+### 下载歌曲行与添加弹窗二次纠正
+
+- 按用户反馈继续对照原 Electron 下载界面：下载中恢复 50px 封面、歌曲名/歌手双行、百分比与字节大小、4px 主题色进度及刷新/取消图标，未提交失败任务仍留在下载中供明确重试。浏览器观察到 Naive UI 内联主题变量覆盖进度色后，补回显式主题 color。
+- 添加弹窗移除任务列表、任务状态、重试、恢复详情和文件名编辑区，只保留歌曲卡、音质、目录、取消/添加下载；添加成功关闭弹窗，任务继续由下载管理处理。文件名改为从当前歌曲、音质和配置派生，保留 captured plan、fresh URL、revision 与关闭时的异步取消保护。
+- 已完成页直接复用原 SongList。任务仅提供目标目录/相对路径；当前 owner、有效 grant 和实际扫描 entry 共同确定本地歌曲，历史记录和展示数据不生成播放权限。FilesSession 提供响应式只读扫描入口；运行时封面/歌手展示不写入下载历史、不传给原生下载请求。稳定已提交目标集合，下载进度变化不重建已完成列表数据。
+- 父侧最终验证：Node 24.22.1、pnpm 10.28.1；Vitest **162 文件 1472 项**、Node/Web 类型、变更 Vue/TS 格式、变更 TS ESLint、Web 与桌面前端构建通过。日志 `/tmp/hemusic-download-items-{tests-final,types-final,format-final,eslint,web-build,desktop-build}.log`。补充覆盖当前歌曲复用音质 links 时的文件名、关闭时取消解析、展示信息不持久化、扫描初始化/重扫/撤权、历史匹配和进度隔离。
+- 使用隔离模拟页与真实 Naive UI、SImage 核查下载中歌曲行和添加弹窗；截图 `/tmp/hemusic-download-items-{manager,popup}.png` 均核实存在，进度色另用计算样式确认。该夹具替换宿主、状态、网络及未参与本次视觉检查的 SongList；已完成列表的接线通过生产 SFC 与 helper 回归验证，不宣称其真实界面/播放验收。未运行用户 App、访问真实音乐库/API、触发 picker 或播放声音。Electron 继续保留；Vue ESLint 尚未配置。

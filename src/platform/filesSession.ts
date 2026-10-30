@@ -14,6 +14,7 @@ import type {
   RendererSettings,
   SettingsImportResult,
   SettingsExportResult,
+  ScanEntry,
   ScanOperation,
   ScanPage,
   LocalAudioTicket,
@@ -86,7 +87,16 @@ export class FilesSession {
   private started = false;
   private beginning: Promise<void> | undefined;
   private cleanup: Promise<void> | undefined;
-  private local?: LocalFilesSession;
+  private readonly localSession = shallowRef<LocalFilesSession>();
+  private get local(): LocalFilesSession | undefined {
+    return this.localSession.value;
+  }
+  private set local(session: LocalFilesSession | undefined) {
+    this.localSession.value = session;
+  }
+  get libraryEntries(): readonly ScanEntry[] {
+    return this.ready.value ? (this.local?.entries.value ?? []) : [];
+  }
 
   constructor(
     private readonly provider: PlatformFiles,

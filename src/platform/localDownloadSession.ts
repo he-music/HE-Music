@@ -57,6 +57,13 @@ export interface DownloadResolveOptions {
   readonly writeLyricRomaji: boolean;
 }
 
+export interface LocalDownloadDisplay {
+  readonly artists: string;
+  readonly album: string;
+  readonly cover: string;
+  readonly duration: number;
+}
+
 export interface LocalDownloadInput {
   grantToken: string;
   filename: string;
@@ -67,6 +74,7 @@ export interface LocalDownloadInput {
   resolveURL: LocalDownloadResolver;
   options?: DownloadOptions;
   resolveOptions?: DownloadResolveOptions;
+  display?: LocalDownloadDisplay;
 }
 export type DownloadWarningCode =
   | "durability_uncertain"
@@ -84,6 +92,8 @@ export interface LocalDownloadTask {
   readonly filename: string;
   readonly label: string;
   readonly quality: string;
+  readonly display?: LocalDownloadDisplay;
+  readonly target?: { readonly directory: string; readonly relativePath: string };
   readonly phase: "active" | "unknown" | "success" | "failed" | "saved";
   readonly done: boolean;
   readonly committed: boolean;
@@ -310,6 +320,24 @@ export class LocalDownloadSession {
       filename: snapshot.filename,
       label: snapshot.label,
       quality: snapshot.quality,
+      ...(snapshot.targetDirectory
+        ? {
+            target: {
+              directory: snapshot.targetDirectory,
+              relativePath: this.relativePath(snapshot.filename, snapshot.options),
+            },
+          }
+        : {}),
+      ...(snapshot.options?.metadata
+        ? {
+            display: {
+              artists: snapshot.options.metadata.artists.join(" / "),
+              album: snapshot.options.metadata.album,
+              cover: "/images/song.jpg?asset",
+              duration: 0,
+            },
+          }
+        : {}),
       phase: interrupted ? "failed" : snapshot.phase,
       done: true,
       committed: snapshot.committed,
@@ -356,12 +384,31 @@ export class LocalDownloadSession {
     const id = [...crypto.getRandomValues(new Uint8Array(32))]
       .map((byte) => byte.toString(16).padStart(2, "0"))
       .join("");
+    const targetDirectory = this.deps.directoryPath?.(input.grantToken) ?? "";
     const record: RecordState = {
       task: {
         id,
         filename: input.filename,
         label: input.label,
         quality: input.quality,
+        ...(input.display
+          ? {
+              display: Object.freeze({
+                artists: input.display.artists,
+                album: input.display.album,
+                cover: input.display.cover,
+                duration: input.display.duration,
+              }),
+            }
+          : {}),
+        ...(targetDirectory
+          ? {
+              target: Object.freeze({
+                directory: targetDirectory,
+                relativePath: this.relativePath(input.filename, input.options),
+              }),
+            }
+          : {}),
         phase: "active",
         done: false,
         committed: false,
@@ -383,7 +430,7 @@ export class LocalDownloadSession {
         options: input.options,
         resolveOptions: input.resolveOptions,
       },
-      targetDirectory: this.deps.directoryPath?.(input.grantToken) ?? "",
+      targetDirectory,
       options: input.options,
       resolveOptions: input.resolveOptions,
     };
@@ -526,6 +573,7 @@ export class LocalDownloadSession {
         filename: record.task.filename,
         label: record.task.label,
         quality: recipe.quality,
+        display: record.task.display,
         source: recipe.source,
         resolveURL: recipe.resolveURL,
         options: this.withResolvedMetadata(recipe.options, result.metadata),

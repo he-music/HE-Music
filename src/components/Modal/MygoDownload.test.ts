@@ -256,13 +256,13 @@ const change = (element: Element, value: unknown) => {
   handler(value);
 };
 const controls = (view: ReturnType<typeof mount>) =>
-  ["directory", "quality", "filename"].map((field) => {
+  ["directory", "quality"].map((field) => {
     const control = view.all().find((element) => element.props["data-download-field"] === field);
     if (!control) throw new Error(`Missing download field ${field}`);
     return control;
   });
 
-it("mounts the actual SFC, chooses grants/quality, edits basename and uses a freshly resolved URL", async () => {
+it("mounts the actual SFC, chooses grants/quality, uses configured filename and uses a freshly resolved URL", async () => {
   const chooseDirectory = vi.fn(async () => {});
   const resolveURL = vi.fn(async () => ({
     url: "https://example.test/audio?SIGNED",
@@ -270,7 +270,7 @@ it("mounts the actual SFC, chooses grants/quality, edits basename and uses a fre
   }));
   const view = mount({ song, session, grants, chooseDirectory, resolveURL });
   await flush();
-  const [directory, quality, name] = controls(view);
+  const [directory, quality] = controls(view);
   expect(directory.props.options).toEqual(
     grants.map((grant, value) => ({ label: grant.displayPath, value })),
   );
@@ -278,8 +278,6 @@ it("mounts the actual SFC, chooses grants/quality, edits basename and uses a fre
   expect(view.all().filter((element) => element.props.value === "lossless")).toHaveLength(1);
   change(directory, 1);
   change(quality, "lossless");
-  await flush();
-  change(name, "chosen.flac");
   await flush();
   await view.click("local_download.choose_directory");
   expect(chooseDirectory).toHaveBeenCalledTimes(1);
@@ -294,7 +292,7 @@ it("mounts the actual SFC, chooses grants/quality, edits basename and uses a fre
   expect(access.start).toHaveBeenCalledWith(
     expect.objectContaining({
       grantToken: grants[1].token,
-      filename: "chosen.flac",
+      filename: "Song.flac",
       url: "https://example.test/audio?SIGNED",
     }),
   );
@@ -302,14 +300,31 @@ it("mounts the actual SFC, chooses grants/quality, edits basename and uses a fre
   await view.click("download.add");
   await flush();
   expect(access.start).toHaveBeenCalledTimes(1);
-  expect(view.text()).toContain("local_download.start_rejected");
+  expect(view.text()).not.toContain("local_download.start_rejected");
+  expect(view.all().filter((element) => typeof element.props.onClick === "function")).toHaveLength(
+    3,
+  );
 });
 
-it("renders real progress, unknown refresh, explicit retry with a new URL/id, and close preserves tasks", async () => {
-  const resolveURL = vi.fn(async () => ({
-    url: `https://example.test/${resolveURL.mock.calls.length}`,
-    format: "mp3",
-  }));
+it("derives the filename from the current song when its quality links are reused", async () => {
+  const props = Vue.shallowReactive({
+    song,
+    session,
+    grants,
+    chooseDirectory: async () => {},
+    resolveURL: async () => ({ url: "https://example.test/audio", format: "mp3" }),
+  });
+  const view = mount(props);
+  props.song = { ...song, id: "other-song", name: "Another song" };
+  await flush();
+  await view.click("download.add");
+  expect(access.start).toHaveBeenCalledWith(
+    expect.objectContaining({ filename: "Another song.mp3" }),
+  );
+});
+
+it("only adds a task and closes, leaving progress and retries to the manager", async () => {
+  const resolveURL = vi.fn(async () => ({ url: "https://example.test/audio", format: "mp3" }));
   const onClose = vi.fn();
   const view = mount({
     song,
@@ -321,41 +336,25 @@ it("renders real progress, unknown refresh, explicit retry with a new URL/id, an
   });
   await view.click("download.add");
   await flush();
+  expect(onClose).toHaveBeenCalledOnce();
   const id = session.tasks.value[0].id;
   snapshot = { received: 5, total: 0 };
   await session.refresh(id);
   await flush();
-  expect(view.text()).toContain("5 / local_download.unknown_size");
-  snapshot = { received: 10, total: 10 };
-  await session.refresh(id);
-  await flush();
-  expect(view.text()).toContain("99%");
-  vi.mocked(access.read).mockRejectedValueOnce(new Error("signed private error"));
-  await session.refresh(id);
-  await flush();
-  expect(view.text()).toContain("local_download.phase_unknown");
-  await view.click("local_download.refresh");
-  await flush();
-  expect(session.tasks.value[0].phase).toBe("active");
+  expect(session.tasks.value[0].received).toBe(5);
+  expect(view.text()).not.toContain("local_download.unknown_size");
   snapshot = { received: 10, total: 10, done: true, code: "network_error" };
   await session.refresh(id);
   await flush();
-  await view.click("local_download.retry");
-  await flush();
-  expect(resolveURL).toHaveBeenCalledTimes(1);
-  expect(view.text()).toContain("local_download.retry_notice");
-  await view.click("local_download.confirm_retry");
-  await flush();
-  expect(resolveURL).toHaveBeenCalledTimes(2);
-  const calls = vi.mocked(access.start).mock.calls;
-  expect(calls[0][0].operationId).not.toBe(calls[1][0].operationId);
-  expect(calls[0][0].url).not.toBe(calls[1][0].url);
-  const dispose = vi.spyOn(session, "dispose");
-  await view.click("common.cancel");
+  expect(session.tasks.value[0].retryable).toBe(true);
+  expect(view.text()).not.toMatch(
+    /local_download\.(retry|refresh|phase_|confirm_retry)|download\.download_manager/,
+  );
+  expect(() => view.button("local_download.retry")).toThrow();
+  expect(() => view.button("local_download.cancel")).toThrow();
+  expect(resolveURL).toHaveBeenCalledOnce();
   view.close();
-  expect(onClose).toHaveBeenCalledTimes(1);
-  expect(dispose).not.toHaveBeenCalled();
-  expect(session.tasks.value).toHaveLength(2);
+  expect(session.tasks.value).toHaveLength(1);
 });
 
 it("reacts to grant props, rejects mismatched formats, and prevents a revoked pending URL from starting", async () => {
@@ -399,7 +398,7 @@ it("reacts to grant props, rejects mismatched formats, and prevents a revoked pe
   expect(access.start).not.toHaveBeenCalled();
 });
 
-it("shows committed cancellation and refresh failure without retry or internal diagnostic codes", async () => {
+it("leaves committed warnings and scan failure in the queue after closing", async () => {
   session.dispose();
   session = new LocalDownloadSession({
     access: () => access,
@@ -415,7 +414,7 @@ it("shows committed cancellation and refresh failure without retry or internal d
     resolveURL: async () => ({ url: "https://example.test/audio", format: "mp3" }),
   });
   await view.click("download.add");
-  await view.click("local_download.cancel");
+  await session.cancel(session.tasks.value[0].id);
   await flush();
   expect(access.cancel).toHaveBeenCalledWith(session.tasks.value[0].id);
   expect(session.tasks.value[0].done).toBe(false);
@@ -428,46 +427,42 @@ it("shows committed cancellation and refresh failure without retry or internal d
   };
   await session.refresh(session.tasks.value[0].id);
   await flush();
-  expect(view.text()).toContain("local_download.possibly_saved");
-  expect(view.text()).toContain("local_download.phase_saved");
-  expect(view.text()).toContain("local_download.refresh_failed");
-  expect(view.text()).toContain("local_download.warning.sync_failed");
-  expect(() => view.button("local_download.retry")).toThrow();
+  expect(session.tasks.value[0]).toMatchObject({
+    phase: "saved",
+    refresh: "failed",
+    warning: "sync_failed",
+    retryable: false,
+  });
+  expect(view.text()).not.toMatch(/local_download\.(possibly_saved|refresh_failed|warning|retry)/);
   const source = readFileSync(new URL("./MygoDownload.vue", import.meta.url), "utf8");
   expect(source).not.toMatch(/window\.|electron|file-saver|localStorage|dataStore/);
 });
 
-it.each(["quality", "filename", "grant"])(
-  "discards pending URL after changing %s",
-  async (field) => {
-    let finish!: (value: { url: string; format: string }) => void;
-    const view = mount({
-      song,
-      session,
-      grants,
-      chooseDirectory: async () => {},
-      resolveURL: () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    });
-    const pending = view.click("download.add");
-    await flush();
-    const [directory, quality, filename] = controls(view);
-    expect([directory, quality, filename].every((control) => control.props.disabled === true)).toBe(
-      true,
-    );
-    if (field === "quality") change(quality, "lossless");
-    if (field === "filename") change(filename, "changed.mp3");
-    if (field === "grant") change(directory, 1);
-    await flush();
-    finish({ url: "https://example.test/old", format: "mp3" });
-    await pending;
-    expect(access.start).not.toHaveBeenCalled();
-    await flush();
-    expect(controls(view).every((control) => control.props.disabled === false)).toBe(true);
-  },
-);
+it.each(["quality", "grant"])("discards pending URL after changing %s", async (field) => {
+  let finish!: (value: { url: string; format: string }) => void;
+  const view = mount({
+    song,
+    session,
+    grants,
+    chooseDirectory: async () => {},
+    resolveURL: () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  });
+  const pending = view.click("download.add");
+  await flush();
+  const [directory, quality] = controls(view);
+  expect([directory, quality].every((control) => control.props.disabled === true)).toBe(true);
+  if (field === "quality") change(quality, "lossless");
+  if (field === "grant") change(directory, 1);
+  await flush();
+  finish({ url: "https://example.test/old", format: "mp3" });
+  await pending;
+  expect(access.start).not.toHaveBeenCalled();
+  await flush();
+  expect(controls(view).every((control) => control.props.disabled === false)).toBe(true);
+});
 
 it("retries original A after closing its modal and opening unrelated B", async () => {
   const resolveA = vi.fn(async () => ({
@@ -495,15 +490,12 @@ it("retries original A after closing its modal and opening unrelated B", async (
     chooseDirectory: async () => {},
     resolveURL: resolveB,
   });
-  const [directory, quality, filename] = controls(second);
+  const [directory, quality] = controls(second);
   change(directory, 1);
   change(quality, "lossless");
   await flush();
-  change(filename, "B.flac");
-  await flush();
-  await second.click("local_download.retry");
-  await flush();
-  await second.click("local_download.confirm_retry");
+  expect(() => second.button("local_download.retry")).toThrow();
+  await session.retry(id);
   await flush();
   expect(resolveB).not.toHaveBeenCalled();
   expect(resolveA).toHaveBeenCalledTimes(2);
@@ -556,7 +548,7 @@ it.each(["song", "resolver", "session", "closed"])(
   },
 );
 
-it("invalidates even a reverted filename edit during URL resolution", async () => {
+it("invalidates even a reverted quality edit during URL resolution", async () => {
   let finish!: (value: { url: string; format: string }) => void;
   const view = mount({
     song,
@@ -570,12 +562,37 @@ it("invalidates even a reverted filename edit during URL resolution", async () =
   });
   const pending = view.click("download.add");
   await flush();
-  const filename = controls(view)[2];
-  change(filename, "changed.mp3");
-  change(filename, "Song.mp3");
+  const quality = controls(view)[1];
+  change(quality, "lossless");
+  change(quality, "320mp3");
   finish({ url: "https://example.test/old", format: "mp3" });
   await pending;
   expect(access.start).not.toHaveBeenCalled();
+});
+
+it("cancel closes the add dialog and invalidates a pending resolver without cancelling queued tasks", async () => {
+  let finish!: (value: { url: string; format: string }) => void;
+  const onClose = vi.fn();
+  const view = mount({
+    song,
+    session,
+    grants,
+    chooseDirectory: async () => {},
+    onClose,
+    resolveURL: () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  });
+  const pending = view.click("download.add");
+  await flush();
+  await view.click("common.cancel");
+  expect(onClose).toHaveBeenCalledOnce();
+  finish({ url: "https://example.test/stale", format: "mp3" });
+  await pending;
+  expect(access.start).not.toHaveBeenCalled();
+  expect(access.cancel).not.toHaveBeenCalled();
+  expect(session.tasks.value).toEqual([]);
 });
 
 it.each([

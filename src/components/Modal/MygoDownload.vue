@@ -1,8 +1,5 @@
 <template>
   <div class="download-song">
-    <n-alert v-if="session.persistenceError.value" type="error" :show-icon="false">
-      {{ t(session.persistenceError.value) }}
-    </n-alert>
     <n-alert type="warning" :title="t('modal.please_know')" closable class="download-warning">
       {{ t("modal.song_download_warning") }}
     </n-alert>
@@ -42,72 +39,12 @@
           </n-button>
         </n-input-group>
       </n-collapse-item>
-      <n-collapse-item :title="t('local_download.filename')" name="filename">
-        <n-input v-model:value="filename" data-download-field="filename" :disabled="busy" />
-      </n-collapse-item>
-      <n-collapse-item v-if="tasks.length" :title="t('download.download_manager')" name="tasks">
-        <div v-for="task in tasks" :key="task.id" class="download-task">
-          <n-text>{{ task.label }} — {{ task.filename }}</n-text>
-          <n-text depth="3" role="status">{{ t(`local_download.phase_${task.phase}`) }}</n-text>
-          <n-alert v-if="task.warning" type="warning" :show-icon="false">
-            {{ t(`local_download.warning.${task.warning}`) }}
-          </n-alert>
-          <n-text v-if="task.residualName" depth="3">
-            {{ t("local_download.residual_file") }}：{{ task.residualName }}
-          </n-text>
-          <n-text depth="3">
-            {{ task.received }} / {{ task.total || t("local_download.unknown_size") }}
-            {{ t("local_download.bytes")
-            }}<span v-if="task.percent !== undefined"> ({{ task.percent }}%)</span>
-          </n-text>
-          <n-text v-if="task.committed && task.phase !== 'success'">
-            {{ t("local_download.possibly_saved") }}
-          </n-text>
-          <n-text v-if="task.refresh !== 'none'">{{
-            t(`local_download.refresh_${task.refresh}`)
-          }}</n-text>
-          <n-flex justify="end">
-            <n-button v-if="!task.done" strong secondary @click="session.cancel(task.id)">
-              {{ t("local_download.cancel") }}
-            </n-button>
-            <n-button
-              v-if="task.phase === 'unknown'"
-              strong
-              secondary
-              @click="session.refresh(task.id)"
-            >
-              {{ t("local_download.refresh") }}
-            </n-button>
-            <n-button
-              v-if="task.retryable"
-              strong
-              secondary
-              :disabled="busy"
-              @click="retry = task.id"
-            >
-              {{ t("local_download.retry") }}
-            </n-button>
-          </n-flex>
-        </div>
-      </n-collapse-item>
     </n-collapse>
     <n-alert v-if="failure" type="error" :show-icon="false" class="feedback" role="alert">
       {{ t(`local_download.${failure}`) }}
     </n-alert>
-    <n-alert v-if="retry" type="info" :show-icon="false" class="feedback">
-      <p>{{ t("local_download.retry_notice") }}</p>
-      <p v-if="retryTask">
-        {{ retryTask.label }} — {{ retryTask.filename }} — {{ retryTask.quality }}
-      </p>
-      <n-flex justify="end">
-        <n-button :disabled="busy || !retryTask?.retryable" @click="confirmRetry">
-          {{ t("local_download.confirm_retry") }}
-        </n-button>
-        <n-button @click="retry = ''">{{ t("local_download.back") }}</n-button>
-      </n-flex>
-    </n-alert>
     <n-flex class="menu" justify="end">
-      <n-button strong secondary @click="emit('close')">{{ t("common.cancel") }}</n-button>
+      <n-button strong secondary @click="close">{{ t("common.cancel") }}</n-button>
       <n-button :loading="busy" type="primary" :disabled="busy || !canStart" @click="submit()">
         {{ t("download.add") }}
       </n-button>
@@ -152,10 +89,8 @@ const qualityDescription = (name: string) => {
 };
 const directory = ref(0);
 const quality = ref("");
-const filename = ref("");
 const busy = ref(false);
 const failure = ref("");
-const retry = ref("");
 let closed = false;
 let revision = 0;
 onScopeDispose(() => {
@@ -172,11 +107,12 @@ const selectDefaultDirectory = () => {
   const index = defaultGrantIndex(props.grants, settingStore.downloadPath);
   directory.value = props.grants.length ? index : 0;
 };
-const tasks = computed(() => props.session.tasks.value);
-const retryTask = computed(() => tasks.value.find((task) => task.id === retry.value));
 const songSource = computed(() => localDownloadSource(props.song));
 const selected = computed(() => supported.value.find((link) => link.name === quality.value));
 const plan = computed(() => createLocalDownloadPlan(props.song, settingStore));
+const filename = computed(() =>
+  normalizePortableFilename(plan.value.filenameStem, selected.value?.format.toLowerCase() ?? "mp3"),
+);
 const canStart = computed(
   () =>
     !!props.grants[directory.value] && !!selected.value && validDownloadFilename(filename.value),
@@ -190,17 +126,6 @@ watch(
   () => {
     revision++;
     quality.value = supported.value[0]?.name ?? "";
-    retry.value = "";
-  },
-  { immediate: true },
-);
-watch(
-  selected,
-  (link) => {
-    filename.value = normalizePortableFilename(
-      plan.value.filenameStem,
-      link?.format.toLowerCase() ?? "mp3",
-    );
   },
   { immediate: true },
 );
@@ -241,6 +166,15 @@ async function submit() {
   const resolveURL = props.resolveURL;
   const capturedPlan = plan.value;
   const label = source.name;
+  const song = props.song;
+  const display = {
+    artists: Array.isArray(song.artists)
+      ? song.artists.map((artist) => artist.name).join(" / ")
+      : song.artists || "",
+    album: typeof song.album === "string" ? song.album : song.album.name,
+    cover: song.cover,
+    duration: song.duration,
+  };
   const version = revision;
   busy.value = true;
   failure.value = "";
@@ -275,6 +209,7 @@ async function submit() {
       filename: name,
       label,
       quality: link.name,
+      display,
       source,
       resolveURL,
       url: result.url,
@@ -287,7 +222,7 @@ async function submit() {
       if (!closed) failure.value = "start_rejected";
       return;
     }
-    retry.value = "";
+    if (!closed && revision === version && props.session === session) close();
   } catch {
     if (!closed && revision === version && props.session === session)
       failure.value = "operation_failed";
@@ -295,21 +230,10 @@ async function submit() {
     busy.value = false;
   }
 }
-async function confirmRetry() {
-  if (closed || busy.value || !retry.value) return;
-  const session = props.session;
-  const id = retry.value;
-  busy.value = true;
-  failure.value = "";
-  try {
-    const next = await session.retry(id);
-    if (!closed && props.session === session) {
-      if (next) retry.value = "";
-      else failure.value = "retry_rejected";
-    }
-  } finally {
-    busy.value = false;
-  }
+function close(): void {
+  closed = true;
+  revision++;
+  emit("close");
 }
 </script>
 
@@ -324,16 +248,6 @@ async function confirmRetry() {
   .menu,
   .feedback {
     margin-top: 20px;
-  }
-  .download-task {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    padding: 12px 0;
-    overflow-wrap: anywhere;
-    & + .download-task {
-      border-top: 1px solid rgba(var(--primary), 0.12);
-    }
   }
 }
 </style>

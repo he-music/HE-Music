@@ -4,7 +4,14 @@ import * as Vue from "vue";
 import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 import { useMygoDownloadTasks, type MygoDownloadTasksOwner } from "@/composables/mygoDownloadTasks";
+import {
+  useMygoDownloadedSongs,
+  type MygoDownloadedSongsOwner,
+} from "@/composables/mygoDownloadedSongs";
+import type { ScanEntry } from "@/platform/mygo.bindings";
 import type { LocalDownloadTask } from "@/platform/localDownloadSession";
+
+type Owner = MygoDownloadTasksOwner & MygoDownloadedSongsOwner;
 
 type Node = {
   tag: string;
@@ -20,10 +27,7 @@ const node = (tag: string, text = ""): Node => ({
   children: [],
   parent: null,
 });
-function mount(
-  owner: Vue.ShallowRef<MygoDownloadTasksOwner | undefined>,
-  initialRoute = "download-downloading",
-) {
+function mount(owner: Vue.ShallowRef<Owner | undefined>, initialRoute = "download-downloading") {
   const { descriptor } = parse(
     readFileSync(new URL("./MygoDownloadManager.vue", import.meta.url), "utf8"),
   );
@@ -41,6 +45,13 @@ function mount(
     "vue-router": { useRoute: () => route, useRouter: () => ({ push: navigate }) },
     "@/platform/filesSession": { filesSession: owner },
     "@/composables/mygoDownloadTasks": { useMygoDownloadTasks },
+    "@/composables/mygoDownloadedSongs": { useMygoDownloadedSongs },
+    "@/components/List/SongList.vue": {
+      default: Vue.defineComponent({
+        props: ["data", "loading"],
+        setup: (props) => () => Vue.h("song-list", { data: props.data, loading: props.loading }),
+      }),
+    },
   };
   const exports: { default?: Vue.Component } = {};
   new Function("require", "exports", compiled)((name: string) => {
@@ -89,6 +100,7 @@ function mount(
     });
   for (const name of ["NText", "NFlex", "NScrollbar"]) app.component(name, container("div"));
   app.component("NButton", container("button"));
+  app.component("SImage", container("image"));
   app.component("SvgIcon", {
     props: ["name"],
     setup: () => () => Vue.h("span"),
@@ -138,6 +150,13 @@ function mount(
     target.text + target.children.map((child) => text(child)).join("");
   return {
     close: () => app.unmount(),
+    unmount: () => app.unmount(),
+    byTag: (tag: string) =>
+      all().filter(
+        (item) =>
+          item.tag ===
+          ({ "s-image": "image", "n-button": "button", "n-progress": "progress" }[tag] ?? tag),
+      ),
     route,
     navigate,
     all,
@@ -178,218 +197,249 @@ const row = (id: string, changes: Partial<LocalDownloadTask> = {}): LocalDownloa
   retryable: false,
   ...changes,
 });
-it("renders the production panel, shares progress after remount, and routes every action to the same queue", async () => {
+const task = row;
+function fixture() {
   const tasks = Vue.shallowRef<readonly LocalDownloadTask[]>([row("running")]);
-  const downloads = {
+  const queue = {
     tasks,
     cancel: vi.fn(async () => {}),
-    refresh: vi.fn(async () => {}),
-    retry: vi.fn(async () => "retry"),
-    retire: vi.fn(async (id: string) => {
-      tasks.value = tasks.value.filter((item) => item.id !== id);
-      return true;
-    }),
+    refresh: vi.fn<() => Promise<void>>(async () => {}),
+    retry: vi.fn(async () => "retried"),
+    retire: vi.fn<(id: string) => Promise<boolean>>(async () => true),
   };
-  const owner = Vue.shallowRef<MygoDownloadTasksOwner | undefined>({ downloads });
-  let view = mount(owner);
-  expect(view.text()).toContain("running.mp3");
-  await view.click("mygo.downloads.refresh");
-  await view.click("mygo.downloads.cancel");
-  expect(downloads.refresh).toHaveBeenCalledWith("running");
-  expect(downloads.cancel).toHaveBeenCalledWith("running");
-  view.close();
-  tasks.value = [
-    row("failed", { done: true, phase: "failed", retryable: true }),
-    row("saved", { done: true, phase: "saved", committed: true, refresh: "failed" }),
-  ];
-  view = mount(owner);
-  await view.click("common.completed");
-  await Vue.nextTick();
-  expect(view.text()).toContain("mygo.downloads.phase.saved");
-  expect(view.text()).toContain("mygo.downloads.scanFailed");
-  await view.click("mygo.downloads.retry");
-  expect(downloads.retry).toHaveBeenCalledWith("failed");
-  await view.click("mygo.downloads.clearDone");
-  await Vue.nextTick();
-  expect(downloads.retire).toHaveBeenCalledTimes(2);
-  expect(view.text()).toContain("mygo.downloads.empty");
-  owner.value = undefined;
-  await Vue.nextTick();
-  expect(view.text()).toContain("mygo.downloads.unavailable");
-  view.close();
-});
-
-function setupTasks(rows: readonly LocalDownloadTask[]) {
-  const tasks = Vue.shallowRef(rows);
-  const downloads = {
-    tasks,
-    cancel: vi.fn(async () => {}),
-    refresh: vi.fn(async () => {}),
-    retry: vi.fn<() => Promise<string | undefined>>(async () => undefined),
-    retire: vi.fn<(id: string) => Promise<boolean>>(async () => false),
-  };
-  const owner = Vue.shallowRef<MygoDownloadTasksOwner | undefined>({ downloads });
-  return { tasks, downloads, owner, view: mount(owner) };
+  const owner = Vue.shallowRef<Owner | undefined>({
+    downloads: queue,
+    ready: Vue.shallowRef(true),
+    directories: Vue.computed(() => [{ token: "grant", epoch: 1, displayPath: "/Music" }]),
+    libraryEntries: [],
+  });
+  return { owner, queue };
 }
-
-it("filters queue records locally, updates counts and progress, and keeps terminal recovery on the completed tab", async () => {
-  const { tasks, downloads, view } = setupTasks([
-    row("running"),
-    row("unknown", { phase: "unknown", percent: undefined, total: 0 }),
-    row("failed", { done: true, phase: "failed", interrupted: true, retryable: true }),
-    row("scanning", { done: true, phase: "success", committed: true, refresh: "pending" }),
-    row("saved", { done: true, phase: "saved", committed: true, refresh: "failed" }),
+it("renders song cover, artist, percentage, byte counts and active/unknown/failed order", async () => {
+  const f = fixture();
+  f.queue.tasks.value = [
+    task("failed", { label: "Failed title", phase: "failed", done: true, retryable: true }),
+    task("unknown", { label: "Unknown title", phase: "unknown" }),
+    task("active", {
+      label: "Active title",
+      percent: 25,
+      received: 1024,
+      total: 4096,
+      display: {
+        artists: "Artist A / Artist B",
+        album: "Album",
+        cover: "https://cover.test/song.jpg",
+        duration: 40,
+      },
+    }),
+  ];
+  const view = mount(f.owner);
+  expect(view.byTag("s-image").map((image) => image.props.src)).toEqual([
+    "https://cover.test/song.jpg",
+    "/images/song.jpg?asset",
+    "/images/song.jpg?asset",
   ]);
-  expect(view.text()).toContain("unknown.mp3");
-  expect(view.text()).not.toContain("failed.mp3");
-  expect(view.text()).toContain("mygo.downloads.phase.unknown");
-  expect(view.text()).toContain("128 B / —");
-  const counts = () => view.all().find((item) => item.props.class === "counts");
-  expect(view.text(counts())).toContain("2");
-  expect(view.text(counts())).toMatch(/3\s+common\.completed/);
-  expect(
-    view
-      .all()
-      .filter((item) => item.tag === "progress")
-      .map((item) => item.props.value),
-  ).toEqual([50, 0]);
-  tasks.value = tasks.value.map((task) =>
-    task.id === "running" ? { ...task, percent: 75 } : task,
-  );
-  await Vue.nextTick();
-  expect(view.all().find((item) => item.tag === "progress")?.props.value).toBe(75);
-  await view.click("common.completed");
-  await Vue.nextTick();
-  expect(view.text()).not.toContain("running.mp3");
-  expect(view.text()).toContain("failed.mp3");
-  expect(view.text()).toContain("mygo.downloads.interrupted");
-  expect(view.text()).toContain("mygo.downloads.scanning");
-  expect(view.text()).toContain("mygo.downloads.scanFailed");
-  expect(view.text(counts())).toMatch(/2\s+download\.downloading/);
-  expect(view.button("mygo.downloads.remove", view.task("scanning"))?.props.disabled).toBe(true);
-  expect(view.button("mygo.downloads.retry", view.task("saved"))).toBeUndefined();
-  expect(view.button("mygo.downloads.refresh")).toBeUndefined();
-  expect(view.button("common.play")).toBeUndefined();
-  expect(downloads.refresh).not.toHaveBeenCalled();
-  expect(downloads.cancel).not.toHaveBeenCalled();
-  expect(downloads.retry).not.toHaveBeenCalled();
-  expect(downloads.retire).not.toHaveBeenCalled();
-  await view.click("mygo.downloads.retry");
-  await Vue.nextTick();
-  expect(downloads.retry).toHaveBeenCalledOnce();
-  expect(view.text(view.task("failed"))).toContain("mygo.downloads.actionFailed");
-  await view.click("mygo.downloads.clearDone");
-  await Vue.nextTick();
-  expect(downloads.retire.mock.calls).toEqual([["failed"], ["saved"]]);
-  expect(view.text()).toContain("scanning.mp3");
-  await view.click("download.downloading");
-  await Vue.nextTick();
-  tasks.value = tasks.value.filter((task) => task.done);
-  await Vue.nextTick();
-  expect(view.text()).toContain("mygo.downloads.empty");
-  expect(view.text(counts())).toContain("0");
-  view.close();
+  expect(view.text()).toContain("Artist A / Artist B");
+  expect(view.text()).toContain("25%");
+  expect(view.text()).toContain("1.0 KiB / 4.0 KiB");
+  expect(view.text().indexOf("Active title")).toBeLessThan(view.text().indexOf("Unknown title"));
+  expect(view.text().indexOf("Unknown title")).toBeLessThan(view.text().indexOf("Failed title"));
+  expect(view.byTag("n-progress")[0].props.style).toEqual({ height: "4px" });
+  expect(view.byTag("n-progress")[0].props.color).toBe("rgb(var(--primary))");
+  view.unmount();
 });
 
-it("preserves pending actions and errors across tabs and ignores a replaced owner's late results", async () => {
-  const { owner, downloads, view } = setupTasks([row("running")]);
-  let finish: (() => void) | undefined;
-  downloads.refresh = vi.fn(
+function scannedEntry(): ScanEntry {
+  return {
+    ref: {
+      grantToken: "grant",
+      fileId: "fresh-file",
+      version: "v1",
+      relativePath: "album/song.flac",
+    },
+    relativePath: "album/song.flac",
+    filename: "song.flac",
+    size: 1024,
+    metadata: {
+      Title: "Scanned title",
+      Artists: ["Scanned artist"],
+      Album: "Scanned album",
+      DurationSeconds: 42,
+      Container: "FLAC",
+      AlbumArtists: [],
+      Comment: "",
+      Lyrics: "",
+      Pictures: [],
+      PicturesLoaded: false,
+      BitrateKbps: 128,
+      SampleRateHz: 44100,
+      Channels: 2,
+      BitsPerSample: 16,
+      Codec: "FLAC",
+    },
+  };
+}
+it("supplies only scanned songs to the original SongList and clears synchronously when permission expires", async () => {
+  const f = fixture();
+  f.queue.tasks.value = [
+    task("committed", {
+      done: true,
+      committed: true,
+      phase: "success",
+      target: { directory: "/Music", relativePath: "album/song.flac" },
+      label: "History title",
+    }),
+  ];
+  f.owner.value = { ...f.owner.value!, libraryEntries: [scannedEntry()] };
+  const view = mount(f.owner, "download-downloaded");
+  expect(view.byTag("song-list")[0].props.data).toMatchObject([
+    {
+      name: "Scanned title",
+      artists: "Scanned artist",
+      platform: "local",
+      id: "mygo-local:fresh-file",
+    },
+  ]);
+  expect(view.byTag("s-image")).toHaveLength(0);
+  expect(view.text()).not.toContain("History title");
+  f.owner.value!.ready.value = false;
+  await Vue.nextTick();
+  expect(view.byTag("song-list")[0].props.data).toEqual([]);
+  expect(view.text()).toContain("local.scan_empty");
+  expect(view.text()).not.toContain("History title");
+  f.owner.value = { ...f.owner.value!, ready: Vue.shallowRef(true), libraryEntries: [] };
+  await Vue.nextTick();
+  expect(view.byTag("song-list")[0].props.data).toEqual([]);
+  f.owner.value = undefined;
+  await Vue.nextTick();
+  expect(view.byTag("song-list")).toHaveLength(0);
+  view.unmount();
+});
+
+it("does not offer retry for committed warnings even if a malformed task says retryable", () => {
+  const f = fixture();
+  f.queue.tasks.value = [
+    task("warning", {
+      done: true,
+      committed: true,
+      phase: "saved",
+      retryable: true,
+      warning: "cleanup_failed",
+    }),
+  ];
+  const view = mount(f.owner, "download-downloaded");
+  expect(view.text()).toContain("local_download.warning.cleanup_failed");
+  expect(
+    view.byTag("n-button").some((button) => button.props["aria-label"] === "mygo.downloads.retry"),
+  ).toBe(false);
+  expect(view.byTag("song-list")[0].props.data).toEqual([]);
+  view.unmount();
+});
+
+it("ignores a rejected late owner callback without clearing a replacement owner's pending action", async () => {
+  const f = fixture();
+  let rejectOld!: (error: Error) => void;
+  let resolveNew!: () => void;
+  f.queue.refresh.mockImplementationOnce(
     () =>
-      new Promise<void>((resolve) => {
-        finish = resolve;
+      new Promise<void>((_resolve, reject) => {
+        rejectOld = reject;
       }),
   );
-  const action = view.click("mygo.downloads.refresh");
+  const view = mount(f.owner);
+  const oldAction = view.button("mygo.downloads.refresh")!.props.onClick as () => Promise<void>;
+  const oldPromise = oldAction();
   await Vue.nextTick();
-  expect(view.button("mygo.downloads.refresh")?.props.disabled).toBe(true);
-  expect(view.button("mygo.downloads.cancel")?.props.disabled).toBe(true);
+  const next = fixture();
+  next.queue.refresh.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        resolveNew = resolve;
+      }),
+  );
+  f.owner.value = next.owner.value;
+  await Vue.nextTick();
+  const newPromise = (
+    view.button("mygo.downloads.refresh")!.props.onClick as () => Promise<void>
+  )();
+  await Vue.nextTick();
+  rejectOld(new Error("old failure"));
+  await oldPromise;
+  await Vue.nextTick();
+  expect(view.button("mygo.downloads.refresh")!.props.disabled).toBe(true);
+  expect(view.text()).not.toContain("mygo.downloads.actionFailed");
+  resolveNew();
+  await newPromise;
+  await Vue.nextTick();
+  expect(view.button("mygo.downloads.refresh")!.props.disabled).toBe(false);
+  view.unmount();
+});
+
+it("keeps failed tasks in downloading with explicit retry and supports active refresh/cancel and retire", async () => {
+  const f = fixture();
+  const view = mount(f.owner);
+  await view.click("mygo.downloads.refresh");
+  await view.click("mygo.downloads.cancel");
+  expect(f.queue.refresh).toHaveBeenCalledOnce();
+  expect(f.queue.cancel).toHaveBeenCalledOnce();
+  f.queue.tasks.value = [task("failed", { done: true, phase: "failed", retryable: true })];
+  await Vue.nextTick();
+  expect(view.text()).toContain("failed");
+  await view.click("mygo.downloads.retry");
+  await Vue.nextTick();
+  expect(f.queue.retry).toHaveBeenCalledWith("failed");
+  await view.click("mygo.downloads.remove");
+  expect(f.queue.retire).toHaveBeenCalledWith("failed");
+  view.unmount();
+});
+it("synchronizes route tabs and shows scanning warnings without success cards", async () => {
+  const f = fixture();
+  f.queue.tasks.value = [
+    task("saved", {
+      done: true,
+      committed: true,
+      phase: "saved",
+      refresh: "pending",
+      residualName: "song.part",
+    }),
+  ];
+  const view = mount(f.owner);
   await view.click("common.completed");
+  await Vue.nextTick();
+  expect(view.navigate).toHaveBeenCalledWith({ name: "download-downloaded" });
+  expect(view.text()).toContain("mygo.downloads.scanning");
+  expect(view.text()).toContain("song.part");
+  expect(view.button("mygo.downloads.remove")?.props.disabled).toBe(true);
+  expect(view.button("mygo.downloads.clearDone")?.props.disabled).toBe(true);
+  expect(view.byTag("s-image")).toHaveLength(0);
+  view.route.name = "download-downloading";
   await Vue.nextTick();
   expect(view.text()).toContain("mygo.downloads.empty");
-  await view.click("download.downloading");
+  view.unmount();
+});
+it("retains removable task failures and isolates late callbacks after unmount", async () => {
+  const f = fixture();
+  f.queue.tasks.value = [task("failed", { done: true, phase: "failed", retryable: true })];
+  f.queue.retire.mockResolvedValueOnce(false);
+  const view = mount(f.owner);
+  await view.click("mygo.downloads.clearDone");
   await Vue.nextTick();
-  expect(view.button("mygo.downloads.refresh")?.props.disabled).toBe(true);
-  finish?.();
+  expect(view.text()).toContain("mygo.downloads.actionFailed");
+  let reject!: (error: Error) => void;
+  f.queue.tasks.value = [task("running")];
+  f.queue.refresh.mockImplementationOnce(
+    () =>
+      new Promise<void>((_resolve, failure) => {
+        reject = failure;
+      }),
+  );
+  await Vue.nextTick();
+  const action = view.click("mygo.downloads.refresh");
+  view.unmount();
+  reject(new Error("late"));
   await action;
-  await Vue.nextTick();
-  downloads.cancel = vi.fn(async () => {
-    throw new Error("offline");
-  });
-  await view.click("mygo.downloads.cancel");
-  await Vue.nextTick();
-  expect(view.text()).toContain("mygo.downloads.actionFailed");
-  await view.click("common.completed");
-  await Vue.nextTick();
-  await view.click("download.downloading");
-  await Vue.nextTick();
-  expect(view.text()).toContain("mygo.downloads.actionFailed");
-  const late = view.click("mygo.downloads.refresh");
-  const replacement = {
-    ...downloads,
-    tasks: Vue.shallowRef<readonly LocalDownloadTask[]>([row("running", { received: 512 })]),
-    refresh: vi.fn(async () => {}),
-  };
-  owner.value = { downloads: replacement };
-  await Vue.nextTick();
-  finish?.();
-  await late;
-  await Vue.nextTick();
-  expect(view.text()).not.toContain("mygo.downloads.actionFailed");
-  expect(view.text()).toContain("512 B");
-  expect(view.button("mygo.downloads.refresh")?.props.disabled).toBe(false);
-  await view.click("mygo.downloads.refresh");
-  expect(replacement.refresh).toHaveBeenCalledWith("running");
-  view.close();
-});
-
-it("shows persistence errors and only enables clearing when ended records are removable", async () => {
-  const { downloads, owner, tasks, view } = setupTasks([
-    row("scanning", { done: true, phase: "success", refresh: "pending" }),
-  ]);
-  const persistenceError = Vue.shallowRef("mygo.downloads.saveFailed");
-  const persistentDownloads = { ...downloads, persistenceError };
-  owner.value = { downloads: persistentDownloads };
-  await Vue.nextTick();
-  expect(view.text()).toContain("mygo.downloads.saveFailed");
-  expect(view.button("mygo.downloads.clearDone")?.props.disabled).toBe(true);
-  await view.click("common.completed");
-  await Vue.nextTick();
-  expect(view.button("mygo.downloads.remove")?.props.disabled).toBe(true);
-  tasks.value = tasks.value.map((task) => ({ ...task, refresh: "failed" }));
-  await Vue.nextTick();
-  expect(view.button("mygo.downloads.clearDone")?.props.disabled).toBe(false);
-  expect(view.button("mygo.downloads.remove")?.props.disabled).toBe(false);
-  await view.click("mygo.downloads.remove");
-  await Vue.nextTick();
-  expect(view.text()).toContain("scanning.mp3");
-  expect(view.text()).toContain("mygo.downloads.actionFailed");
-  view.close();
-});
-
-it("keeps completed/downloading tabs in sync with route navigation and external route changes", async () => {
-  const owner = Vue.shallowRef<MygoDownloadTasksOwner | undefined>({
-    downloads: {
-      tasks: Vue.shallowRef([
-        row("saved", { done: true, committed: true, phase: "success" }),
-        row("running"),
-      ]),
-      cancel: vi.fn(),
-      refresh: vi.fn(),
-      retry: vi.fn(),
-      retire: vi.fn(),
-    },
-  });
-  const view = mount(owner, "download-downloaded");
-  expect(view.text()).toContain("saved.mp3");
-  expect(view.text()).not.toContain("running.mp3");
-  await view.click("download.downloading");
-  await Vue.nextTick();
-  expect(view.navigate).toHaveBeenCalledWith({ name: "download-downloading" });
-  expect(view.text()).toContain("running.mp3");
-  view.route.name = "download-downloaded";
-  await Vue.nextTick();
-  expect(view.text()).toContain("saved.mp3");
-  expect(view.text()).not.toContain("running.mp3");
-  view.close();
+  const remounted = mount(f.owner);
+  expect(remounted.text()).not.toContain("mygo.downloads.actionFailed");
+  expect(remounted.button("mygo.downloads.refresh")?.props.disabled).toBe(false);
+  remounted.unmount();
 });
