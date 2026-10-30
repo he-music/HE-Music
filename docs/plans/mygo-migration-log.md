@@ -779,3 +779,14 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 父侧最终验证使用 Node 24.22.1、pnpm 10.28.1：`pnpm test` **165 文件、1489 项通过**；`pnpm typecheck` 的 Node/Web 两项通过；全部变更文件 Prettier、变更 TS ESLint、`git diff --check` 通过；`pnpm build:web` 和 `pnpm build:desktop:frontend` 通过，Vite 分别为 11.10 秒与 10.44 秒，保留既有 chunk size 警告。日志 `/tmp/hemusic-parity-final-{tests,types,eslint,web-build,desktop-build}.log`；格式检查直接输出通过。
 - 生产 SFC 与逻辑回归覆盖分类路由、模糊搜索、设置联动、目录撤销的旧 owner、下载清历史与路径切换、任务重试、编辑器草稿/保存及更新候选。下载进度变化保持已完成 SongList 数据引用和子组件更新次数稳定；必要的目录变化仍清空列表。CPU renderer 不代表浏览器布局或 WebView 实机渲染验收。
 - 本轮未运行真实客户端、用户 App、音乐库或外部音乐 API，未触发系统 picker、播放声音或安装更新；原生权限、热重载、长列表、真实主题/字体、Windows 和发布 feed 验收继续保留。Vue ESLint 尚未配置，Vue 仅报告类型、生产 SFC 回归和格式检查通过；Electron 保留。
+
+### 纯 Go 平台库替换
+
+- 按用户授权引入 `golang.org/x/sys v0.49.0`；该版本要求 Go 1.26，未提高本项目已有的 Go 1.27.3 要求。`go mod tidy` 同时将项目已直接使用的 purego 从 indirect 移到直接依赖，版本不变，go.sum 仅增加 x/sys 的两条校验和。
+- Linux 文件属性改用 `unix.Fstat/Fchown/Fchmod`、四个描述符 xattr API，以及 `IoctlGetInt` 和平台提供的 `FS_IOC_GETFLAGS`，删除自写 xattr syscall 分发和 ioctl 请求号拼装。保留固定 FD、64 KiB 预算、属性白名单、ACL/SELinux 顺序及复制后核验。纳秒时间戳保留 NULL-path `utimensat`：库的 `UtimesNanoAt` 不能表达 NULL 路径，`Futimes` 会损失纳秒，改用 `AT_EMPTY_PATH` 又会提高内核要求。
+- Windows 设备型号改用 `windows/registry`，仍只读取 REG_SZ、保留 258 字节单次读取预算及 UTF-16 长度检查，移除 unsafe 转换；macOS 的设备型号查询改用 `unix.Sysctl`。设置重置重命名使用 `windows.MoveFileEx`，保留 REPLACE_EXISTING/WRITE_THROUGH 两个标志。
+- Windows 文件属性、安全描述符、SID 比较及 EA 查询改用 x/sys 的类型化调用。GetSecurityInfo 返回 Go 持有的描述符，不再调用 LocalFree；DACL/SACL 缺失仍按原合同处理，保留保护标志、完整性标签和写后比较。ReOpenFile 暂无对应导出封装，继续用已持有的文件句柄调用，不改成按路径重开。原保护 DACL、时间戳、ADS/EA 回归同步消费库 API。
+- 新增 Linux 文件身份回归：源路径重命名并创建同名替代文件后，复制必须取原 FD 的扩展属性，替代文件不得被读取为源或被更改。隔离 Linux arm64 容器分别在 tmpfs 和 overlayfs 运行 `^TestMetadataLinux`，各 **7 项通过、0 skip**，包括 ACL、SELinux 两项、inode flags 和新回归。日志 `/tmp/hemusic-platform-libs-linux-{tmpfs,overlay}-tests.log`；仅使用临时文件和自有容器，容器运行结束自动清理。
+- 字体方案只做编译对照，未接入生产：通过私有 Go overlay 将 macOS 字体枚举替换为固定 SDK 的 `ui.FontFamilies()`，同一私有 modfile、CGO=0、trimpath、mygo_noinspector 和 `-s -w` 下，原实现为 **14,185,602 字节**，SDK 方案为 **14,933,234 字节**，增加 **747,632 字节（约 730 KiB、5.27%）**；同时有缓存刷新和家族名行为差异。本轮保留现有三平台字体枚举，也不引入 fontscan 扫描与缓存。
+- 最终验证：`CGO_ENABLED=0 go test -mod=readonly ./...`、本机全包 vet 和 darwin/arm64 发布标志构建通过；Linux arm64 与 Windows amd64 全包 vet 通过；Linux/Windows 的 amd64/arm64 四组 desktop 测试二进制编译通过，Windows 二进制未运行。gofmt、`go mod verify` 和 `git diff --check` 通过。最终 macOS 二进制为 **14,185,730 字节**，比替换前增加 **128 字节**；构建元数据确认 CGO_ENABLED=0，产物位于临时目录，未运行客户端。
+- 执行中首次 Windows 静态编译与依赖整理并行，返回 setup failed，整理完成后串行重跑通过；首次 Linux 容器准备因 VM 不可见的宿主临时路径挂载及不存在的工作目录失败，均未执行测试。之后改用 stdin 传递自有测试二进制、在容器内创建目录，得到上述两组实际结果；未将准备失败记为功能失败或测试通过。常规检查日志为 `/tmp/hemusic-platform-libs-{host-tests,host-vet,host-build,linux-build,linux-amd64-build,windows-build,windows-arm64-build,linux-vet,windows-vet}.log`。

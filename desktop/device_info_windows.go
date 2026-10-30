@@ -3,24 +3,28 @@
 package main
 
 import (
-	"syscall"
-	"unsafe"
+	"encoding/binary"
+
+	"golang.org/x/sys/windows"
+	"golang.org/x/sys/windows/registry"
 )
 
 func nativeDeviceModel() string {
-	path, _ := syscall.UTF16PtrFromString(`HARDWARE\DESCRIPTION\System\BIOS`)
-	var key syscall.Handle
-	if syscall.RegOpenKeyEx(syscall.HKEY_LOCAL_MACHINE, path, 0, syscall.KEY_QUERY_VALUE, &key) != nil {
+	key, err := registry.OpenKey(registry.LOCAL_MACHINE, `HARDWARE\DESCRIPTION\System\BIOS`, registry.QUERY_VALUE)
+	if err != nil {
 		return ""
 	}
-	defer syscall.RegCloseKey(key)
-	name, _ := syscall.UTF16PtrFromString("SystemProductName")
+	defer key.Close()
+	// Keep the original bounded, single read and REG_SZ-only contract.
+	var data [258]byte
+	size, kind, err := key.GetValue("SystemProductName", data[:])
+	if err != nil || kind != registry.SZ || size%2 != 0 || size > len(data) {
+		return ""
+	}
 	var value [129]uint16
-	size := uint32(len(value) * 2)
-	var kind uint32
-	if syscall.RegQueryValueEx(key, name, nil, &kind, (*byte)(unsafe.Pointer(&value[0])), &size) != nil || kind != syscall.REG_SZ || size%2 != 0 || size > uint32(len(value)*2) {
-		return ""
+	for i := range size / 2 {
+		value[i] = binary.LittleEndian.Uint16(data[i*2:])
 	}
-	return syscall.UTF16ToString(value[:size/2])
+	return windows.UTF16ToString(value[:size/2])
 }
 func nativeDeviceFallback() string { return "Windows PC" }

@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"testing"
 	"unsafe"
+
+	"golang.org/x/sys/unix"
 )
 
 func TestMetadataLinuxAttributes(t *testing.T) {
@@ -30,13 +32,13 @@ func TestMetadataLinuxAttributes(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, value := range [][]byte{[]byte("tag attribute"), {}} {
-		if _, err := metadataLinuxXattr(source, syscall.SYS_FSETXATTR, "user.music", value); err != nil {
+		if err := unix.Fsetxattr(int(source.Fd()), "user.music", value, 0); err != nil {
 			if err == syscall.EOPNOTSUPP {
 				t.Skip("filesystem does not support xattrs")
 			}
 			t.Fatal(err)
 		}
-		if _, err := metadataLinuxXattr(destination, syscall.SYS_FSETXATTR, "user.stale", []byte("remove")); err != nil {
+		if err := unix.Fsetxattr(int(destination.Fd()), "user.stale", []byte("remove"), 0); err != nil {
 			t.Fatal(err)
 		}
 		if err := metadataCopyAttributes(source, destination); err != nil {
@@ -89,7 +91,7 @@ func TestMetadataLinuxACL(t *testing.T) {
 		binary.LittleEndian.PutUint16(acl[offset+2:], uint16(entry[1]))
 		binary.LittleEndian.PutUint32(acl[offset+4:], entry[2])
 	}
-	if _, err := metadataLinuxXattr(source, syscall.SYS_FSETXATTR, "system.posix_acl_access", acl); err != nil {
+	if err := unix.Fsetxattr(int(source.Fd()), "system.posix_acl_access", acl, 0); err != nil {
 		if err == syscall.EOPNOTSUPP {
 			t.Skip("filesystem does not support POSIX ACLs")
 		}
@@ -106,7 +108,7 @@ func TestMetadataLinuxACL(t *testing.T) {
 		t.Fatal("ACL was not preserved")
 	}
 	// A destination ACL inherited from its parent must not survive an ACL-free source.
-	if _, err := metadataLinuxXattr(source, syscall.SYS_FREMOVEXATTR, "system.posix_acl_access", nil); err != nil {
+	if err := unix.Fremovexattr(int(source.Fd()), "system.posix_acl_access"); err != nil {
 		t.Fatal(err)
 	}
 	if err := metadataCopyAttributes(source, destination); err != nil {
@@ -231,5 +233,52 @@ func TestMetadataLinuxSELinuxDifferentLabelRequiresVerifiedWrite(t *testing.T) {
 	}
 	if !bytes.Equal(after["security.selinux"], different) {
 		t.Fatalf("label update succeeded without matching readback: got=%v want=%v", after["security.selinux"], different)
+	}
+}
+
+func TestMetadataLinuxAttributesStayOnPinnedFilesAfterPathReplacement(t *testing.T) {
+	directory := t.TempDir()
+	source, err := os.CreateTemp(directory, "source")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer source.Close()
+	destination, err := os.CreateTemp(directory, "destination")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer destination.Close()
+	if err := unix.Fsetxattr(int(source.Fd()), "user.music", []byte("pinned"), 0); err != nil {
+		if err == unix.EOPNOTSUPP {
+			t.Skip("filesystem does not support xattrs")
+		}
+		t.Fatal(err)
+	}
+	original := source.Name()
+	if err := os.Rename(original, original+"-moved"); err != nil {
+		t.Fatal(err)
+	}
+	replacement, err := os.Create(original)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer replacement.Close()
+	if err := unix.Fsetxattr(int(replacement.Fd()), "user.music", []byte("replacement"), 0); err != nil {
+		t.Fatal(err)
+	}
+	if err := metadataCopyAttributes(source, destination); err != nil {
+		t.Fatal(err)
+	}
+	for _, check := range []struct {
+		file *os.File
+		want string
+	}{{destination, "pinned"}, {replacement, "replacement"}} {
+		attributes, err := metadataLinuxAttributes(check.file)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(attributes["user.music"]) != check.want {
+			t.Fatalf("attributes followed a replaced path: got %q want %q", attributes["user.music"], check.want)
+		}
 	}
 }

@@ -6,9 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"syscall"
 	"testing"
 	"unsafe"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestMetadataWindowsAttributes(t *testing.T) {
@@ -26,32 +27,23 @@ func TestMetadataWindowsAttributes(t *testing.T) {
 	}
 	defer destination.Close()
 	// Use an explicit protected DACL, distinguishable from directory inheritance.
-	sddl, err := syscall.UTF16PtrFromString("D:P(A;;FA;;;WD)")
+	descriptor, err := windows.SecurityDescriptorFromString("D:P(A;;FA;;;WD)")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var descriptor uintptr
-	convert := metadataAdvapi32.NewProc("ConvertStringSecurityDescriptorToSecurityDescriptorW")
-	ok, _, err := convert.Call(uintptr(unsafe.Pointer(sddl)), 1, uintptr(unsafe.Pointer(&descriptor)), 0)
-	if ok == 0 {
+	dacl, _, err := descriptor.DACL()
+	if err != nil {
 		t.Fatal(err)
 	}
-	defer syscall.LocalFree(syscall.Handle(descriptor))
-	var dacl uintptr
-	var present, defaulted int32
-	getDACL := metadataAdvapi32.NewProc("GetSecurityDescriptorDacl")
-	ok, _, err = getDACL.Call(descriptor, uintptr(unsafe.Pointer(&present)), uintptr(unsafe.Pointer(&dacl)), uintptr(unsafe.Pointer(&defaulted)))
-	if ok == 0 || present == 0 {
-		t.Fatalf("read test DACL: %v", err)
-	}
-	handle, _, err := metadataReopen.Call(source.Fd(), 0x40000, 1|2|4, 0)
+	handle, _, err := metadataReopen.Call(source.Fd(), windows.WRITE_DAC, windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, 0)
 	if handle == ^uintptr(0) {
 		t.Fatal(err)
 	}
-	code, _, _ := metadataSetSecurity.Call(handle, 1, 4|0x80000000, 0, 0, dacl, 0)
-	syscall.CloseHandle(syscall.Handle(handle))
-	if code != 0 {
-		t.Fatal(syscall.Errno(code))
+	err = windows.SetSecurityInfo(windows.Handle(handle), windows.SE_FILE_OBJECT,
+		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
+	windows.CloseHandle(windows.Handle(handle))
+	if err != nil {
+		t.Fatal(err)
 	}
 	basic, err := metadataWindowsBasicInfo(source)
 	if err != nil {
@@ -59,8 +51,8 @@ func TestMetadataWindowsAttributes(t *testing.T) {
 	}
 	basic.Attributes = 0x2 | 0x20 // hidden, archive
 	basic.Creation, basic.Access, basic.Write, basic.Change = 132000000000000000, 132000000010000000, 132000000020000000, 132000000030000000
-	ok, _, err = metadataSetInfo.Call(source.Fd(), 0, uintptr(unsafe.Pointer(&basic)), unsafe.Sizeof(basic))
-	if ok == 0 {
+	if err := windows.SetFileInformationByHandle(windows.Handle(source.Fd()), windows.FileBasicInfo,
+		(*byte)(unsafe.Pointer(&basic)), uint32(unsafe.Sizeof(basic))); err != nil {
 		t.Fatal(err)
 	}
 	if err := metadataCheckAttributes(source); err != nil {
@@ -80,7 +72,6 @@ func TestMetadataWindowsAttributes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer syscall.LocalFree(syscall.Handle(uintptr(security.descriptor)))
 	if security.control&0x1000 == 0 {
 		t.Fatal("DACL protection was lost")
 	}
@@ -120,11 +111,9 @@ func TestMetadataWindowsRejectsExtendedAttributes(t *testing.T) {
 	// FILE_FULL_EA_INFORMATION: next offset, flags, name length, value length,
 	// NUL-terminated ASCII name, then value. All bytes belong to this temp file.
 	ea := []byte{0, 0, 0, 0, 0, 4, 3, 0, 't', 'a', 'g', 's', 0, 'e', 'a', '!'}
-	var statusBlock [2]uintptr
-	setEA := syscall.NewLazyDLL("ntdll.dll").NewProc("NtSetEaFile")
-	status, _, _ := setEA.Call(file.Fd(), uintptr(unsafe.Pointer(&statusBlock)), uintptr(unsafe.Pointer(&ea[0])), uintptr(len(ea)))
-	if status != 0 {
-		t.Fatalf("set temp EA: NTSTATUS %#x", status)
+	var statusBlock windows.IO_STATUS_BLOCK
+	if err := windows.NtSetEaFile(windows.Handle(file.Fd()), &statusBlock, &ea[0], uint32(len(ea))); err != nil {
+		t.Fatalf("set temp EA: %v", err)
 	}
 	if err := metadataCheckAttributes(file); err == nil || !strings.Contains(err.Error(), "extended attributes are unsupported") {
 		t.Fatalf("EA rejection was not specific: %v", err)
