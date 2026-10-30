@@ -3,6 +3,7 @@ module github.com/he-music/HE-Music
 go 1.27.3
 
 require (
+	github.com/bmatcuk/doublestar/v4 v4.10.4
 	github.com/egoist/mygo v0.6.5-0.20261026063203-07ebe19ac0dc
 	github.com/tommyo123/mtag v1.0.2
 )

@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/he-music/HE-Music/desktop/metadata"
@@ -62,5 +63,33 @@ func TestScanFiltersNonAudioNamesBeforeParsingAndCache(t *testing.T) {
 	}
 	if len(entries) != 2 || len(want) != 0 {
 		t.Fatalf("supported audio missing or extra files collected: entries=%d missing=%v", len(entries), want)
+	}
+}
+
+func TestScanAudioGlobMatchesSupportedFormatsAtEveryDepth(t *testing.T) {
+	actor, ctx, epoch, token, directory := scanTestGrant(t)
+	nested := "Album [Live]/{Disc}"
+	if err := os.MkdirAll(filepath.Join(directory, filepath.FromSlash(nested)), 0700); err != nil {
+		t.Fatal(err)
+	}
+	want := make(map[string]bool)
+	for ext := range localAudioExtensions {
+		for _, name := range []string{"root" + ext, nested + "/Track" + strings.ToUpper(ext)} {
+			scanTestWrite(t, filepath.Join(directory, filepath.FromSlash(name)), []byte("unreadable tags"))
+			want[name] = true
+		}
+	}
+	entries, issues := scanTestDrain(t, scanTestJob(t, actor.state, ctx, epoch, token))
+	if len(issues) != 0 || len(entries) != len(want) {
+		t.Fatalf("glob results: entries=%d want=%d issues=%v", len(entries), len(want), issues)
+	}
+	for _, entry := range entries {
+		if !want[entry.RelativePath] {
+			t.Errorf("unexpected glob result: %s", entry.RelativePath)
+		}
+		delete(want, entry.RelativePath)
+	}
+	if len(want) != 0 {
+		t.Fatalf("glob missed audio files: %v", want)
 	}
 }

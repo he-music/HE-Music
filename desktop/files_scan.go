@@ -12,17 +12,19 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/bmatcuk/doublestar/v4"
 	"github.com/egoist/mygo"
 	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
 const (
-	scanPageSize      = 32
-	scanQueueSize     = 64
-	scanMaxOperations = 8
-	scanMaxDepth      = 16
-	scanMaxItems      = 10000
-	scanLifetime      = 5 * time.Minute
+	scanAudioGlobPattern = "**/*.{mp3,wav,flac,aac,webm,m4a,mp4,ogg,aiff,aif,ape}"
+	scanPageSize         = 32
+	scanQueueSize        = 64
+	scanMaxOperations    = 8
+	scanMaxDepth         = 16
+	scanMaxItems         = 10000
+	scanLifetime         = 5 * time.Minute
 )
 
 var errFilesScan = errors.New("invalid or expired file operation")
@@ -397,9 +399,10 @@ func (r scanReaderAt) ReadAt(p []byte, offset int64) (int, error) {
 }
 
 func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
-	// Restrict library candidates before parsing or consulting a legacy index.
-	// Content sniffing alone may classify unrelated files as supported audio.
-	if !supportedLocalAudioName(filename) {
+	// Match the Electron audio glob before parsing or consulting a legacy index.
+	// Traversal remains bound to the authorized directory lease.
+	matched, err := doublestar.Match(scanAudioGlobPattern, strings.ToLower(relative))
+	if err != nil || !matched {
 		return true
 	}
 	file, before, err := openGrantedRegular(j.lease, relative)
