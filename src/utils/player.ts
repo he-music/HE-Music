@@ -317,18 +317,14 @@ class Player {
     const dataStore = useDataStore();
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
-    const settingStore = useSettingStore();
     // 播放信息
     const { id, platform, path } = musicStore.playSong;
     // 设置音量和速率
     audioManager.setVolume(statusStore.playVolume);
     audioManager.setRate(statusStore.playRate);
-    // 播放设备
-    if (!settingStore.showSpectrums) {
-      void this.toggleOutputDevice().catch((error: unknown) => {
-        console.error("Failed to restore audio output device:", error);
-      });
-    }
+    void this.toggleOutputDevice().catch((error: unknown) => {
+      console.error("Failed to restore audio output device:", error);
+    });
     const requestId = this.playRequestId;
     this.playbackAttempt = { src, autoPlay, seek, requestId, canAutoPlay };
     const pending = this.pendingAutoPlay;
@@ -1292,7 +1288,8 @@ class Player {
    */
   public async toggleOutputDevice(deviceId?: string) {
     const settingStore = useSettingStore();
-    await audioManager.setSinkId(deviceId ?? settingStore.playDevice);
+    const selected = deviceId ?? settingStore.playDevice;
+    if (typeof selected === "string") await audioManager.setSinkId(selected);
   }
   /**
    * 启用/更新均衡器

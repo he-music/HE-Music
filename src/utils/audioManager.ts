@@ -8,13 +8,9 @@ import { isElectron } from "@/utils/env";
 import { shallowRef } from "vue";
 import { AudioProcessingDriver } from "./audioCapability";
 
+import { AudioOutputRouter } from "./audioOutput";
 /** Only source admission changes update this ref; playback clocks stay inside consumers. */
 export const audioProcessingAvailable = shallowRef(false);
-
-/** 扩充 AudioContext 接口以支持 setSinkId (实验性 API) */
-interface IExtendedAudioContext extends AudioContext {
-  setSinkId?(deviceId: string): Promise<void>;
-}
 
 /**
  * 音频事件类型定义
@@ -40,16 +36,13 @@ export type AudioEventType =
  */
 class AudioManager {
   /** 核心上下文 */
-  private audioCtx: IExtendedAudioContext | null = null;
+  private audioCtx: AudioContext | null = null;
   /** 音频元素 */
   private legacyElement: HTMLAudioElement | null = null;
   private driver: AudioProcessingDriver | undefined;
   private desiredGains = Array<number>(10).fill(0);
-  private desiredSinkId = "";
-  private confirmedSinkId = "";
-  private sinkRevision = 0;
-  private readonly sinkQueues = new WeakMap<object, Promise<void>>();
-  private readonly appliedSinks = new WeakMap<object, string>();
+  private readonly output = new AudioOutputRouter();
+  private playRevision = 0;
   private get audioElement(): HTMLAudioElement | null {
     return this.driver?.element ?? this.legacyElement;
   }
@@ -95,10 +88,14 @@ class AudioManager {
         createElement: () => new Audio(),
         frequencies: this.eqFrequencies,
         volume: this.volume,
-        prepareOutput: (element, context) => this.applyOutputDevice(element, context),
+        prepareOutput: (element, context) => {
+          this.output.setSource(element, context, this.driver?.gain);
+          return this.output.play();
+        },
       });
       this.driver.on("processingchange", () => this.syncProcessingGraph());
     }
+    this.output.setSource(this.audioElement);
     this.bindInternalEvents();
   }
 
@@ -114,7 +111,8 @@ class AudioManager {
       filter.gain.value = this.desiredGains[index];
     });
     audioProcessingAvailable.value = driver.processingAvailable;
-    void this.applyOutputDevice(driver.element, driver.context).catch((error: unknown) => {
+    this.output.setSource(driver.element, driver.context, driver.gain);
+    void this.output.refresh().catch((error: unknown) => {
       console.error("AudioManager: 设置输出设备失败", error);
     });
   }
@@ -128,7 +126,7 @@ class AudioManager {
     try {
       if (isElectron) {
         // 使用标准 AudioContext
-        this.audioCtx = new AudioContext() as IExtendedAudioContext;
+        this.audioCtx = new AudioContext();
         // 创建节点
         this.sourceNode = this.audioCtx.createMediaElementSource(this.audioElement!);
         this.gainNode = this.audioCtx.createGain();
@@ -159,6 +157,7 @@ class AudioManager {
         this.gainNode.connect(this.audioCtx.destination);
         // 同步音量
         this.gainNode.gain.value = this.volume;
+        this.output.setSource(this.audioElement, this.audioCtx, this.gainNode);
       }
 
       this.isInitialized = true;
@@ -181,6 +180,7 @@ class AudioManager {
     options: { fadeIn?: boolean; fadeDuration?: number; autoPlay?: boolean } = {},
   ) {
     this.clearFadeOutTimer();
+    const revision = ++this.playRevision;
     if (this.driver) {
       this.clearFadeOutTimer();
       const driver = this.driver;
@@ -209,6 +209,7 @@ class AudioManager {
       try {
         await driver.play();
       } catch (error) {
+        if (revision === this.playRevision) this.output.pause();
         console.error("AudioManager: 播放失败");
         throw error;
       }
@@ -244,8 +245,14 @@ class AudioManager {
 
     if (shouldPlay) {
       try {
+        this.output.setSource(this.audioElement, this.audioCtx, this.gainNode);
+        await this.output.play().catch((error: unknown) => {
+          console.error("AudioManager: 设置输出设备失败", error);
+        });
+        if (revision !== this.playRevision) return;
         await this.audioElement?.play();
       } catch (error) {
+        if (revision === this.playRevision) this.output.pause();
         console.error("AudioManager: 播放失败");
         throw error;
       }
@@ -258,8 +265,10 @@ class AudioManager {
    */
   public pause(options: { fadeOut?: boolean; fadeDuration?: number } = {}) {
     this.clearFadeOutTimer();
+    this.playRevision += 1;
     const element = this.audioElement;
     const sourceGeneration = this.driver?.loadGeneration;
+    if (!options.fadeOut || element?.paused) this.output.pause();
     if (this.driver && (!options.fadeOut || element?.paused)) {
       this.driver.pause();
       return;
@@ -313,6 +322,7 @@ class AudioManager {
   /** Drop a revoked local source, including bytes already buffered by the element. */
   public clearSource() {
     this.clearFadeOutTimer();
+    this.output.setSource(null);
     if (this.driver) {
       this.driver.clearSource();
       this.syncProcessingGraph();
@@ -476,63 +486,8 @@ class AudioManager {
    * 设置音频输出设备
    * @param deviceId 设备 ID
    */
-  public async setSinkId(deviceId: string) {
-    const revision = ++this.sinkRevision;
-    this.desiredSinkId = deviceId === "default" ? "" : deviceId;
-    try {
-      await this.applyOutputDevice(this.audioElement, this.audioCtx);
-    } catch (error) {
-      if (revision === this.sinkRevision) this.desiredSinkId = this.confirmedSinkId;
-      throw error;
-    }
-  }
-
-  private async applyOutputDevice(
-    element: HTMLAudioElement | null,
-    context: AudioContext | null | undefined,
-  ) {
-    // Web Audio owns the physical output when a graph exists; an element sink cannot replace it.
-    const target: IExtendedAudioContext | HTMLAudioElement | null = context ?? element;
-    if (!target) return;
-    const desired = this.desiredSinkId;
-    if (typeof target.setSinkId !== "function") {
-      if (desired === "") {
-        this.confirmedSinkId = "";
-        return;
-      }
-      throw new DOMException(
-        "This audio output does not support device selection",
-        "NotSupportedError",
-      );
-    }
-    const previous = this.sinkQueues.get(target) ?? Promise.resolve();
-    const operation = previous.then(async () => {
-      const current =
-        this.driver?.context ?? this.driver?.element ?? this.audioCtx ?? this.audioElement;
-      if (
-        target !== current ||
-        desired !== this.desiredSinkId ||
-        this.appliedSinks.get(target) === desired
-      )
-        return;
-      // Fresh outputs already follow the system default; WebKit need not
-      // implement device selection for ordinary playback to work.
-      if (desired === "" && !this.appliedSinks.has(target)) {
-        this.confirmedSinkId = "";
-        return;
-      }
-      await target.setSinkId?.(desired);
-      this.appliedSinks.set(target, desired);
-      const active =
-        this.driver?.context ?? this.driver?.element ?? this.audioCtx ?? this.audioElement;
-      if (target === active) this.confirmedSinkId = desired;
-    });
-    // A failed request must not block later requests, but its caller sees failure.
-    this.sinkQueues.set(
-      target,
-      operation.catch(() => undefined),
-    );
-    await operation;
+  public setSinkId(deviceId: string): Promise<void> {
+    return this.output.setSinkId(deviceId);
   }
 
   /**

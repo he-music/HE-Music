@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn<() => Promise<LocalAudioTicket>>(),
   close: vi.fn(async () => {}),
   sink: vi.fn<(device: string) => Promise<void>>(async () => {}),
+  device: vi.fn<() => string | undefined>(() => undefined),
   lyrics: vi.fn(),
   cover: vi.fn(),
   warning: vi.fn<(options: { onNegativeClick?: () => unknown }) => { destroy(): void }>(),
@@ -45,6 +46,9 @@ vi.mock("@/stores", () => ({
   useSettingStore: () => ({
     smtcOpen: false,
     showSpectrums: true,
+    get playDevice() {
+      return mocks.device();
+    },
     getFadeTime: 0,
     songLevel: "128mp3",
   }),
@@ -159,6 +163,7 @@ beforeEach(async () => {
   mocks.ref.fileId = "B";
   mocks.radio.mockReset();
   mocks.sink.mockReset().mockResolvedValue(undefined);
+  mocks.device.mockReset().mockReturnValue(undefined);
   mocks.url.mockReset().mockResolvedValue("https://synthetic.invalid/current");
   mocks.open.mockReset().mockResolvedValue({
     ticketId: "ticket",
@@ -470,6 +475,12 @@ describe("real Player HTTP control autoplay intent", () => {
       expect(manager.paused).toBe(false);
     },
   );
+  it("restores the configured output when spectrum display is enabled", async () => {
+    mocks.device.mockReturnValue("saved-speakers");
+    await player.nextOrPrev("next");
+    expect(mocks.sink).toHaveBeenCalledWith("saved-speakers");
+    expect(manager.paused).toBe(false);
+  });
   it("cancels an old owner's deferred real prepareOutput without losing the source", async () => {
     const sink = deferred<void>();
     mocks.sink.mockReturnValueOnce(sink.promise);

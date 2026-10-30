@@ -6,8 +6,9 @@ const mocks = vi.hoisted(() => ({
   toggleOutputDevice: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
+  settings: { playDevice: "" },
 }));
-vi.mock("@/stores", () => ({ useSettingStore: () => ({}), useStatusStore: () => ({}) }));
+vi.mock("@/stores", () => ({ useSettingStore: () => mocks.settings, useStatusStore: () => ({}) }));
 vi.mock("@/utils/env", () => mocks.env);
 vi.mock("@/platform", () => ({ platform: { capabilities: {} } }));
 vi.mock("@/utils/helper", () => ({ renderOption: vi.fn() }));
@@ -43,11 +44,13 @@ describe("output device feedback", () => {
       resolve();
       for (let n = 0; n < 10; n++) await Promise.resolve();
       expect(mocks.success).toHaveBeenCalledOnce();
+      expect(mocks.settings.playDevice).toBe("speakers");
       mocks.toggleOutputDevice.mockRejectedValueOnce(new DOMException("denied", "NotAllowedError"));
       item.value.value = "missing";
       for (let n = 0; n < 10; n++) await Promise.resolve();
       expect(mocks.success).toHaveBeenCalledOnce();
       expect(mocks.error).toHaveBeenCalledExactlyOnceWith("message.output_device_change_failed");
+      expect(mocks.settings.playDevice).toBe("speakers");
     } finally {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();

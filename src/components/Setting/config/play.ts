@@ -44,13 +44,14 @@ export const usePlaySettings = (): SettingConfig => {
     }
   };
 
-  // mpv 切换输出设备
+  // 切换输出设备
   const playDeviceChange = async (deviceId: string) => {
     // 找到对应的 label 用于显示
     const option = outputDevices.value.find((d) => d.value === deviceId);
     const label = option?.label || deviceId;
     try {
       await player.toggleOutputDevice(deviceId);
+      settingStore.playDevice = deviceId;
       window.$message.success(t("message.output_device_change_success", { device: label }));
     } catch (error) {
       console.error("Failed to change audio output device:", error);

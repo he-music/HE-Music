@@ -798,3 +798,13 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 使用临时 Go overlay 将主函数替换为隔离能力探针，设置独立用户数据目录及唯一页面 origin，只加载自有静态 HTML，不加载播放器、请求媒体权限或播放声音。在 macOS 26.3 上，HTTP loopback 和 `mygo://` 两组对照均为安全上下文：原配置 `mediaDevices` / `enumerateDevices` 为 undefined，应用生产配置函数后分别变为 object / function。空句柄、空偏好对象、不支持 selector 的 NSObject 拒绝检查，以及重复启用检查符合预期。四个隐藏窗口和本机临时 HTTP 服务均随探针退出清理，结果见 `/tmp/hemusic-webview-media-probe-result.json`，stderr 为空。
 - 同次运行确认 `HTMLMediaElement.prototype.setSinkId` 为 function，`AudioContext.prototype.setSinkId` 为 undefined；本轮修复 API 暴露，不代表现有 Web Audio 图已能选择输出设备，也未通过设备枚举、实际路由或发声验收。
 - 验证通过：`CGO_ENABLED=0 go test -mod=readonly ./...`、全包 `go vet`、macOS arm64 / amd64 发布标志构建，Windows amd64 / Linux arm64 的 desktop 测试二进制交叉编译，以及 gofmt 与 `git diff --check`。跨平台二进制未运行，未启动用户客户端。
+
+### Web Audio 输出设备路由
+
+- 已提交前两项改动：`0a864a4` 使用 x/sys 封装平台系统调用，`0daa568` 启用 macOS WebView 媒体设备 API。用户随后授权重新设计 player / audioManager，本轮将物理输出路由提取为 `AudioOutputRouter`，播放业务、歌曲时钟与源授权仍由原 player / AudioProcessingDriver 管理。
+- 有 `AudioContext.setSinkId` 时继续直接切换 context；普通无处理音源切换源音频元素；WKWebView 有元素级 setSinkId、缺少 context 级方法时，从 GainNode 接出 MediaStreamAudioDestinationNode，交给独立音频元素播放并选择设备。EQ、频谱和音量仍作用于原图，输出元素保持音量和倍速为 1；源元素继续提供时间、播放状态、seek 和倍速。
+- 显式切换前先建立静音候选输出，设置设备并准备播放，成功后才断开原 context.destination，避免候选失败破坏当前输出。设备更改串行执行，过期候选清理；暂停与 ended 停止输出元素，换歌、回退或 clearSource 解除 srcObject、事件监听、节点及流轨道。切回默认重连 context.destination；活动流错误或恢复播放被拒绝时恢复默认图输出，输出错误不作为歌曲解码错误转发。
+- player 恢复设备不再受 showSpectrums 控制；设置页在切换成功后保存 playDevice，失败保留原选择。没有改变设备枚举、摄像头或麦克风权限、跨域源准入及授权文件票据合同。
+- 新增生产 AudioManager 回归覆盖真实输出目标、EQ / 音量 / 倍速 / 时钟、流暂停恢复、设备拒绝、自动播放拒绝、过期候选、暂停期间未决播放、切回默认、保存设备跨图恢复、普通音源回退和流错误；沿用原并发路由、授权撤销与旧页面 owner 测试。最初新增的 WebKit 路由用例在原实现明确抛 NotSupportedError，实现后通过。
+- 隔离 macOS 26.3 WKWebView 使用生产 `audioOutput.ts` 打包产物运行静音探针：真实 AudioContext、GainNode 和 MediaStream 输出，预加载不播放，播放后流为 live、paused=false、muted=false，暂停 / 恢复正常，默认回切后 srcObject 清空、轨道 ended。全程 gain=0；元素的设备选择方法为实例级测试替身，不读取设备 ID、请求权限或切换真实硬件。结果 `/tmp/hemusic-output-probe-result.json`，stderr 为空；实际扬声器选择、设备枚举结果及输出延迟未验收。
+- 最终验证：`pnpm test` **165 文件、1,500 测试通过**，`pnpm typecheck`（Node / Web）、变更 TS 的 ESLint / Prettier、`git diff --check` 通过；`pnpm build:web` / `pnpm build:desktop:frontend` 分别 10.82s / 11.39s 构建通过，保留既有 chunk 大小警告。日志 `/tmp/hemusic-sink-final-{tests,types}.log`、`/tmp/hemusic-sink-{web,desktop}-build.log`。真实设备切换仍需实机验收。
