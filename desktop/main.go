@@ -20,12 +20,24 @@ func main() {
 		return
 	}
 	defer stopGateway()
+	stopLogging := func() {}
+	defer func() { stopLogging() }()
 	mygo.App.WhenReady(func() {
+		if stop, err := configureDesktopLogging(); err != nil {
+			log.Print("配置文件日志失败，继续输出到控制台: ", err)
+		} else {
+			stopLogging = stop
+		}
 		appearance := WindowAppearance{}
 		directory, directoryErr := mygo.App.Path(mygo.PathUserData)
 		if directoryErr == nil {
 			if err := preparePreferencesResetStartup(directory); err != nil {
 				log.Print("恢复设置重置失败")
+				mygo.App.Quit()
+				return
+			}
+			if err := prepareApplicationStorage(directory); err != nil {
+				log.Print("配置业务数据存储失败: ", err)
 				mygo.App.Quit()
 				return
 			}

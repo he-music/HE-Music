@@ -28,8 +28,9 @@ func (d *updatesFakeDriver) check(ctx context.Context) (updatesCandidate, error)
 }
 
 type updatesInstallCall struct {
-	ctx   context.Context
-	reply chan error
+	ctx      context.Context
+	reply    chan error
+	progress func(int64, int64)
 }
 
 type updatesFakeCandidate struct{ calls chan updatesInstallCall }
@@ -38,8 +39,8 @@ func (c *updatesFakeCandidate) metadata() (string, string, string) {
 	return "2.0.0", "release notes", "2026-10-01T00:00:00Z"
 }
 
-func (c *updatesFakeCandidate) install(ctx context.Context) error {
-	call := updatesInstallCall{ctx: ctx, reply: make(chan error, 1)}
+func (c *updatesFakeCandidate) install(ctx context.Context, progress func(int64, int64)) error {
+	call := updatesInstallCall{ctx: ctx, progress: progress, reply: make(chan error, 1)}
 	c.calls <- call
 	return <-call.reply // SDK swap is not guaranteed to respect cancellation.
 }

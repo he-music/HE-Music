@@ -2,7 +2,11 @@ import { defineStore } from "pinia";
 import type { CoverType, UserLikeDataType } from "@/types/main";
 import { playlistCategories } from "@/api/playlist";
 import { cloneDeep, isEmpty } from "lodash-es";
-import localforage from "localforage";
+import {
+  applicationStorage,
+  createApplicationDatabase,
+  dropApplicationDatabase,
+} from "@/platform/applicationStorage";
 import {
   SongInfo,
   CategoryGroupInfo,
@@ -55,20 +59,20 @@ interface ListState {
 type UserDataKeys = keyof ListState["userLikeData"];
 
 // musicDB
-const musicDB = localforage.createInstance({
+const musicDB = createApplicationDatabase({
   name: "music-data",
   description: "List data of the application",
   storeName: "music",
 });
 
 // userDB
-const userDB = localforage.createInstance({
+const userDB = createApplicationDatabase({
   name: "user-data",
   description: "User data of the application",
   storeName: "user",
 });
 // backgroundDB
-const backgroundDB = localforage.createInstance({
+const backgroundDB = createApplicationDatabase({
   name: "background-data",
   description: "Background image data",
   storeName: "background",
@@ -375,7 +379,7 @@ export const useDataStore = defineStore("data", {
     async deleteDB(name?: string): Promise<void> {
       try {
         if (name) {
-          await localforage.dropInstance({ name });
+          await dropApplicationDatabase({ name });
           console.log(`Dropped ${name} database`);
           return;
         }
@@ -536,7 +540,7 @@ export const useDataStore = defineStore("data", {
   // 持久化
   persist: {
     key: "data-store",
-    storage: localStorage,
+    storage: applicationStorage,
     pick: ["userLoginStatus", "userData", "searchHistory", "token", "refreshToken", "expiresAt"],
   },
 });

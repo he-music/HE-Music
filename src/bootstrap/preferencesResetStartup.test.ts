@@ -7,12 +7,23 @@ const mocks = vi.hoisted(() => ({
   loaded: vi.fn(),
   failure: vi.fn(),
   drop: vi.fn(async () => {}),
+  snapshot: vi.fn(async () => ({})),
+  put: vi.fn(async () => {}),
+  remove: vi.fn(async () => {}),
+  clear: vi.fn<(namespace: string) => Promise<void>>(async () => {}),
 }));
 vi.mock("mygo-runtime", () => ({ isMyGo: () => true }));
 vi.mock("@/platform/mygo.bindings", () => ({
   DesktopPlatform: {
     pendingPreferencesReset: mocks.pending,
     acknowledgePreferencesReset: mocks.ack,
+  },
+  DesktopLog: { write: async () => {} },
+  DesktopStorage: {
+    localSnapshot: mocks.snapshot,
+    put: mocks.put,
+    remove: mocks.remove,
+    clear: mocks.clear,
   },
 }));
 vi.mock("@/platform", () => ({
@@ -21,6 +32,7 @@ vi.mock("@/platform", () => ({
     return { kind: "mygo", gateway: {} };
   },
 }));
+vi.mock("@/platform/applicationLog", () => ({ installApplicationLogging: () => () => {} }));
 vi.mock("@/bootstrap/window", () => ({ bootstrapWindow: mocks.mount }));
 vi.mock("@/platform/gateway", () => ({ initializeGateway: async () => {} }));
 vi.mock("localforage", () => ({ default: { dropInstance: mocks.drop } }));
@@ -31,6 +43,7 @@ vi.mock("@/platform/preferencesResetStartup", async (original) => ({
 beforeEach(() => {
   vi.resetModules();
   vi.clearAllMocks();
+  mocks.clear.mockImplementation(async () => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.stubGlobal("location", { hash: "#/" });
   vi.stubGlobal("window", { __HE_MUSIC_GATEWAY_ORIGIN__: "http://fixture.test" });
@@ -63,7 +76,8 @@ it("actual production main waits for pending read and durable renderer acknowled
   expect(mocks.mount).not.toHaveBeenCalled();
   read?.({ transactionId: "tx", mode: "settings", phase: "renderer" });
   await vi.waitFor(() => expect(mocks.ack).toHaveBeenCalledWith("tx"));
-  expect(localStorage.removeItem).toHaveBeenCalledWith("setting-store");
+  expect(mocks.remove).toHaveBeenCalledWith("renderer", "setting-store");
+  expect(localStorage.removeItem).not.toHaveBeenCalled();
   expect(mocks.loaded).not.toHaveBeenCalled();
   expect(mocks.mount).not.toHaveBeenCalled();
   ack?.();
@@ -73,7 +87,9 @@ it("actual production main waits for pending read and durable renderer acknowled
 
 it("actual production main blocks old app mount on partial recovery and exposes early retry UI", async () => {
   mocks.pending.mockResolvedValueOnce({ transactionId: "tx", mode: "all", phase: "renderer" });
-  mocks.drop.mockRejectedValueOnce(new Error("IndexedDB blocked"));
+  mocks.clear.mockImplementation(async (namespace?: string) => {
+    if (namespace === "music-data/music") throw new Error("Native storage blocked");
+  });
   await import("@/main");
   await vi.waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
   expect(mocks.ack).not.toHaveBeenCalled();

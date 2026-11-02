@@ -1,4 +1,4 @@
-import localforage from "localforage";
+import { dropApplicationDatabase, flushApplicationWrites } from "./applicationStorage";
 import zh from "@/i18n/locales/mygo/preferencesReset.zh-CN.json";
 import en from "@/i18n/locales/mygo/preferencesReset.en.json";
 
@@ -47,10 +47,11 @@ export async function recoverPreferencesResetBeforeMount(
     } else if (tx.mode === "all") {
       storage.local.clear();
       storage.session.clear();
-      for (const store of resetApplicationStores) await localforage.dropInstance({ ...store });
+      for (const store of resetApplicationStores) await dropApplicationDatabase({ ...store });
     } else {
       throw new Error(recoveryText().reset_invalid_request);
     }
+    await flushApplicationWrites();
     await native.acknowledge(tx.transactionId);
   } catch (cause) {
     throw new PreferencesResetRecoveryError(recoveryText().reset_recovery_failed, { cause });

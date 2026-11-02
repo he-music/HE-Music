@@ -14,13 +14,23 @@
       />
       <div v-else class="markdown-body">{{ t("modal.no_update_log") }}</div>
     </n-scrollbar>
+    <n-flex v-if="phase === 'installing'" vertical :size="8">
+      <n-progress v-if="downloadPercent !== null" type="line" :percentage="downloadPercent" />
+      <n-spin v-else size="small" />
+      <n-text>{{
+        t(downloadPercent === null ? "updates.download_received" : "updates.download_progress", {
+          downloaded: downloadedMB,
+          total: totalMB,
+        })
+      }}</n-text>
+    </n-flex>
     <n-text v-if="phase !== 'available' && phase !== 'installing'" role="status">{{
       t(`updates.phase_${phase}`)
     }}</n-text>
     <n-alert v-if="failure" type="warning" :show-icon="false">{{ failure }}</n-alert>
     <n-flex class="menu" justify="end">
       <n-button strong secondary :disabled="busy" @click="emit('close')">{{
-        t("common.cancel")
+        t(phase === "installed" ? "updates.later" : "common.cancel")
       }}</n-button>
       <n-button type="warning" strong secondary :disabled="busy" @click="goDownload">{{
         t("modal.click_download")
@@ -33,18 +43,29 @@
         @click="confirmInstall"
         >{{ t(phase === "installing" ? "updates.phase_installing" : "modal.update_now") }}</n-button
       >
+      <n-button
+        v-if="phase === 'installed'"
+        type="primary"
+        :loading="restarting"
+        :disabled="!current || busy"
+        @click="restartApp"
+      >
+        {{ t("updates.restart") }}
+      </n-button>
     </n-flex>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, onScopeDispose, ref, watch } from "vue";
+import { computed, onScopeDispose, ref } from "vue";
 import packageJson from "@/../package.json";
 import { useI18n } from "vue-i18n";
 import { marked } from "marked";
 import { platform } from "@/platform";
 import { UpdatesSession, updatesSession } from "@/platform/updatesSession";
 import "github-markdown-css/github-markdown.css";
+import { filesSession } from "@/platform/filesSession";
+import { flushApplicationWrites } from "@/platform/applicationStorage";
 
 const props = defineProps<{ owner?: UpdatesSession }>();
 const emit = defineEmits<{ close: [] }>();
@@ -57,9 +78,22 @@ const current = computed(() => {
 const state = computed(() => (current.value ? session.value?.state.value : undefined));
 const phase = computed(() => state.value?.phase ?? "unavailable");
 const confirming = ref(false);
+const restarting = ref(false);
+const downloadPercent = computed(() => {
+  const value = state.value;
+  return value && value.total > 0
+    ? Math.min(100, Math.round((value.downloaded / value.total) * 1000) / 10)
+    : null;
+});
+const downloadedMB = computed(() => ((state.value?.downloaded ?? 0) / 1024 / 1024).toFixed(1));
+const totalMB = computed(() => ((state.value?.total ?? 0) / 1024 / 1024).toFixed(1));
 const failure = ref("");
 const busy = computed(
-  () => confirming.value || session.value?.busy.value === true || phase.value === "installing",
+  () =>
+    confirming.value ||
+    restarting.value ||
+    session.value?.busy.value === true ||
+    phase.value === "installing",
 );
 const renderedNotes = computed(() =>
   state.value?.notes ? marked.parse(state.value.notes, { async: false }) : "",
@@ -67,12 +101,6 @@ const renderedNotes = computed(() =>
 let disposed = false;
 onScopeDispose(() => {
   disposed = true;
-});
-watch(phase, (next, previous) => {
-  if (next === "installed" && previous === "installing" && !disposed && current.value) {
-    window.$message?.success(t("message.update_download_complete"));
-    emit("close");
-  }
 });
 async function openExternal(url: string): Promise<boolean> {
   try {
@@ -133,6 +161,27 @@ function confirmInstall(): void {
       }
     },
   });
+}
+async function restartApp(): Promise<void> {
+  const owner = session.value;
+  if (disposed || !current.value || busy.value || phase.value !== "installed" || !owner) return;
+  restarting.value = true;
+  try {
+    const fileOwner = filesSession.value?.capturePreferencesResetOwner();
+    await fileOwner?.dispose();
+    await flushApplicationWrites();
+    if (
+      updatesSession.value !== owner ||
+      !owner.ready.value ||
+      owner.state.value?.phase !== "installed"
+    )
+      return;
+    await owner.restart();
+  } catch {
+    if (!disposed) failure.value = t("updates.operation_failed");
+  } finally {
+    restarting.value = false;
+  }
 }
 </script>
 

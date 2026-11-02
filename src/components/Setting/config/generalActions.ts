@@ -1,3 +1,4 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 import { computed, onScopeDispose, ref, shallowRef, watch } from "vue";
 import { isElectron } from "@/utils/env";
 import { platform } from "@/platform";
@@ -46,8 +47,8 @@ export function useGeneralSettingsActions() {
     pending.value = true;
     try {
       const rendererData = {
-        "setting-store": localStorage.getItem("setting-store"),
-        "shortcut-store": localStorage.getItem("shortcut-store"),
+        "setting-store": applicationStorage.getItem("setting-store"),
+        "shortcut-store": applicationStorage.getItem("shortcut-store"),
       };
       const result = await window.api.store.export(rendererData);
       if (disposed) return;
@@ -91,9 +92,9 @@ export function useGeneralSettingsActions() {
           if (data) {
             if (data.renderer) {
               if (data.renderer["setting-store"])
-                localStorage.setItem("setting-store", data.renderer["setting-store"]);
+                applicationStorage.setItem("setting-store", data.renderer["setting-store"]);
               if (data.renderer["shortcut-store"])
-                localStorage.setItem("shortcut-store", data.renderer["shortcut-store"]);
+                applicationStorage.setItem("shortcut-store", data.renderer["shortcut-store"]);
             }
             reloading.value = true;
             window.$message.success(t("message.import_settings_success"));

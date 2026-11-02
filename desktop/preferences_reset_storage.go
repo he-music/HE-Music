@@ -144,6 +144,9 @@ func completePreferencesReset(directory string) error {
 			return err
 		}
 	}
+	if err := resetApplicationStorage(directory, tx.Mode); err != nil {
+		return err
+	}
 	tx.Phase = PreferencesResetRenderer
 	return writePreferencesReset(directory, tx)
 }

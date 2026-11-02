@@ -10,10 +10,25 @@ import { useMygoNetworkProxySettings } from "./networkProxy";
 export const useNetworkSettings = (): SettingConfig => {
   const settingStore = useSettingStore();
   const testProxyLoading = ref<boolean>(false);
+  const integration: SettingConfig["groups"][number] = {
+    title: t("setting.network.third_party_integration"),
+    items: [
+      {
+        key: "smtcOpen",
+        label: t("setting.play.smtc"),
+        type: "switch",
+        description: t("setting.play.smtc_tip"),
+        value: computed({
+          get: () => settingStore.smtcOpen,
+          set: (value) => (settingStore.smtcOpen = value),
+        }),
+      },
+    ],
+  };
   if (platform.kind === "mygo" && platform.networkProxy) {
     const proxy = useMygoNetworkProxySettings(platform.networkProxy, settingStore);
     return {
-      groups: [proxy.group],
+      groups: [proxy.group, integration],
       onActivate: proxy.onActivate,
       onDeactivate: proxy.onDeactivate,
     };
@@ -142,21 +157,7 @@ export const useNetworkSettings = (): SettingConfig => {
           },
         ],
       },
-      {
-        title: t("setting.network.third_party_integration"),
-        items: [
-          {
-            key: "smtcOpen",
-            label: t("setting.play.smtc"),
-            type: "switch",
-            description: t("setting.play.smtc_tip"),
-            value: computed({
-              get: () => settingStore.smtcOpen,
-              set: (v) => (settingStore.smtcOpen = v),
-            }),
-          },
-        ],
-      },
+      integration,
     ],
   };
 };

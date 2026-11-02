@@ -1,3 +1,10 @@
+import { installApplicationLogging } from "@/platform/applicationLog";
+import { applicationStorage } from "@/platform/applicationStorage";
+import {
+  prepareApplicationStorageBeforeMount,
+  ApplicationStorageRecoveryError,
+  showApplicationStorageRecoveryFailure,
+} from "@/platform/applicationStorageStartup";
 import { isMyGo } from "mygo-runtime";
 import {
   recoverPreferencesResetBeforeMount,
@@ -10,13 +17,17 @@ import { initializeGateway } from "@/platform/gateway";
 
 async function start(): Promise<void> {
   if (isMyGo() && !isDesktopLyricsWindow("mygo", location.hash)) {
-    const { DesktopPlatform } = await import("@/platform/mygo.bindings");
+    const { DesktopPlatform, DesktopStorage, DesktopLog } =
+      await import("@/platform/mygo.bindings");
+    const stopLogging = installApplicationLogging(DesktopLog);
+    import.meta.hot?.dispose(stopLogging);
+    await prepareApplicationStorageBeforeMount(DesktopStorage);
     await recoverPreferencesResetBeforeMount(
       {
         pending: () => DesktopPlatform.pendingPreferencesReset(),
         acknowledge: (id) => DesktopPlatform.acknowledgePreferencesReset(id),
       },
-      { local: localStorage, session: sessionStorage },
+      { local: applicationStorage, session: sessionStorage },
     );
   }
   const { platform } = await import("@/platform");
@@ -34,4 +45,6 @@ async function start(): Promise<void> {
 void start().catch((error: unknown) => {
   console.error("应用初始化失败", error);
   if (error instanceof PreferencesResetRecoveryError) showPreferencesResetRecoveryFailure(error);
+  if (error instanceof ApplicationStorageRecoveryError)
+    showApplicationStorageRecoveryFailure(error);
 });

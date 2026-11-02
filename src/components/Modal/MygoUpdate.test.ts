@@ -7,6 +7,8 @@ import { UpdatesSession, updatesSession } from "@/platform/updatesSession";
 import type { PlatformUpdates, UpdatesEvent, UpdatesState } from "@/platform/updates";
 import { marked } from "marked";
 const openExternal = vi.fn(async () => {});
+const flushWrites = vi.fn(async () => {});
+const disposeFiles = vi.fn(async () => {});
 
 type Element = {
   tag: string;
@@ -58,6 +60,12 @@ function mount(owner?: UpdatesSession) {
           data?.version ? `${key}:${data.version}` : key,
       }),
     },
+    "@/platform/filesSession": {
+      filesSession: Vue.shallowRef({
+        capturePreferencesResetOwner: () => ({ dispose: disposeFiles }),
+      }),
+    },
+    "@/platform/applicationStorage": { flushApplicationWrites: flushWrites },
     "@/platform/updatesSession": { UpdatesSession, updatesSession },
   };
   const exports: { default?: Vue.Component } = {};
@@ -110,7 +118,17 @@ function mount(owner?: UpdatesSession) {
       element.props.markdown = binding.value;
     },
   });
-  for (const name of ["NText", "NAlert", "NFlex", "NButton", "NTag", "NScrollbar", "SvgIcon"])
+  for (const name of [
+    "NProgress",
+    "NSpin",
+    "NText",
+    "NAlert",
+    "NFlex",
+    "NButton",
+    "NTag",
+    "NScrollbar",
+    "SvgIcon",
+  ])
     app.component(name, pass);
   const root = node("root");
   app.mount(root);
@@ -162,6 +180,8 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
           version: "",
           notes: "",
           date: "",
+          downloaded: 0,
+          total: 0,
           installBusy: false,
           ...state,
         },
@@ -183,6 +203,9 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
     ),
     getState: vi.fn(async () => {}),
     download: vi.fn(async () => {}),
+    restart: vi.fn(async (id, _epoch, revision) =>
+      emit(id, { operationRevision: revision, stateRevision: 7, phase: "installed" }),
+    ),
     install: vi.fn(async (id, _epoch, revision) => {
       installID = id;
       installRevision = revision;
@@ -244,11 +267,22 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
   expect(provider.install).toHaveBeenCalledOnce();
   expect(provider.download).not.toHaveBeenCalled();
   expect(session.state.value?.phase).toBe("installing");
+  emit(0, {
+    operationRevision: installRevision,
+    stateRevision: 5,
+    phase: "installing",
+    installBusy: true,
+    downloaded: 50,
+    total: 100,
+  });
+  await flush();
+  expect(ui.all().some((element) => element.props.percentage === 50)).toBe(true);
+  expect(provider.restart).not.toHaveBeenCalled();
   ui.close();
   expect(provider.teardown).not.toHaveBeenCalled();
   emit(installID, {
     operationRevision: installRevision,
-    stateRevision: 5,
+    stateRevision: 6,
     phase: "installed",
     code: "restart-required",
   });
@@ -257,6 +291,11 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
   expect(session.ready.value).toBe(true);
   const dialog = mount(session);
   expect(dialog.all().some((element) => element.text === "updates.phase_installed")).toBe(true);
+  expect(provider.restart).not.toHaveBeenCalled();
+  await dialog.click("updates.restart");
+  expect(disposeFiles).toHaveBeenCalledOnce();
+  expect(flushWrites).toHaveBeenCalledOnce();
+  expect(provider.restart).toHaveBeenCalledOnce();
   await session.dispose();
   await flush();
   expect(dialog.all().some((element) => element.text === "modal.update_now")).toBe(false);

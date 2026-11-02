@@ -1,10 +1,10 @@
 import { reactive, ref } from "vue";
 import { cloneDeep } from "lodash-es";
-import localforage from "localforage";
+import { createApplicationDatabase } from "@/platform/applicationStorage";
 import type { SongInfo } from "@/types/main.hemusic";
 
 // localDB
-const localDB = localforage.createInstance({
+const localDB = createApplicationDatabase({
   name: "local-data",
   description: "Local data of the application",
   storeName: "local",

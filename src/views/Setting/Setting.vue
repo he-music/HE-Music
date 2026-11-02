@@ -1,13 +1,6 @@
 <template>
   <div class="setting">
-    <n-tabs
-      v-model:value="activeKey"
-      class="tabs"
-      type="card"
-      animated
-      default-value="song"
-      @update:value="tabChange"
-    >
+    <n-tabs v-model:value="activeKey" class="tabs" type="card" animated default-value="general">
       <n-tab-pane
         name="general"
         :tab="t('setting.general.general_setting')"
@@ -38,8 +31,8 @@
       </n-tab-pane>
       <!-- 快捷键 -->
       <n-tab-pane
-        v-if="isElectron"
-        name="shortcut"
+        v-if="isElectron || isMygo"
+        name="keyboard"
         :tab="t('setting.shortcut.shortcut_setting')"
         display-directive="show:lazy"
       >
@@ -47,7 +40,7 @@
       </n-tab-pane>
       <!-- 本地 -->
       <n-tab-pane
-        v-if="isElectron"
+        v-if="isElectron || isMygo"
         name="local"
         :tab="t('setting.local.local_setting')"
         display-directive="show:lazy"
@@ -71,9 +64,11 @@
 
 <script setup lang="ts">
 import type { SettingType } from "@/types/main";
+import type { SettingConfig } from "@/types/settings";
 import { useI18n } from "vue-i18n";
-import { computed } from "vue";
-import { isElectron } from "@/utils/env";
+import { computed, type ComputedRef } from "vue";
+import { useScopedSettingConfig, useSettingActivation } from "@/composables/useSettingLifecycle";
+import { isElectron, isMygo } from "@/utils/env";
 import { usePlaySettings } from "@/components/Setting/config/play";
 import { useGeneralSettings } from "@/components/Setting/config/general";
 import { useGeneralSettingsActions } from "@/components/Setting/config/generalActions";
@@ -87,18 +82,43 @@ const { t } = useI18n();
 const router = useRouter();
 
 // 菜单数据
-const activeKey = computed<SettingType>(
-  () => (router.currentRoute.value.query.type as SettingType) || "general",
-);
+const settingTypes: readonly SettingType[] = [
+  "general",
+  "appearance",
+  "play",
+  "lyrics",
+  "keyboard",
+  "local",
+  "network",
+  "about",
+];
+const activeKey = computed<SettingType>({
+  get: () => {
+    const value = router.currentRoute.value.query.type;
+    if (value === "shortcut") return "keyboard";
+    return settingTypes.find((type) => type === value) ?? "general";
+  },
+  set: (value) => tabChange(value),
+});
 
 const generalActions = useGeneralSettingsActions();
-const playConfig = computed(() => usePlaySettings());
-const generalConfig = computed(() => useGeneralSettings(generalActions));
-const appearanceConfig = computed(() => useAppearanceSettings());
-const lyricConfig = computed(() => useLyricSettings());
-const keyboardConfig = computed(() => useKeyboardSettings());
-const localConfig = computed(() => useLocalSettings());
-const networkConfig = computed(() => useNetworkSettings());
+const playConfig = useScopedSettingConfig(() => usePlaySettings());
+const generalConfig = useScopedSettingConfig(() => useGeneralSettings(generalActions));
+const appearanceConfig = useScopedSettingConfig(() => useAppearanceSettings());
+const lyricConfig = useScopedSettingConfig(() => useLyricSettings());
+const keyboardConfig = useScopedSettingConfig(() => useKeyboardSettings());
+const localConfig = useScopedSettingConfig(() => useLocalSettings());
+const networkConfig = useScopedSettingConfig(() => useNetworkSettings());
+const configs: Readonly<Record<string, ComputedRef<SettingConfig> | undefined>> = {
+  general: generalConfig,
+  appearance: appearanceConfig,
+  play: playConfig,
+  lyrics: lyricConfig,
+  keyboard: keyboardConfig,
+  local: localConfig,
+  network: networkConfig,
+};
+useSettingActivation(computed(() => configs[activeKey.value]?.value));
 
 const tabChange = (key: SettingType) => {
   router.push({

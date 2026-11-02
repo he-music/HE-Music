@@ -4,6 +4,18 @@ import { call, event } from "mygo-runtime";
 
 // ---- Types ----
 
+export interface ApplicationBackup {
+  format: string;
+  version: number;
+  records: ApplicationStorageRecord[];
+}
+
+export interface ApplicationStorageRecord {
+  namespace: string;
+  key: string;
+  data: StorageValue;
+}
+
 /** AuthCallbackPrepared reserves the callback listener before the backend creates a session. */
 export interface AuthCallbackPrepared {
   sessionId: string;
@@ -533,6 +545,12 @@ export interface ShortcutStatus {
   results: ShortcutResult[];
 }
 
+export interface StorageValue {
+  kind: string;
+  value: string;
+  mediaType: string;
+}
+
 export interface SystemMediaCommand {
   generation: number;
   revision: number;
@@ -648,6 +666,8 @@ export interface UpdatesState {
   version: string;
   notes: string;
   date: string;
+  downloaded: number;
+  total: number;
   installBusy: boolean;
 }
 
@@ -859,6 +879,16 @@ export const DesktopLifecycle = {
 } as const;
 
 /**
+ * Renderer logging accepts bounded strings, never arbitrary objects, errors with
+ * response bodies, credentials, local file references or native handles.
+ */
+export const DesktopLog = {
+  write(level: string, message: string): Promise<void> {
+    return call("DesktopLog.Write", level, message);
+  },
+} as const;
+
+/**
  * DesktopLyrics owns an independent web window with a native external unlock path.
  * It never owns audio, claims lifecycle readiness, writes settings, or accepts arbitrary IPC.
  */
@@ -1010,6 +1040,33 @@ export const GlobalShortcuts = {
   },
 } as const;
 
+export const DesktopStorage = {
+  clear(namespace: string): Promise<void> {
+    return call("DesktopStorage.Clear", namespace);
+  },
+  export(): Promise<ApplicationBackup> {
+    return call("DesktopStorage.Export");
+  },
+  get(namespace: string, key: string): Promise<StorageValue | null> {
+    return call("DesktopStorage.Get", namespace, key);
+  },
+  keys(namespace: string): Promise<string[]> {
+    return call("DesktopStorage.Keys", namespace);
+  },
+  localSnapshot(): Promise<Record<string, string>> {
+    return call("DesktopStorage.LocalSnapshot");
+  },
+  put(namespace: string, key: string, value: StorageValue): Promise<void> {
+    return call("DesktopStorage.Put", namespace, key, value);
+  },
+  remove(namespace: string, key: string): Promise<void> {
+    return call("DesktopStorage.Remove", namespace, key);
+  },
+  restore(backup: ApplicationBackup): Promise<void> {
+    return call("DesktopStorage.Restore", backup);
+  },
+} as const;
+
 /**
  * SystemFonts exposes bounded family names to the renderer. Enumeration runs on
  * the lifecycle main owner so a lyrics child cannot read the system list.
@@ -1112,6 +1169,13 @@ export const Updates = {
    */
   install(requestID: number, epoch: number, revision: number): Promise<void> {
     return call("Updates.Install", requestID, epoch, revision);
+  },
+  /**
+   * Restart only follows an explicitly requested, completed installation. Its ack
+   * is published before the separately queued native relaunch is allowed to run.
+   */
+  restart(requestID: number, epoch: number, revision: number): Promise<void> {
+    return call("Updates.Restart", requestID, epoch, revision);
   },
   teardown(requestID: number, epoch: number): Promise<void> {
     return call("Updates.Teardown", requestID, epoch);

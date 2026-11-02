@@ -1,3 +1,4 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 import { defineStore } from "pinia";
 import { keywords, regexes } from "@/assets/data/exclude";
 import { ThemeColorType } from "@/types/color";
@@ -265,7 +266,7 @@ export const useSettingStore = defineStore("setting", {
   // 持久化
   persist: {
     key: "setting-store",
-    storage: localStorage,
+    storage: applicationStorage,
     serializer: {
       serialize: JSON.stringify,
       deserialize: deserializeLyricSettings,

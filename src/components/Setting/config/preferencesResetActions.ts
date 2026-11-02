@@ -1,3 +1,4 @@
+import { applicationStorage, flushApplicationWrites } from "@/platform/applicationStorage";
 import { computed, nextTick, onScopeDispose, ref, toValue, type MaybeRefOrGetter } from "vue";
 import { useDataStore, useSettingStore } from "@/stores";
 import type { PreferencesResetFilesOwner } from "@/platform/preferencesResetOwner";
@@ -61,11 +62,12 @@ export function usePreferencesResetActions(
               settingStore.$reset();
               await nextTick();
             } else {
-              window.localStorage.clear();
+              applicationStorage.clear();
               window.sessionStorage.clear();
               await dataStore.deleteDB();
               await clearAdditionalPreferencesData(() => !disposed && capturedOwner.current());
             }
+            await flushApplicationWrites();
           },
           quit: () => lifecycle.quit(),
           reportRendererFailure: () => {

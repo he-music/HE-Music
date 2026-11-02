@@ -1,3 +1,4 @@
+import { flushApplicationWrites } from "./applicationStorage";
 import { shallowReactive } from "vue";
 import { currentWindow, runtime } from "mygo-runtime";
 import {
@@ -91,6 +92,14 @@ export function createMygoPlatform(): PlatformAdapter {
     },
     lifecycle: {
       ...DesktopLifecycle,
+      async quit() {
+        await flushApplicationWrites();
+        await DesktopLifecycle.quit();
+      },
+      async resolveClose(requestId, resolution) {
+        if (resolution !== "cancel") await flushApplicationWrites();
+        await DesktopLifecycle.resolveClose(requestId, resolution);
+      },
       async ready(config) {
         capabilities.tray = false;
         const status = await DesktopLifecycle.ready(config);
@@ -110,6 +119,7 @@ export function createMygoPlatform(): PlatformAdapter {
       isMaximized: currentWindow.isMaximized,
       close: currentWindow.close,
       async reload() {
+        await flushApplicationWrites();
         location.reload();
       },
       onMaximized: (listener) => events.desktopWindowMaximized.on(listener),

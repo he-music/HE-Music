@@ -14,6 +14,8 @@ type UpdatesState struct {
 	Version           string `json:"version"`
 	Notes             string `json:"notes"`
 	Date              string `json:"date"`
+	Downloaded        int64  `json:"downloaded"`
+	Total             int64  `json:"total"`
 	InstallBusy       bool   `json:"installBusy"`
 }
 
@@ -28,7 +30,7 @@ type UpdatesEvent struct {
 
 type updatesCandidate interface {
 	metadata() (version, notes, date string)
-	install(context.Context) error
+	install(context.Context, func(int64, int64)) error
 }
 
 type updatesDriver interface {
@@ -40,10 +42,11 @@ type updatesDriver interface {
 // before Begin and wait for its event before issuing commands with the returned epoch.
 // No background checker or installation runs until explicitly requested.
 type Updates struct {
-	session updatesSession
-	post    func(func())
-	valid   func(context.Context) bool
-	emit    func(context.Context, UpdatesEvent) error
+	session  updatesSession
+	post     func(func())
+	valid    func(context.Context) bool
+	emit     func(context.Context, UpdatesEvent) error
+	relaunch func()
 }
 
 func (u *Updates) Begin(ctx context.Context, requestID uint64) {
@@ -73,6 +76,31 @@ func (u *Updates) Download(ctx context.Context, requestID, epoch, revision uint6
 // no restart here and no promise that cancellation can prevent disk replacement.
 func (u *Updates) Install(ctx context.Context, requestID, epoch, revision uint64) {
 	u.command(ctx, requestID, func() string { return u.session.install(ctx, epoch, revision, requestID) })
+}
+
+// Restart only follows an explicitly requested, completed installation. Its ack
+// is published before the separately queued native relaunch is allowed to run.
+func (u *Updates) Restart(ctx context.Context, requestID, epoch, revision uint64) {
+	u.command(ctx, requestID, func() string {
+		s := &u.session
+		if code := s.operation(ctx, epoch, revision); code != "" {
+			return code
+		}
+		if s.state.Phase != "installed" {
+			return "restart-unavailable"
+		}
+		if u.relaunch == nil {
+			return "unsupported"
+		}
+		s.state.OperationRevision = revision
+		s.touch()
+		u.post(func() {
+			if s.current(ctx, epoch, revision) && s.state.Phase == "installed" && !s.installBusy {
+				u.relaunch()
+			}
+		})
+		return ""
+	})
 }
 
 func (u *Updates) Teardown(ctx context.Context, requestID, epoch uint64) {

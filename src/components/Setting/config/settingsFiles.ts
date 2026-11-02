@@ -1,3 +1,4 @@
+import { applicationStorage, flushApplicationWrites } from "@/platform/applicationStorage";
 import { computed, onScopeDispose, ref } from "vue";
 import { useSettingStore, useShortcutStore } from "@/stores";
 import { t } from "@/i18n";
@@ -90,7 +91,7 @@ export function useSettingsFiles() {
               failure();
               return;
             }
-            const written = writeRendererSettings(localStorage, document.renderer);
+            const written = writeRendererSettings(applicationStorage, document.renderer);
             if (written === "rollback-failed") {
               window.$message.error(t("message.settings_restore_failed"));
               return;
@@ -99,6 +100,7 @@ export function useSettingsFiles() {
               failure();
               return;
             }
+            await flushApplicationWrites();
             reloading.value = true;
             window.$message.success(t("message.import_settings_success"));
             reloadTimer = setTimeout(() => {

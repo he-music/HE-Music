@@ -1,3 +1,4 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 import { isElectron, isMac, isWin, isLinux } from "./env";
 import type { DeviceInfo } from "@/types/main.hemusic";
 import packageJson from "@/../package.json";
@@ -72,11 +73,11 @@ async function getDeviceName(): Promise<string> {
  * 生成并持久化 device_id，格式: {app_type}_{platform}_{uuid}
  */
 export function getDeviceId(): string {
-  let deviceId = localStorage.getItem(DEVICE_ID_KEY);
+  let deviceId = applicationStorage.getItem(DEVICE_ID_KEY);
   if (!deviceId) {
     const uuid = createUuid();
     deviceId = `${getAppType()}_${getPlatform()}_${uuid}`;
-    localStorage.setItem(DEVICE_ID_KEY, deviceId);
+    applicationStorage.setItem(DEVICE_ID_KEY, deviceId);
   }
   return deviceId;
 }

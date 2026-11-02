@@ -1,3 +1,4 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 import { defineStore } from "pinia";
 import type { SongInfo } from "@/types/main.hemusic";
 import { getSizeCover } from "@/utils/format";
@@ -213,7 +214,7 @@ export const useMusicStore = defineStore("music", {
   // 持久化
   persist: {
     key: "music-store",
-    storage: localStorage,
+    storage: applicationStorage,
     pick: ["playSong", "playPlaylist"],
   },
 });

@@ -1,3 +1,4 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 import { computed, watch } from "vue";
 import type { PiniaPluginContext } from "pinia";
 import type { StatusState } from "./status";
@@ -32,7 +33,7 @@ const persistedKeys = [
 /** status 按字段持久化，播放进度仅在秒数变化时触发保存，其余 store 仍使用原插件。 */
 export function persistStatus({ store, pinia }: PiniaPluginContext) {
   if (store.$id !== "status") return;
-  const storage = localStorage;
+  const storage = applicationStorage;
   const key = "status-store";
 
   const settingStore = useSettingStore(pinia);

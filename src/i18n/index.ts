@@ -19,6 +19,8 @@ import audioEN from "./locales/mygo/audio.en.json";
 import audioZH from "./locales/mygo/audio.zh-CN.json";
 import preferencesResetEN from "./locales/mygo/preferencesReset.en.json";
 import preferencesResetZH from "./locales/mygo/preferencesReset.zh-CN.json";
+import storageEN from "./locales/mygo/storage.en.json";
+import storageZH from "./locales/mygo/storage.zh-CN.json";
 
 const numberFormats = {
   en: {
@@ -57,6 +59,7 @@ const i18n = createI18n({
         ...appearanceEN,
         ...audioEN,
         ...preferencesResetEN,
+        ...storageEN,
         protocols: protocolsEN,
       },
     },
@@ -71,6 +74,7 @@ const i18n = createI18n({
         ...appearanceZH,
         ...audioZH,
         ...preferencesResetZH,
+        ...storageZH,
         protocols: protocolsZH,
       },
     },

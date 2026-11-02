@@ -28,6 +28,8 @@ async function owner() {
             version: "2.0.0",
             notes: "",
             date: "",
+            downloaded: 0,
+            total: 0,
             installBusy: false,
           },
         }),
@@ -35,6 +37,7 @@ async function owner() {
     check: async () => {},
     getState: async () => {},
     download: async () => {},
+    restart: async () => {},
     install: async () => {},
     teardown: async () => {},
     onChange: (listener) => {

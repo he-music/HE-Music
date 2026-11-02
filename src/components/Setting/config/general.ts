@@ -1,10 +1,15 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 import { useDataStore, useSettingStore } from "@/stores";
 import { isElectron } from "@/utils/env";
 import { SettingConfig } from "@/types/settings";
-import { computed } from "vue";
+import { computed, defineAsyncComponent } from "vue";
 import { t } from "@/i18n";
 import { platform } from "@/platform";
 import type { GeneralSettingsActions } from "./generalActions";
+
+const ApplicationDataTransfer = defineAsyncComponent(
+  () => import("@/components/Setting/ApplicationDataTransfer.vue"),
+);
 
 export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConfig => {
   const dataStore = useDataStore();
@@ -49,7 +54,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
       negativeText: t("common.cancel"),
       onPositiveClick: async () => {
         // 重置设置
-        window.localStorage.clear();
+        applicationStorage.clear();
         window.sessionStorage.clear();
         // deleteDB
         await dataStore.deleteDB();
@@ -191,6 +196,12 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
             buttonLabel: t("setting.other.import_settings"),
             action: actions.importSettings,
             componentProps: { type: "primary" },
+          },
+          {
+            key: "applicationData",
+            label: t("mygo.data_transfer"),
+            type: "custom",
+            component: ApplicationDataTransfer,
           },
         ],
       },

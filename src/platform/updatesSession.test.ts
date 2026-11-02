@@ -12,6 +12,8 @@ function snapshot(overrides: Partial<UpdatesState> = {}): UpdatesState {
     version: "",
     notes: "",
     date: "",
+    downloaded: 0,
+    total: 0,
     installBusy: false,
     ...overrides,
   };
@@ -23,6 +25,7 @@ class FakeUpdates implements PlatformUpdates {
   install = vi.fn<PlatformUpdates["install"]>(async () => {});
   getState = vi.fn<PlatformUpdates["getState"]>(async () => {});
   download = vi.fn<PlatformUpdates["download"]>(async () => {});
+  restart = vi.fn<PlatformUpdates["restart"]>(async () => {});
   teardown = vi.fn<PlatformUpdates["teardown"]>(async () => {});
   onChange = vi.fn<PlatformUpdates["onChange"]>((listener) => {
     this.listeners.add(listener);

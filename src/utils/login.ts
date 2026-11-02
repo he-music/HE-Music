@@ -1,3 +1,4 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 import { useDataStore, usePlatformStore, useSettingStore, useStatusStore } from "@/stores";
 import { updateUserData } from "./auth";
 import { usePlayer } from "./player";
@@ -22,7 +23,7 @@ export async function completeLogin(result: LoginResult): Promise<void> {
   dataStore.refreshToken = result.refresh_token || "";
   dataStore.expiresAt = result.expires_at || 0;
   dataStore.userLoginStatus = true;
-  localStorage.setItem("lastLoginTime", Date.now().toString());
+  applicationStorage.setItem("lastLoginTime", Date.now().toString());
   // 用户数据局部刷新失败也应尝试刷新平台，避免成功登录后保留匿名平台列表。
   const updates = await Promise.allSettled([updateUserData(), platformStore.loadPlatforms()]);
   if (statusStore.playLoading) player.initPlayer(settingStore.autoPlay, player.getSeek());

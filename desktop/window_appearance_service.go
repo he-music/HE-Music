@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -45,16 +46,41 @@ func (s *WindowAppearanceService) initialize(path string) (WindowAppearance, err
 	}
 	s.store = store
 	appearance, _, err := store.Load()
+	if businessStorage.root != "" {
+		value, readErr := businessStorage.read("renderer", "native-window-appearance")
+		if readErr != nil {
+			return WindowAppearance{}, readErr
+		}
+		if value != nil {
+			if value.Kind != "text" || json.Unmarshal([]byte(value.Value), &appearance) != nil {
+				return WindowAppearance{}, errors.New("invalid stored window appearance")
+			}
+			err = nil
+		}
+	}
 	s.desired, s.applied, s.failed = appearance, appearance, err != nil
 	return appearance, err
 }
 
 func (s *WindowAppearanceService) save(useBorderless bool) (WindowAppearanceState, error) {
+	businessStorage.mu.Lock()
+	defer businessStorage.mu.Unlock()
+	if businessStorage.recoveryRequired {
+		return s.snapshot(), errors.New("application storage recovery required")
+	}
 	if s.store == nil {
 		return s.snapshot(), errors.New("window appearance unavailable")
 	}
 	next := WindowAppearance{UseBorderless: useBorderless}
-	if _, err := s.store.Save(next); err != nil {
+	if businessStorage.root != "" {
+		data, err := json.Marshal(next)
+		if err != nil {
+			return s.snapshot(), err
+		}
+		if err := businessStorage.write("renderer", "native-window-appearance", StorageValue{Kind: "text", Value: string(data)}); err != nil {
+			return s.snapshot(), err
+		}
+	} else if _, err := s.store.Save(next); err != nil {
 		return s.snapshot(), err
 	}
 	s.desired, s.failed = next, false

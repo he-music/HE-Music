@@ -8,6 +8,7 @@ import type { PlatformAdapter } from "./types";
 import type { PlatformFiles } from "./files";
 import type { SettingGroup, SettingConfig } from "@/types/settings";
 import type { SettingsImportResult } from "./mygo.bindings";
+import * as settingLifecycle from "@/composables/useSettingLifecycle";
 
 const host = vi.hoisted(() => ({ electron: false }));
 vi.mock("@/utils/env", () => ({
@@ -174,6 +175,7 @@ function mountPage(type: "general" | "lyrics" = "lyrics") {
   const lyricConfigs: SettingConfig[] = [];
   const modules: Record<string, unknown> = {
     vue: { ...Vue, Transition: pass },
+    "@/composables/useSettingLifecycle": settingLifecycle,
     "vue-i18n": { useI18n: () => ({ t: (key: string) => `${locale.value}:${key}` }) },
     "@/composables/useMobile": { useMobile: () => ({ isSmallScreen: Vue.ref(false) }) },
     "@/utils/helper": { renderIcon: () => undefined },

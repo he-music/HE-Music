@@ -22,6 +22,8 @@ function fixture(phase = "idle") {
     version: "",
     notes: "",
     date: "",
+    downloaded: 0,
+    total: 0,
     installBusy: false,
   };
   const emit = (id: number, overrides: Partial<UpdatesState> = {}) => {
@@ -40,6 +42,7 @@ function fixture(phase = "idle") {
     ),
     getState: vi.fn(async () => {}),
     download: vi.fn(async () => {}),
+    restart: vi.fn(async () => {}),
     install: vi.fn(async () => {}),
     teardown: vi.fn(async () => {}),
     onChange: (listener) => {

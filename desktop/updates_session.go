@@ -90,6 +90,7 @@ func (s *updatesSession) revoke() {
 	s.candidate = nil
 	s.state.Phase, s.state.Code = "inactive", ""
 	s.state.Version, s.state.Notes, s.state.Date = "", "", ""
+	s.state.Downloaded, s.state.Total = 0, 0
 	s.touch()
 }
 
@@ -106,6 +107,7 @@ func (s *updatesSession) check(owner context.Context, epoch, revision, requestID
 	s.state.OperationRevision = revision
 	s.state.Phase, s.state.Code = "checking", ""
 	s.state.Version, s.state.Notes, s.state.Date = "", "", ""
+	s.state.Downloaded, s.state.Total = 0, 0
 	s.touch()
 	ctx, cancel := context.WithTimeout(owner, 2*time.Minute)
 	s.cancel = cancel
@@ -152,13 +154,18 @@ func (s *updatesSession) install(owner context.Context, epoch, revision, request
 	s.installBusy = true
 	s.state.OperationRevision = revision
 	s.state.Phase, s.state.Code = "installing", ""
+	s.state.Downloaded, s.state.Total = 0, 0
 	s.touch()
 	ctx, cancel := context.WithTimeout(owner, 30*time.Minute)
 	s.cancel = cancel
 	go func() {
-		// SDK owns the combined download/verify/swap. No progress callback is
-		// presented as a separable downloaded or safe-to-cancel stage.
-		err := candidate.install(ctx)
+		// Download bytes describe only the SDK download. Verification and swap
+		// still belong to this same non-cancellable install operation.
+		progress := newUpdatesProgressReporter(func(downloaded, total int64) {
+			s.service.post(func() { s.progress(owner, epoch, revision, downloaded, total) })
+		})
+		err := candidate.install(ctx, progress.report)
+		progress.finish()
 		cancel()
 		s.service.post(func() {
 			// Only actual SDK return releases this fence, never revoke/timeout.
@@ -182,4 +189,23 @@ func (s *updatesSession) install(owner context.Context, epoch, revision, request
 		})
 	}()
 	return ""
+}
+
+func (s *updatesSession) progress(owner context.Context, epoch, revision uint64, downloaded, total int64) {
+	if !s.current(owner, epoch, revision) || !s.installBusy || s.state.Phase != "installing" {
+		return
+	}
+	const maxSafeBytes = 1<<53 - 1
+	if downloaded < s.state.Downloaded || downloaded < 0 || downloaded > maxSafeBytes || total > maxSafeBytes {
+		return
+	}
+	if total < 0 || (total > 0 && total < downloaded) {
+		total = 0
+	}
+	if downloaded == s.state.Downloaded && total == s.state.Total {
+		return
+	}
+	s.state.Downloaded, s.state.Total = downloaded, total
+	s.touch()
+	s.service.publish(owner, 0, "")
 }

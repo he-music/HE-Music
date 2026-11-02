@@ -30,7 +30,7 @@
 
 ## 当前阶段
 
-M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重试交互问题已局部修复。下一步验证 macOS 原生回调与实际请求链，M4 媒体/歌词和 Windows 实测尚未完成。
+主要桌面功能接线已完成，最新一轮补齐设置生命周期、Go 业务持久化、已发布 Electron 数据导入、更新进度、显式重启和文件日志。已完成自动化、隔离 WKWebView 合成验证及 Windows／Linux 交叉编译；真实用户数据、正式更新发布和平台实机验收仍待执行。以下按时间保留各阶段当时的结果，最新证据见文末。
 
 ## M0 审计结论与 M1 构建入口
 
@@ -862,3 +862,29 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 
 - 下载改动已提交为 `49eab01`，macOS 按需读取输出设备已提交为 `494dc1f`。上文“未提交”描述保留各阶段验证当时的状态；持久化改为 Go 文件仍仅为方案，没有实施或迁移用户数据。
 - 提交前重新执行并通过：全量 **169 文件、1,552 测试**、Node / Web 类型检查、全部变更及新增 TS 的 ESLint、全部变更及新增 Vue / TS / JSON / Markdown 的 Prettier、`git diff --check`，Go desktop 全包测试与 vet、修改 Go 文件的 gofmt，以及权限 plist 语法检查。网页 / mygo 前端构建分别 12.41s / 11.52s 通过，保留已有 chunk 大小警告。日志 `/tmp/hemusic-precommit-{tests,types,go,vet,eslint,format,web-build,desktop-build}.log`。真实文件删除、麦克风授权后的设备列表和声卡切换仍未实机验收。
+
+### 设置入口与配置生命周期补齐
+
+- `useSettingLifecycle` 统一惰性配置、语言替换、页签激活、KeepAlive 和销毁清理，覆盖全部设置分类。mygo 显示快捷键及本地设置，统一使用 `keyboard`，兼容 `?type=shortcut`，非法路由回退常规页；网络页恢复共享系统媒体开关。
+- 本阶段全量 172 文件、1,562 测试及类型、相关静态检查通过；最终全量结果见下文。
+
+### Go 业务持久化与已发布 Electron 数据导入
+
+- 新增 `DesktopStorage` 及前端统一存储适配，mygo 在 `PathUserData/business-data-v1` 按固定 namespace 保存设置、快捷键、账号、播放状态、歌单、历史、下载任务及背景图片；Web／Electron 保留原 localStorage／IndexedDB。Pinia 在挂载前预载，异步数据库按 namespace 排队，Blob 在磁盘保存原始字节；退出、重载及导入等待写入队列。
+- 原生磁盘 IO 在 worker 执行，主线程仅校验生命周期。记录采用临时文件、同步、原子替换和私有权限；读取损坏阻止默认覆盖，写入失败保留重试。整树导入先验证 staging，再替换数据树；失败回滚及启动恢复保持旧树，回滚本身失败时冻结旧页面，等待新文档恢复，防止旧队列覆盖新数据。测试覆盖 clear 与 in-flight 重放、失败写入顺序和 rollback 故障。
+- 「备份与恢复 → 应用数据」接入完整导出／导入；旧 Electron 的只读助手位于 `scripts/migration/export-electron-data.js`，导出账号、设置、歌单、历史、图片及原生偏好。导入转换歌词样式／选项和窗口无边框偏好，逐字段忽略不支持的旧歌词值；不导入跨屏窗口坐标。旧 settings-only 文件继续原设置导入，不扩大为整树覆盖。只迁移已发布 Electron，不迁移未发布 mygo 浏览器数据；导入路径不授予音乐文件权限，下载历史不携带 token/ref/临时 URL。
+- 操作与限制见 [应用数据文档](../mygo-data.md)。本阶段最终 175 文件、1,576 测试、类型、相关静态检查、Go 测试／vet及两端前端构建通过，后续新增用例计入下文最终结果。
+
+### 更新字节进度、显式重启与文件日志
+
+- 接入 SDK 合并安装接口的实际字节回调，100ms 合并高频通知并发送最后样本；原生 dispatcher 复核 owner／epoch／revision，拒绝迟到和倒退进度。下载达到 100% 仍保持 installing，只有 SDK 验签／替换成功返回才进入 installed，安装互斥持续到返回。总量未知时显示已接收量，不伪造百分比。
+- 安装成功后保留「重启应用／稍后」，显式重启先排空文件 owner 和存储队列，再发送会话请求。原生先回执、后再次核对当前会话调用 `App.Relaunch`；安装完成不会自动重启。官方 `go tool mygo generate` 已更新绑定。
+- Go 标准日志同时输出控制台和 `PathLogs/mygo/` 文件，按 UTC 日期和 2 MiB 大小轮转，保留 14 天，仅清理自有命名文件。主页面转发有界诊断字符串和未处理错误类别，不序列化对象、响应或堆栈；凭据、URL、换行处理及每页面上报限量在原生落实。日志失败保留控制台并不阻止应用运行。
+- 两次隔离 macOS WKWebView 探针使用生产存储／绑定／更新会话、临时数据和日志目录，验证预载、Blob 恢复、浏览器存储保持原样、无效备份拒绝、旧页面写入屏障、私有文件日志、更新字节事件及显式重启回执。最终 `/tmp/hemusic-storage-wk-probe/result.json` 的上述结果及 `passed` 均为 true；`updateDriver=synthetic`、`hostRelaunch=false`，表示真实 RPC／事件加合成更新驱动，没有真实下载／安装更新或重启宿主。探针服务已停止，临时业务数据和日志目录已删除。
+- 最新源码验证通过：`pnpm test` **177 文件、1,580 测试**，`pnpm typecheck`，修改及新增 TS／JS 的 ESLint、全部修改及新增 TS／JS／Vue／JSON／Markdown 的 Prettier、修改 Go 的 gofmt、`git diff --check`，`go test ./...`、`go vet ./...`。`pnpm build:web` 11.08s、`pnpm build:desktop:frontend` 12.15s 通过，保留已有 chunk 大小提示。`CGO_ENABLED=0` 下 Windows／Linux 的 amd64／arm64 全包编译通过，并核对生成 PE／ELF 架构；这不代表平台运行验收。证据 `/tmp/hemusic-runtime-final-{tests,types,eslint,format,go,vet,web-build,desktop-build}.log` 和 `/tmp/hemusic-runtime-final-{windows,linux}-{amd64,arm64}.log`。
+- 正式 feed、公钥和发布流程仍未配置；真实旧 Electron 用户数据导入、用户音乐事务、权限后输出设备路由及 Windows 运行仍待实机验收。未访问用户音乐、未申请麦克风、未真实安装更新。本轮未重新打包普通 macOS 应用，Electron 源码与依赖保留，改动未提交或推送。
+
+### 设置、业务存储、更新与日志提交前验证
+
+- 用户授权提交本轮改动。提交前重新执行并通过：全量 **177 文件、1,580 测试**、Node／Web 类型检查、修改及新增 TS／JS 的 ESLint、相关 Prettier、修改 Go 的 gofmt、`git diff --check`，以及 `go test ./...`、`go vet ./...`。证据 `/tmp/hemusic-submit-runtime-{tests,types,static,go,vet}.log`。新增 `docs/mygo-data.md` 被 `/docs/*` 通用忽略规则匹配，按明确文件路径纳入版本控制，保留原忽略范围。
+- 按用户要求已使用官方 CLI 构建当前工作区的 Windows／Linux amd64 生产测试包，位于 `build/mygo/test-x64`。已核对 PE GUI／ELF x86-64、压缩包及 DEB 内的二进制摘要、Linux 执行权限、DEB 架构／依赖和 SHA-256；尚未在目标桌面运行。用户反馈 Linux apt 从清华镜像获取 libsoup 依赖时返回 403，安装源问题尚待其换源后复测。测试包不纳入提交，未执行远端推送或发布。

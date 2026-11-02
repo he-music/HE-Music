@@ -1,3 +1,4 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 import { h } from "vue";
 import type { SettingType, UpdateInfoType } from "@/types/main";
 import type { ModalReactive } from "naive-ui";
@@ -43,7 +44,7 @@ const setModalClosed = (modalKey: string): void => {
 
 // 用户协议
 export const openUserAgreement = async () => {
-  const isAgree = window.localStorage.getItem("isAgree");
+  const isAgree = applicationStorage.getItem("isAgree");
   if (isAgree) return;
 
   const { default: UserAgreement } = await import("@/components/Modal/UserAgreement.vue");
@@ -62,7 +63,7 @@ export const openUserAgreement = async () => {
         onClose: () => {
           modal.destroy();
           // 储存状态
-          window.localStorage.setItem("isAgree", Date.now().toString());
+          applicationStorage.setItem("isAgree", Date.now().toString());
         },
       });
     },

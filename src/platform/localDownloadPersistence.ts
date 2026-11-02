@@ -4,7 +4,7 @@ import type {
   DownloadResolveOptions,
   DownloadWarningCode,
 } from "./localDownloadSession";
-import localforage from "localforage";
+import { createApplicationDatabase } from "./applicationStorage";
 
 export interface LocalDownloadSnapshotSource {
   readonly id: string;
@@ -273,7 +273,7 @@ export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
 
 /** A failed/corrupt initial read never authorizes overwriting the existing history. */
 export function createLocalDownloadPersistence(
-  storage: LocalDownloadStorage = localforage.createInstance({
+  storage: LocalDownloadStorage = createApplicationDatabase({
     name: "local-data",
     storeName: "local_download_history",
   }),

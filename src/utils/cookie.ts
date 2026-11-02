@@ -1,14 +1,15 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 import Cookies from "js-cookie";
 
 // 获取 Cookie
 export const getCookie = (key: string) => {
-  return Cookies.get(key) ?? localStorage.getItem(`cookie-${key}`);
+  return Cookies.get(key) ?? applicationStorage.getItem(`cookie-${key}`);
 };
 
 // 移除 Cookie
 export const removeCookie = (key: string) => {
   Cookies.remove(key);
-  localStorage.removeItem(`cookie-${key}`);
+  applicationStorage.removeItem(`cookie-${key}`);
 };
 
 // 设置 Cookie
@@ -29,6 +30,6 @@ export const setCookies = (cookieValue: string) => {
     // 设置 cookie
     document.cookie = `${name}=${value}; ${expires}; path=/`;
     // 保存 cookie
-    localStorage.setItem(`cookie-${name}`, value);
+    applicationStorage.setItem(`cookie-${name}`, value);
   });
 };

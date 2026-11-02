@@ -1,4 +1,4 @@
-import localforage from "localforage";
+import { dropApplicationDatabase } from "./applicationStorage";
 
 // music-data/music and user-data/user are cleared by dataStore.deleteDB().
 // These remaining application stores contain cached rows/blobs/history only.
@@ -14,6 +14,6 @@ export async function clearAdditionalPreferencesData(
 ): Promise<void> {
   for (const store of additionalResetStores) {
     if (!current()) throw new Error("Preferences reset owner replaced");
-    await localforage.dropInstance({ ...store });
+    await dropApplicationDatabase({ ...store });
   }
 }

@@ -17,7 +17,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-type Operation = "check" | "install" | "state";
+type Operation = "check" | "install" | "state" | "restart";
 interface Pending {
   id: number;
   operation: Operation;
@@ -112,6 +112,12 @@ export class UpdatesSession {
       return Promise.reject(new Error("Update candidate is unavailable"));
     }
     return this.run("install");
+  }
+  restart(): Promise<UpdatesState> {
+    if (this.native.value?.phase !== "installed" || this.busy.value) {
+      return Promise.reject(new Error("Installed update is unavailable"));
+    }
+    return this.run("restart");
   }
   refresh(): Promise<UpdatesState> {
     return this.run("state");

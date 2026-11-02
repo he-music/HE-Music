@@ -28,7 +28,10 @@ var desktopUpdates = newUpdates(
 
 // Registration does not probe Enabled (which writes a temporary installation
 // directory), start a checker, inspect AppData, or register the updater plugin.
-func init() { mygo.Bind(desktopUpdates) }
+func init() {
+	desktopUpdates.relaunch = mygo.App.Relaunch
+	mygo.Bind(desktopUpdates)
+}
 
 type updatesSDKDriver struct{}
 
@@ -56,8 +59,8 @@ func (c updatesSDKCandidate) metadata() (string, string, string) {
 	return c.update.Version, c.update.Notes, date
 }
 
-func (c updatesSDKCandidate) install(ctx context.Context) error {
-	return c.update.Install(ctx, nil)
+func (c updatesSDKCandidate) install(ctx context.Context, progress func(int64, int64)) error {
+	return c.update.Install(ctx, progress)
 }
 
 // RunOnMain is synchronous in this SDK. A lazy FIFO worker performs that wait,

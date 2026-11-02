@@ -1,3 +1,4 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 import { shortcutSession } from "@/platform/shortcutSession";
 import { defineStore } from "pinia";
 
@@ -99,6 +100,6 @@ export const useShortcutStore = defineStore("shortcut", {
   // 持久化
   persist: {
     key: "shortcut-store",
-    storage: localStorage,
+    storage: applicationStorage,
   },
 });

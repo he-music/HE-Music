@@ -109,9 +109,10 @@
 </template>
 
 <script setup lang="ts">
-import { effectScope, onScopeDispose } from "vue";
+import { computed } from "vue";
+import { useScopedSettingConfig, useSettingActivation } from "@/composables/useSettingLifecycle";
 import type { MenuOption, NScrollbar, SelectOption } from "naive-ui";
-import { SettingItem, SettingGroup, SettingConfig } from "@/types/settings";
+import { SettingItem, SettingGroup } from "@/types/settings";
 import type { SettingType } from "@/types/main";
 import { useMobile } from "@/composables/useMobile";
 import { renderIcon } from "@/utils/helper";
@@ -131,42 +132,13 @@ const { t } = useI18n();
 const props = defineProps<{ type: SettingType; scrollTo?: string }>();
 
 const generalActions = useGeneralSettingsActions();
-let playSettingsScope: ReturnType<typeof effectScope> | undefined;
-let playSettingsDisposed = false;
-let lastPlayConfig: SettingConfig = { groups: [] };
-const playConfig = computed(() => {
-  if (playSettingsDisposed) return lastPlayConfig;
-  playSettingsScope?.stop();
-  playSettingsScope = effectScope(true);
-  const config = playSettingsScope.run(usePlaySettings);
-  if (config) lastPlayConfig = config;
-  return lastPlayConfig;
-});
-onScopeDispose(() => {
-  playSettingsDisposed = true;
-  playSettingsScope?.stop();
-});
-const generalConfig = computed(() => useGeneralSettings(generalActions));
-const appearanceConfig = computed(() => useAppearanceSettings());
-// 搜索会在 render 中惰性求值；为歌词配置单独持有 scope，语言变化时替换并清理旧实例。
-let lyricSettingsScope: ReturnType<typeof effectScope> | undefined;
-let lyricSettingsDisposed = false;
-let lastLyricConfig: SettingConfig = { groups: [] };
-const lyricConfig = computed(() => {
-  if (lyricSettingsDisposed) return lastLyricConfig;
-  lyricSettingsScope?.stop();
-  lyricSettingsScope = effectScope(true);
-  const config = lyricSettingsScope.run(useLyricSettings);
-  if (config) lastLyricConfig = config;
-  return lastLyricConfig;
-});
-onScopeDispose(() => {
-  lyricSettingsDisposed = true;
-  lyricSettingsScope?.stop();
-});
-const keyboardConfig = computed(() => useKeyboardSettings());
-const localConfig = computed(() => useLocalSettings());
-const networkConfig = computed(() => useNetworkSettings());
+const playConfig = useScopedSettingConfig(usePlaySettings);
+const generalConfig = useScopedSettingConfig(() => useGeneralSettings(generalActions));
+const appearanceConfig = useScopedSettingConfig(useAppearanceSettings);
+const lyricConfig = useScopedSettingConfig(useLyricSettings);
+const keyboardConfig = useScopedSettingConfig(useKeyboardSettings);
+const localConfig = useScopedSettingConfig(useLocalSettings);
+const networkConfig = useScopedSettingConfig(useNetworkSettings);
 
 // 配置映射表
 const configs: Record<string, ComputedRef> = {
@@ -217,21 +189,7 @@ const onMenuSelect = () => {
   }
 };
 
-// 监听 ActiveKey 变化，触发懒加载事件
-watch(
-  activeKey,
-  (newKey, oldKey) => {
-    // 触发销毁
-    if (oldKey && configs[oldKey]?.value.onDeactivate) {
-      configs[oldKey].value.onDeactivate();
-    }
-    // 触发激活
-    if (newKey && configs[newKey]?.value.onActivate) {
-      configs[newKey].value.onActivate();
-    }
-  },
-  { immediate: true },
-);
+useSettingActivation(computed(() => configs[activeKey.value]?.value));
 
 const highlightKey = ref<string>();
 const isSearchActive = ref(false);

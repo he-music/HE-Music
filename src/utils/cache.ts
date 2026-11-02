@@ -1,3 +1,4 @@
+import { applicationStorage } from "@/platform/applicationStorage";
 type StorageType = "localStorage" | "sessionStorage";
 
 interface CacheOptions {
@@ -18,7 +19,9 @@ export const getCacheData = async <T, Args extends unknown[]>(
   const { key, time, storage = "sessionStorage", useCache = true } = options;
   if (useCache) {
     try {
-      const cachedData = window[storage].getItem(key);
+      const cachedData = (
+        storage === "localStorage" ? applicationStorage : window.sessionStorage
+      ).getItem(key);
       if (cachedData) {
         const cached: { value: T; expiry: number } | null = JSON.parse(cachedData);
         if (
@@ -39,7 +42,10 @@ export const getCacheData = async <T, Args extends unknown[]>(
   const result = await promiseFunc(...args);
   try {
     const expiry = time === -1 ? -1 : Date.now() + time * 60_000;
-    window[storage].setItem(key, JSON.stringify({ value: result, expiry }));
+    (storage === "localStorage" ? applicationStorage : window.sessionStorage).setItem(
+      key,
+      JSON.stringify({ value: result, expiry }),
+    );
   } catch (error) {
     console.warn(`写入缓存失败：${key}`, error);
   }
