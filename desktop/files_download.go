@@ -284,6 +284,9 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	out = j.state
 	c.mu.Unlock()
 	out.Code = "io_error"
+	stage, status := "prepare_target", 0
+	var err error
+	defer func() { logDownloadFailure(stage, status, err, out) }()
 	root := j.lease.handle.root
 	target, err := downloadNativeTarget(j.state.Filename, j.options)
 	if err != nil {
@@ -312,6 +315,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		for _, private := range owned {
 			if err := private.cleanup(); err != nil {
 				out.Code = "cleanup_failed"
+				logDownloadFailure("cleanup_private", status, err, out)
 				if private.residual {
 					out.ResidualName = path.Join(path.Dir(target), private.name)
 				}
@@ -325,6 +329,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 			out.Ref = nil
 		}
 	}()
+	stage = "create_work_file"
 	work, err := downloadNewPrivate(root, "work", j.io)
 	if work != nil {
 		owned = append(owned, work)
@@ -345,6 +350,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		return
 	}
 	req.Header.Set("Accept-Encoding", "identity")
+	stage = "fetch_audio"
 	resp, err := c.client.Do(req)
 	if err != nil {
 		out.Code = "network_error"
@@ -359,11 +365,13 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		closeBody()
 		if bodyCloseErr != nil && (out.Code == "ok" || out.Code == "durability_uncertain") {
 			out.Code = "cleanup_failed"
+			logDownloadFailure("close_response", status, bodyCloseErr, out)
 			if !out.Committed {
 				out.Ref = nil
 			}
 		}
 	}()
+	status = resp.StatusCode
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Range") != "" || resp.Uncompressed || (resp.Header.Get("Content-Encoding") != "" && resp.Header.Get("Content-Encoding") != "identity") {
 		out.Code = "http_rejected"
 		return
@@ -374,6 +382,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	c.mu.Lock()
 	j.state.Total = out.Total
 	c.mu.Unlock()
+	stage = "read_audio"
 	buf := make([]byte, 32<<10)
 	for {
 		if j.ctx.Err() != nil {
@@ -387,6 +396,10 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 			j.state.Received = out.Received
 			c.mu.Unlock()
 			if writeErr != nil || written != n {
+				err = writeErr
+				if err == nil {
+					err = io.ErrShortWrite
+				}
 				return
 			}
 		}
@@ -394,6 +407,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 			break
 		}
 		if readErr != nil {
+			err = readErr
 			out.Code = "network_error"
 			return
 		}
@@ -406,6 +420,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		out.Code = "http_rejected"
 		return
 	}
+	stage = "parse_audio"
 	reader := metadataReader{ctx: j.ctx, file: file}
 	info, err := metadata.ParseScan(reader, out.Received)
 	if err != nil {
@@ -418,15 +433,18 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	}
 	// Parsed tags are deliberately discarded, so cached results contain no pictures,
 	// attachments or unbounded tag strings. The parent may read metadata using Ref.
+	stage = "validate_audio"
 	if err = metadata.CompareAudioPayload(j.ctx, reader, out.Received, reader, out.Received); err != nil {
 		out.Code = "payload_rejected"
 		return
 	}
+	stage = "copy_source"
 	source, sourceErr := downloadNewPrivate(root, "source", j.io)
 	if source != nil {
 		owned = append(owned, source)
 	}
 	if sourceErr != nil {
+		err = sourceErr
 		return
 	}
 	if err = j.io.before("source", "copy"); err != nil {
@@ -444,33 +462,42 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	originalAudio := source.file
 	originalInfo, originalErr := originalAudio.Stat()
 	if originalErr != nil {
+		err = originalErr
 		return
 	}
+	stage = "edit_metadata"
 	if err = downloadNativeMetadata(j.ctx, c.client, root, file, tmp, j.options); err != nil {
 		out.Code = "unsupported"
 		return
 	}
+	stage = "verify_metadata"
 	editedInfo, editStatErr := file.Stat()
 	currentSource, sourceStatErr := originalAudio.Stat()
 	if editStatErr != nil || sourceStatErr != nil || !os.SameFile(currentSource, originalInfo) {
+		err = errors.Join(editStatErr, sourceStatErr)
 		out.Code = "payload_rejected"
 
 		return
 	}
 	compareErr := metadata.CompareAudioPayload(j.ctx, originalAudio, originalInfo.Size(), file, editedInfo.Size())
 	if compareErr != nil {
+		err = compareErr
 		out.Code = "payload_rejected"
 
 		return
 	}
-	if work.sync() != nil {
+	stage = "sync_audio"
+	if err = work.sync(); err != nil {
 		return
 	}
+	stage = "prepare_sidecars"
 	sidecars, sidecarErr := downloadNativePrepareSidecars(j.ctx, c.client, root, targetName, j.options, j.io, &owned)
 	if sidecarErr != nil {
+		err = sidecarErr
 		out.Code = "io_error"
 		return
 	}
+	stage = "authorize_commit"
 	if err = j.io.before("commit", "before_claim"); err != nil {
 		return
 	}
@@ -480,6 +507,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	}
 	authorizedParent, parentErr := downloadNativeParentInfo(j.lease.handle.root, target)
 	if parentErr != nil || !os.SameFile(workParentInfo, authorizedParent) {
+		err = parentErr
 		out.Code = "conflict"
 		return
 	}
@@ -496,9 +524,11 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	}
 	authorizedParent, parentErr = downloadNativeParentInfo(j.lease.handle.root, target)
 	if parentErr != nil || !os.SameFile(workParentInfo, authorizedParent) {
+		err = parentErr
 		out.Code = "conflict"
 		return
 	}
+	stage = "publish_audio"
 	if err = work.publish(targetName); err != nil {
 		out.Code = "atomic_commit_failed"
 		if errors.Is(err, os.ErrExist) {
@@ -518,9 +548,11 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	published, err := root.Lstat(targetName)
 	original, statErr := file.Stat()
 	if err != nil || statErr != nil || !sameLocalFileInfo(published, original) {
+		err = errors.Join(err, statErr)
 		out.Code = "conflict"
 		return
 	}
+	stage = "register_audio"
 	ref, registered, err := s.registerLocalFile(j.lease, target)
 	if err != nil {
 		out.Code = "registration_failed"
@@ -529,15 +561,18 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	registeredInfo, statErr := registered.Stat()
 	registeredCloseErr := registered.Close()
 	if statErr != nil || registeredCloseErr != nil || !sameLocalFileInfo(original, registeredInfo) {
+		err = errors.Join(statErr, registeredCloseErr)
 		out.Code = "conflict"
 		return
 	}
 	registeredParent, parentErr := downloadNativeParentInfo(j.lease.handle.root, target)
 	if parentErr != nil || !os.SameFile(workParentInfo, registeredParent) {
+		err = parentErr
 		out.Code = "registration_failed"
 		return
 	}
 	out.Ref = ref
+	stage = "publish_sidecars"
 	for _, sidecar := range sidecars {
 		if err = j.io.before("sidecar", "publish"); err == nil {
 			err = sidecar.private.publish(sidecar.public)
@@ -551,12 +586,14 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		out.Code = "partial_committed"
 		return
 	}
+	stage = "sync_directory"
 	durability := j.io.DirectoryDurability
 	if durability == nil {
 		durability = downloadCommitDirectoryDurability
 	}
 	durable, durabilityErr := durability(root)
 	if durabilityErr != nil {
+		err = durabilityErr
 		out.Code = "sync_failed"
 		return
 	}

@@ -62,6 +62,28 @@ afterEach(async () => {
   expect(vi.getTimerCount()).toBe(0);
   vi.useRealTimers();
 });
+it.each([
+  "io_error",
+  "invalid_request",
+  "network_error",
+  "http_rejected",
+  "limit",
+  "payload_rejected",
+  "unsupported",
+  "atomic_commit_failed",
+])("retains the native failure reason %s for display", async (code) => {
+  const id = await session.start(input);
+  if (!id) throw new Error("Missing download task");
+  vi.mocked(access.read).mockResolvedValueOnce(state(id, { code, done: true }));
+  await session.refresh(id);
+  expect(session.tasks.value[0]).toMatchObject({
+    phase: "failed",
+    committed: false,
+    warning: code,
+  });
+  expect(JSON.stringify(session.tasks.value)).not.toMatch(/SIGNED|grantToken|https/);
+});
+
 it("waits for a saved file's background scan beyond the transport deadline", async () => {
   const id = await session.start(input);
   if (!id) throw new Error("Missing download task");

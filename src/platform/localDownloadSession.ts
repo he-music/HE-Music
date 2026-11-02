@@ -78,6 +78,14 @@ export interface LocalDownloadInput {
   display?: LocalDownloadDisplay;
 }
 export type DownloadWarningCode =
+  | "io_error"
+  | "invalid_request"
+  | "network_error"
+  | "http_rejected"
+  | "limit"
+  | "payload_rejected"
+  | "unsupported"
+  | "atomic_commit_failed"
   | "durability_uncertain"
   | "partial_committed"
   | "sync_failed"
@@ -1040,6 +1048,14 @@ export class LocalDownloadSession {
 
   private warningCode(code: string): DownloadWarningCode | undefined {
     return new Set<DownloadWarningCode>([
+      "io_error",
+      "invalid_request",
+      "network_error",
+      "http_rejected",
+      "limit",
+      "payload_rejected",
+      "unsupported",
+      "atomic_commit_failed",
       "durability_uncertain",
       "partial_committed",
       "sync_failed",

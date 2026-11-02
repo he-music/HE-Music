@@ -187,6 +187,14 @@ export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
   const resolveOptions = validatedResolveOptions(value.resolveOptions);
   const warning = value.warning;
   const validWarnings = [
+    "io_error",
+    "invalid_request",
+    "network_error",
+    "http_rejected",
+    "limit",
+    "payload_rejected",
+    "unsupported",
+    "atomic_commit_failed",
     "durability_uncertain",
     "partial_committed",
     "sync_failed",

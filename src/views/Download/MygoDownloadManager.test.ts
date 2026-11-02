@@ -64,7 +64,11 @@ function entry(id = "saved"): ScanEntry {
     },
   };
 }
-function setup(rows: LocalDownloadTask[] = [saved()], initialRoute = "download-downloaded") {
+function setup(
+  rows: LocalDownloadTask[] = [saved()],
+  initialRoute = "download-downloaded",
+  os = "darwin",
+) {
   const tasks = Vue.shallowRef<readonly LocalDownloadTask[]>(rows);
   const queue = {
     tasks,
@@ -137,6 +141,7 @@ function setup(rows: LocalDownloadTask[] = [saved()], initialRoute = "download-d
       "@/utils/player": { usePlayer: () => ({ updatePlayList: play, addNextSong: playOne }) },
       "vue-router": { useRoute: () => route, useRouter: () => ({ push: navigate }) },
       "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
+      "@/utils/env": { isWin: os === "win32" },
       "fixture-updates": { updated },
     },
     [
@@ -229,6 +234,39 @@ function setup(rows: LocalDownloadTask[] = [saved()], initialRoute = "download-d
     navigate,
   };
 }
+it("shows the native download failure reason in the task row", async () => {
+  const f = setup(
+    [record("failed", { phase: "failed", done: true, warning: "http_rejected", retryable: true })],
+    "download-downloading",
+  );
+  await flushSfcHost();
+  expect(f.text()).toContain("mygo.downloads.phase.failed");
+  expect(f.text()).toContain("local_download.warning.http_rejected");
+});
+
+it("shows a saved Windows download as completed while retaining genuine write warnings", async () => {
+  const f = setup(
+    [saved("saved", { phase: "saved", warning: "durability_uncertain" })],
+    "download-downloaded",
+    "win32",
+  );
+  await flushSfcHost();
+  expect(f.text()).toContain("common.completed");
+  expect(f.text()).not.toContain("local_download.warning.durability_uncertain");
+  expect(f.text()).toContain("mygo.downloads.fileUnavailable");
+  for (const warning of ["sync_failed", "partial_committed", "cleanup_failed"] as const) {
+    f.tasks.value = [saved("saved", { phase: "saved", warning })];
+    await flushSfcHost();
+    expect(f.text()).toContain(`local_download.warning.${warning}`);
+  }
+});
+
+it("retains an unexpected durability warning on other platforms", async () => {
+  const f = setup([saved("saved", { phase: "saved", warning: "durability_uncertain" })]);
+  await flushSfcHost();
+  expect(f.text()).toContain("local_download.warning.durability_uncertain");
+});
+
 it("renders completed task records without scanning or importing arbitrary directory songs", async () => {
   const f = setup();
   expect(f.text()).toContain("Original saved");

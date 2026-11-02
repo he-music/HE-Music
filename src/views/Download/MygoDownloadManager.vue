@@ -104,12 +104,9 @@
               <n-text v-if="task.interrupted" depth="3">{{
                 t("mygo.downloads.interrupted")
               }}</n-text>
-              <n-text
-                v-if="task.warning && task.warning !== 'cancelled'"
-                type="warning"
-                role="status"
-                >{{ t(`local_download.warning.${task.warning}`) }}</n-text
-              >
+              <n-text v-if="showTaskWarning(task)" type="warning" role="status">{{
+                t(`local_download.warning.${task.warning}`)
+              }}</n-text>
               <n-text v-if="task.residualName" depth="3"
                 >{{ t("local_download.residual_file") }}：{{ task.residualName }}</n-text
               >
@@ -180,6 +177,7 @@ import { LocalFileActions } from "@/platform/localFileActions";
 import type { LocalDownloadTask } from "@/platform/localDownloadSession";
 import { useMusicStore } from "@/stores";
 import { usePlayer } from "@/utils/player";
+import { isWin } from "@/utils/env";
 
 const { t } = useI18n();
 const { tasks, completed, unfinished, pending, errors, run } = useMygoDownloadTasks(filesSession);
@@ -315,6 +313,19 @@ async function runFileAction(id: string, action: "reveal" | "remove"): Promise<v
       filePending.value = new Set([...filePending.value].filter((value) => value !== id));
   }
 }
+function showTaskWarning(task: LocalDownloadTask): boolean {
+  if (!task.warning || task.warning === "cancelled") return false;
+  // Windows has no ordinary directory fsync contract. Keep the saved outcome
+  // and stored warning, but do not present this expected limitation as an error.
+  return !(
+    isWin &&
+    task.done &&
+    task.committed &&
+    task.phase === "saved" &&
+    task.warning === "durability_uncertain"
+  );
+}
+
 function taskStatus(task: LocalDownloadTask): string {
   if (task.done && task.committed) return t("common.completed");
   if (task.warning === "cancelled") return t("mygo.downloads.cancelled");

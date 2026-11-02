@@ -38,6 +38,26 @@ const deferred = () => {
   return { promise, resolve };
 };
 
+it.each([
+  "io_error",
+  "invalid_request",
+  "network_error",
+  "http_rejected",
+  "limit",
+  "payload_rejected",
+  "unsupported",
+  "atomic_commit_failed",
+] as const)("restores the allowlisted download failure reason %s", async (warning) => {
+  const task = { ...snapshot(), phase: "failed" as const, done: true, warning };
+  const db = storage();
+  const persistence = createLocalDownloadPersistence(db);
+  await persistence.load();
+  await persistence.save([task]);
+  const written = vi.mocked(db.setItem).mock.calls[0][1];
+  expect(await createLocalDownloadPersistence(storage(written)).load()).toEqual([task]);
+  expect(() => localDownloadSnapshot({ ...task, warning: "raw private error" })).toThrow();
+});
+
 describe("localDownloadPersistence", () => {
   it("round trips allowlisted metadata without authorization, URLs or runtime state", async () => {
     const db = storage();
