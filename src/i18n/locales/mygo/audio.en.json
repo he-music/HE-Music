@@ -1,5 +1,9 @@
 {
   "audio": {
-    "effects_unavailable": "Audio effects are unavailable for this source. Regular playback is preserved."
+    "effects_unavailable": "Audio effects are unavailable for this source. Regular playback is preserved.",
+    "read_output_devices": "Read devices",
+    "output_access_denied": "Microphone permission was not granted. Output devices could not be read.",
+    "output_devices_failed": "Failed to read output devices.",
+    "output_devices_empty": "No output devices were returned."
   }
 }

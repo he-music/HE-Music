@@ -7,6 +7,12 @@
   "icon": "public/icons/favicon-1024x1024.png",
   "main": "./desktop",
   "out": "build/mygo",
+  "macos": {
+    "entitlements": "desktop/macos.entitlements.plist",
+    "infoPlist": {
+      "NSMicrophoneUsageDescription": "仅在你读取音频输出设备时访问麦克风，以获取可选输出设备列表，不保存或上传音频。"
+    }
+  },
   "bindings": "src/platform/mygo.bindings.ts",
   "devUrl": "http://127.0.0.1:14667",
   "devCommand": "pnpm run dev:desktop:frontend",

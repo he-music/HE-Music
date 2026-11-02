@@ -1,5 +1,9 @@
 {
   "audio": {
-    "effects_unavailable": "当前音源不支持音效处理，已保持普通播放。"
+    "effects_unavailable": "当前音源不支持音效处理，已保持普通播放。",
+    "read_output_devices": "读取设备",
+    "output_access_denied": "未获得麦克风权限，无法读取输出设备。",
+    "output_devices_failed": "读取输出设备失败。",
+    "output_devices_empty": "未读取到输出设备。"
   }
 }

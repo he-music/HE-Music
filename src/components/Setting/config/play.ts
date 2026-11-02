@@ -6,7 +6,8 @@ import { SettingConfig } from "@/types/settings";
 import { SelectOption } from "naive-ui";
 import { uniqBy } from "lodash-es";
 
-import { computed, ref } from "vue";
+import { readOutputDevices } from "@/utils/audioOutputDevices";
+import { computed, getCurrentScope, onScopeDispose, ref } from "vue";
 import { usePlayer } from "@/utils/player";
 import { t } from "@/i18n";
 
@@ -16,15 +17,30 @@ export const usePlaySettings = (): SettingConfig => {
   const player = usePlayer();
   const isDesktop = isElectron || isMygo;
 
-  const outputDevices = ref<SelectOption[]>([]);
+  const canRequestOutputAccess = isMygo && platform.os === "darwin";
+  const outputDevices = ref<SelectOption[]>([{ label: t("common.system_default"), value: "" }]);
+  const readingOutputs = ref(false);
+  let active = true;
+  let revision = 0;
+  const onDeactivate = () => {
+    active = false;
+    revision++;
+  };
+  if (getCurrentScope()) onScopeDispose(onDeactivate);
 
-  // 获取全部输出设备
-  const getOutputDevices = async () => {
-    if (!isDesktop) return;
-    outputDevices.value = [{ label: t("common.system_default"), value: "" }];
-    if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) return;
+  // Passive enumeration never requests microphone access.
+  const getOutputDevices = async (requestAccess = false) => {
+    if (!isDesktop || !active || readingOutputs.value) return;
+    const operation = ++revision;
+    const current = () => active && revision === operation;
+    readingOutputs.value = true;
     try {
-      const allDevices = await navigator.mediaDevices.enumerateDevices();
+      if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices)
+        throw new DOMException("Media devices unavailable", "NotSupportedError");
+      const needsCapture =
+        requestAccess && canRequestOutputAccess && !outputDevices.value.some((item) => item.value);
+      const allDevices = await readOutputDevices(navigator.mediaDevices, needsCapture, current);
+      if (!allDevices) return;
       const devices = uniqBy(
         allDevices.filter(
           (device) =>
@@ -39,8 +55,19 @@ export const usePlaySettings = (): SettingConfig => {
           value: device.deviceId,
         })),
       ];
-    } catch (e) {
-      console.error("获取 WebAudio 设备失败", e);
+      if (requestAccess && devices.length === 0)
+        window.$message.warning(t("mygo.audio.output_devices_empty"));
+    } catch (error) {
+      if (!current()) return;
+      console.error("获取 WebAudio 设备失败", error);
+      if (requestAccess) {
+        const denied = error instanceof DOMException && error.name === "NotAllowedError";
+        window.$message.error(
+          t(denied ? "mygo.audio.output_access_denied" : "mygo.audio.output_devices_failed"),
+        );
+      }
+    } finally {
+      readingOutputs.value = false;
     }
   };
 
@@ -123,11 +150,13 @@ export const usePlaySettings = (): SettingConfig => {
   };
 
   const onActivate = async () => {
+    active = true;
     if (isDesktop) await getOutputDevices();
   };
 
   return {
     onActivate,
+    onDeactivate,
     groups: [
       {
         title: t("setting.play.play_setting"),
@@ -214,6 +243,12 @@ export const usePlaySettings = (): SettingConfig => {
             type: "select",
             show: isDesktop,
             description: t("setting.play.output_device_tip"),
+            disabled: readingOutputs,
+            extraButton: {
+              label: t("mygo.audio.read_output_devices"),
+              show: canRequestOutputAccess,
+              action: () => void getOutputDevices(true),
+            },
             options: outputDevices,
             componentProps: {
               renderOption,

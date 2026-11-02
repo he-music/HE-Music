@@ -131,7 +131,21 @@ const { t } = useI18n();
 const props = defineProps<{ type: SettingType; scrollTo?: string }>();
 
 const generalActions = useGeneralSettingsActions();
-const playConfig = computed(() => usePlaySettings());
+let playSettingsScope: ReturnType<typeof effectScope> | undefined;
+let playSettingsDisposed = false;
+let lastPlayConfig: SettingConfig = { groups: [] };
+const playConfig = computed(() => {
+  if (playSettingsDisposed) return lastPlayConfig;
+  playSettingsScope?.stop();
+  playSettingsScope = effectScope(true);
+  const config = playSettingsScope.run(usePlaySettings);
+  if (config) lastPlayConfig = config;
+  return lastPlayConfig;
+});
+onScopeDispose(() => {
+  playSettingsDisposed = true;
+  playSettingsScope?.stop();
+});
 const generalConfig = computed(() => useGeneralSettings(generalActions));
 const appearanceConfig = computed(() => useAppearanceSettings());
 // 搜索会在 render 中惰性求值；为歌词配置单独持有 scope，语言变化时替换并清理旧实例。
