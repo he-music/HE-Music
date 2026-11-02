@@ -84,6 +84,50 @@ async function flush() {
 }
 
 describe("LocalFilesSession", () => {
+  it("publishes a native-confirmed download immediately and retains it across partial scans", async () => {
+    const f = await fixture();
+    const file = entry();
+    f.local.publishDownloadedFile(file);
+    expect(f.local.entries.value).toEqual([file]);
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce({
+      ...page([]),
+      issues: [{ relativePath: "shortcut", code: "symlink" }],
+    });
+    await f.local.scan();
+    expect(f.local.phase.value).toBe("partial");
+    expect(f.local.entries.value).toEqual([file]);
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce(page([]));
+    await f.local.scan();
+    expect(f.local.entries.value).toEqual([]);
+  });
+  it("keeps a newly committed file when a scan started before the commit finishes later", async () => {
+    const f = await fixture();
+    const pending = deferred<ScanPage>();
+    vi.mocked(f.provider.readScanPage!).mockReturnValueOnce(pending.promise);
+    const scanning = f.local.scan();
+    await flush();
+    const file = entry();
+    f.local.publishDownloadedFile(file);
+    pending.resolve(page([]));
+    await scanning;
+    expect(f.local.entries.value).toEqual([file]);
+    await f.shell.revokeDirectory("grant");
+    f.local.publishDownloadedFile(file);
+    expect(f.local.entries.value).toEqual([]);
+  });
+  it("rejects foreign or mismatched download references and clears seeded files before deletion refresh", async () => {
+    const f = await fixture();
+    f.local.publishDownloadedFile({ ...entry(), ref: { ...entry().ref, grantToken: "foreign" } });
+    f.local.publishDownloadedFile({ ...entry(), relativePath: "different.mp3" });
+    expect(f.local.entries.value).toEqual([]);
+    f.local.publishDownloadedFile(entry());
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce({
+      ...page([]),
+      issues: [{ relativePath: "shortcut", code: "symlink" }],
+    });
+    await f.local.refreshAfterWrite();
+    expect(f.local.entries.value).toEqual([]);
+  });
   it("clears obsolete references before refreshing after a write and rejects an older scan page", async () => {
     const f = await fixture();
     await f.local.scan();
@@ -295,5 +339,40 @@ describe("LocalFilesSession", () => {
     expect(f.local.entries.value).toEqual([entry(), downloaded]);
     expect(f.local.phase.value).toBe("complete");
     expect(f.provider.cancelFileOperation).not.toHaveBeenCalled();
+  });
+  it("refreshes only the committed download directory and preserves the other directory's songs", async () => {
+    const f = await fixture();
+    vi.mocked(f.provider.chooseDirectory).mockResolvedValueOnce({
+      status: "selected",
+      grant: { token: "other", epoch: 7, displayPath: "/other" },
+      relation: "",
+      existingToken: "",
+    });
+    await f.shell.chooseDirectory();
+    const other = {
+      ...entry(),
+      ref: { ...entry().ref, grantToken: "other", fileId: "other-file" },
+    };
+    vi.mocked(f.provider.startScan!).mockImplementation(async (_epoch, token) => ({
+      operationId: token,
+    }));
+    vi.mocked(f.provider.readScanPage!).mockImplementation(async (_epoch, id) => ({
+      ...page([id === "grant" ? entry() : other]),
+      operationId: id,
+    }));
+    await f.local.scan();
+    expect(f.local.entries.value).toHaveLength(2);
+    vi.mocked(f.provider.startScan!).mockClear();
+    vi.mocked(f.provider.startScan!).mockImplementation(async (_epoch, token) => {
+      if (token !== "grant") throw new Error("unrelated directory unavailable");
+      return { operationId: token };
+    });
+    await f.local.refreshAfterDownload("grant");
+    expect(f.provider.startScan).toHaveBeenCalledExactlyOnceWith(7, "grant");
+    expect(f.local.entries.value).toContain(other);
+    expect(f.local.phase.value).toBe("complete");
+    await expect(f.local.refreshAfterDownload("revoked")).rejects.toThrow(
+      "Download directory unavailable",
+    );
   });
 });

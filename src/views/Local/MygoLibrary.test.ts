@@ -78,6 +78,9 @@ async function mount() {
     "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
     "@/platform/filesSession": { filesSession },
     "@/platform/localFilesSession": { localFilesSession },
+    "@/components/Local/LocalScanIssues.vue": {
+      default: Vue.defineComponent({ render: () => Vue.h("scan-issues") }),
+    },
     "@/platform/libraryDirectoryRecovery": recoveryModule,
     "@/platform/librarySongRows": songRowsModule,
     "@/stores": { useSettingStore: () => settings },
@@ -363,7 +366,8 @@ it("the real local library template manages grants, scans transient rows and cle
   });
   await localFilesSession.value?.scan();
   await flush();
-  expect(view.all().some((element) => element.text === "local.scan_partial_detail")).toBe(true);
+  expect(view.all().some((element) => element.tag === "scan-issues")).toBe(true);
+  expect(localFilesSession.value?.issues.value).toMatchObject([{ code: "item-limit" }]);
   expect(view.all().find((element) => element.tag === "song-list")?.props.data).toMatchObject([
     { id: "mygo-local:path:%2Ffixture/song.mp3" },
   ]);

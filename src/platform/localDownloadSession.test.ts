@@ -79,6 +79,7 @@ it("waits for a saved file's background scan beyond the transport deadline", asy
   });
   scan.resolve();
   await refreshing;
+  await vi.advanceTimersByTimeAsync(0);
   expect(session.tasks.value[0].refresh).toBe("complete");
 });
 
@@ -189,6 +190,7 @@ describe("localDownloadSession", () => {
       state(next, { done: true, code: "ok", committed: true, ref }),
     );
     await session.refresh(next);
+    await vi.advanceTimersByTimeAsync(0);
     expect(session.tasks.value[1]).toMatchObject({
       phase: "success",
       refresh: "failed",

@@ -5,6 +5,7 @@ import type {
   DownloadOptions,
   DownloadRequest,
   DownloadState,
+  ScanEntry,
 } from "@/platform/mygo.bindings";
 export type { DownloadMetadata, DownloadOptions } from "@/platform/mygo.bindings";
 import {
@@ -94,6 +95,8 @@ export interface LocalDownloadTask {
   readonly quality: string;
   readonly song?: { readonly id: string; readonly platform: string };
   readonly display?: LocalDownloadDisplay;
+  readonly createdAt?: number;
+  readonly completedAt?: number;
   readonly target?: { readonly directory: string; readonly relativePath: string };
   readonly phase: "active" | "unknown" | "success" | "failed" | "saved";
   readonly done: boolean;
@@ -111,8 +114,10 @@ interface RecordState {
   task: LocalDownloadTask;
   token: string;
   access: LocalDownloadAccess;
+  file?: ScanEntry;
   sequence: number;
   pending: Set<() => void>;
+  filePending: Set<() => void>;
   retrying: boolean;
   retiring?: boolean;
   recipe?: {
@@ -125,6 +130,13 @@ interface RecordState {
   targetDirectory: string;
   options?: DownloadOptions;
   resolveOptions?: DownloadResolveOptions;
+  removal?: {
+    promise: Promise<boolean>;
+    resolve(value: boolean): void;
+    timer: ReturnType<typeof setTimeout>;
+    finishing: boolean;
+    acknowledged: boolean;
+  };
   timer?: ReturnType<typeof setTimeout>;
 }
 function isWellFormedUnicode(value: string): boolean {
@@ -265,10 +277,11 @@ export class LocalDownloadSession {
   private writes: Promise<void> = Promise.resolve();
   private disposed = false;
   private beginRestore?: () => void;
+  private readonly archivedRows = new WeakMap<LocalDownloadSnapshot, LocalDownloadTask>();
   constructor(
     private readonly deps: {
       access(token: string): LocalDownloadAccess | undefined;
-      onCommitted(): Promise<void>;
+      onCommitted(token: string, file?: ScanEntry): Promise<void>;
       persistence?: LocalDownloadPersistence;
       deferRestore?: boolean;
       directoryPath?(token: string): string | undefined;
@@ -315,8 +328,10 @@ export class LocalDownloadSession {
   }
 
   private archivedTask(snapshot: LocalDownloadSnapshot): LocalDownloadTask {
+    const cached = this.archivedRows.get(snapshot);
+    if (cached) return cached;
     const interrupted = !snapshot.done;
-    return {
+    const task: LocalDownloadTask = {
       id: snapshot.id,
       filename: snapshot.filename,
       label: snapshot.label,
@@ -332,16 +347,19 @@ export class LocalDownloadSession {
             },
           }
         : {}),
-      ...(snapshot.options?.metadata
+      ...(snapshot.display || snapshot.options?.metadata
         ? {
             display: {
-              artists: snapshot.options.metadata.artists.join(" / "),
-              album: snapshot.options.metadata.album,
+              artists:
+                snapshot.display?.artists ?? snapshot.options?.metadata?.artists.join(" / ") ?? "",
+              album: snapshot.display?.album ?? snapshot.options?.metadata?.album ?? "",
               cover: "/images/song.jpg?asset",
-              duration: 0,
+              duration: snapshot.display?.duration ?? 0,
             },
           }
         : {}),
+      ...(snapshot.createdAt !== undefined ? { createdAt: snapshot.createdAt } : {}),
+      ...(snapshot.completedAt !== undefined ? { completedAt: snapshot.completedAt } : {}),
       phase: interrupted ? "failed" : snapshot.phase,
       done: true,
       committed: snapshot.committed,
@@ -365,9 +383,53 @@ export class LocalDownloadSession {
         !!this.deps.directoryToken &&
         !!this.deps.resolveURL,
     };
+    this.archivedRows.set(snapshot, task);
+    return task;
+  }
+
+  /** Release native operation slots while retaining independent durable task records. */
+  private async archiveFinished(): Promise<void> {
+    for (const record of this.records.values()) {
+      const forget = record.access.forget;
+      if (
+        !this.current(record) ||
+        !record.task.done ||
+        record.pending.size ||
+        record.retrying ||
+        record.retiring ||
+        record.removal ||
+        !forget
+      )
+        continue;
+      record.retiring = true;
+      try {
+        const snapshot = localDownloadSnapshot({
+          ...record.task,
+          source: record.recipe?.source,
+          targetDirectory: record.targetDirectory,
+          options: record.options,
+          resolveOptions: record.resolveOptions,
+        });
+        if (!(await this.bounded(() => forget(record.task.id), record)) || !this.current(record))
+          continue;
+        for (const stop of [...record.filePending]) stop();
+        this.records.delete(record.task.id);
+        this.archived.set(record.task.id, snapshot);
+        clearTimeout(record.timer);
+        record.recipe = undefined;
+        record.token = "";
+        this.publish();
+      } catch {
+        // A rejected/unknown native cleanup retains its record and can be retried.
+      } finally {
+        record.retiring = false;
+      }
+    }
   }
 
   async start(input: LocalDownloadInput): Promise<string | undefined> {
+    if (this.deps.persistence && this.deps.resolveURL && !this.disposed)
+      await this.archiveFinished();
     if (
       this.disposed ||
       [...this.records.values()].some(
@@ -395,6 +457,7 @@ export class LocalDownloadSession {
         filename: input.filename,
         label: input.label,
         quality: input.quality,
+        createdAt: Date.now(),
         song: Object.freeze({ id: input.source.id, platform: input.source.platform }),
         ...(input.display
           ? {
@@ -427,6 +490,7 @@ export class LocalDownloadSession {
       access,
       sequence: 0,
       pending: new Set(),
+      filePending: new Set(),
       retrying: false,
       recipe: {
         quality: input.quality,
@@ -463,6 +527,7 @@ export class LocalDownloadSession {
     }
     // Lost Start responses are recovered only by reads of the original id.
     if (this.current(record)) this.schedule(record);
+    this.continueRemoval(record);
     return id;
   }
 
@@ -500,17 +565,24 @@ export class LocalDownloadSession {
         !this.validResolvedFormat(snapshot.filename, snapshot.quality, source, result.format)
       )
         return;
-      return await this.start({
+      const replacement = await this.start({
         grantToken: token,
         filename: snapshot.filename,
         label: snapshot.label,
         quality: snapshot.quality,
+        display: this.archivedTask(snapshot).display,
         source,
         resolveURL,
         url: result.url,
         options: this.withResolvedMetadata(snapshot.options, result.metadata),
         resolveOptions: snapshot.resolveOptions,
       });
+      if (replacement && this.archived.get(id) === snapshot) {
+        this.archived.delete(id);
+        this.touched.add(id);
+        this.publish();
+      }
+      return replacement;
     } catch {
       return undefined;
     } finally {
@@ -544,10 +616,12 @@ export class LocalDownloadSession {
       !this.current(record) ||
       !record.task.retryable ||
       record.retrying ||
-      record.retiring
+      record.retiring ||
+      record.removal
     )
       return undefined;
     record.retrying = true;
+    let replacement: string | undefined;
     try {
       const result = await this.bounded(
         () =>
@@ -573,7 +647,7 @@ export class LocalDownloadSession {
         )
       )
         return undefined;
-      return await this.start({
+      replacement = await this.start({
         grantToken: record.token,
         filename: record.task.filename,
         label: record.task.label,
@@ -585,11 +659,76 @@ export class LocalDownloadSession {
         resolveOptions: recipe.resolveOptions,
         url: result.url,
       });
+      return replacement;
     } catch {
       return undefined;
     } finally {
       record.retrying = false;
+      if (replacement && this.current(record)) await this.retire(id);
     }
+  }
+
+  /** Remove the task only after cancellation and native cleanup are confirmed. */
+  remove(id: string): Promise<boolean> {
+    if (this.disposed) return Promise.resolve(false);
+    if (this.archived.has(id)) return this.retire(id);
+    const record = this.records.get(id);
+    if (!record || !this.current(record)) return Promise.resolve(false);
+    if (record.removal) return record.removal.promise;
+    if (record.retrying || record.retiring) return Promise.resolve(false);
+    let resolve!: (value: boolean) => void;
+    const promise = new Promise<boolean>((done) => {
+      resolve = done;
+    });
+    record.removal = {
+      promise,
+      resolve,
+      timer: setTimeout(() => this.finishRemoval(record, false), 10_000),
+      finishing: false,
+      acknowledged: record.task.done,
+    };
+    if (record.task.done) this.continueRemoval(record);
+    else void this.cancel(id);
+    return promise;
+  }
+
+  private finishRemoval(record: RecordState, result: boolean): void {
+    const removal = record.removal;
+    if (!removal) return;
+    record.removal = undefined;
+    clearTimeout(removal.timer);
+    removal.resolve(result);
+  }
+
+  private continueRemoval(record: RecordState): void {
+    const removal = record.removal;
+    if (
+      !removal ||
+      removal.finishing ||
+      !this.current(record) ||
+      !record.task.done ||
+      record.pending.size > 0 ||
+      record.retrying ||
+      record.retiring
+    )
+      return;
+    if (
+      !removal.acknowledged &&
+      (record.task.residualName ||
+        record.task.refresh === "failed" ||
+        [
+          "cleanup_failed",
+          "registration_failed",
+          "sync_failed",
+          "partial_committed",
+          "durability_uncertain",
+        ].includes(record.task.warning ?? ""))
+    ) {
+      this.finishRemoval(record, false);
+      return;
+    }
+    removal.finishing = true;
+    void this.retire(record.task.id).then((result) => this.finishRemoval(record, result));
   }
 
   async retire(id: string): Promise<boolean> {
@@ -610,7 +749,6 @@ export class LocalDownloadSession {
       record.pending.size > 0 ||
       record.retrying ||
       record.retiring ||
-      record.task.refresh === "pending" ||
       !forget
     )
       return false;
@@ -618,12 +756,14 @@ export class LocalDownloadSession {
     try {
       const forgotten = await this.bounded(() => forget(id), record);
       if (!forgotten || !this.current(record)) return false;
+      for (const stop of [...record.filePending]) stop();
       this.records.delete(id);
       this.touched.add(id);
       clearTimeout(record.timer);
       record.recipe = undefined;
       record.token = "";
       this.publish();
+      this.finishRemoval(record, true);
       return true;
     } catch {
       return false;
@@ -633,7 +773,11 @@ export class LocalDownloadSession {
   }
   async refresh(id: string): Promise<void> {
     const record = this.records.get(id);
-    if (!record || !this.current(record) || record.task.done) return;
+    if (!record || !this.current(record) || (record.task.done && !record.task.committed)) return;
+    if (record.task.done) {
+      if (record.task.refresh === "failed") await this.refreshCommitted(record);
+      return;
+    }
     if (record.timer) clearTimeout(record.timer);
     record.timer = undefined;
     await this.query(record, "read");
@@ -649,6 +793,7 @@ export class LocalDownloadSession {
   invalidate(token?: string): void {
     for (const record of this.records.values()) {
       if (token !== undefined && record.token !== token) continue;
+      this.finishRemoval(record, false);
       if (this.deps.persistence) {
         try {
           this.archived.set(
@@ -670,7 +815,7 @@ export class LocalDownloadSession {
       }
       this.records.delete(record.task.id);
       this.touched.add(record.task.id);
-      for (const stop of [...record.pending]) stop();
+      for (const stop of [...record.pending, ...record.filePending]) stop();
       clearTimeout(record.timer);
       if (!record.task.done) {
         const access = record.access;
@@ -731,17 +876,23 @@ export class LocalDownloadSession {
     record.task = { ...record.task, phase: "unknown" };
     this.publish();
   }
-  private bounded<T>(run: () => Promise<T>, record?: RecordState, timeout = 3000): Promise<T> {
+  private bounded<T>(
+    run: () => Promise<T>,
+    record?: RecordState,
+    timeout = 3000,
+    file = false,
+  ): Promise<T> {
+    const pending = file ? record?.filePending : record?.pending;
     return new Promise((resolve, reject) => {
       let active = true;
       const stop = () => {
         active = false;
         clearTimeout(timer);
-        record?.pending.delete(stop);
+        pending?.delete(stop);
         reject(new Error("Unavailable"));
       };
       const timer = setTimeout(stop, timeout);
-      record?.pending.add(stop);
+      pending?.add(stop);
       Promise.resolve()
         .then(() => {
           if (!active) throw new Error("Unavailable");
@@ -749,7 +900,7 @@ export class LocalDownloadSession {
         })
         .then((value) => {
           clearTimeout(timer);
-          record?.pending.delete(stop);
+          pending?.delete(stop);
           resolve(value);
         }, stop);
     });
@@ -776,6 +927,7 @@ export class LocalDownloadSession {
         ...record.task,
         done: state.done,
         committed: state.committed,
+        ...(state.done ? { completedAt: Date.now() } : {}),
         received: state.received,
         total: state.total,
         percent: saved
@@ -796,23 +948,65 @@ export class LocalDownloadSession {
         ...(warning ? { warning } : {}),
         ...(state.residualName ? { residualName: state.residualName } : {}),
       };
-      if (state.done && state.committed) {
-        record.task = { ...record.task, refresh: "pending" };
-        this.publish();
-        try {
-          // Library scanning uses the scan budget, separate from native request timeouts.
-          await this.bounded(() => this.deps.onCommitted(), record, 300_000);
-          if (this.current(record)) record.task = { ...record.task, refresh: "complete" };
-        } catch {
-          if (this.current(record)) record.task = { ...record.task, refresh: "failed" };
-        }
+      if (state.done && state.committed && state.ref) {
+        const metadata = record.options?.metadata;
+        record.file = {
+          ref: { ...state.ref },
+          relativePath: state.ref.relativePath,
+          filename: record.task.filename,
+          size: state.received,
+          metadata: {
+            Title: metadata?.title || record.task.label,
+            Artists: metadata?.artists
+              ? [...metadata.artists]
+              : record.task.display?.artists
+                ? [record.task.display.artists]
+                : [],
+            Album: metadata?.album || record.task.display?.album || "",
+            DurationSeconds: record.task.display?.duration ?? 0,
+            Container: "",
+            AlbumArtists: [],
+            Comment: "",
+            Lyrics: "",
+            Pictures: [],
+            PicturesLoaded: false,
+            BitrateKbps: 0,
+            SampleRateHz: 0,
+            Channels: 0,
+            BitsPerSample: 0,
+            Codec: "",
+          },
+        };
       }
+      if (state.done && state.committed) void this.refreshCommitted(record);
       if (this.current(record)) this.publish();
     } catch {
       if (this.current(record) && !record.task.done && sequence === record.sequence)
         this.unknown(record);
     } finally {
       if (this.current(record)) this.schedule(record);
+      this.continueRemoval(record);
+    }
+  }
+  private async refreshCommitted(record: RecordState): Promise<void> {
+    if (!this.current(record) || !record.task.committed || record.task.refresh === "pending")
+      return;
+    record.task = { ...record.task, refresh: "pending" };
+    this.publish();
+    try {
+      // Index the saved directory without starting another transfer.
+      await this.bounded(
+        () => this.deps.onCommitted(record.token, record.file),
+        record,
+        300_000,
+        true,
+      );
+      if (this.current(record)) record.task = { ...record.task, refresh: "complete" };
+    } catch {
+      if (this.current(record)) record.task = { ...record.task, refresh: "failed" };
+    } finally {
+      if (this.current(record)) this.publish();
+      this.continueRemoval(record);
     }
   }
   private withResolvedMetadata(

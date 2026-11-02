@@ -235,7 +235,8 @@ it("merges a downloaded file without clearing unrelated local refs or invoking t
   });
   const refreshing = downloads.refresh(id);
   await flush();
-  expect(f.local.entries.value).toEqual([entry]);
+  expect(f.local.entries.value[0]).toBe(entry);
+  expect(f.local.entries.value[1]).toMatchObject({ ref: downloaded.ref, filename: "download.mp3" });
   expect(f.blockAudio).not.toHaveBeenCalled();
   page.resolve({
     operationId: "scan-2",

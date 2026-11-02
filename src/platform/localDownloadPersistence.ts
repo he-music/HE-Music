@@ -24,6 +24,13 @@ export interface LocalDownloadSnapshot {
   readonly filename: string;
   readonly quality: string;
   readonly source?: LocalDownloadSnapshotSource;
+  readonly display?: {
+    readonly artists: string;
+    readonly album: string;
+    readonly duration: number;
+  };
+  readonly createdAt?: number;
+  readonly completedAt?: number;
   readonly targetDirectory: string;
   readonly options?: DownloadOptions;
   readonly resolveOptions?: DownloadResolveOptions;
@@ -158,6 +165,24 @@ export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
     (value.phase === "failed" && value.committed)
   )
     throw invalid();
+  if (value.createdAt !== undefined && !bytes(value.createdAt)) throw invalid();
+  if (value.completedAt !== undefined && !bytes(value.completedAt)) throw invalid();
+  let display: LocalDownloadSnapshot["display"];
+  if (value.display !== undefined) {
+    const input = value.display;
+    if (
+      !object(input) ||
+      !text(input.artists) ||
+      !text(input.album) ||
+      input.artists.length > 4096 ||
+      input.album.length > 4096 ||
+      typeof input.duration !== "number" ||
+      !Number.isFinite(input.duration) ||
+      input.duration < 0
+    )
+      throw invalid();
+    display = { artists: input.artists, album: input.album, duration: input.duration };
+  }
   const options = downloadOptions(value.options);
   const resolveOptions = validatedResolveOptions(value.resolveOptions);
   const warning = value.warning;
@@ -230,6 +255,9 @@ export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
     filename: value.filename,
     quality: value.quality,
     ...(source ? { source } : {}),
+    ...(display ? { display } : {}),
+    ...(value.createdAt !== undefined ? { createdAt: value.createdAt } : {}),
+    ...(value.completedAt !== undefined ? { completedAt: value.completedAt } : {}),
     targetDirectory: value.targetDirectory,
     ...(options ? { options } : {}),
     ...(resolveOptions ? { resolveOptions } : {}),

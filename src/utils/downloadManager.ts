@@ -6,7 +6,7 @@ import { songLyric, songUrl } from "@/api/song";
 import songManager from "@/utils/songManager";
 import type { SongInfo } from "@/types/main.hemusic";
 import { songEqual } from "@/utils/song";
-import { removeWordLyric, romaSeparator, transSeparator } from "@/utils/lyric";
+import { toLineDownloadLyrics } from "@/utils/downloadLyrics";
 import { t } from "@/i18n";
 
 interface DownloadTask {
@@ -254,17 +254,7 @@ class DownloadManager {
         let lyric = "";
         if (downloadLyric) {
           const lyricResult = await songLyric(song.id, song.platform);
-          lyric = [
-            removeWordLyric(lyricResult?.lyric) || "",
-            settingStore.downloadLyricTran && lyricResult?.trans
-              ? [transSeparator, removeWordLyric(lyricResult?.trans)].join("\n")
-              : "",
-            settingStore.downloadLyricRoma && lyricResult?.roma
-              ? [romaSeparator, removeWordLyric(lyricResult?.roma)].join("\n")
-              : "",
-          ]
-            .filter((item) => !!item)
-            .join("\n\n");
+          lyric = toLineDownloadLyrics(lyricResult?.lyric);
         }
 
         const config = {

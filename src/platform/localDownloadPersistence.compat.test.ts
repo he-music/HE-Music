@@ -19,6 +19,42 @@ describe("download history compatibility", () => {
     ).not.toHaveProperty("options");
   });
 
+  it("persists safe task presentation and timestamps while dropping runtime capabilities", () => {
+    const snapshot = localDownloadSnapshot({
+      id: "task",
+      label: "Title",
+      filename: "song.mp3",
+      quality: "320mp3",
+      targetDirectory: "/Music",
+      phase: "success",
+      done: true,
+      committed: true,
+      received: 1,
+      total: 1,
+      createdAt: 1000,
+      completedAt: 2000,
+      display: {
+        artists: "Artist",
+        album: "Album",
+        duration: 180,
+        cover: "https://cdn.test/private",
+        grantToken: "secret",
+      },
+      ref: { grantToken: "secret", fileId: "private-file" },
+      url: "https://download.test/signed",
+    });
+    expect(snapshot.display).toEqual({ artists: "Artist", album: "Album", duration: 180 });
+    expect(snapshot.createdAt).toBe(1000);
+    expect(snapshot.completedAt).toBe(2000);
+    expect(JSON.stringify(snapshot)).not.toMatch(/secret|https:|private-file/);
+    for (const extra of [
+      { createdAt: -1 },
+      { completedAt: Infinity },
+      { display: { artists: "Artist", album: "Album", duration: NaN } },
+    ])
+      expect(() => localDownloadSnapshot({ ...snapshot, ...extra })).toThrow();
+  });
+
   it("strips runtime cover URL while retaining safe captured metadata", () => {
     const snapshot = localDownloadSnapshot({
       id: "safe",

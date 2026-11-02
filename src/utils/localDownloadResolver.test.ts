@@ -28,7 +28,11 @@ describe("mygo local download resolver candidate", () => {
           cover: "https://img.test/c.jpg",
         },
       })),
-      vi.fn(async () => ({ lyric: "line", trans: "translation", roma: "romaji" })),
+      vi.fn(async () => ({
+        lyric: "[00:01.00]<0,200>Hello<200,300> world",
+        trans: "translation",
+        roma: "romaji",
+      })),
     );
     await expect(
       resolve(
@@ -46,7 +50,7 @@ describe("mygo local download resolver candidate", () => {
       format: "mp3",
       metadata: {
         title: "Fresh",
-        lyrics: "line\n\n[lang:trans]\ntranslation\n\n[lang:roma]\nromaji",
+        lyrics: "[00:01.00]Hello world",
         coverURL: "https://img.test/c.jpg",
       },
     });
@@ -115,6 +119,36 @@ it("keeps captured metadata when fresh detail is unavailable", async () => {
   ).resolves.toMatchObject({
     metadata: { title: "Captured", artists: ["Artist"], album: "Album", lyrics: "Known" },
   });
+});
+
+it("converts captured lyrics when fetching fresh lyrics fails after restoring a task", async () => {
+  const resolve = createMygoDownloadResolver(
+    vi.fn(async () => ({ url: "https://cdn.test/audio", format: "mp3" })),
+    vi.fn(async () => {
+      throw new Error("detail unavailable");
+    }),
+    vi.fn(async () => {
+      throw new Error("lyrics unavailable");
+    }),
+  );
+  const result = await resolve(
+    "320",
+    source,
+    {
+      writeMetadata: true,
+      writeCover: false,
+      writeLyrics: true,
+      saveSidecars: true,
+      metadata: {
+        title: "Title",
+        artists: [],
+        album: "",
+        lyrics: "[00:01.00]<0,200>原文\n\n[lang:trans]\n翻译",
+      },
+    },
+    { writeLyricTranslation: true, writeLyricRomaji: true },
+  );
+  expect(result.metadata?.lyrics).toBe("[00:01.00]原文");
 });
 
 it.each([

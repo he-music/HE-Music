@@ -3,13 +3,11 @@
     <div class="title">
       <n-text class="keyword">{{ t("download.download_manager") }}</n-text>
       <n-flex class="counts">
-        <n-text class="item">
-          <SvgIcon name="Download" :depth="3" />
-          {{ currentTab === "completed" ? songs.length : activeCount }}
-        </n-text>
+        <n-text class="item"
+          ><SvgIcon name="Download" :depth="3" />{{ visibleTasks.length }}</n-text
+        >
         <n-text class="item" depth="3">
-          <SvgIcon :name="currentTab === 'completed' ? 'Download' : 'DownloadDone'" :depth="3" />
-          {{ currentTab === "completed" ? activeCount : completedCount }}
+          {{ currentTab === "completed" ? unfinishedCount : completedCount }}
           {{ currentTab === "completed" ? t("download.downloading") : t("common.completed") }}
         </n-text>
       </n-flex>
@@ -18,211 +16,177 @@
       <n-flex class="left" align="flex-end">
         <n-button
           :focusable="false"
-          :disabled="currentTab !== 'completed' || !songs.length || !filesSession?.ready.value"
+          :disabled="currentTab !== 'completed' || !songs.length"
           type="primary"
           strong
           secondary
           round
           @click="playDownloaded"
         >
-          <template #icon><SvgIcon name="Play" /></template>
-          {{ t("common.play") }}
-        </n-button>
-        <n-button
-          :focusable="false"
-          class="more"
-          :disabled="
-            !filesSession?.ready.value ||
-            (currentTab === 'downloading' && (!retryable.length || pending.size > 0))
-          "
-          :loading="currentTab === 'completed' ? scanning : pending.size > 0"
-          :title="t(currentTab === 'completed' ? 'mygo.downloads.refresh' : 'download.retry')"
-          :aria-label="t(currentTab === 'completed' ? 'mygo.downloads.refresh' : 'download.retry')"
-          strong
-          secondary
-          circle
-          @click="currentTab === 'completed' ? refreshDownloads() : retryAll()"
-        >
-          <template #icon><SvgIcon name="Refresh" /></template>
+          <template #icon><SvgIcon name="Play" /></template>{{ t("common.play") }}
         </n-button>
       </n-flex>
-      <n-flex class="right" justify="end">
-        <n-tabs v-model:value="currentTab" class="tabs" type="segment">
-          <n-tab name="completed">{{ t("common.completed") }}</n-tab>
-          <n-tab name="downloading">{{ t("download.downloading") }}</n-tab>
-        </n-tabs>
-      </n-flex>
+      <n-tabs v-model:value="currentTab" class="tabs" type="segment">
+        <n-tab name="completed">{{ t("common.completed") }}</n-tab>
+        <n-tab name="downloading">{{ t("download.downloading") }}</n-tab>
+      </n-tabs>
     </n-flex>
-    <n-text v-if="filesSession?.downloads?.persistenceError?.value" role="alert" type="error">
-      {{ t(filesSession.downloads.persistenceError.value) }}
-    </n-text>
+    <n-text v-if="filesSession?.downloads?.persistenceError?.value" role="alert" type="error">{{
+      t(filesSession.downloads.persistenceError.value)
+    }}</n-text>
+    <LocalScanIssues />
     <n-empty
       v-if="!filesSession?.downloads"
       :description="t('mygo.downloads.unavailable')"
       class="empty"
       role="status"
     />
-    <div v-else-if="currentTab === 'completed'" class="download-downloaded">
-      <div v-for="task in completedNotices" :key="task.id" class="completed-notice" role="status">
-        <n-text>{{ task.label }}</n-text>
-        <n-text v-if="task.warning" type="warning">{{
-          t(`local_download.warning.${task.warning}`)
-        }}</n-text>
-        <n-text v-if="task.residualName" depth="3"
-          >{{ t("local_download.residual_file") }}：{{ task.residualName }}</n-text
-        >
-        <n-text v-if="errors.has(task.id)" type="error" role="alert">{{
-          t("mygo.downloads.actionFailed")
-        }}</n-text>
-        <n-button
-          :disabled="pending.has(task.id) || task.refresh === 'pending'"
-          :aria-label="t('mygo.downloads.remove')"
-          @click="run(task.id, 'retire')"
-        >
-          <template #icon><SvgIcon name="Close" /></template>
-        </n-button>
-      </div>
-      <SongList :data="songs" :loading="scanning" />
-    </div>
     <div v-else-if="visibleTasks.length" class="download-list">
       <div class="list-header">
-        <n-text class="num">#</n-text>
-        <n-text class="task-title">{{ t("common.title") }}</n-text>
-        <n-text class="status">{{ t("common.status") }}</n-text>
-        <n-text class="actions">{{ t("common.operation") }}</n-text>
+        <n-text class="num">#</n-text><n-text class="task-title">{{ t("common.title") }}</n-text>
+        <n-text class="status">{{ t("common.status") }}</n-text
+        ><n-text class="actions">{{ t("common.operation") }}</n-text>
       </div>
       <n-scrollbar class="virtual-list">
-        <div v-for="(task, index) in visibleTasks" :key="task.id" class="download-item">
+        <div
+          v-for="(task, index) in visibleTasks"
+          :key="task.id"
+          :data-task-id="task.id"
+          class="download-item"
+          @contextmenu.prevent="openMenu($event, task.id)"
+          @dblclick="playTask(task.id)"
+        >
           <div class="num">
             <n-text depth="3">{{ index + 1 }}</n-text>
           </div>
           <div class="task-title">
-            <s-image :src="task.display?.cover || '/images/song.jpg?asset'" class="cover" />
+            <DownloadedArtwork
+              :song="files.get(task.id)"
+              :fallback="task.display?.cover"
+              class="cover"
+            />
             <div class="info">
               <n-text class="name-text" ellipsis :title="task.label">{{ task.label }}</n-text>
               <n-text class="artists text-hidden" depth="3">{{
                 task.display?.artists || ""
               }}</n-text>
+              <n-text class="artists text-hidden" depth="3">{{ task.quality }}</n-text>
             </div>
           </div>
           <div class="status">
             <n-flex vertical :size="6">
               <n-flex justify="space-between">
-                <n-text
-                  :type="task.phase === 'failed' ? 'error' : undefined"
-                  :depth="task.phase === 'failed' ? undefined : '3'"
-                  role="status"
+                <n-text :type="task.phase === 'failed' ? 'error' : undefined" role="status">{{
+                  taskStatus(task)
+                }}</n-text>
+                <n-text v-if="!task.done" depth="3"
+                  >{{ bytes(task.received) }} /
+                  {{ task.total > 0 ? bytes(task.total) : "—" }}</n-text
                 >
-                  {{
-                    task.phase === "active" && task.percent !== undefined
-                      ? `${task.percent}%`
-                      : t(`mygo.downloads.phase.${task.phase}`)
-                  }}
-                </n-text>
-                <n-text v-if="task.phase === 'active'" depth="3">
-                  {{ bytes(task.received) }} / {{ task.total > 0 ? bytes(task.total) : "—" }}
-                </n-text>
               </n-flex>
               <n-progress
+                v-if="!task.done"
                 type="line"
                 :color="task.phase === 'active' ? 'rgb(var(--primary))' : undefined"
                 :percentage="task.percent ?? 0"
                 :show-indicator="false"
-                :status="task.phase === 'failed' ? 'error' : undefined"
                 class="downloading-progress"
                 style="height: 4px"
                 :aria-label="t('mygo.downloads.progress')"
               />
+              <n-text v-if="task.done && task.committed && !files.has(task.id)" depth="3">{{
+                t(
+                  task.refresh === "pending"
+                    ? "mygo.downloads.readingFile"
+                    : "mygo.downloads.fileUnavailable",
+                )
+              }}</n-text>
               <n-text v-if="task.interrupted" depth="3">{{
                 t("mygo.downloads.interrupted")
               }}</n-text>
-              <n-text v-if="task.warning" type="warning" role="status">
-                {{ t(`local_download.warning.${task.warning}`) }}
-              </n-text>
-              <n-text v-if="task.residualName" depth="3">
-                {{ t("local_download.residual_file") }}：{{ task.residualName }}
-              </n-text>
-              <n-text v-if="errors.has(task.id)" type="error" role="alert">
-                {{ t("mygo.downloads.actionFailed") }}
-              </n-text>
+              <n-text
+                v-if="task.warning && task.warning !== 'cancelled'"
+                type="warning"
+                role="status"
+                >{{ t(`local_download.warning.${task.warning}`) }}</n-text
+              >
+              <n-text v-if="task.residualName" depth="3"
+                >{{ t("local_download.residual_file") }}：{{ task.residualName }}</n-text
+              >
+              <n-text v-if="errors.has(task.id)" type="error" role="alert">{{
+                t("mygo.downloads.actionFailed")
+              }}</n-text>
             </n-flex>
           </div>
-          <n-flex class="actions" align="center" justify="center" :aria-busy="pending.has(task.id)">
-            <template v-if="!task.done">
-              <n-button
-                :disabled="pending.has(task.id)"
-                :aria-label="t('mygo.downloads.refresh')"
-                :title="t('mygo.downloads.refresh')"
-                type="primary"
-                secondary
-                strong
-                @click="run(task.id, 'refresh')"
-              >
-                <template #icon><SvgIcon name="Refresh" /></template>
-              </n-button>
-              <n-button
-                :disabled="pending.has(task.id)"
-                :aria-label="t('mygo.downloads.cancel')"
-                :title="t('mygo.downloads.cancel')"
-                type="error"
-                secondary
-                strong
-                @click="run(task.id, 'cancel')"
-              >
-                <template #icon><SvgIcon name="Close" /></template>
-              </n-button>
-            </template>
+          <n-flex class="actions" align="center" justify="center" :aria-busy="busy(task.id)">
             <n-button
-              v-if="task.retryable && !task.committed"
-              :disabled="pending.has(task.id)"
+              v-if="task.done && task.committed"
+              :disabled="busy(task.id) || !files.has(task.id)"
+              :aria-label="t('common.play')"
+              type="primary"
+              secondary
+              strong
+              @click="playTask(task.id)"
+              ><template #icon><SvgIcon name="Play" /></template
+            ></n-button>
+            <n-button
+              v-else-if="task.retryable"
+              :disabled="busy(task.id)"
               :aria-label="t('mygo.downloads.retry')"
-              :title="t('mygo.downloads.retry')"
               type="primary"
               secondary
               strong
               @click="run(task.id, 'retry')"
-            >
-              <template #icon><SvgIcon name="Refresh" /></template>
-            </n-button>
+              ><template #icon><SvgIcon name="Refresh" /></template
+            ></n-button>
             <n-button
-              v-if="task.done"
-              :disabled="pending.has(task.id) || task.refresh === 'pending'"
+              :disabled="busy(task.id)"
               :aria-label="t('mygo.downloads.remove')"
-              :title="t('mygo.downloads.remove')"
               type="error"
               secondary
               strong
-              @click="run(task.id, 'retire')"
-            >
-              <template #icon><SvgIcon name="Close" /></template>
-            </n-button>
+              @click="run(task.id, 'remove')"
+              ><template #icon><SvgIcon name="Close" /></template
+            ></n-button>
           </n-flex>
         </div>
       </n-scrollbar>
-      <n-button v-if="removable.length" class="clear-tasks" text size="small" @click="clearDone">
-        {{ t("mygo.downloads.clearDone") }}
-      </n-button>
     </div>
     <n-empty v-else :description="t('common.list_empty')" class="empty" role="status" />
+    <n-dropdown
+      trigger="manual"
+      :show="menuOpen && !!menuTask"
+      :x="menuX"
+      :y="menuY"
+      :options="menuOptions"
+      @select="selectMenu"
+      @clickoutside="menuOpen = false"
+    />
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, onActivated, onScopeDispose, shallowRef, watch } from "vue";
-import SongList from "@/components/List/SongList.vue";
-import { useMygoDownloadedSongs } from "@/composables/mygoDownloadedSongs";
+import { computed, onScopeDispose, shallowRef, watch } from "vue";
+import LocalScanIssues from "@/components/Local/LocalScanIssues.vue";
+import DownloadedArtwork from "@/components/Local/DownloadedArtwork.vue";
+import type { DropdownOption } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";
 import { filesSession } from "@/platform/filesSession";
 import { useMygoDownloadTasks } from "@/composables/mygoDownloadTasks";
-import { localFilesSession } from "@/platform/localFilesSession";
-import { useSettingStore } from "@/stores";
+import { useMygoDownloadedSongs } from "@/composables/mygoDownloadedSongs";
+import { localFilesSession, nativeLocalEntry } from "@/platform/localFilesSession";
+import { LocalFileActions } from "@/platform/localFileActions";
+import type { LocalDownloadTask } from "@/platform/localDownloadSession";
+import { useMusicStore } from "@/stores";
 import { usePlayer } from "@/utils/player";
 
 const { t } = useI18n();
-const { tasks, pending, errors, run, removable, clearDone, retryable, retryAll } =
-  useMygoDownloadTasks(filesSession);
-const settingStore = useSettingStore();
+const { tasks, completed, unfinished, pending, errors, run } = useMygoDownloadTasks(filesSession);
+const { songs, files } = useMygoDownloadedSongs(filesSession, completed);
+const completedCount = computed(() => completed.value.length);
+const unfinishedCount = computed(() => unfinished.value.length);
+const music = useMusicStore();
 const player = usePlayer();
 const route = useRoute();
 const router = useRouter();
@@ -233,82 +197,130 @@ const currentTab = computed<"completed" | "downloading">({
     if (route.name !== name) void router.push({ name });
   },
 });
-const downloadDirectory = computed(() => settingStore.downloadPath);
-const { songs } = useMygoDownloadedSongs(filesSession, downloadDirectory);
-const refreshing = shallowRef(false);
-const scanning = computed(
-  () => refreshing.value || localFilesSession.value?.scanning.value === true,
+const visibleTasks = computed(() =>
+  currentTab.value === "completed" ? completed.value : unfinished.value,
 );
-let scanRevision = 0;
+const filePending = shallowRef<ReadonlySet<string>>(new Set());
+const busy = (id: string) => pending.value.has(id) || filePending.value.has(id);
+const menuOpen = shallowRef(false);
+const menuID = shallowRef("");
+const menuX = shallowRef(0);
+const menuY = shallowRef(0);
+let menuOwner = filesSession.value;
+let disposed = false;
 onScopeDispose(() => {
-  scanRevision++;
+  disposed = true;
 });
-const grant = computed(() =>
-  filesSession.value?.directories.value.find(
-    (directory) => directory.displayPath === downloadDirectory.value,
-  ),
-);
-const playDownloaded = () => {
-  if (filesSession.value?.ready.value && songs.value.length)
-    void player.updatePlayList(songs.value);
-};
-async function refreshDownloads(showTip = true): Promise<void> {
-  const owner = filesSession.value;
-  const local = localFilesSession.value;
-  const path = downloadDirectory.value;
-  if (!owner?.ready.value || !local || refreshing.value) return;
-  if (!path || !grant.value) {
-    if (showTip) window.$message?.warning(t("message.please_set_download_path"));
-    return;
+watch([filesSession, currentTab], ([owner], [previous]) => {
+  menuOpen.value = false;
+  if (owner !== previous) filePending.value = new Set();
+});
+const menuTask = computed(() => tasks.value.find((task) => task.id === menuID.value));
+const menuOptions = computed<DropdownOption[]>(() => {
+  const task = menuTask.value;
+  if (!task) return [];
+  const song = files.value.get(task.id);
+  const isPlaying =
+    song && music.playSong.id === song.id && music.playSong.platform === song.platform;
+  const options: DropdownOption[] = [];
+  if (task.committed) {
+    options.push({ key: "play", label: t("common.play"), disabled: busy(task.id) || !song });
+    options.push({ key: "reveal", label: t("menu.open_folder"), disabled: busy(task.id) || !song });
+    options.push({
+      key: "delete-file",
+      label: t("menu.delete_file"),
+      disabled: busy(task.id) || !song || isPlaying,
+    });
+  } else if (task.retryable) {
+    options.push({ key: "retry", label: t("mygo.downloads.retry"), disabled: busy(task.id) });
   }
-  const revision = ++scanRevision;
-  const current = () =>
-    revision === scanRevision &&
-    filesSession.value === owner &&
-    owner.ready.value &&
-    localFilesSession.value === local &&
-    downloadDirectory.value === path;
-  refreshing.value = true;
-  try {
-    await local.refreshAfterDownload();
-    if (current() && showTip)
-      window.$message?.success(t("message.found_local_music_count", { count: songs.value.length }));
-  } catch {
-    if (current() && showTip) window.$message?.error(t("mygo.downloads.actionFailed"));
-  } finally {
-    if (revision === scanRevision) refreshing.value = false;
+  options.push({ key: "remove", label: t("mygo.downloads.remove"), disabled: busy(task.id) });
+  return options;
+});
+function openMenu(event: MouseEvent, id: string): void {
+  menuOwner = filesSession.value;
+  menuID.value = id;
+  menuX.value = event.clientX;
+  menuY.value = event.clientY;
+  menuOpen.value = true;
+}
+function selectMenu(key: string): void {
+  menuOpen.value = false;
+  const task = menuTask.value;
+  if (!task || filesSession.value !== menuOwner || busy(task.id)) return;
+  if (key === "remove" || key === "retry") void run(task.id, key);
+  else if (key === "play") playTask(task.id);
+  else if (key === "reveal") void runFileAction(task.id, "reveal");
+  else if (key === "delete-file") {
+    const owner = menuOwner;
+    window.$dialog.warning({
+      title: t("common.confirm_delete"),
+      content: t("mygo.downloads.deleteFileConfirm", { name: task.label }),
+      positiveText: t("common.delete"),
+      negativeText: t("common.cancel"),
+      onPositiveClick: () => {
+        if (filesSession.value === owner && tasks.value.includes(task))
+          return runFileAction(task.id, "remove");
+        return undefined;
+      },
+    });
   }
 }
-watch(
-  [filesSession, localFilesSession, downloadDirectory, grant],
-  () => {
-    scanRevision++;
-    refreshing.value = false;
-    if (currentTab.value === "completed" && !scanning.value) void refreshDownloads(false);
-  },
-  { immediate: true },
-);
-watch(currentTab, (tab) => {
-  if (tab === "completed" && !scanning.value) void refreshDownloads(false);
-});
-onActivated(() => {
-  if (currentTab.value === "completed" && !scanning.value) void refreshDownloads(false);
-});
-const completedTasks = computed(() => tasks.value.filter((task) => task.committed));
-const activeTasks = computed(() => {
-  const priority = { active: 0, unknown: 1, failed: 2, saved: 2, success: 2 };
-  return tasks.value
-    .filter((task) => !task.committed)
-    .sort((a, b) => priority[a.phase] - priority[b.phase]);
-});
-const completedNotices = computed(() =>
-  completedTasks.value.filter(
-    (task) => task.warning || task.residualName || errors.value.has(task.id),
-  ),
-);
-const completedCount = computed(() => songs.value.length);
-const activeCount = computed(() => activeTasks.value.length);
-const visibleTasks = activeTasks;
+function playTask(id: string): void {
+  const song = files.value.get(id);
+  if (song && !busy(id)) void player.addNextSong(song, true);
+}
+function playDownloaded(): void {
+  if (songs.value.length) void player.updatePlayList(songs.value);
+}
+async function runFileAction(id: string, action: "reveal" | "remove"): Promise<void> {
+  const owner = filesSession.value;
+  const local = localFilesSession.value;
+  const task = tasks.value.find((task) => task.id === id);
+  const song = files.value.get(id);
+  const entry = song ? nativeLocalEntry(song.id) : undefined;
+  if (!owner || !local || !task || !song || !entry || busy(id)) return;
+  const native = owner.fileActionAccess(entry.ref);
+  if (!native) return;
+  const current = () =>
+    !disposed &&
+    filesSession.value === owner &&
+    localFilesSession.value === local &&
+    tasks.value.includes(task) &&
+    files.value.get(id) === song &&
+    nativeLocalEntry(song.id) === entry &&
+    native.current();
+  const actions = new LocalFileActions({
+    access: () => ({ ...native, current }),
+    isPlaying: () => music.playSong.id === song.id && music.playSong.platform === song.platform,
+    onRemoved: () => {
+      void local.refreshAfterWrite().catch(() => {
+        if (!disposed && filesSession.value === owner)
+          window.$message.error(t("mygo.downloads.fileRefreshFailed"));
+      });
+    },
+  });
+  filePending.value = new Set(filePending.value).add(id);
+  try {
+    if (action === "reveal") {
+      if (!(await actions.reveal(song)) && current())
+        window.$message.error(t("message.local_file_action_failed"));
+    } else {
+      const result = await actions.remove(song);
+      if (result.removed && result.current) window.$message.success(t("menu.delete_file_success"));
+      else if (current()) window.$message.error(t("message.local_file_action_failed"));
+    }
+  } finally {
+    if (!disposed && filesSession.value === owner)
+      filePending.value = new Set([...filePending.value].filter((value) => value !== id));
+  }
+}
+function taskStatus(task: LocalDownloadTask): string {
+  if (task.done && task.committed) return t("common.completed");
+  if (task.warning === "cancelled") return t("mygo.downloads.cancelled");
+  if (task.phase === "active" && task.percent !== undefined) return `${task.percent}%`;
+  return t(`mygo.downloads.phase.${task.phase}`);
+}
 function bytes(value: number): string {
   if (value < 1024) return `${value} B`;
   if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KiB`;
@@ -451,19 +463,9 @@ function bytes(value: number): string {
       }
     }
   }
-  .clear-tasks {
-    margin-top: 12px;
-  }
   .download-downloaded {
     flex: 1;
     min-height: 0;
-  }
-  .completed-notice {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 12px;
-    margin-bottom: 12px;
   }
   .empty {
     margin-top: 60px;

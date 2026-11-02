@@ -3,6 +3,20 @@
     "pending": "待重新授权的目录",
     "filter": "筛选歌曲名称、歌手或专辑",
     "play_filtered": "播放筛选结果",
-    "no_matches": "没有匹配的歌曲"
+    "no_matches": "没有匹配的歌曲",
+    "scanDetails": "展开查看文件与原因",
+    "scanReasons": {
+      "path": "无法安全访问此路径",
+      "read-directory": "无法读取目录",
+      "changed": "文件或目录在扫描期间发生变化",
+      "item-limit": "达到本次扫描条目上限",
+      "stat": "无法读取文件属性",
+      "symlink": "已跳过符号链接",
+      "depth-limit": "达到本次扫描目录深度上限",
+      "special-file": "已跳过特殊文件",
+      "reference-limit": "达到文件引用数量上限",
+      "index-save-failed": "歌曲已读取，但曲库索引保存失败",
+      "unknown": "扫描未完成，请根据原因码检查"
+    }
   }
 }

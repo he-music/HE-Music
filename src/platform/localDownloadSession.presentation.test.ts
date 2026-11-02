@@ -106,5 +106,21 @@ it("keeps captured song presentation across retries without persisting its cover
   expect(
     restored.tasks.value.every((task) => task.target?.relativePath === "Artist/Album/Song.mp3"),
   ).toBe(true);
+  expect(
+    restored.tasks.value.every(
+      (task) =>
+        task.display?.artists === expected.artists &&
+        task.display.album === expected.album &&
+        task.display.duration === expected.duration,
+    ),
+  ).toBe(true);
+  expect(history.every((task) => typeof task.createdAt === "number")).toBe(true);
   expect(restored.tasks.value.every((task) => task.display?.cover !== expected.cover)).toBe(true);
+  const retryAfterRestart = await restored.retry(retried!);
+  const restartedTask = restored.tasks.value.find((task) => task.id === retryAfterRestart);
+  expect(restartedTask?.display).toMatchObject({
+    artists: expected.artists,
+    album: expected.album,
+    duration: expected.duration,
+  });
 });

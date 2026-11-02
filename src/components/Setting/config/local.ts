@@ -198,28 +198,6 @@ export const useLocalSettings = (): SettingConfig => {
             }),
           },
           {
-            key: "downloadLyricTranslation",
-            label: t("setting.local.download_song_lyric_trans"),
-            type: "switch",
-            description: t("setting.local.download_song_lyric_trans_tip"),
-            disabled: computed(() => !settingStore.downloadMeta || !settingStore.downloadLyric),
-            value: computed({
-              get: () => settingStore.downloadLyricTran,
-              set: (v) => (settingStore.downloadLyricTran = v),
-            }),
-          },
-          {
-            key: "downloadLyricRomaji",
-            label: t("setting.local.download_song_lyric_roma"),
-            type: "switch",
-            description: t("setting.local.download_song_lyric_roma_tip"),
-            disabled: computed(() => !settingStore.downloadMeta || !settingStore.downloadLyric),
-            value: computed({
-              get: () => settingStore.downloadLyricRoma,
-              set: (v) => (settingStore.downloadLyricRoma = v),
-            }),
-          },
-          {
             key: "fileNameFormat",
             label: t("setting.local.file_naming_format"),
             type: "select",

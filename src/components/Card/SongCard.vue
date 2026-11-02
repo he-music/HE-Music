@@ -163,7 +163,7 @@ import { usePlayer } from "@/utils/player";
 import blob from "@/utils/blob";
 import type { SongInfo } from "@/types/main.hemusic";
 import { getSizeCover } from "@/utils/format";
-import { TagProps } from "naive-ui";
+import type { TagProps } from "naive-ui";
 import { IsValidId, songEqual } from "@/utils/song";
 import { FeatureSupportFlag } from "@/api/platform";
 import { useI18n } from "vue-i18n";
@@ -222,7 +222,7 @@ const localCover = async (show: boolean) => {
   if (blobURL) song.value.cover = blobURL;
 };
 
-const getQuality = (song: SongInfo) => {
+const getQuality = (song: SongInfo): { name?: string; type?: TagProps["type"] } => {
   if (song.path) {
     switch (song.quality) {
       case "MASTER":
@@ -269,10 +269,7 @@ const getQuality = (song: SongInfo) => {
   }
   return {};
 };
-const quality = getQuality(song.value) as {
-  name?: string;
-  type: TagProps["type"];
-};
+const quality = computed(() => getQuality(song.value));
 </script>
 
 <style lang="scss" scoped>

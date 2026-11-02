@@ -80,8 +80,6 @@ export function createLocalDownloadPlan(
     | "downloadMeta"
     | "downloadCover"
     | "downloadLyric"
-    | "downloadLyricTran"
-    | "downloadLyricRoma"
     | "saveMetaFile"
   >,
 ): LocalDownloadPlan {
@@ -105,8 +103,8 @@ export function createLocalDownloadPlan(
   return {
     filenameStem: sanitizeDownloadSegment(filenameStem),
     resolveOptions: {
-      writeLyricTranslation: settings.downloadLyric && settings.downloadLyricTran,
-      writeLyricRomaji: settings.downloadLyric && settings.downloadLyricRoma,
+      writeLyricTranslation: false,
+      writeLyricRomaji: false,
     },
     options: {
       ...(relativeDirectory ? { relativeDirectory } : {}),

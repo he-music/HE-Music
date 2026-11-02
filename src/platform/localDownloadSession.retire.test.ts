@@ -146,7 +146,7 @@ describe("localDownloadSession retire", () => {
     resolver.resolve({ url: "https://example.test/fresh", format: "mp3" });
     await retry;
   });
-  it("waits for committed metadata refresh before retiring a successful download", async () => {
+  it("removes a completed record while indexing is pending and ignores the late index response", async () => {
     const id = (await session.start(input))!;
     const metadata = deferred<void>();
     onCommitted.mockReturnValueOnce(metadata.promise);
@@ -161,10 +161,10 @@ describe("localDownloadSession retire", () => {
     const reading = session.refresh(id);
     await vi.advanceTimersByTimeAsync(0);
     expect(session.tasks.value[0].refresh).toBe("pending");
-    expect(await session.retire(id)).toBe(false);
+    expect(await session.retire(id)).toBe(true);
     metadata.resolve();
     await reading;
-    expect(await session.retire(id)).toBe(true);
+    expect(session.tasks.value).toHaveLength(0);
     expect(onCommitted).toHaveBeenCalledTimes(1);
   });
   it("drops late retire acknowledgments across grant invalidation and owner replacement", async () => {
@@ -184,5 +184,113 @@ describe("localDownloadSession retire", () => {
       expect(session.tasks.value.map((task) => task.id)).toEqual([next]);
       expect(await session.retire(next)).toBe(true);
     }
+  });
+  it("removes an active task with one request only after cancellation cleanup finishes", async () => {
+    const id = (await session.start(input))!;
+    const removing = session.remove(id);
+    expect(session.remove(id)).toBe(removing);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(access.cancel).toHaveBeenCalledOnce();
+    expect(access.forget).not.toHaveBeenCalled();
+    expect(session.tasks.value).toHaveLength(1);
+    expect(await session.retry(id)).toBeUndefined();
+    vi.mocked(access.read).mockResolvedValueOnce(state(id, { done: true, code: "cancelled" }));
+    await vi.advanceTimersByTimeAsync(250);
+    expect(await removing).toBe(true);
+    expect(access.forget).toHaveBeenCalledExactlyOnceWith(id);
+    expect(session.tasks.value).toEqual([]);
+  });
+  it("retains an unconfirmed or rejected removal and clears removal timers on invalidation", async () => {
+    const id = (await session.start(input))!;
+    const timedOut = session.remove(id);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await timedOut).toBe(false);
+    expect(session.tasks.value).toHaveLength(1);
+    expect(access.forget).not.toHaveBeenCalled();
+    const invalidated = session.remove(id);
+    current = false;
+    session.invalidate("grant");
+    expect(await invalidated).toBe(false);
+    expect(session.tasks.value).toEqual([]);
+  });
+  it("removes failed and saved task records without canceling or deleting a committed file", async () => {
+    const failed = await finish();
+    expect(await session.remove(failed)).toBe(true);
+    const id = (await session.start(input))!;
+    vi.mocked(access.read).mockResolvedValueOnce(
+      state(id, {
+        done: true,
+        code: "ok",
+        committed: true,
+        ref: { grantToken: "grant", relativePath: "song.mp3", fileId: "file", version: "version" },
+      }),
+    );
+    await session.refresh(id);
+    expect(onCommitted).toHaveBeenCalledWith(
+      "grant",
+      expect.objectContaining({ ref: expect.objectContaining({ grantToken: "grant" }) }),
+    );
+    expect(await session.remove(id)).toBe(true);
+    expect(access.cancel).not.toHaveBeenCalled();
+    expect(access.forget).toHaveBeenCalledTimes(2);
+    expect(session.tasks.value).toEqual([]);
+  });
+  it("keeps a task when native removal fails and permits retrying removal", async () => {
+    const id = await finish();
+    vi.mocked(access.forget!).mockResolvedValueOnce(false);
+    expect(await session.remove(id)).toBe(false);
+    expect(session.tasks.value).toHaveLength(1);
+    expect(await session.remove(id)).toBe(true);
+  });
+  it("retries a saved file's failed directory refresh without starting or querying another transfer", async () => {
+    const id = (await session.start(input))!;
+    onCommitted.mockRejectedValueOnce(new Error("scan failed"));
+    vi.mocked(access.read).mockResolvedValueOnce(
+      state(id, {
+        done: true,
+        code: "ok",
+        committed: true,
+        ref: { grantToken: "grant", relativePath: "song.mp3", fileId: "file", version: "version" },
+      }),
+    );
+    await session.refresh(id);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.tasks.value[0].refresh).toBe("failed");
+    await session.refresh(id);
+    expect(session.tasks.value[0].refresh).toBe("complete");
+    expect(onCommitted).toHaveBeenCalledTimes(2);
+    expect(access.start).toHaveBeenCalledOnce();
+    expect(access.read).toHaveBeenCalledOnce();
+  });
+  it("replaces a failed row after retry is accepted and retains it if a replacement cannot start", async () => {
+    const id = await finish();
+    const replacement = await session.retry(id);
+    expect(replacement).toBeTruthy();
+    expect(access.forget).toHaveBeenCalledWith(id);
+    expect(session.tasks.value.map((task) => task.id)).toEqual([replacement]);
+    if (!replacement) throw new Error("Missing replacement");
+    vi.mocked(access.read).mockResolvedValueOnce(
+      state(replacement, { done: true, code: "network_error" }),
+    );
+    await session.refresh(replacement);
+    const active = (await session.start(input))!;
+    expect(await session.retry(replacement)).toBeUndefined();
+    expect(session.tasks.value.some((task) => task.id === replacement)).toBe(true);
+    expect(session.tasks.value.some((task) => task.id === active)).toBe(true);
+  });
+  it("keeps newly reported cleanup warnings visible until a second explicit removal", async () => {
+    const id = (await session.start(input))!;
+    vi.mocked(access.cancel).mockResolvedValueOnce(
+      state(id, {
+        done: true,
+        code: "cleanup_failed",
+        residualName: "song.part",
+      }),
+    );
+    expect(await session.remove(id)).toBe(false);
+    expect(session.tasks.value[0].residualName).toBe("song.part");
+    expect(access.forget).not.toHaveBeenCalled();
+    expect(await session.remove(id)).toBe(true);
+    expect(access.forget).toHaveBeenCalledExactlyOnceWith(id);
   });
 });

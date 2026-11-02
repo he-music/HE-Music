@@ -87,9 +87,7 @@
         </n-tabs>
       </n-flex>
     </n-flex>
-    <n-alert v-if="phase === 'partial'" type="warning" :show-icon="false">
-      {{ t("local.scan_partial_detail", { count: issueCount }) }}
-    </n-alert>
+    <LocalScanIssues />
     <RouterView v-slot="{ Component }">
       <Transition :name="`router-${settingStore.routeAnimation}`" mode="out-in">
         <KeepAlive v-if="settingStore.useKeepAlive">
@@ -109,6 +107,7 @@
 
 <script setup lang="ts">
 import { computed, KeepAlive, shallowRef, watch } from "vue";
+import LocalScanIssues from "@/components/Local/LocalScanIssues.vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
 import type { DropdownOption } from "naive-ui";
 import { useI18n } from "vue-i18n";
@@ -130,8 +129,6 @@ const settingStore = useSettingStore();
 const ready = computed(() => filesSession.value?.ready.value ?? false);
 const grantCount = computed(() => filesSession.value?.directories.value.length ?? 0);
 const scanning = computed(() => session.value?.scanning.value ?? false);
-const phase = computed(() => session.value?.phase.value ?? "idle");
-const issueCount = computed(() => session.value?.issues.value.length ?? 0);
 const localType = computed(() => String(route.name ?? "local-songs"));
 const query = shallowRef("");
 const defaultMusicPath = shallowRef("");

@@ -28,6 +28,30 @@ function entry(id: string, title: string): ScanEntry {
     },
   };
 }
+it.each([
+  { codec: "mp3", rate: 44100, depth: 0, bitrate: 320, quality: "HQ" },
+  { codec: "mp3", rate: 44100, depth: 0, bitrate: 128, quality: undefined },
+  { codec: "flac", rate: 44100, depth: 16, bitrate: 800, quality: "SQ" },
+  { codec: "alac", rate: 44100, depth: 24, bitrate: 800, quality: "HIRES" },
+  { codec: "pcm", rate: 96000, depth: 24, bitrate: 4608, quality: "HIRES" },
+  { codec: "pcm-float", rate: 48000, depth: 32, bitrate: 3072, quality: "MASTER" },
+  { codec: "aac", rate: 96000, depth: 24, bitrate: 320, quality: "HQ" },
+  { codec: "", rate: 0, depth: 0, bitrate: 0, quality: undefined },
+])(
+  "derives local quality from audio properties: $codec $depth bit $rate Hz",
+  ({ codec, rate, depth, bitrate, quality }) => {
+    const file = entry("audio", "Audio");
+    file.metadata = {
+      ...file.metadata,
+      Codec: codec,
+      SampleRateHz: rate,
+      BitsPerSample: depth,
+      BitrateKbps: bitrate,
+    };
+    const rows = createLibrarySongRows(shallowRef([file]));
+    expect(rows.value[0].quality).toBe(quality);
+  },
+);
 it("filters by title, artist and album while preserving row identity and transient capabilities", () => {
   const first = entry("first", "中文标题");
   const source = shallowRef<readonly ScanEntry[]>([first, entry("second", "Other")]);

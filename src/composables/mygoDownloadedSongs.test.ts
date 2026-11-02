@@ -28,6 +28,27 @@ function entry(token = "downloads", path = "album/song.flac"): ScanEntry {
     },
   };
 }
+function record(
+  id = "download",
+  directory = "/Downloads",
+): import("@/platform/localDownloadSession").LocalDownloadTask {
+  return {
+    id,
+    filename: "song.flac",
+    label: "Original title",
+    quality: "flac",
+    song: { id: "online-id", platform: "provider" },
+    target: { directory, relativePath: "album/song.flac" },
+    phase: "success",
+    done: true,
+    committed: true,
+    received: 1024,
+    total: 1024,
+    percent: 100,
+    refresh: "none",
+    retryable: false,
+  };
+}
 function fixture() {
   const entries = shallowRef<readonly ScanEntry[]>([entry(), entry("music")]);
   const grants = shallowRef([
@@ -41,48 +62,49 @@ function fixture() {
       return entries.value;
     },
   });
-  const directory = shallowRef("/Downloads");
-  return { entries, grants, owner, directory, ...useMygoDownloadedSongs(owner, directory) };
+  const records = shallowRef([record()]);
+  return { entries, grants, owner, records, ...useMygoDownloadedSongs(owner, records) };
 }
-it("shows every scanned song in the configured directory without requiring download history", () => {
+it("binds only files associated with completed records and never imports unrelated directory songs", () => {
   const f = fixture();
-  expect(f.songs.value).toMatchObject([
-    { name: "Directory song", platform: "local", id: "mygo-local:downloads:album/song.flac" },
-  ]);
-  expect(JSON.stringify(f.songs.value)).not.toMatch(/grantToken|version/);
-  const previous = f.songs.value[0];
-  f.entries.value = [...f.entries.value];
-  expect(f.songs.value[0]).toBe(previous);
-});
-it("switches the entire list when the default download directory changes", () => {
-  const f = fixture();
-  f.directory.value = "/Music";
-  expect(f.songs.value[0].id).toBe("mygo-local:music:album/song.flac");
-  f.directory.value = "/missing";
-  expect(f.songs.value).toEqual([]);
-  f.directory.value = "";
-  expect(f.songs.value).toEqual([]);
-});
-it("clears immediately on initialization, revoked grants, owner changes and removal", () => {
-  const f = fixture();
-  f.owner.value!.ready.value = false;
-  expect(f.songs.value).toEqual([]);
-  f.owner.value!.ready.value = true;
   expect(f.songs.value).toHaveLength(1);
+  expect(f.files.value.has("download")).toBe(true);
+  expect(f.records.value[0].song).toEqual({ id: "online-id", platform: "provider" });
+  expect(f.records.value[0].label).toBe("Original title");
+  f.records.value = [];
+  expect(f.songs.value).toEqual([]);
+  expect(f.entries.value).toHaveLength(2);
+});
+it("keeps records when the downloaded file is missing, moved, or no longer authorized", () => {
+  const f = fixture();
+  const original = f.records.value[0];
+  f.entries.value = [];
+  expect(f.files.value.size).toBe(0);
+  expect(f.records.value).toEqual([original]);
+  f.entries.value = [entry()];
+  expect(f.files.value.has(original.id)).toBe(true);
   f.grants.value = [];
-  expect(f.songs.value).toEqual([]);
-  f.owner.value = { ready: shallowRef(true), directories: computed(() => []), libraryEntries: [] };
-  expect(f.songs.value).toEqual([]);
+  expect(f.files.value.size).toBe(0);
+  expect(f.records.value[0]).toBe(original);
   f.owner.value = undefined;
   expect(f.songs.value).toEqual([]);
+  expect(f.records.value).toEqual([original]);
 });
-it("rejects stale or mismatched file references and follows fresh scans", () => {
+it("uses each record's captured target across changes to the configured download directory", () => {
   const f = fixture();
-  f.entries.value = [
-    entry("stale"),
-    { ...entry(), ref: { ...entry().ref, relativePath: "other.flac" } },
-  ];
+  f.records.value = [record("old"), record("new", "/Music")];
+  expect([...f.files.value.keys()]).toEqual(["old", "new"]);
+  f.entries.value = [entry("music")];
+  expect([...f.files.value.keys()]).toEqual(["new"]);
+  expect(f.records.value).toHaveLength(2);
+});
+it("rejects stale and mismatched references and keeps stable file rows for unchanged entries", () => {
+  const f = fixture();
+  const song = f.songs.value[0];
+  f.entries.value = [...f.entries.value];
+  expect(f.songs.value[0]).toBe(song);
+  f.entries.value = [{ ...entry(), ref: { ...entry().ref, relativePath: "different.flac" } }];
   expect(f.songs.value).toEqual([]);
-  f.entries.value = [entry()];
-  expect(f.songs.value).toHaveLength(1);
+  f.owner.value!.ready.value = false;
+  expect(f.songs.value).toEqual([]);
 });

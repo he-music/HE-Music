@@ -29,6 +29,10 @@ function queue(rows = [task()]): MygoDownloadQueue & { tasks: Ref<readonly Local
     cancel: vi.fn(async () => {}),
     refresh: vi.fn(async () => {}),
     retry: vi.fn(async () => "new"),
+    remove: vi.fn(async (id) => {
+      tasks.value = tasks.value.filter((row) => row.id !== id);
+      return true;
+    }),
     retire: vi.fn(async (id) => {
       tasks.value = tasks.value.filter((row) => row.id !== id);
       return true;
@@ -92,7 +96,7 @@ it("retries failed tasks, keeps retirement failures, clears only eligible done r
   expect(view.errors.value.has("failed")).toBe(false);
   downloads.retire = vi.fn(async () => false);
   await view.clearDone();
-  expect(downloads.retire).toHaveBeenCalledTimes(2);
+  expect(downloads.retire).toHaveBeenCalledTimes(3);
   expect(view.errors.value.has("success")).toBe(true);
   expect(view.tasks.value).toHaveLength(4);
   scope.stop();
@@ -153,6 +157,7 @@ it("does not add a poller or stop real session downloads when a page scope close
     refresh: (id) => session.refresh(id),
     cancel: (id) => session.cancel(id),
     retry: (id) => session.retry(id),
+    remove: (id) => session.remove(id),
     retire: async () => false,
   };
   const owner = shallowRef<MygoDownloadTasksOwner | undefined>({ downloads });

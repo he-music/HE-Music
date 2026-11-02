@@ -131,10 +131,11 @@ export class FilesSession {
         directoryToken: (path) =>
           this.directoryGrants.value.find((grant) => grant.displayPath === path)?.token,
         resolveURL: deps?.resolveURL,
-        onCommitted: async () => {
+        onCommitted: async (token, file) => {
           const local = this.local;
           if (this.disposed || !this.ready.value || !local) throw new Error("Files unavailable");
-          await local.refreshAfterDownload();
+          if (file) local.publishDownloadedFile(file);
+          await local.refreshAfterDownload(token);
           if (
             this.disposed ||
             !this.ready.value ||

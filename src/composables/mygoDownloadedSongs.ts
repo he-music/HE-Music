@@ -1,5 +1,6 @@
 import { computed, type Ref } from "vue";
 import type { FilesSession } from "@/platform/filesSession";
+import type { LocalDownloadTask } from "@/platform/localDownloadSession";
 import { createLibrarySongRows } from "@/platform/librarySongRows";
 
 export type MygoDownloadedSongsOwner = Pick<
@@ -7,22 +8,35 @@ export type MygoDownloadedSongsOwner = Pick<
   "ready" | "directories" | "libraryEntries"
 >;
 
-/** The download directory supplies songs; history never supplies file capabilities. */
+/** Resolve optional file actions for records; scanning never creates or removes a task. */
 export function useMygoDownloadedSongs(
   owner: Readonly<Ref<MygoDownloadedSongsOwner | undefined>>,
-  directory: Readonly<Ref<string>>,
+  tasks: Readonly<Ref<readonly LocalDownloadTask[]>>,
 ) {
-  const entries = computed(() => {
+  const matches = computed(() => {
     const current = owner.value;
-    if (!current?.ready.value || !directory.value) return [];
-    const tokens = new Set(
-      current.directories.value
-        .filter((grant) => grant.displayPath === directory.value)
-        .map((grant) => grant.token),
-    );
-    return current.libraryEntries.filter(
-      (entry) => tokens.has(entry.ref.grantToken) && entry.relativePath === entry.ref.relativePath,
-    );
+    if (!current?.ready.value) return [];
+    const entries = current.libraryEntries;
+    return tasks.value.flatMap((task) => {
+      if (!task.done || !task.committed || !task.target) return [];
+      const target = task.target;
+      const tokens = new Set(
+        current.directories.value
+          .filter((grant) => grant.displayPath === target.directory)
+          .map((grant) => grant.token),
+      );
+      const entry = entries.find(
+        (entry) =>
+          tokens.has(entry.ref.grantToken) &&
+          entry.relativePath === target.relativePath &&
+          entry.ref.relativePath === target.relativePath,
+      );
+      return entry ? [{ id: task.id, entry }] : [];
+    });
   });
-  return { songs: createLibrarySongRows(entries) };
+  const songs = createLibrarySongRows(computed(() => matches.value.map((match) => match.entry)));
+  const files = computed(
+    () => new Map(matches.value.map((match, index) => [match.id, songs.value[index]])),
+  );
+  return { songs, files };
 }

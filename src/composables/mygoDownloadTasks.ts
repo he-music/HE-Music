@@ -3,7 +3,7 @@ import type { LocalDownloadSession, LocalDownloadTask } from "@/platform/localDo
 
 export interface MygoDownloadQueue extends Pick<
   LocalDownloadSession,
-  "cancel" | "refresh" | "retry"
+  "cancel" | "refresh" | "retry" | "remove"
 > {
   readonly tasks: Readonly<Ref<readonly LocalDownloadTask[]>>;
   retire(id: string): Promise<boolean>;
@@ -11,7 +11,7 @@ export interface MygoDownloadQueue extends Pick<
 export interface MygoDownloadTasksOwner {
   readonly downloads?: MygoDownloadQueue;
 }
-export type DownloadTaskAction = "cancel" | "refresh" | "retry" | "retire";
+export type DownloadTaskAction = "cancel" | "refresh" | "retry" | "retire" | "remove";
 
 /** View state only: FilesSession retains ownership of tasks, authorization and polling. */
 export function useMygoDownloadTasks(owner: Readonly<Ref<MygoDownloadTasksOwner | undefined>>) {
@@ -22,7 +22,13 @@ export function useMygoDownloadTasks(owner: Readonly<Ref<MygoDownloadTasksOwner 
   let active = true;
   watch(
     [queue, () => tasks.value.map((task) => task.id)],
-    ([current, ids], [previous]) => {
+    ([current, ids], [previous, previousIDs]) => {
+      if (
+        current === previous &&
+        ids.length === previousIDs.length &&
+        ids.every((id, index) => id === previousIDs[index])
+      )
+        return;
       const keep = new Set(current === previous ? ids : []);
       pending.value = new Map([...pending.value].filter(([id]) => keep.has(id)));
       errors.value = new Set([...errors.value].filter((id) => keep.has(id)));
@@ -39,9 +45,9 @@ export function useMygoDownloadTasks(owner: Readonly<Ref<MygoDownloadTasksOwner 
     const captured = queue.value;
     const task = tasks.value.find((item) => item.id === id);
     if (!active || !captured || !task || pending.value.has(id)) return false;
-    if (action === "retire" && (!task.done || task.refresh === "pending")) return false;
-    if (action === "retry" && !task.retryable) return false;
-    if ((action === "cancel" || action === "refresh") && task.done) return false;
+    if (action === "retire" && !task.done) return false;
+    if (action === "retry" && (!task.retryable || task.committed)) return false;
+    if (action === "cancel" && task.done) return false;
     const ticket = Symbol(id);
     pending.value = new Map(pending.value).set(id, ticket);
     errors.value = new Set([...errors.value].filter((item) => item !== id));
@@ -50,6 +56,7 @@ export function useMygoDownloadTasks(owner: Readonly<Ref<MygoDownloadTasksOwner 
       let succeeded = true;
       if (action === "retry") succeeded = (await captured.retry(id)) !== undefined;
       else if (action === "retire") succeeded = await captured.retire(id);
+      else if (action === "remove") succeeded = await captured.remove(id);
       else await captured[action](id);
       if (!current()) return false;
       if (!succeeded) errors.value = new Set(errors.value).add(id);
@@ -66,6 +73,22 @@ export function useMygoDownloadTasks(owner: Readonly<Ref<MygoDownloadTasksOwner 
     }
   }
 
+  const completed = computed<readonly LocalDownloadTask[]>((previous) => {
+    const rows = tasks.value.filter((task) => task.done && task.committed);
+    return previous &&
+      rows.length === previous.length &&
+      rows.every((task, index) => task === previous[index])
+      ? previous
+      : rows;
+  });
+  const unfinished = computed<readonly LocalDownloadTask[]>((previous) => {
+    const rows = tasks.value.filter((task) => !task.done || !task.committed);
+    return previous &&
+      rows.length === previous.length &&
+      rows.every((task, index) => task === previous[index])
+      ? previous
+      : rows;
+  });
   const retryable = computed(() => tasks.value.filter((task) => task.retryable && !task.committed));
   async function retryAll(): Promise<void> {
     const captured = queue.value;
@@ -76,9 +99,7 @@ export function useMygoDownloadTasks(owner: Readonly<Ref<MygoDownloadTasksOwner 
     }
   }
 
-  const removable = computed(() =>
-    tasks.value.filter((task) => task.done && task.refresh !== "pending"),
-  );
+  const removable = computed(() => tasks.value.filter((task) => task.done));
   async function clearDone(): Promise<void> {
     const captured = queue.value;
     const ids = removable.value.map((task) => task.id);
@@ -87,5 +108,16 @@ export function useMygoDownloadTasks(owner: Readonly<Ref<MygoDownloadTasksOwner 
       await run(id, "retire");
     }
   }
-  return { tasks, pending, errors, removable, run, clearDone, retryable, retryAll };
+  return {
+    tasks,
+    completed,
+    unfinished,
+    pending,
+    errors,
+    removable,
+    run,
+    clearDone,
+    retryable,
+    retryAll,
+  };
 }

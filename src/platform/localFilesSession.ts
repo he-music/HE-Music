@@ -20,6 +20,7 @@ function waitForPage(signal: AbortSignal): Promise<void> {
     if (signal.aborted) finish();
   });
 }
+const entryKey = (entry: ScanEntry) => `${entry.ref.grantToken}\0${entry.relativePath}`;
 
 const activeSession = shallowRef<LocalFilesSession>();
 export const localFilesSession = computed(() => activeSession.value);
@@ -40,6 +41,7 @@ export function nativeLocalEntry(songID: string): ScanEntry | undefined {
 /** Transient scan results only: file capabilities never enter persisted song data. */
 export class LocalFilesSession {
   private readonly results = shallowRef<readonly ScanEntry[]>([]);
+  private readonly downloaded = new Map<string, ScanEntry>();
   private readonly scanIssues = shallowRef<readonly DirectoryScanIssue[]>([]);
   private readonly scanPhase = shallowRef<ScanPhase>("idle");
   readonly entries = computed(() => this.results.value);
@@ -53,6 +55,8 @@ export class LocalFilesSession {
   private readonly stop: () => void;
   private downloadRefresh?: Promise<void>;
   private downloadRevision = 0;
+  private readonly downloadTokens = new Set<string>();
+  private refreshAllDownloads = false;
 
   constructor(private readonly source: Readonly<Ref<FilesSession | undefined>>) {
     activeSession.value = this;
@@ -61,6 +65,10 @@ export class LocalFilesSession {
       ([session, ready], [previous]) => {
         this.cancel();
         const tokens = new Set(ready ? session?.directories.value.map((grant) => grant.token) : []);
+        for (const [key, entry] of this.downloaded) {
+          if (session !== previous || !tokens.has(entry.ref.grantToken))
+            this.downloaded.delete(key);
+        }
         this.results.value =
           session !== previous
             ? []
@@ -73,6 +81,25 @@ export class LocalFilesSession {
       },
       { flush: "sync" },
     );
+  }
+
+  /** Only live, native-confirmed download references enter this transient index. */
+  publishDownloadedFile(entry: ScanEntry): void {
+    const owner = this.source.value;
+    if (
+      this.disposed ||
+      !owner?.ready.value ||
+      !entry.ref.fileId ||
+      !entry.ref.version ||
+      entry.relativePath !== entry.ref.relativePath ||
+      !owner.directories.value.some((grant) => grant.token === entry.ref.grantToken)
+    )
+      return;
+    this.downloaded.set(entryKey(entry), entry);
+    this.results.value = [
+      ...this.results.value.filter((item) => entryKey(item) !== entryKey(entry)),
+      entry,
+    ];
   }
 
   directoryPath(token: string): string | undefined {
@@ -95,19 +122,27 @@ export class LocalFilesSession {
     this.cancel();
     this.stop();
     this.results.value = [];
+    this.downloaded.clear();
     this.scanIssues.value = [];
   }
 
   /** Keep published refs while coalescing scans for newly committed downloads. */
-  refreshAfterDownload(): Promise<void> {
+  refreshAfterDownload(token?: string): Promise<void> {
     if (this.disposed) return Promise.reject(new Error("Library unavailable"));
+    if (token && !this.source.value?.directories.value.some((grant) => grant.token === token))
+      return Promise.reject(new Error("Download directory unavailable"));
     this.downloadRevision++;
+    if (token) this.downloadTokens.add(token);
+    else this.refreshAllDownloads = true;
     if (this.downloadRefresh) return this.downloadRefresh;
     const refresh = async () => {
       let revision: number;
       do {
         revision = this.downloadRevision;
-        await this.scan();
+        const tokens = this.refreshAllDownloads ? undefined : new Set(this.downloadTokens);
+        this.downloadTokens.clear();
+        this.refreshAllDownloads = false;
+        await this.scan(tokens);
         if (this.disposed || this.scanPhase.value !== "complete") {
           throw new Error("Library refresh incomplete");
         }
@@ -121,6 +156,7 @@ export class LocalFilesSession {
 
   async refreshAfterWrite(): Promise<void> {
     if (this.disposed) return;
+    this.downloaded.clear();
     this.results.value = [];
     const scanning = this.scan();
     const revision = this.revision;
@@ -147,7 +183,7 @@ export class LocalFilesSession {
     }
   }
 
-  async scan(): Promise<void> {
+  async scan(tokens?: ReadonlySet<string>): Promise<void> {
     if (this.disposed) return;
     this.cancel();
     const session = this.source.value;
@@ -166,6 +202,7 @@ export class LocalFilesSession {
     let failed = false;
     let partial = false;
     for (const grant of session.directories.value) {
+      if (tokens && !tokens.has(grant.token)) continue;
       if (!current()) break;
       const access = session.scanAccess(grant.token);
       if (!access) {
@@ -174,6 +211,8 @@ export class LocalFilesSession {
       }
       let operationID: string | undefined;
       let finished = false;
+      const downloadedAtStart = new Map(this.downloaded);
+      let directoryPartial = false;
       const entries: ScanEntry[] = [];
       try {
         const operation = await access.start();
@@ -198,6 +237,7 @@ export class LocalFilesSession {
           entries.push(...page.entries);
           if (page.issues.length) {
             partial = true;
+            directoryPartial = true;
             this.scanIssues.value = [
               ...this.scanIssues.value,
               ...page.issues.map((issue) => ({ ...issue, grantToken: grant.token })),
@@ -206,9 +246,22 @@ export class LocalFilesSession {
           cursor = page.nextCursor;
           if (page.done) {
             finished = true;
+            const scanned = new Set(entries.map(entryKey));
+            const retained: ScanEntry[] = [];
+            for (const [key, entry] of this.downloaded) {
+              if (entry.ref.grantToken !== grant.token) continue;
+              if (downloadedAtStart.get(key) !== entry) {
+                const previous = entries.findIndex((item) => entryKey(item) === key);
+                if (previous >= 0) entries.splice(previous, 1);
+                retained.push(entry);
+              } else if (scanned.has(key)) this.downloaded.delete(key);
+              else if (directoryPartial) retained.push(entry);
+              else this.downloaded.delete(key);
+            }
             this.results.value = [
               ...this.results.value.filter((entry) => entry.ref.grantToken !== grant.token),
               ...entries,
+              ...retained,
             ];
             break;
           }

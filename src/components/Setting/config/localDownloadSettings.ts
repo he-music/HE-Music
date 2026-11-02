@@ -1,31 +1,15 @@
-import { computed } from "vue";
+import { computed, h } from "vue";
 import { t } from "@/i18n";
 import type { SettingConfig } from "@/types/settings";
 import { useSettingStore } from "@/stores";
 import { filesSession } from "@/platform/filesSession";
 
-type LegacyBooleanKey =
-  | "downloadMeta"
-  | "downloadCover"
-  | "downloadLyric"
-  | "downloadLyricTran"
-  | "downloadLyricRoma"
-  | "saveMetaFile";
+type LegacyBooleanKey = "downloadMeta" | "downloadCover" | "downloadLyric" | "saveMetaFile";
 
 const legacyBooleanSettings: readonly [LegacyBooleanKey, string, string][] = [
   ["downloadMeta", "setting.local.download_song_meta", "setting.local.download_song_meta_tip"],
   ["downloadCover", "setting.local.download_song_cover", "setting.local.download_song_cover_tip"],
   ["downloadLyric", "setting.local.download_song_lyric", "setting.local.download_song_lyric_tip"],
-  [
-    "downloadLyricTran",
-    "setting.local.download_song_lyric_trans",
-    "setting.local.download_song_lyric_trans_tip",
-  ],
-  [
-    "downloadLyricRoma",
-    "setting.local.download_song_lyric_roma",
-    "setting.local.download_song_lyric_roma_tip",
-  ],
   ["saveMetaFile", "setting.local.save_song_meta_file", "setting.local.save_song_meta_file_tip"],
 ];
 
@@ -45,8 +29,26 @@ export function createMygoDownloadSettings(hooks: MygoDownloadSettingsHooks = {}
       if (result.status === "failed") window.$message.error(t("setting.local.directory_failed"));
       return;
     }
-    if (result.value.status !== "selected" || !result.value.grant) return;
-    settings.downloadPath = result.value.grant.displayPath;
+    const selection = result.value;
+    const grant =
+      selection.status === "selected"
+        ? selection.grant
+        : selection.status === "overlap" && selection.relation === "duplicate"
+          ? owner.directories.value.find((grant) => grant.token === selection.existingToken)
+          : undefined;
+    if (!grant) {
+      if (selection.status === "overlap")
+        window.$message.warning(t("message.local_path_overlapping"));
+      return;
+    }
+    if (
+      !owner.ready.value ||
+      !owner.directories.value.some(
+        (item) => item.token === grant.token && item.epoch === grant.epoch,
+      )
+    )
+      return;
+    settings.downloadPath = grant.displayPath;
     await hooks.scanLibrary?.();
   };
   return {
@@ -58,8 +60,18 @@ export function createMygoDownloadSettings(hooks: MygoDownloadSettingsHooks = {}
             key: "downloadPath",
             label: t("setting.local.default_download_path"),
             type: "button",
-            description: computed(
-              () => settings.downloadPath || t("setting.local.default_download_path_empty"),
+            description: () => {
+              const path = settings.downloadPath;
+              if (!path) return t("setting.local.default_download_path_empty");
+              return h(
+                "span",
+                { style: { display: "block", overflowWrap: "anywhere" }, title: path },
+                path,
+              );
+            },
+            title: computed(() => settings.downloadPath),
+            disabled: computed(
+              () => !filesSession.value?.ready.value || filesSession.value.busy.value,
             ),
             buttonLabel: t("common.change"),
             action: choose,
@@ -82,11 +94,9 @@ export function createMygoDownloadSettings(hooks: MygoDownloadSettingsHooks = {}
             disabled: computed(() =>
               key === "downloadCover" || key === "downloadLyric"
                 ? !settings.downloadMeta
-                : key === "downloadLyricTran" || key === "downloadLyricRoma"
-                  ? !settings.downloadMeta || !settings.downloadLyric
-                  : key === "saveMetaFile"
-                    ? !settings.downloadMeta
-                    : false,
+                : key === "saveMetaFile"
+                  ? !settings.downloadMeta
+                  : false,
             ),
             value: computed({
               get: () => settings[key],

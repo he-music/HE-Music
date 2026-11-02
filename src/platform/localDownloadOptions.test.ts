@@ -71,6 +71,13 @@ describe("local download options candidate", () => {
     });
   });
 
+  it("ignores legacy translation and romaji preferences for new downloads", () => {
+    expect(createLocalDownloadPlan(song, settings).resolveOptions).toEqual({
+      writeLyricTranslation: false,
+      writeLyricRomaji: false,
+    });
+  });
+
   it("selects the saved default grant by display path", () => {
     const grants = [
       { token: "a", epoch: 1, displayPath: "Music" },

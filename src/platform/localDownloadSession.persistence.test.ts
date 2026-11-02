@@ -98,6 +98,56 @@ const input = {
   }),
   url: "https://example.test/OLD_SIGNED",
 };
+it("retains more than 64 completed task records while releasing native operation slots", async () => {
+  const f = setup([]);
+  await f.session.restored;
+  const live = new Map<string, string>();
+  let filename = "";
+  const access = {
+    ...f.access,
+    start: vi.fn(async (request: { operationId: string }) => {
+      if (live.size) throw new Error("Native operation slot was not released");
+      live.set(request.operationId, filename);
+      return { operationId: request.operationId };
+    }),
+    read: vi.fn(async (id: string) => ({
+      operationId: id,
+      code: "ok",
+      done: true,
+      committed: true,
+      received: 100,
+      total: 100,
+      ref: { grantToken: "new-grant", fileId: id, version: "v1", relativePath: live.get(id)! },
+    })),
+    forget: vi.fn(async (id: string) => live.delete(id)),
+  };
+  f.deps.access.mockReturnValue(access);
+  for (let index = 0; index < 66; index++) {
+    filename = `song-${index}.mp3`;
+    const id = await f.session.start({ ...input, filename });
+    expect(id).toBeTruthy();
+    await f.session.refresh(id!);
+  }
+  expect(access.forget).toHaveBeenCalledTimes(65);
+  expect(f.session.tasks.value).toHaveLength(66);
+  const historical = f.session.tasks.value.find((task) => task.filename === "song-0.mp3");
+  filename = "active.mp3";
+  await f.session.start({ ...input, filename });
+  expect(f.session.tasks.value.find((task) => task.id === historical?.id)).toBe(historical);
+  await f.session.dispose();
+  const stored = f.persistence.save.mock.lastCall?.[0];
+  expect(stored).toHaveLength(67);
+  expect(stored?.filter((task) => task.done && task.committed)).toHaveLength(66);
+  expect(stored?.every((task) => typeof task.createdAt === "number")).toBe(true);
+  const restarted = setup(stored ? [...stored] : []);
+  await restarted.session.restored;
+  expect(restarted.session.tasks.value.filter((task) => task.done && task.committed)).toHaveLength(
+    66,
+  );
+  expect(
+    restarted.session.tasks.value.find((task) => task.id === historical?.id)?.completedAt,
+  ).toBe(historical?.completedAt);
+});
 
 describe("LocalDownloadSession candidate persistence seam", () => {
   it("restores success/failure and converts unfinished tasks without touching the backend", async () => {

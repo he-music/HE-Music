@@ -3,6 +3,20 @@
     "pending": "Folders awaiting access",
     "filter": "Filter by song, artist or album",
     "play_filtered": "Play filtered songs",
-    "no_matches": "No matching songs"
+    "no_matches": "No matching songs",
+    "scanDetails": "Expand to view files and reasons",
+    "scanReasons": {
+      "path": "The path could not be accessed safely",
+      "read-directory": "The directory could not be read",
+      "changed": "The file or directory changed during the scan",
+      "item-limit": "The scan reached its entry limit",
+      "stat": "File attributes could not be read",
+      "symlink": "Symbolic link skipped",
+      "depth-limit": "The scan reached its directory depth limit",
+      "special-file": "Special file skipped",
+      "reference-limit": "The file reference limit was reached",
+      "index-save-failed": "Songs were read, but the library index could not be saved",
+      "unknown": "The scan did not complete. Check the reason code"
+    }
   }
 }

@@ -4,7 +4,7 @@ import {
   type DownloadMetadata,
 } from "../platform/localDownloadSession";
 import { validLocalDownloadFormat } from "@/platform/localDownloadPersistence";
-import { romaSeparator, transSeparator } from "@/utils/lyric";
+import { toLineDownloadLyrics } from "./downloadLyrics";
 
 export interface MygoDownloadResolution {
   readonly url: string;
@@ -19,19 +19,9 @@ function validResolvedURL(value: unknown): value is string {
   return typeof value === "string" && validDownloadHTTPURL(value);
 }
 
-function lyricText(
-  value: unknown,
-  options?: { writeLyrics: boolean; writeTranslation: boolean; writeRomaji: boolean },
-): string {
-  if (!options?.writeLyrics || !value || typeof value !== "object") return "";
-  const data = value as { lyric?: string; trans?: string; roma?: string };
-  return [
-    data.lyric,
-    options.writeTranslation && data.trans ? [transSeparator, data.trans].join("\n") : "",
-    options.writeRomaji && data.roma ? [romaSeparator, data.roma].join("\n") : "",
-  ]
-    .filter(Boolean)
-    .join("\n\n");
+function lyricText(value: unknown): string {
+  if (!value || typeof value !== "object" || !("lyric" in value)) return "";
+  return typeof value.lyric === "string" ? value.lyric : "";
 }
 
 export function createMygoDownloadResolver(
@@ -53,7 +43,7 @@ export function createMygoDownloadResolver(
     return songLyric(...args);
   },
 ): LocalDownloadResolver {
-  return async (quality, source, options, resolveOptions): Promise<MygoDownloadResolution> => {
+  return async (quality, source, options): Promise<MygoDownloadResolution> => {
     try {
       const link = source.links.find((item) => item.name === quality);
       const format = link?.format.toLowerCase();
@@ -109,16 +99,12 @@ export function createMygoDownloadResolver(
         typeof song?.cover === "string" && song.cover ? song.cover : captured?.coverURL;
       if (options?.writeCover && (!resolvedCover || !validDownloadHTTPURL(resolvedCover)))
         throw new Error("Download cover unavailable");
-      const fetchedLyrics = lyricText(lyricResult, {
-        writeLyrics: !!options?.writeLyrics,
-        writeTranslation: !!resolveOptions?.writeLyricTranslation,
-        writeRomaji: !!resolveOptions?.writeLyricRomaji,
-      });
+      const fetchedLyrics = lyricText(lyricResult);
       const metadata = {
         title: typeof song?.name === "string" ? song.name : (captured?.title ?? source.name),
         artists: artists.length ? [...artists] : [...(captured?.artists ?? [])],
         album: album || captured?.album || "",
-        lyrics: fetchedLyrics || captured?.lyrics || "",
+        lyrics: toLineDownloadLyrics(fetchedLyrics || captured?.lyrics),
         ...(resolvedCover ? { coverURL: resolvedCover } : {}),
       };
       return {

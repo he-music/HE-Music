@@ -206,20 +206,15 @@ it("updates dependent download switches and clears the configured path without r
   const items = config.groups.flatMap((group) => group.items);
   const disabled = (key: string) => Vue.toValue(items.find((item) => item.key === key)?.disabled);
   setting.downloadMeta = false;
-  for (const key of [
-    "downloadCover",
-    "downloadLyric",
-    "downloadLyricTran",
-    "downloadLyricRoma",
-    "saveMetaFile",
-  ])
+  for (const key of ["downloadCover", "downloadLyric", "saveMetaFile"])
     expect(disabled(key)).toBe(true);
   setting.downloadMeta = true;
   setting.downloadLyric = false;
   expect(disabled("downloadCover")).toBe(false);
-  expect(disabled("downloadLyricTran")).toBe(true);
   setting.downloadLyric = true;
-  expect(disabled("downloadLyricTran")).toBe(false);
+  expect(
+    items.some((item) => item.key === "downloadLyricTran" || item.key === "downloadLyricRoma"),
+  ).toBe(false);
   setting.downloadPath = "/synthetic/selected";
   const clear = items.find((item) => item.key === "downloadPath")?.extraButton;
   expect(Vue.toValue(clear?.show)).toBe(true);
@@ -239,8 +234,6 @@ describe("LocalMusicDirectory真实SFC", () => {
       "downloadMeta",
       "downloadCover",
       "downloadLyric",
-      "downloadLyricTran",
-      "downloadLyricRoma",
       "saveMetaFile",
       "fileNameFormat",
       "folderStrategy",
@@ -262,6 +255,8 @@ describe("LocalMusicDirectory真实SFC", () => {
     expect(keys).toContain("downloadPath");
     expect(keys).toContain("downloadMeta");
     expect(keys).toContain("showDefaultLocalPath");
+    expect(keys).not.toContain("downloadLyricTranslation");
+    expect(keys).not.toContain("downloadLyricRomaji");
   });
 
   it("重新授权后保存提示并只自动扫描一次，取消与重开不重复扫描", async () => {

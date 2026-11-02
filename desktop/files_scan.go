@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -56,15 +57,16 @@ type scanEvent struct {
 	issue *ScanIssue
 }
 type fileScan struct {
-	state    *nativeFilesState
-	lease    *directoryLease
-	id       string
-	ctx      context.Context
-	cancel   context.CancelFunc
-	queue    chan scanEvent
-	finished chan struct{}
-	mu       sync.Mutex // Serializes cursor consumption, never held across actor calls.
-	cursor   uint64
+	state        *nativeFilesState
+	lease        *directoryLease
+	id           string
+	ctx          context.Context
+	cancel       context.CancelFunc
+	queue        chan scanEvent
+	finished     chan struct{}
+	mu           sync.Mutex // Serializes cursor consumption, never held across actor calls.
+	cursor       uint64
+	loggedIssues int
 }
 
 // The existing state is actor-owned and intentionally unchanged. This bounded
@@ -258,6 +260,10 @@ func (j *fileScan) emit(event scanEvent) bool {
 	}
 }
 func (j *fileScan) issue(path, code string) bool {
+	if j.loggedIssues < 200 {
+		log.Printf("本地音乐扫描提示：文件=%q 原因=%s", path, code)
+		j.loggedIssues++
+	}
 	return j.emit(scanEvent{issue: &ScanIssue{RelativePath: path, Code: code}})
 }
 func (j *fileScan) run() {

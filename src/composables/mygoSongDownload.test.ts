@@ -25,6 +25,7 @@ function setup() {
     retry: vi.fn(async () => "retried"),
     cancel: vi.fn(),
     refresh: vi.fn(),
+    remove: vi.fn(async () => true),
     retire: vi.fn(),
   };
   const ready = shallowRef(true);

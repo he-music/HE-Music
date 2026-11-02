@@ -96,8 +96,29 @@ function fixture(electron: boolean) {
     ...(Array.isArray(value.children) ? value.children.filter(Vue.isVNode).flatMap(all) : []),
   ];
   const image = () => all(render({ $slots: {} }, [])).find((node) => node.type === "s-image");
-  return { song, settings, artwork, invoke, image, enabled: () => enabled?.value };
+  return {
+    song,
+    settings,
+    artwork,
+    invoke,
+    image,
+    qualityTag: () => all(render({ $slots: {} }, [])).find((node) => node.type === "n-tag"),
+    enabled: () => enabled?.value,
+  };
 }
+
+it("updates the quality badge when local audio properties arrive or change", () => {
+  const h = fixture(false);
+  expect(h.qualityTag()).toBeUndefined();
+  h.song.quality = "HQ";
+  expect(h.qualityTag()?.props?.type).toBe("success");
+  h.song.quality = "SQ";
+  expect(h.qualityTag()?.props?.type).toBe("warning");
+  h.song.quality = "HIRES";
+  expect(h.qualityTag()?.props?.type).toBe("error");
+  h.song.quality = undefined;
+  expect(h.qualityTag()).toBeUndefined();
+});
 
 it("SongCard candidate gates native artwork with visibility and keeps song data unchanged", async () => {
   const h = fixture(false);
