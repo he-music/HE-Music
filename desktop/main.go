@@ -64,6 +64,7 @@ func main() {
 		}
 		options := WindowAppearanceOptions(appearance)
 		options.Title, options.Width, options.Height = "HE-Music", 1280, 800
+		options.MinWidth, options.MinHeight = 800, 600
 		options.StateKey = "main"
 		if gatewayOrigin != "" {
 			options.Page.PreloadScript = desktopGatewayPreloadScript(gatewayOrigin)
