@@ -808,3 +808,57 @@ M2 已完成独立复查；M3 Go 与前端组件已实现并审查，密码重�
 - 新增生产 AudioManager 回归覆盖真实输出目标、EQ / 音量 / 倍速 / 时钟、流暂停恢复、设备拒绝、自动播放拒绝、过期候选、暂停期间未决播放、切回默认、保存设备跨图恢复、普通音源回退和流错误；沿用原并发路由、授权撤销与旧页面 owner 测试。最初新增的 WebKit 路由用例在原实现明确抛 NotSupportedError，实现后通过。
 - 隔离 macOS 26.3 WKWebView 使用生产 `audioOutput.ts` 打包产物运行静音探针：真实 AudioContext、GainNode 和 MediaStream 输出，预加载不播放，播放后流为 live、paused=false、muted=false，暂停 / 恢复正常，默认回切后 srcObject 清空、轨道 ended。全程 gain=0；元素的设备选择方法为实例级测试替身，不读取设备 ID、请求权限或切换真实硬件。结果 `/tmp/hemusic-output-probe-result.json`，stderr 为空；实际扬声器选择、设备枚举结果及输出延迟未验收。
 - 最终验证：`pnpm test` **165 文件、1,500 测试通过**，`pnpm typecheck`（Node / Web）、变更 TS 的 ESLint / Prettier、`git diff --check` 通过；`pnpm build:web` / `pnpm build:desktop:frontend` 分别 10.82s / 11.39s 构建通过，保留既有 chunk 大小警告。日志 `/tmp/hemusic-sink-final-{tests,types}.log`、`/tmp/hemusic-sink-{web,desktop}-build.log`。真实设备切换仍需实机验收。
+
+### 下载管理展示与移除任务对齐 Electron（历史阶段）
+
+本段记录阶段性实现；其中目录驱动列表及刷新按钮的决定，已由下节持久化下载任务模型取代。
+
+- 按用户要求对照 `Download/layout.vue`、`downloaded.vue`、`downloading.vue` 和 `DownloadManager`：已完成页继续使用配置下载目录内的当前授权扫描歌曲，展示原 SongList；下载中保留未完成、失败及需处理的异常任务，操作统一为刷新 / 重试和移除。移除原额外的清空已完成任务入口，已完成页不混入任务历史或恢复提示。
+- 移除活动任务改为一个操作：请求取消，沿用原有任务轮询等待底层 Done 和清理确认，再调用 ForgetDownload 释放任务记录和持久化历史；没有新增轮询器。取消仍未确认、底层拒绝或超时，记录继续保留。页面 owner / 目录授权失效会终止未决移除，不影响替换会话。移除任务不调用文件删除；已下载文件仍通过歌曲菜单执行原有文件删除流程。
+- 取消期间新出现的清理失败、残留文件、提交不确定或列表刷新失败会先保留并展示，用户再次明确移除才清记录。重试在新任务建立成功后回收原失败记录，建立失败则保留原任务；恢复的历史任务也在替代任务建立后替换，避免正常重试产生重复行。
+- 文件提交完成后的刷新改为只扫描该任务的授权目录；下载页主动刷新也只扫描当前配置目录，保留其他目录已有结果，避免无关目录影响下载列表刷新。连续提交仍合并刷新，新提交会补扫。未授权目录不进入扫描。
+- 修复成功文件“两个页签都不见”的状态缺口：刷新未完成或失败的任务保留在下载中；已保存但刷新失败时，刷新按钮只重试目录索引，不重复传输。成功完成索引后正常任务退出下载中，文件进入已完成 SongList。
+- 验证：`pnpm test` **165 文件、1,508 测试通过**，Node / Web 类型检查、变更 TS 的 ESLint、全部变更 Prettier 和 `git diff --check` 通过。网页 / mygo 前端构建分别 15.16s / 11.58s 通过，保留既有 chunk 大小警告。新增用例覆盖活动任务一次移除、取消超时、失权、保留残留警告、重试替换记录、刷新失败恢复及目标目录单独刷新。日志 `/tmp/hemusic-download-parity-final-{tests,types}.log`、`/tmp/hemusic-download-parity-{web,desktop}-build.log`。未操作真实下载源、音乐目录或客户端，实际文件下载 / 删除及 WebView 布局仍需实机验收；本轮代码尚未提交。
+
+### 下载管理改为持久化任务驱动
+
+- 根据用户确认的领域模型更新 `CONTEXT.md`：下载任务是独立持久记录，下载中 / 已完成仅按同一批任务的状态筛选。文件提交后立即进入已完成，不再等待目录索引；文件缺失、撤权、修改默认下载目录均不清除任务，手动放入目录的歌曲也不产生下载任务。
+- 完成记录保留原歌曲来源、目标、歌手 / 专辑 / 时长和创建 / 完成时间，兼容旧历史记录；持久化白名单继续排除封面地址、解析后的下载地址、授权 token 和文件引用。底层完成操作可以释放槽位，历史记录继续保留；连续完成 66 条任务及重启恢复用例通过，重启后重试也继承安全展示信息；新增断言先复现缺失再验证修复。
+- 已完成和下载中使用任务行及专用右键菜单。移除记录保留文件；删除文件单独确认并保留记录；播放、打开位置和删除文件仅使用当前授权扫描引用，并复核播放状态、页面 owner、任务和文件身份。确认前撤权、替换 owner、迟到删除响应均不会操作新会话或产生旧操作的成功反馈。
+- 按用户要求移除下载管理顶部刷新按钮和活动任务的手动刷新按钮；进度继续使用现有轮询，失败任务保留重试。文件索引异步更新且不阻塞完成记录移除，仍保留下载事务的清理、残留和持久化警告。
+- 稳定已完成集合、任务计数及归档行引用，避免其他任务的进度变化引起已完成页更新。生产 SFC 的临时更新计数验证无关进度不触发更新，文件可用性和任务内容改变仍正常更新；计数仅存在于测试注入代码。
+- 验证通过：`pnpm test` **165 文件、1,511 测试**，`pnpm typecheck`（Node / Web）、变更 TS 的 ESLint、全部变更 Prettier 及 `git diff --check`。网页 / mygo 前端构建分别 11.71s / 11.72s 通过，保留既有 chunk 大小警告。日志 `/tmp/hemusic-download-records-final-{tests,types,eslint,format}.log` 和 `/tmp/hemusic-download-records-{web,desktop}-build.log`。未操作真实下载源、用户音乐文件或客户端，实际下载 / 文件删除和 WebView 交互未实机验收；代码未提交。
+
+### 新下载文件可用性、扫描明细和下载目录反馈
+
+- 修复新下载文件仍依赖整目录扫描才能播放的问题：下载完成时把后端返回、已校验目标和会话的文件引用接入临时本地索引。扫描尚未结束、返回旧页面或包含无关提示时，保留本次下载的有效引用；后续完整扫描确认文件不在目录中时移除引用。引用不进入下载历史，撤权和会话失效仍立即清理；删除文件前清理临时下载索引，避免部分扫描恢复已删除文件。
+- 下载管理不再把读取中的文件直接标记为不可用，改为显示正在读取；未取得引用时提示查看扫描详情或目录授权。条目中歌手下方仅保留音质名称，歌曲来源仍在任务数据中保留。
+- 新增共用扫描详情，在本地音乐和下载管理中可直接展开查看授权目录、相对文件路径、原因说明及原因码，不显示授权 token。Go 扫描器同时输出相对路径与原因码，每次扫描最多输出 200 条，并转义文件名中的控制字符。
+- 修复选择已授权目录时，后端返回 duplicate 却被下载设置忽略的问题；当前授权中的同一目录可以直接设为默认下载目录。父子目录重叠会显示提示并保留原选择，选择结果再次核对当前授权与 epoch。设置页以纯文本显示完整路径，按最新文案约定移除额外授权状态说明，路径中的 HTML 字符按文本显示。
+- 验证通过：`pnpm test` **167 文件、1,519 测试**，Node / Web 类型检查、变更 TS 与新增测试的 ESLint、Prettier、`git diff --check`，以及网页 / mygo 前端构建。`CGO_ENABLED=0 go test -mod=readonly ./desktop/...`、对应 `go vet` 及 gofmt 检查通过。用例覆盖新 MP3 在扫描未完成及部分扫描时可用、迟到扫描、撤权、删除刷新、重复目录选择、路径转义和扫描明细。日志 `/tmp/hemusic-download-availability-final-{tests,types,eslint,format,go,vet}.log` 及 `/tmp/hemusic-download-availability-{web,desktop}-build.log`。未访问用户下载文件、请求真实音源或操作系统目录选择器；用户这首 MP3 的实际文件状态尚未实机验证，代码未提交。
+
+### 下载封面、音质标记与逐行歌词
+
+- 下载条目恢复后通过当前授权文件读取内嵌 / 同名封面，沿用现有可见性加载与封面缓存；不把临时图片 URL 或文件权限写入任务历史。验证已读取且非当前播放的文件可删除，当前播放项继续禁用删除，确认期间再次检查文件、owner 和播放状态。
+- Go metadata 已映射 mtag 的 BitDepth；MP3 的位深度为 0 表示不适用。补上本地歌曲的质量映射：有损音频按码率判定 HQ，已识别无损 codec 按采样率 / 位深度判定 SQ、HIRES 或 MASTER，不从文件后缀推断无损。SongCard 的音质标记改为 computed，标签信息变化后正常更新。
+- 下载歌词统一转换为原文逐行 LRC，保留行时间戳，移除逐字和增强 LRC 的词时间戳；恢复任务使用的历史歌词也经过同样转换。mygo 和 Electron 下载设置均移除翻译 / 音译项目，旧偏好和任务字段保持兼容但不再影响下载歌词；音频标签与歌词附属文件使用同一份转换结果，播放界面的歌词展示不变。
+- 验证通过：`pnpm test` **168 文件、1,536 测试**，Node / Web 类型检查、变更 TS 和新增工具的 ESLint、全部变更及新增文件 Prettier、`git diff --check`，网页与 mygo 前端构建。用例覆盖恢复条目的本地封面接线、删除菜单与当前播放保护、MP3 / FLAC / ALAC / PCM / AAC 的音质分类、标签响应更新、逐字歌词转逐行、旧歌词回退及隐藏设置项。日志 `/tmp/hemusic-download-fixes-final-{tests,types,eslint,format}.log` 和 `/tmp/hemusic-download-fixes-{web,desktop}-build.log`。未操作用户真实歌曲文件，实机封面与删除交互未验收；代码未提交。
+
+### macOS 输出设备枚举与持久化方案核对
+
+- macOS 26.3 隔离探针使用当前生产媒体配置，对照 WebKit 默认设置与显式开启扬声器功能：`ExposeSpeakersEnabled`、`ExposeSpeakersWithoutMicrophoneEnabled`、`PerElementSpeakerSelectionEnabled` 默认已全部开启，两组仍只返回一个无设备 ID / 标签的 `audioinput`。没有请求采集权限或改变系统输出；不能将开关开启视为设备枚举已修复。证据 `/tmp/hemusic-speaker-enumeration-result.json`，探针通过临时 Go overlay 构建，没有改 SDK 或产品入口。
+- 对照 WebKit 的 `UserMediaPermissionRequestManagerProxy::computeFilteredDeviceList`，扬声器仍按当前页面是否获音频采集授权过滤。继续 WebAudio 路由需确定是否接受按需申请麦克风权限；原生输出路线需要同时适配真实路由，CoreAudio UID 不能直接传给浏览器 `setSinkId`。后续用户选择按需申请权限，实现见下节。
+- 当前 mygo SDK 的 macOS 创建默认 WKWebView 配置，没有从 `PathUserData` 设置网站数据目录。WebKit 存在配置目录的私有接口，但需要创建 WebView 前接入，并同步处理 SDK 的默认数据存储、Cookie 和清理入口；重定向位置也不会把浏览器数据变为 Go 管理的业务数据。Electron 与 WebKit 的 localStorage / IndexedDB 文件格式不能直接共用。
+- 持久化建议：Web 保留现有存储；mygo 在平台层提供相同业务读写接口，通过 Go 在 `PathUserData` 保存。Pinia 使用启动预载的内存快照与异步持久化队列，localforage 使用仅在 mygo 选择的适配器；二进制内容单独保存，避免假设所有值均可 JSON 化。未发布 mygo 版本不作为历史迁移来源；旧 Electron 设置可经现有导出读取，歌单、队列等额外数据需由 Electron 读取后导出标准格式，不能直接接管旧 Chromium 数据目录。本轮仅核对方案，未更改产品存储。
+
+### 按需读取 macOS 音频输出设备
+
+- 用户选择保留 WebAudio 播放器并按需申请权限。mygo + macOS 的输出设备设置新增“读取设备”按钮，进入设置仍只被动枚举；仅明确点击且尚无可选输出时调用 `getUserMedia({ audio: true, video: false })`。获取临时流后立即停止所有轨道，再枚举输出设备，不读取、保存或上传采集内容。已有列表的再次读取不重复获取麦克风。
+- 重复点击合并，读取时暂时禁用输出选择；拒绝授权、读取失败与空结果反馈独立，保留原有输出偏好。设置页切换、配置替换或销毁后丢弃迟到结果，迟到授权返回的流仍立即停止。播放配置沿用已有歌词配置的独立 effectScope 模式，替换时清理旧实例。Web、Electron 与其他 mygo 平台不展示该权限入口。
+- `mygo.json` 增加 `NSMicrophoneUsageDescription`，`desktop/macos.entitlements.plist` 仅声明 `com.apple.security.device.audio-input`，未新增摄像头权限。须完整重启 mygo 开发进程使原生包元数据更新，不能只依赖前端热更新。
+- 验证通过：全量 **169 文件、1,552 测试**，Node / Web 类型检查、相关 TS ESLint、Prettier、`git diff --check`、网页及 mygo 前端构建。用例覆盖显式触发、重复点击、拒绝授权、空列表、采集停止时序、迟到授权、销毁后反馈抑制与平台边界。另用 SDK 临时副本的 `writeBundle` / `codesign` 构造临时探针包，核对用途说明和实际签名中的 audio-input entitlement；未启动该签名包。证据 `/tmp/hemusic-output-access-final-{tests,types}.log`、`/tmp/hemusic-output-access-{eslint,format,web-build,desktop-build,bundle}.log`。未申请真实麦克风权限或切换用户声卡，系统授权后的真实设备列表和路由仍需实机确认；业务持久化未变更，代码未提交。
+
+### 下载及设备读取改动提交验证
+
+- 下载改动已提交为 `49eab01`，macOS 按需读取输出设备已提交为 `494dc1f`。上文“未提交”描述保留各阶段验证当时的状态；持久化改为 Go 文件仍仅为方案，没有实施或迁移用户数据。
+- 提交前重新执行并通过：全量 **169 文件、1,552 测试**、Node / Web 类型检查、全部变更及新增 TS 的 ESLint、全部变更及新增 Vue / TS / JSON / Markdown 的 Prettier、`git diff --check`，Go desktop 全包测试与 vet、修改 Go 文件的 gofmt，以及权限 plist 语法检查。网页 / mygo 前端构建分别 12.41s / 11.52s 通过，保留已有 chunk 大小警告。日志 `/tmp/hemusic-precommit-{tests,types,go,vet,eslint,format,web-build,desktop-build}.log`。真实文件删除、麦克风授权后的设备列表和声卡切换仍未实机验收。
