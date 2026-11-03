@@ -114,6 +114,20 @@ export function validateConfig(config) {
   return config;
 }
 
+/** GitHub 工作流只向当前仓库发草稿，tag、原生版本和界面版本必须一致。 */
+export function validateGitHubRelease(config, packageVersion, env) {
+  if (!config.updates.github || config.updates.github !== env.GITHUB_REPOSITORY) {
+    fail("GitHub 发布的 updates.github 必须与当前工作流仓库一致");
+  }
+  if (packageVersion !== config.version) {
+    fail("package.json 与 mygo.json 的 version 必须一致");
+  }
+  const tag = `${config.updates.tagPrefix || "v"}${config.version}`;
+  if (env.GITHUB_REF !== `refs/tags/${tag}`) {
+    fail("Git tag 必须等于 updates.tagPrefix（默认 v）加 mygo.json version");
+  }
+}
+
 function inside(root, candidate) {
   const relative = path.relative(root, candidate);
   return relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
@@ -316,6 +330,15 @@ export async function runRelease({
   }
   if (mode === "build") {
     signingKey(config, env);
+    if (env.GITHUB_ACTIONS === "true" && env.GITHUB_REF?.startsWith("refs/tags/")) {
+      let pkg;
+      try {
+        pkg = JSON.parse(await readFile(path.join(root, "package.json"), "utf8"));
+      } catch {
+        fail("GitHub 发布必须提供合法 package.json 版本");
+      }
+      validateGitHubRelease(config, pkg.version, env);
+    }
     const goMod = await readFile(path.join(root, "go.mod"), "utf8");
     if (
       !goMod.split("\n").some((line) => line.trim() === `github.com/egoist/mygo ${SDK_VERSION}`) ||

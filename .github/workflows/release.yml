@@ -2,7 +2,7 @@ name: Build & Release
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v*", "mygo-test-v*"]
   workflow_dispatch:
 
 permissions:
@@ -71,10 +71,10 @@ jobs:
       - run: pnpm check:runtime
       - run: pnpm vendor:check
       - name: Build test artifacts
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/') }}
         run: node scripts/vendor/mygo.mjs build -platform ${{ matrix.target }} -sign - -skip-dmg -skip-notarize
       - name: Build and verify signed update artifacts
-        if: startsWith(github.ref, 'refs/tags/')
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
         env:
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: node scripts/package/mygo-release.mjs --build --platform ${{ matrix.target }}
@@ -82,7 +82,7 @@ jobs:
         if: runner.os == 'Windows'
         run: pnpm test:desktop:windows-sdk
       - name: Archive test artifacts with file permissions
-        if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+        if: ${{ github.event_name != 'push' || !startsWith(github.ref, 'refs/tags/') }}
         shell: bash
         run: |
           mkdir -p build/artifacts
@@ -90,11 +90,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: HE-Music-${{ matrix.id }}
-          path: ${{ startsWith(github.ref, 'refs/tags/') && 'build/mygo/' || 'build/artifacts/' }}
+          path: ${{ github.event_name == 'push' && startsWith(github.ref, 'refs/tags/') && 'build/mygo/' || 'build/artifacts/' }}
           if-no-files-found: error
 
   release:
-    if: startsWith(github.ref, 'refs/tags/')
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     needs: desktop
     runs-on: ubuntu-latest
     permissions:
@@ -132,6 +132,9 @@ jobs:
         with:
           draft: true
           generate_release_notes: true
+          prerelease: false
+          # 草稿不设 latest；v* 正式版公开时选择 latest，测试频道保持非 latest。
+          make_latest: false
           files: |
             release-artifacts/**/*.tar.gz
             release-artifacts/**/*.dmg

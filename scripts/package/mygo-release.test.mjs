@@ -4,7 +4,14 @@ import { mkdtemp, mkdir, writeFile, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { main, SDK_VERSION, validateConfig, verifyArtifacts, runRelease } from "./mygo-release.mjs";
+import {
+  main,
+  SDK_VERSION,
+  validateConfig,
+  validateGitHubRelease,
+  verifyArtifacts,
+  runRelease,
+} from "./mygo-release.mjs";
 import { vendorFixture } from "../vendor/fixture.mjs";
 
 const pair = () => {
@@ -73,6 +80,63 @@ test("默认缺更新配置拒绝，公开配置检查不需要私钥", () => {
   assert.doesNotThrow(() =>
     validateConfig({ ...config(), updates: { publicKey: keys.pub, github: "owner/repo" } }),
   );
+});
+
+test("GitHub tag 频道、原生版本和界面版本必须指向同一发布", () => {
+  for (const prefix of [undefined, "mygo-v", "mygo-test-v"]) {
+    const c = {
+      ...config(),
+      updates: { publicKey: keys.pub, github: "he-music/HE-Music", tagPrefix: prefix },
+    };
+    const github = {
+      GITHUB_REPOSITORY: "he-music/HE-Music",
+      GITHUB_REF: `refs/tags/${prefix || "v"}1.0.4`,
+    };
+    assert.doesNotThrow(() => validateGitHubRelease(c, "1.0.4", github));
+    assert.throws(() => validateGitHubRelease(c, "1.0.5", github), /version 必须一致/);
+    assert.throws(
+      () => validateGitHubRelease(c, "1.0.4", { ...github, GITHUB_REF: "refs/tags/v9.0.0" }),
+      /Git tag/,
+    );
+    assert.throws(
+      () => validateGitHubRelease(c, "1.0.4", { ...github, GITHUB_REPOSITORY: "fork/music" }),
+      /工作流仓库一致/,
+    );
+  }
+});
+
+test("GitHub 构建在调用 Go 前拦截版本或仓库不匹配，合法 tag 仍完成验签", async (t) => {
+  const f = await fixture(t);
+  f.c.updates = { publicKey: keys.pub, github: "he-music/HE-Music", tagPrefix: "mygo-v" };
+  f.manifest.url = `https://github.com/he-music/HE-Music/releases/download/mygo-v1.0.4/${f.name}`;
+  await writeFile(path.join(f.root, "mygo.json"), JSON.stringify(f.c));
+  await writeFile(f.manifestPath, JSON.stringify(f.manifest));
+  const github = {
+    ...env,
+    GITHUB_ACTIONS: "true",
+    GITHUB_REPOSITORY: "he-music/HE-Music",
+    GITHUB_REF: "refs/tags/mygo-v1.0.4",
+  };
+  let calls = 0;
+  const build = (environment = github) =>
+    runRelease({
+      root: f.root,
+      mode: "build",
+      env: environment,
+      spawn: () => {
+        calls++;
+        return { status: 0 };
+      },
+    });
+  await assert.rejects(build(), /合法 package.json/);
+  await writeFile(path.join(f.root, "package.json"), JSON.stringify({ version: "1.0.5" }));
+  await assert.rejects(build(), /version 必须一致/);
+  await writeFile(path.join(f.root, "package.json"), JSON.stringify({ version: "1.0.4" }));
+  await assert.rejects(build({ ...github, GITHUB_REF: "refs/tags/mygo-test-v1.0.4" }), /Git tag/);
+  await assert.rejects(build({ ...github, GITHUB_REPOSITORY: "fork/music" }), /工作流仓库一致/);
+  assert.equal(calls, 0);
+  assert.equal((await build()).artifacts.length, 1);
+  assert.equal(calls, 1);
 });
 
 test("构建前拒绝缺失、不匹配或损坏私钥，不回显 secret", async (t) => {

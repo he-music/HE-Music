@@ -82,7 +82,7 @@
 - 原生能力包括桌面歌词、托盘、快捷键、系统媒体、本地音乐、下载、标签编辑、代理及播放控制；共用原有 Vue 界面和歌词效果。
 - Web 使用浏览器存储与下载，桌面端的业务数据由 Go 保存。旧 Electron 数据导出助手和导入兼容仍保留，见[数据迁移说明](docs/mygo-data.md)。
 - `pnpm check:runtime` 检查生产源码、类型配置和直接依赖不再引用旧宿主桥接；该检查不替代类型检查、测试和实际界面验收。
-- 自动更新尚未配置真实 feed、公钥和 CI 私钥，目前不可用。普通构建与签名更新发布是不同入口，见[更新发布说明](docs/mygo-updates.md)。
+- `v2.0.0` 已配置正式更新源与公钥；GitHub Secret 由发布负责人管理，签名发布及实机更新仍待验收。普通构建与签名更新发布是不同入口，见[更新发布说明](docs/mygo-updates.md)。
 
 ## ⚙️ 本地部署
 
@@ -104,9 +104,28 @@
    | `pnpm build:linux` | Linux    |
    | `pnpm build:mac`   | MacOS    |
 
-## ⚙️ 发布构建配置
+## ⚙️ GitHub 发布与更新测试
 
-GitHub Actions 使用独立 Web 构建与 mygo 平台矩阵，后端地址由 `VITE_API_URL`／`VITE_NETEASE_API_URL` secrets 注入。手动运行生成测试产物；tag 构建必须通过真实更新配置、密钥与产物验签，缺配置时明确失败。验签后的 Release 保持草稿，供安装验收后发布。
+发布准备、操作步骤和验收记录需要随代码维护。README 保留常用入口，完整流程见 [GitHub 发布与 mygo 自动更新](docs/mygo-updates.md)。已配置 `v2.0.0` 的正式更新源与公钥，首个启用更新的包需要手动安装；签名发布和自动升级仍需验收。
+
+发布前准备：
+
+- 在仓库 Actions secrets 配置真实 `VITE_API_URL`，并保存 `MYGO_UPDATER_PRIVATE_KEY` 私钥文本。已停用的网易 API 不作为发布前提，无需为此配置 `VITE_NETEASE_API_URL`。
+- 用固定官方 CLI 生成一次长期密钥；只将公钥、公开仓库及 `tagPrefix` 写入 `mygo.json`，私钥保存在仓库外和 GitHub secret 中。
+- 同步 `package.json.version` 与 `mygo.json.version`，准备本版本更新说明和各平台安装验收环境。
+
+正式发布从 `v2.0.0` 开始，后续使用 `v2.0.1`、`v2.1.0` 等命名。`updates.tagPrefix` 使用 `v`，两个版本字段填写不带前缀的 `2.0.0`。配置、测试与代码提交完成后创建 tag：
+
+```sh
+git tag v2.0.0
+git push origin v2.0.0
+```
+
+Actions 会完成 Web／mygo 构建与更新包验签，并创建草稿 Release；核对全部平台附件、安装结果后再公开草稿。正式 `v2.0.0` 发布时勾选 **Set as the latest release**，保持非 prerelease，客户端由 latest release 检测后续正式更新。手动 **Run workflow** 只生成测试产物，不发布 Release。
+
+推荐先在测试分支使用 `mygo-test-v` 前缀，手动安装 A，再发布更高版本 B，完整验证「检查更新 → 下载验签 → 安装 → 显式重启 → 版本与数据核对」。测试 Release 必须公开为普通 Release，保持非 latest；草稿和 GitHub prerelease 默认不会被客户端检测到。
+
+macOS 当前为 ad hoc 签名、未公证；Windows 交付安装器需要 NSIS，目标机需要 WebView2；Linux 的 DEB 由包管理器更新，应用自更新应使用用户目录安装。各平台准备、完整 A → B 演练、附件清单和故障排查均在 [详细指南](docs/mygo-updates.md) 中。
 
 ## 😘 鸣谢
 
