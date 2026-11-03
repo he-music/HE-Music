@@ -97,6 +97,29 @@ export function gatewayProxyUrl(value: string): string {
   return `${gateway}/__proxy?target=${encodeTarget(target.href)}${fragment}`;
 }
 
+/** The injected proxy always supplies its own CORS headers, independent of the CDN. */
+export function isMygoGatewayResourceUrl(value: string): boolean {
+  const gateway = mygoGatewayOrigin();
+  if (!gateway) return false;
+  try {
+    const base = new URL(gateway);
+    const resource = new URL(value);
+    return (
+      base.protocol === "http:" &&
+      localHost(base.hostname) &&
+      !base.username &&
+      !base.password &&
+      !resource.username &&
+      !resource.password &&
+      resource.origin === base.origin &&
+      resource.pathname === `${base.pathname.replace(/\/+$/, "")}/__proxy` &&
+      Boolean(resource.searchParams.get("target"))
+    );
+  } catch {
+    return false;
+  }
+}
+
 function combineURL(base: string, value: string): URL {
   if (/^https?:\/\//i.test(value)) return new URL(value);
   if (value.startsWith("//")) return new URL(`https:${value}`);

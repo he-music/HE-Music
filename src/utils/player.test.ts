@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
     currentTime: 0,
     src: "",
     paused: true,
+    readyState: 0,
   },
   status: { playLoading: false, playStatus: false, playVolume: 1, playRate: 1 },
   song: { id: "a", platform: "test", name: "A" },
@@ -32,6 +33,7 @@ vi.mock("./audioManager", () => ({ default: mocks.audio }));
 vi.mock("./songManager", () => ({
   default: {
     getPlaySongData: () => mocks.song,
+    getPlayerInfoObj: () => ({ name: "A", artist: "Artist" }),
     getCoverColor: mocks.cover,
     getOnlineUrl: vi.fn().mockResolvedValue("https://audio.example/next.mp3"),
   },
@@ -55,6 +57,7 @@ beforeEach(async () => {
   mocks.audio.currentTime = 0;
   mocks.audio.src = "";
   mocks.audio.paused = true;
+  mocks.audio.readyState = 0;
   mocks.status.playLoading = false;
   mocks.status.playStatus = false;
   mocks.audio.play.mockReset().mockResolvedValue(undefined);
@@ -67,6 +70,7 @@ beforeEach(async () => {
   });
   vi.stubGlobal("window", {
     location: { protocol: "https:" },
+    document: { title: "HE-Music" },
     open: vi.fn(),
     $dialog: { warning: mocks.warning },
     $message: { error: vi.fn() },
@@ -88,6 +92,61 @@ async function failHttp(code = 4, autoPlay = true, seek = 0) {
   });
   await expect(player.createPlayer("http://audio.example/a.mp3", autoPlay, seek)).rejects.toThrow();
 }
+describe("media buffering state", () => {
+  const emit = (name: string) => {
+    const listener = mocks.callbacks.get(name);
+    expect(listener, `missing ${name} handler`).toBeDefined();
+    listener?.(new Event(name));
+  };
+
+  it("keeps a pending start loading until actual playing, not merely canplay", () => {
+    mocks.audio.paused = false;
+    emit("play");
+    expect(mocks.status.playStatus).toBe(true);
+    expect(mocks.status.playLoading).toBe(true);
+    emit("canplay");
+    expect(mocks.status.playLoading).toBe(true);
+    emit("playing");
+    expect(mocks.status.playLoading).toBe(false);
+    emit("canplay");
+    expect(mocks.status.playLoading).toBe(false);
+  });
+
+  it.each(["waiting", "stalled"])(
+    "shows %s as buffering and clears it on playback or pause",
+    (event) => {
+      mocks.audio.paused = false;
+      mocks.status.playStatus = true;
+      emit(event);
+      expect(mocks.status.playLoading).toBe(true);
+      emit("playing");
+      expect(mocks.status.playLoading).toBe(false);
+      emit(event);
+      mocks.audio.paused = true;
+      emit("pause");
+      expect(mocks.status.playLoading).toBe(false);
+      expect(mocks.status.playStatus).toBe(false);
+    },
+  );
+
+  it("does not mark buffered playback as waiting merely because the fetch stalled", () => {
+    mocks.audio.paused = false;
+    mocks.audio.readyState = 4;
+    mocks.status.playStatus = true;
+    emit("stalled");
+    expect(mocks.status.playLoading).toBe(false);
+    mocks.audio.readyState = 2;
+    emit("stalled");
+    expect(mocks.status.playLoading).toBe(true);
+  });
+
+  it("finishes a paused preload when canplay arrives", () => {
+    mocks.status.playLoading = true;
+    emit("canplay");
+    expect(mocks.status.playLoading).toBe(false);
+    expect(mocks.status.playStatus).toBe(false);
+  });
+});
 
 describe("HTTP playback recovery", () => {
   it("keeps the dialog open when opening HTTPS and restores full initialization on retry", async () => {

@@ -888,3 +888,51 @@
 
 - 用户授权提交本轮改动。提交前重新执行并通过：全量 **177 文件、1,580 测试**、Node／Web 类型检查、修改及新增 TS／JS 的 ESLint、相关 Prettier、修改 Go 的 gofmt、`git diff --check`，以及 `go test ./...`、`go vet ./...`。证据 `/tmp/hemusic-submit-runtime-{tests,types,static,go,vet}.log`。新增 `docs/mygo-data.md` 被 `/docs/*` 通用忽略规则匹配，按明确文件路径纳入版本控制，保留原忽略范围。
 - 按用户要求已使用官方 CLI 构建当前工作区的 Windows／Linux amd64 生产测试包，位于 `build/mygo/test-x64`。已核对 PE GUI／ELF x86-64、压缩包及 DEB 内的二进制摘要、Linux 执行权限、DEB 架构／依赖和 SHA-256；尚未在目标桌面运行。用户反馈 Linux apt 从清华镜像获取 libsoup 依赖时返回 403，安装源问题尚待其换源后复测。测试包不纳入提交，未执行远端推送或发布。
+
+### 下载问题处理提交与 Ubuntu 22 测试修正
+
+- 用户确认下载目前可用后，按授权提交 `46721e9`（`fix: 完善下载失败原因与 Windows 完成提示`）。该提交包含下载错误原因及安全阶段日志、Windows 正常保存提示和相关测试；未放宽音频校验。Windows 透明修正仍仅在已测试的私有 SDK 对照副本中，正式依赖和模块缓存未改动，未推送。
+- Ubuntu 22 用户进一步确认：实体机切歌后可能停在 00:00／00:01，等待后才能继续，更接近加载缓冲。补齐 Player 的 `waiting`／`stalled`／`playing` 状态，`canplay` 不再提前结束正在等待的播放；暂停会清除缓冲提示；有足够缓冲仍在播放时，网络 `stalled` 不会误显示加载。对注入的 loopback 私有媒体代理免去额外 Range／CORS 探测，因为 Go 网关已提供自身 CORS 响应头；普通 Web／其他来源继续探测，地址、会话前缀和路由仍严格匹配。
+- Linux 主窗口在首次导航前设置并读回 WebKitGTK 媒体手势策略，异步音源解析后的播放意图仍由应用 Player 控制。歌词子窗口单独禁用加速合成（后续确认不保证 Skia 改用 CPU 绘制），并在 GTK 默认 draw 之前使用 Cairo CLEAR 清除当前 damage 区域、保存／恢复 Cairo 状态；主窗口 GPU 保持原配置。回调按进程单例创建，随 GTK 窗口销毁断开信号，不增加定时器、强制刷新或高频响应式依赖。歌词页导航在策略和窗口监听安装后开始。
+- 原生调用通过 `NativeHandle` 查找受控 GTK 子树，`RTLD_NOLOAD` 复用已加载的 GTK／GObject／WebKit ABI，失败记录日志并继续运行；硬件策略读回不支持时仍尝试背景清除。没有修改或复制到正式 SDK 依赖，也没有通过全局环境变量禁用主窗口合成。
+- 自动化验证：新测试先复现 4 项失败；修正后完整 **177 文件、1,606 测试**通过，包含暂停／owner 撤销及快速切歌合同；Node／Web 类型、修改 TS 的 ESLint／Prettier、Go 全包测试及 Linux amd64 vet 通过，Windows amd64／Linux arm64 全包交叉编译通过。策略读回、子树查找边界及 Cairo 清理顺序用可注入测试验证。
+- 当前宿主没有可用 Docker／Linux 图形环境，上述结果不代表已在 Ubuntu 22 真实 WebKitGTK、GPU／显示服务器和音源上验收。透明拖影及实际缓冲改善仍待用户运行测试包确认；本阶段 Linux 改动暂未提交。
+- 已构建 Ubuntu 22 x64 测试包：`build/mygo/ubuntu22-playback-lyrics-test/HE-Music-1.0.4-linux-x64-ubuntu22-test.tar.gz`（SHA-256 `9246d93ee5bb970bca97480bdae1566bd3bf99754c7b2058677efb8382b909be`），包含运行程序、图标、中文说明和可执行的 `Start-Diagnostic.sh`；另有官方 CLI 生成的 `linux-amd64/he-music_1.0.4_amd64.deb`（SHA-256 `d753d846400a7503d544f3631f89ae234fc6af0b52025dde4743ae76f87ee44c`）。核对 ELF x86-64、压缩包全部内容摘要及执行权限、DEB 内 `/opt/he-music/he-music` 与原程序摘要、桌面入口和架构／依赖通过；诊断脚本通过 `sh -n`。脚本仅收集会话类型、架构和 GTK／WebKitGTK 包版本并捕获运行输出，不安装依赖或修改系统配置。
+
+### Ubuntu 22 X11／WebKitGTK 2.50.4 实测未通过与诊断 v2
+
+- 用户复测上一版后仍有切歌卡顿和明显纵向歌词残影；环境为 X11、x86_64、WebKitGTK 2.50.4。日志包含 EGL DRI2 认证警告、缺少 WebVTT 编码器与 `fakevideosink`。该结果覆盖前面的候选假设，不能将上版记录理解为实机修复通过。两条 GTK 包版本本身也不能证明运行时混用了库，新脚本只查询本机架构并标注架构／安装状态。
+- 核对 WebKit 上游 `webkitgtk-2.50.4` 源码：`MediaPlayerPrivateGStreamer.cpp` 对音频播放器缺少 `fakevideosink` 时会回退 `fakesink`，故这条警告不是卡顿的直接证明；`WebProcessGLib.cpp` 在进程初始化时读取 `WEBKIT_SKIA_ENABLE_CPU_RENDERING`，`SkiaPaintingEngine.cpp` 据此决定 CPU／GPU worker。歌词 settings 的 `hardware-acceleration-policy=NEVER` 只关闭该视图加速合成，不能代表 Skia GPU 绘制也被禁用；修正变量命名、注释及上文描述。
+- `mygo.json` 使用官方支持的 `linux.depends` 补齐 GStreamer base／good／bad／libav／pulseaudio 运行插件，后续 DEB 会声明这些依赖。脚本不自行安装依赖，便携包按说明使用 apt 安装；`gstreamer1.0-tools` 仅用于插件检查。
+- 新增 `scripts/diagnostics/mygo-linux.sh`，支持 normal（继承现有设置）及 cpu 两个启动模式。cpu 在启动程序前设置 `WEBKIT_SKIA_ENABLE_CPU_RENDERING=1`、`WEBKIT_DISABLE_DMABUF_RENDERER=1`、`WEBKIT_DISABLE_COMPOSITING_MODE=1`，用于整个应用及其子进程的图形路径对照，可能增加 CPU 用量，尚未设成产品默认值；无需修改系统环境或安全沙箱。分别输出模式日志，插件检查有超时边界，native 策略安装成功也会输出固定日志。
+- 新鲜验证：启动脚本隔离测试 3 项通过（含开关先于子进程启动、继承环境、空格路径、插件分支、无效参数保护）；Go 全包测试、Linux amd64 vet、相关 ESLint／Prettier／gofmt、官方 CLI Linux amd64 构建通过。前端业务代码本轮未改变，未重报上一轮的 1,606 项为本轮结果。没有 Linux 图形实测，卡顿和拖影仍待用户补依赖后分别复测 normal／cpu，两项任务均未宣告完成；本轮未提交、推送。
+- v2 便携诊断包：`build/mygo/ubuntu22-renderer-diagnostic-v2/HE-Music-1.0.4-linux-x64-renderer-diagnostic-v2.tar.gz`，SHA-256 `03f8630e00563a2da9a15bf3054ab1672cb7303983882b6152977aa0789611cd`；DEB 的 SHA-256 为 `0d4b6ff6861b6fc36d02c0a9bf4587dd8706a15ef14317cd1b77a473e609d1e7`。核对 ELF x86-64、全部 tar 条目摘要、脚本与仓库来源一致、执行权限、DEB 主程序摘要及新增 5 项运行依赖通过；脚本 `sh -n` 通过。
+
+### Ubuntu 22 v2 CPU 实测失败后：修正透明清理目标
+
+- 用户只提供 cpu 模式日志，三个 WebKit 环境开关均为 1，媒体及歌词策略安装均有成功日志，但歌词仍拖影；GStreamer bad／libav 仍未安装，不能认为音频依赖已经补齐。未将 v2 当成已验证的修复。
+- 核对 WebKitGTK 2.50.4 的 `Source/WebKit/UIProcess/API/gtk/WebKitWebViewBase.cpp`：realize 为 WebView 创建其自己的 `GdkWindow`，draw 在该控件 Cairo context 上绘制。前两版把背景清理回调安装到外层 GtkWindow，是已确认的目标选择错误，安装成功日志无法证明子 WebView 像素被清理。
+- `nativeWebViewTarget` 同时返回匹配的 widget 和 settings；歌词清理回调现在直接安装到该 WebView，在默认绘制前清理当前 damage clip，再恢复 Cairo 状态继续默认绘制。首次实际调用时只记录一次 `lyrics WebView background clear executed`，不增加定时器、全量失效或前端强制更新，不改歌词动画。main 窗口的媒体策略继续仅修改自己的 settings。
+- 新增真实 Cairo 双 image surface 像素回归：旧实现报子画面旧字形 alpha=65535（失败），修正目标后旧字形透明、新半透明字形正常绘制、damage clip 外及父画面像素保留。宿主实际执行且通过，没有跳过；这验证 Cairo／目标选择，不等价于 Ubuntu GTK 图形验收。证据 `/tmp/hemusic-linux-v3-cairo-{red,green}.log`。
+- v3 诊断脚本默认改为 normal，CPU 只在显式参数下启用。启动脚本 4 项隔离测试、Go 全包测试、Linux amd64 vet、相关 ESLint／Prettier／gofmt 与官方 CLI Linux amd64 构建通过；前端代码本轮未改，未重报旧的前端测试数量。新代码尚未提交，SDK 版本及模块缓存未改。
+- v3 便携包 `build/mygo/ubuntu22-webview-draw-v3/HE-Music-1.0.4-linux-x64-webview-draw-v3.tar.gz`（SHA-256 `75d1c3d45e50aabb4dee3a56752177720ca60bcd2a1ccfa04ba8e91f218afc99`）；DEB SHA-256 `89f9abdbbc9bd00c89f6e4a08ad17deef911bccc249bf321a8fd30060319e0de`。已核对架构、tar 全部条目摘要及执行权限、脚本来源一致、DEB 内程序摘要和 5 项音频依赖。仍需用户在退出旧进程后运行 v3、确认实际执行日志及拖影结果，未宣称问题已在实机修复。
+
+### Ubuntu 22 v4：真实 WebKitGTK 复现与启用合成
+
+- 用户 v3 normal 仍拖影，且 `WebView background clear executed` 已出现，证实只清理控件 Cairo context 不足。本轮发现已运行的 Podman Linux VM，配置了隔离 Ubuntu 22 GTK 图形验证环境；此前各阶段未配置该验证环境，并非本机无法运行任何 Linux 测试。
+- 使用 GTK 3.24.33／WebKitGTK 2.50.4（与用户相同版本）、Xvfb X11＋xcompmgr、生产 `DesktopLyric/index.vue`，通过 Python GTK 窗口壳及内存 provider 输入四行中文逐字歌词。环境为 arm64、Mesa，不是已打包 Go 应用或用户 x86-64 实体显卡；测试容器中为可信 fixture 单独禁用了 WebKit sandbox，产品和启动脚本没有此设置。测试结束已停止自建 `hemusic-gtk-repro-v4` 容器，未停止原有 VM 或其他服务。
+- 非合成路径（NEVER）稳定复现相同拖影，屏幕在当前字形上方区域有 21,886 个异常有色像素，而同一时刻 WebKit 快照该区域为 0。去掉 drop-shadow 仍有 22,644 个，排除通过删除阴影来修复的方向。启用合成（ALWAYS）后该区域为 0，原始着色／阴影／切行均保留；安装或不安装 Cairo 清理回调都通过。Mesa 软件 GL＋Skia CPU 绘制、同时保留合成也通过同一截图检查。证据 `build/mygo/gtk-lyrics-probe-v4/results/comparison.json` 和配套截图。
+- 将歌词窗口策略由 `WEBKIT_HARDWARE_ACCELERATION_POLICY_NEVER=2` 改为 `ALWAYS=1`，保留读回验证和固定成功日志。前几版强制关闭合成的方向错误，v3 的像素测试仅证明控件目标／Cairo 清理，不证明 WebKit 内部显示缓冲更新正确。新的政策回归用例先报未启用合成失败，切换后通过；主窗口媒体设置不变。
+- 诊断脚本默认 normal，移除旧 cpu 模式，改为显式 `software-gl`：`LIBGL_ALWAYS_SOFTWARE=1`、`WEBKIT_SKIA_ENABLE_CPU_RENDERING=1`，同时两个禁用合成／DMA-BUF 的变量设为 0，保证软件绘制对照仍保留合成。仅作用当前程序及其子进程，未改系统驱动、沙箱或正式 SDK。
+- Go 全包测试、Linux amd64 vet、gofmt、启动脚本 4 项隔离测试、相关 ESLint／Prettier 和官方 CLI Linux amd64 构建通过。生产前端未改，不重复宣称旧的前端测试数量。新包 `build/mygo/ubuntu22-compositing-v4/HE-Music-1.0.4-linux-x64-compositing-v4.tar.gz`，SHA-256 `ffdb2e573b1b994d9ef6423429398e4529144e5cf8d20ccd8407fa8a78e24316`，内附 evidence 截图与比较 JSON；DEB SHA-256 `0084e72019f6984da71b9b634e58258e3c6dc3b3bc19bc7d846bbf86394ff0c3`。已核对 ELF 架构、tar 全部内容摘要／执行权限、脚本来源、DEB 程序摘要和 5 项依赖。
+- 相同版本 GTK 的隔离验证已通过。用户随后确认 v4 的 `software-gl` 在 Ubuntu 22 X11 x86-64 实体机无拖影，正常模式仍有拖影；只将兼容模式标为实机通过。音频 bad／libav 依赖缺失仍独立待处理，不宣称播放卡顿已修复。用户已授权提交本轮代码，不推送。
+
+### Linux 正式应用图形兼容设置
+
+- 按用户要求将兼容模式接入 Linux mygo 的“设置 → 外观”。原生服务持久保存布尔选择，界面区分已保存选择与当前运行模式，保存成功后按需提示重启；保存失败保留原值，非 Linux、Web 和 Electron 不显示此入口。设置构造保持惰性，会话随主窗口生命周期创建／清理，迟到回执不能覆盖新 owner 或向已离开的设置页弹提示。
+- 本机图形偏好独立保存在 `PathUserData/linux-graphics.json`，0600 权限、有界／严格 JSON、临时文件同步与原子替换；不随业务备份跨机器导入。损坏文件在启动时保留并标注读取失败，用户显式保存可修复；设置重置包含该文件，待执行的重置在 GTK 初始化前即按正常模式规划启动，实际删除仍由既有单实例事务完成。
+- Linux 在获取单实例和加载 GTK／WebKit 前读取偏好。为保证无 cgo 构建中动态 C 库也看到新环境，必要时用同一可执行文件、参数和 PID 替换一次进程，环境相同时不会再次替换。启用时请求软件 GL／Skia CPU 并保留合成，关闭时清除四项受控环境开关。官方 CLI 已重新生成绑定，正式 SDK pin／缓存未改。
+- 诊断脚本升级 v5，使用固定枚举临时覆盖保存值，普通应用菜单／双击继续读取保存值。脚本的 Node 测试与 Vitest 分别运行，避免误收集 `node:test` 文件。
+- 新鲜验证：完整前端 178 文件、1,614 测试、Node／Web 类型、Go 全包测试、Linux amd64 vet，以及脚本 4 项测试通过。隔离 Ubuntu 22 arm64 容器的完整 desktop 测试通过，新增真实启动子进程检查确认 libc 读取到开启／关闭后的环境、PID 保留且不循环；首次全套运行因缺少测试用 FFmpeg 失败，在该自有容器安装 FFmpeg 后复验通过。此验证不代表新设置入口已在用户 x86-64 实体机验收；其正常模式拖影和音频卡顿仍未宣告解决。
+- 使用真实 `SettingItemRenderer.vue` 与外观配置在 Chrome 中验证开启／关闭、保存提示及重启后的模式显示，页面错误为空；该界面 fixture 使用内存 provider，磁盘持久化与 C 环境由上面的原生测试独立验证。相关 ESLint／Prettier、生产桌面前端构建、官方 CLI Linux amd64 生产构建和 Windows amd64 全包交叉编译通过。
+- 新版产物位于 `build/mygo/ubuntu22-graphics-settings-v5/linux-amd64/`。DEB SHA-256 `60b91f6b9d3b62c5cb05115b19c999ff154a40e4f51f2c712d7fb849b38e0263`，官方 tar SHA-256 `f957443746a5115e496930728fd1f71150df535278954de606bcc29e3cfacf52`；ELF x86-64、两种归档的程序摘要／执行位和五项音频依赖已核对。

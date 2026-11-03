@@ -197,6 +197,14 @@ export interface LifecycleStatus {
   epoch: number;
 }
 
+/** This preference belongs to this machine, outside portable application backups. */
+export interface LinuxGraphicsState {
+  enabled: boolean;
+  applied: boolean;
+  restartRequired: boolean;
+  loadFailed: boolean;
+}
+
 /** LocalAudioTicket contains only transient bearer credentials, never filesystem paths. */
 export interface LocalAudioTicket {
   ticketId: string;
@@ -875,6 +883,15 @@ export const DesktopLifecycle = {
    */
   teardown(): Promise<void> {
     return call("DesktopLifecycle.Teardown");
+  },
+} as const;
+
+export const LinuxGraphics = {
+  current(): Promise<LinuxGraphicsState> {
+    return call("LinuxGraphics.Current");
+  },
+  save(enabled: boolean): Promise<LinuxGraphicsState> {
+    return call("LinuxGraphics.Save", enabled);
   },
 } as const;
 

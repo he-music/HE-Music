@@ -16,6 +16,7 @@ import {
   NetworkProxy,
   NetworkGateway,
   WindowAppearanceService,
+  LinuxGraphics,
   events,
 } from "./mygo.bindings";
 import { externalHttpURL, type PlatformAdapter } from "./types";
@@ -68,6 +69,7 @@ export function createMygoPlatform(): PlatformAdapter {
     networkProxy: createNetworkProxyProvider(NetworkProxy),
     gateway: NetworkGateway,
     windowAppearance: WindowAppearanceService,
+    linuxGraphics: os === "linux" ? LinuxGraphics : undefined,
     updates: {
       ...Updates,
       onChange: (listener) => events.desktopUpdates.on(listener),

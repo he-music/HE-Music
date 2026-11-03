@@ -70,7 +70,10 @@ vi.mock("./helper", () => ({ shuffleArray: (items: unknown[]) => items }));
 vi.mock("./blob", () => ({ default: {} }));
 vi.mock("@/api/radio", () => ({ listRadioSongs: mocks.radio }));
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
-vi.mock("@/platform/gateway", () => ({ gatewayProxyUrl: (url: string) => url }));
+vi.mock("@/platform/gateway", () => ({
+  gatewayProxyUrl: (url: string) => url,
+  isMygoGatewayResourceUrl: () => false,
+}));
 // Real LocalAudioSession with an inert authorized ticket provider.
 vi.mock("@/platform/filesSession", () => ({
   filesSession: {

@@ -9,6 +9,10 @@ import (
 )
 
 func main() {
+	if err := bootstrapLinuxGraphics(); err != nil {
+		log.Print("初始化 Linux 图形设置失败: ", err)
+		return
+	}
 	acquired, stopProtocols := installProtocolHooks()
 	if !acquired {
 		return
@@ -71,7 +75,7 @@ func main() {
 		}
 		win := mygo.NewWindow(options)
 		if mediaErr := configureNativeWebViewMedia(win.NativeHandle()); mediaErr != nil {
-			log.Print("启用 WebView 媒体设备 API 失败，保留默认音频输出: ", mediaErr)
+			log.Print("配置 WebView 媒体策略失败，保留默认设置: ", mediaErr)
 		}
 		if _, hoverErr := installWindowButtonsHover(win, appearance.UseBorderless); hoverErr != nil {
 			log.Print("设置 macOS 原生窗口按钮悬停失败，保留可见按钮: ", hoverErr)

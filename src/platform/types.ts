@@ -10,6 +10,7 @@ import type { TaskbarProvider } from "./taskbarSession";
 import type { PlatformNetworkProxy } from "./networkProxy";
 import type { GatewayProvider } from "./gateway";
 import type { PlatformWindowAppearance } from "./windowAppearance";
+import type { PlatformLinuxGraphics } from "./linuxGraphics";
 import type { PlatformPreferencesReset } from "./preferencesReset";
 import type {
   CloseRequested,
@@ -73,6 +74,7 @@ export interface PlatformAdapter {
   readonly networkProxy?: PlatformNetworkProxy;
   readonly gateway?: GatewayProvider;
   readonly windowAppearance?: PlatformWindowAppearance;
+  readonly linuxGraphics?: PlatformLinuxGraphics;
 }
 
 export function systemFromUserAgent(userAgent: string): SystemPlatform {

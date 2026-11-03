@@ -7,6 +7,15 @@
   "icon": "public/icons/favicon-1024x1024.png",
   "main": "./desktop",
   "out": "build/mygo",
+  "linux": {
+    "depends": [
+      "gstreamer1.0-plugins-base",
+      "gstreamer1.0-plugins-good",
+      "gstreamer1.0-plugins-bad",
+      "gstreamer1.0-libav",
+      "gstreamer1.0-pulseaudio"
+    ]
+  },
   "macos": {
     "entitlements": "desktop/macos.entitlements.plist",
     "infoPlist": {

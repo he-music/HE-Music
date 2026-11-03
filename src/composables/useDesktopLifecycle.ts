@@ -15,6 +15,7 @@ import { createShellLocalArtworkSession } from "./shellLocalArtwork";
 import { createShellProtocolSession } from "./shellProtocols";
 import { createShellTaskbarSession } from "./shellTaskbar";
 import { WindowAppearanceSession } from "@/platform/windowAppearance";
+import { LinuxGraphicsSession } from "@/platform/linuxGraphics";
 import { createMygoDownloadResolver } from "@/utils/localDownloadResolver";
 import { createShellControlSession } from "./shellControl";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
@@ -44,6 +45,10 @@ export function useDesktopLifecycle(ui: {
   const appearance =
     lifecycle && platform.windowAppearance
       ? new WindowAppearanceSession(platform.windowAppearance)
+      : undefined;
+  const graphics =
+    lifecycle && platform.kind === "mygo" && platform.os === "linux" && platform.linuxGraphics
+      ? new LinuxGraphicsSession(platform.linuxGraphics)
       : undefined;
   if (!lifecycle) {
     let disposed = false;
@@ -165,6 +170,7 @@ export function useDesktopLifecycle(ui: {
         void protocols?.start().catch(() => console.error("应用协议会话初始化失败"));
         void taskbar?.start().catch(() => console.error("任务栏会话初始化失败"));
         void appearance?.start().catch(() => console.error("窗口外观会话初始化失败"));
+        void graphics?.start().catch(() => console.error("Linux 图形设置会话初始化失败"));
         void updates?.start().catch(() => console.error("应用更新会话初始化或检查失败"));
         void files?.start();
         await shortcuts?.start();
@@ -182,6 +188,7 @@ export function useDesktopLifecycle(ui: {
         tray.dispose();
         artwork?.dispose();
         appearance?.dispose();
+        graphics?.dispose();
         await control?.dispose().catch(reportFailure);
         await protocols?.dispose();
         await taskbar?.dispose();
@@ -204,6 +211,7 @@ export function useDesktopLifecycle(ui: {
     disposed = true;
     artwork?.dispose();
     appearance?.dispose();
+    graphics?.dispose();
     const controlCleanup = control?.dispose().catch(reportFailure);
     const protocolsCleanup = protocols?.dispose();
     const taskbarCleanup = taskbar?.dispose();

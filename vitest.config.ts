@@ -9,7 +9,11 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    // These offline release checks use node:test and run through test:desktop:release.
-    exclude: [...configDefaults.exclude, "scripts/package/mygo-release*.test.mjs"],
+    // Offline script checks use node:test and are run separately from Vitest.
+    exclude: [
+      ...configDefaults.exclude,
+      "scripts/package/mygo-release*.test.mjs",
+      "scripts/diagnostics/*.test.mjs",
+    ],
   },
 });

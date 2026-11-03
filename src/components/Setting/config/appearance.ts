@@ -6,6 +6,7 @@ import { computed, ref } from "vue";
 import { t } from "@/i18n";
 import { platform } from "@/platform";
 import { windowAppearanceSession } from "@/platform/windowAppearance";
+import { linuxGraphicsSession } from "@/platform/linuxGraphics";
 
 export const useAppearanceSettings = (): SettingConfig => {
   const settingStore = useSettingStore();
@@ -51,9 +52,41 @@ export const useAppearanceSettings = (): SettingConfig => {
     window.$message.warning(t("message.setting_saved_and_restart_required"));
   };
 
+  const handleGraphicsChange = async (enabled: boolean) => {
+    const session = linuxGraphicsSession.value;
+    if (!session) return;
+    const generation = activation;
+    try {
+      const state = await session.save(enabled);
+      if (!state || !active || generation !== activation || linuxGraphicsSession.value !== session)
+        return;
+      if (state.restartRequired) {
+        window.$message.warning(t("message.setting_saved_and_restart_required"));
+      } else {
+        window.$message.success(t("mygo.linux_graphics.saved"));
+      }
+    } catch {
+      if (active && generation === activation && linuxGraphicsSession.value === session) {
+        window.$message.error(t("mygo.linux_graphics.save_failed"));
+      }
+    }
+  };
+  const refreshGraphics = async (generation: number) => {
+    const session = linuxGraphicsSession.value;
+    if (!session) return;
+    try {
+      await session.refresh();
+    } catch {
+      if (active && generation === activation && linuxGraphicsSession.value === session) {
+        window.$message.error(t("mygo.linux_graphics.load_failed"));
+      }
+    }
+  };
+
   const onActivate = async () => {
     active = true;
     const generation = ++activation;
+    if (platform.kind === "mygo" && platform.os === "linux") void refreshGraphics(generation);
     if (platform.kind === "mygo") {
       const session = windowAppearanceSession.value;
       if (!session) return;
@@ -162,6 +195,36 @@ export const useAppearanceSettings = (): SettingConfig => {
                 if (isElectron) useBorderless.value = v;
                 handleBorderlessChange(v);
               },
+            }),
+          },
+          {
+            key: "linuxGraphicsCompatibility",
+            label: t("mygo.linux_graphics.title"),
+            type: "switch",
+            show:
+              platform.kind === "mygo" &&
+              platform.os === "linux" &&
+              Boolean(platform.linuxGraphics),
+            description: computed(() => {
+              const state = linuxGraphicsSession.value?.state.value;
+              return t(
+                state?.loadFailed ? "mygo.linux_graphics.load_default" : "mygo.linux_graphics.tip",
+                {
+                  mode: t(
+                    state?.applied
+                      ? "mygo.linux_graphics.compatible"
+                      : "mygo.linux_graphics.normal",
+                  ),
+                },
+              );
+            }),
+            disabled: computed(
+              () =>
+                !linuxGraphicsSession.value?.state.value || linuxGraphicsSession.value.saving.value,
+            ),
+            value: computed({
+              get: () => linuxGraphicsSession.value?.state.value?.enabled ?? false,
+              set: handleGraphicsChange,
             }),
           },
           {

@@ -172,6 +172,26 @@ function playbackFixture(
 }
 
 describe("audio capability", () => {
+  it("admits the injected gateway media without a redundant network probe", async () => {
+    const gateway = "http://127.0.0.1:49234/session-secret";
+    vi.stubGlobal("window", { __HE_MUSIC_GATEWAY_ORIGIN__: gateway });
+    try {
+      const fetcher = vi.fn(async () => new Response(null, { status: 200 }));
+      const url = `${gateway}/__proxy?target=aHR0cHM6Ly9hdWRpby5leGFtcGxlL3Nvbmc`;
+      await expect(canUseWebAudioSource(url, { fetcher })).resolves.toBe(true);
+      expect(fetcher).not.toHaveBeenCalled();
+      const controller = new AbortController();
+      controller.abort();
+      await expect(canUseWebAudioSource(url, { fetcher, signal: controller.signal })).resolves.toBe(
+        false,
+      );
+      await canUseWebAudioSource(`${gateway}/other?target=anything`, { fetcher });
+      expect(fetcher).toHaveBeenCalledOnce();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it("uses a cancellable ranged GET and accepts a CORS response", async () => {
     const fetcher = vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
       expect(init?.method).toBe("GET");
@@ -590,6 +610,7 @@ describe("audio capability", () => {
       "timeupdate",
       "error",
       "waiting",
+      "stalled",
       "canplay",
       "loadedmetadata",
       "loadstart",

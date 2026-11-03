@@ -1,0 +1,12 @@
+{
+  "linux_graphics": {
+    "title": "图形兼容模式",
+    "tip": "出现拖影或黑屏时可启用。当前：{mode}；修改后重启应用生效。",
+    "normal": "正常模式",
+    "compatible": "兼容模式",
+    "saved": "图形设置已保存",
+    "save_failed": "图形设置保存失败，请重试",
+    "load_failed": "图形设置读取失败，请重试",
+    "load_default": "图形设置读取失败。当前：{mode}；请重新保存选择。"
+  }
+}

@@ -23,6 +23,7 @@ export type AudioEventType =
   | "timeupdate"
   | "error"
   | "waiting"
+  | "stalled"
   | "canplay"
   | "loadedmetadata"
   | "loadstart"
@@ -442,6 +443,7 @@ class AudioManager {
       "timeupdate",
       "error",
       "waiting",
+      "stalled",
       "canplay",
       "loadedmetadata",
       "loadstart",
@@ -526,6 +528,11 @@ class AudioManager {
    */
   public get currentTime() {
     return this.audioElement?.currentTime || 0;
+  }
+
+  /** Native media readiness; stalled fetches can still have playable buffers. */
+  public get readyState() {
+    return this.audioElement?.readyState ?? 0;
   }
 
   /**

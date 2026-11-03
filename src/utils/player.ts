@@ -99,6 +99,7 @@ class Player {
       const playTitle = `${name} - ${artist}`;
       window.document.title = `${playTitle} | HE-Music`;
       statusStore.playStatus = true;
+      statusStore.playLoading = true;
       // IPC 通知
       if (isElectron) {
         window.electron.ipcRenderer.send("play-status-change", true);
@@ -112,10 +113,29 @@ class Player {
     };
     audioManager.on("play", playCallback);
     this.eventCallbacks.set("play", playCallback);
+    const playingCallback = () => {
+      if (audioManager.paused) return;
+      const statusStore = useStatusStore();
+      statusStore.playStatus = true;
+      statusStore.playLoading = false;
+    };
+    audioManager.on("playing", playingCallback);
+    this.eventCallbacks.set("playing", playingCallback);
+    const bufferingCallback = (event: Event) => {
+      if (audioManager.paused) return;
+      // A stalled network request can coexist with enough buffered audio.
+      if (event.type === "stalled" && audioManager.readyState >= 3) return;
+      useStatusStore().playLoading = true;
+    };
+    for (const event of ["waiting", "stalled"] as const) {
+      audioManager.on(event, bufferingCallback);
+      this.eventCallbacks.set(event, bufferingCallback);
+    }
     // 暂停
     const pauseCallback = () => {
       const statusStore = useStatusStore();
       statusStore.playStatus = false;
+      statusStore.playLoading = false;
       if (!isElectron) window.document.title = "HE-Music";
       // IPC 通知
       if (isElectron) {
@@ -199,7 +219,7 @@ class Player {
     // 可以播放
     const canplayCallback = () => {
       const statusStore = useStatusStore();
-      statusStore.playLoading = false;
+      if (audioManager.paused) statusStore.playLoading = false;
       const playSongData = songManager.getPlaySongData();
       this.retryInfo = {
         songId: `${playSongData?.id}-${playSongData?.platform}`,

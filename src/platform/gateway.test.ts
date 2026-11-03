@@ -14,6 +14,24 @@ async function setup() {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("mygo gateway request boundaries", () => {
+  it("recognizes only the injected loopback proxy route as an admitted resource", async () => {
+    const module = await setup();
+    const resource = module.gatewayProxyUrl("https://cdn.example/song.mp3");
+    expect(module.isMygoGatewayResourceUrl(resource)).toBe(true);
+    for (const other of [
+      `${gateway}/__api/hemusic/song?target=anything`,
+      `${gateway}/__proxy?target=`,
+      resource.replace("session-secret", "another-session"),
+      resource.replace("49234", "49235"),
+      resource.replace("127.0.0.1", "user:password@127.0.0.1"),
+      "https://cdn.example/__proxy?target=anything",
+    ]) {
+      expect(module.isMygoGatewayResourceUrl(other)).toBe(false);
+    }
+    vi.stubGlobal("window", {});
+    expect(module.isMygoGatewayResourceUrl(resource)).toBe(false);
+  });
+
   it("keeps standalone Web request configuration and source URLs intact", async () => {
     vi.stubGlobal("window", {});
     const module = await import("./gateway");

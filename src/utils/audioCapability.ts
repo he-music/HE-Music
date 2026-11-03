@@ -1,3 +1,5 @@
+import { isMygoGatewayResourceUrl } from "@/platform/gateway";
+
 export type AudioSourceAccess = "native" | "web-audio";
 
 export interface AudioSourceProbeOptions {
@@ -16,6 +18,9 @@ export async function canUseWebAudioSource(
   options: AudioSourceProbeOptions = {},
 ): Promise<boolean> {
   if (!/^https?:\/\//i.test(url) || options.signal?.aborted) return false;
+  // The native proxy already guarantees CORS. A second ranged upstream fetch
+  // delays every track and may compete with WebKitGTK's actual media request.
+  if (isMygoGatewayResourceUrl(url)) return true;
   // These Kuwo media responses allow ordinary playback but reject CORS reads.
   // Avoid a known-to-fail browser fetch; keep other sources eligible for processing.
   try {
@@ -225,6 +230,7 @@ const mediaEvents = [
   "timeupdate",
   "error",
   "waiting",
+  "stalled",
   "canplay",
   "loadedmetadata",
   "loadstart",

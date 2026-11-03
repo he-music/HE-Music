@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"os"
 	"time"
 
@@ -303,7 +304,7 @@ func (l *DesktopLyrics) createWindow() (err error) {
 		}
 	}()
 	win := mygo.NewWindow(mygo.WindowOptions{
-		Title: "HE-Music Desktop Lyrics", URL: "/#/desktop-lyric",
+		Title: "HE-Music Desktop Lyrics",
 		Width: bounds.Width, Height: bounds.Height, X: bounds.X, Y: bounds.Y,
 		MinWidth: 640, MinHeight: 140, MaxWidth: 1400, MaxHeight: 360,
 		Hidden: true, Frameless: true, Transparent: true, DisableShadow: true,
@@ -314,6 +315,9 @@ func (l *DesktopLyrics) createWindow() (err error) {
 	if win.IsDestroyed() || win.Page() == nil {
 		l.closeWindow(generation, "window-creation-failed")
 		return errors.New("desktop lyrics window creation failed")
+	}
+	if renderingErr := configureNativeLyricsRendering(win.NativeHandle()); renderingErr != nil {
+		log.Print("桌面歌词渲染兼容策略未完全生效: ", renderingErr)
 	}
 	l.state.window.Bounds = LyricsBounds(win.Bounds())
 	l.state.window.WorkArea = lyricsWorkAreaForBounds(l.state.window.Bounds, areas)
@@ -365,6 +369,10 @@ func (l *DesktopLyrics) createWindow() (err error) {
 		})
 	})
 	l.emitWindow()
+	if loadErr := win.Page().LoadURL("/#/desktop-lyric"); loadErr != nil {
+		l.closeWindow(generation, "child-load-failed")
+		return errors.New("desktop lyrics page loading failed")
+	}
 	return nil
 }
 

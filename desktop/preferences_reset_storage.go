@@ -17,6 +17,7 @@ const preferencesResetMarker = "preferences-reset.pending"
 var preferencesResetFiles = [...]string{
 	"window-appearance.json", "network-proxy.json", "local-library-directories.json",
 	"local-library-index.json", "window-state.json",
+	linuxGraphicsFile,
 }
 
 func preferencesResetDirectory(directory string) error {

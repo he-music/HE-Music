@@ -1,0 +1,12 @@
+{
+  "linux_graphics": {
+    "title": "Graphics compatibility mode",
+    "tip": "Enable for rendering artifacts or a black screen. Running: {mode}. Restart the app to apply changes.",
+    "normal": "Normal mode",
+    "compatible": "Compatibility mode",
+    "saved": "Graphics settings saved",
+    "save_failed": "Could not save graphics settings. Please retry.",
+    "load_failed": "Could not load graphics settings. Please retry.",
+    "load_default": "Could not load graphics settings. Running: {mode}. Save your choice again."
+  }
+}
