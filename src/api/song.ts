@@ -1,6 +1,5 @@
 import request, { API_URL, requestHemusic, type HemusicRequestConfig } from "@/utils/request";
 import { gatewayProxyUrl } from "@/platform/gateway";
-import { isElectron } from "@/utils/env";
 import type { GetSongDetailResponse } from "@/types/main.hemusic";
 
 // 获取歌曲 URL
@@ -145,19 +144,15 @@ export const getCoverUrlStr = (
  * @returns TTML 格式歌词
  */
 export const songLyricTTML = async (id: number) => {
-  if (isElectron) {
-    return request({ url: "/lyric/ttml", params: { id, noCookie: true } });
-  } else {
-    const url = `https://amll-ttml-db.stevexmh.net/ncm/${id}`;
-    try {
-      const response = await fetch(gatewayProxyUrl(url));
-      if (response === null || response.status !== 200) {
-        return null;
-      }
-      const data = await response.text();
-      return data;
-    } catch {
+  const url = `https://amll-ttml-db.stevexmh.net/ncm/${id}`;
+  try {
+    const response = await fetch(gatewayProxyUrl(url));
+    if (response === null || response.status !== 200) {
       return null;
     }
+    const data = await response.text();
+    return data;
+  } catch {
+    return null;
   }
 };

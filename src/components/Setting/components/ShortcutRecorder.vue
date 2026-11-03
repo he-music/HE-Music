@@ -43,7 +43,6 @@ import {
   shortcutSession,
   type ShortcutSession,
 } from "@/platform/shortcutSession";
-import { formatForGlobalShortcut } from "@/utils/helper";
 import { ref, computed, onMounted, onBeforeUnmount } from "vue";
 import type { InputInst } from "naive-ui";
 import { useI18n } from "vue-i18n";
@@ -130,7 +129,6 @@ const onKeyDown = (event: KeyboardEvent) => {
       .filter(Boolean)
       .join("+");
     if (!modified) shortcut = "CmdOrCtrl+Shift+" + event.code;
-    if (platform.kind === "electron") shortcut = formatForGlobalShortcut(shortcut);
   }
   const normalized = normalizeShortcut(shortcut, platform.os);
   const duplicate = Object.entries(shortcutStore.shortcutList).some(

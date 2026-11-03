@@ -101,7 +101,6 @@ function mountRecorder(
     "@/stores": { useShortcutStore: () => store },
     "@/platform": { platform: { os: "darwin", kind, shortcuts: provider } },
     "@/platform/shortcutSession": { normalizeShortcut, shortcutSession: () => sessionFor(store) },
-    "@/utils/helper": { formatForGlobalShortcut: (value: string) => value.replace("Digit", "num") },
   };
   const exports: {
     default?: { setup: (props: object, context: object) => Record<string, unknown> };
@@ -439,13 +438,5 @@ describe("shortcut Pinia and actual recorder setup", () => {
     await flush();
     expect(f.store.shortcutList.playOrPause.isRegistered).toBe(false);
     expect(f.provider.check).not.toHaveBeenCalled();
-  });
-
-  it("Electron录制沿用旧数字转换且不增加动作监听", async () => {
-    const f = fixture();
-    const recorder = mountRecorder(f.store, f.provider, "electron");
-    recorder.focus();
-    recorder.key("Digit1", { ctrlKey: true });
-    expect(f.store.shortcutList.playOrPause.globalShortcut).toBe("Control+num1");
   });
 });

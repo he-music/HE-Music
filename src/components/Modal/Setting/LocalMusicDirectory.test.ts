@@ -224,7 +224,7 @@ it("updates dependent download switches and clears the configured path without r
 });
 
 describe("LocalMusicDirectory真实SFC", () => {
-  it("设置入口开放授权目录与本地封面，Web隐藏且Electron保留旧组", () => {
+  it("设置入口开放授权目录与本地封面，Web隐藏", () => {
     const config = useLocalSettings();
     expect(config.groups.flatMap((group) => group.items.map((item) => item.key))).toEqual([
       "localFilesPath",
@@ -250,13 +250,6 @@ describe("LocalMusicDirectory真实SFC", () => {
     expect(legacy.open).toHaveBeenCalledOnce();
     host.mygo = false;
     expect(useLocalSettings().groups).toEqual([]);
-    host.electron = true;
-    const keys = useLocalSettings().groups.flatMap((group) => group.items.map((item) => item.key));
-    expect(keys).toContain("downloadPath");
-    expect(keys).toContain("downloadMeta");
-    expect(keys).toContain("showDefaultLocalPath");
-    expect(keys).not.toContain("downloadLyricTranslation");
-    expect(keys).not.toContain("downloadLyricRomaji");
   });
 
   it("重新授权后保存提示并只自动扫描一次，取消与重开不重复扫描", async () => {
@@ -324,7 +317,7 @@ describe("LocalMusicDirectory真实SFC", () => {
     expect(setting.localFilesPath).toEqual(["/synthetic/selected"]);
     await original.dispose();
   });
-  it("无会话禁用按钮、Web安全；Electron目录操作仍调用旧helper", async () => {
+  it("无会话禁用按钮、Web安全", async () => {
     const ui = mountDirectory();
     expect(ui.text()).toContain("setting.local.directory_unavailable");
     expect(ui.buttons().every((button) => button.props.disabled === true)).toBe(true);
@@ -333,10 +326,5 @@ describe("LocalMusicDirectory真实SFC", () => {
     const web = mountDirectory();
     expect(web.buttons()).toHaveLength(0);
     web.close();
-    host.electron = true;
-    const electron = mountDirectory();
-    const add = electron.buttons().find((button) => !button.props.quaternary)!;
-    await (add.props.onClick as () => unknown)();
-    expect(legacy.change).toHaveBeenCalledOnce();
   });
 });

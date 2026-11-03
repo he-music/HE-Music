@@ -61,14 +61,13 @@ it("routes mygo editing and downloading through the owned native helpers", async
   expect(mocks.save).toHaveBeenCalledWith(song);
   expect(mocks.create).not.toHaveBeenCalled();
 });
-it.each(["electron", "web"])("preserves the existing %s modal paths", async (kind) => {
+it.each(["web"])("preserves the existing %s modal paths", async (kind) => {
   prepare(kind);
   const modal = await import("./modal");
   await modal.openSongInfoEditor(song);
-  const editor = mocks.create.mock.calls[0]?.[0].content();
-  expect(isVNode(editor) && editor.type).toBe(mocks.editor);
+  expect(mocks.create).not.toHaveBeenCalled();
   await modal.openDownloadSong(song);
-  const download = mocks.create.mock.calls[1]?.[0].content();
+  const download = mocks.create.mock.calls[0]?.[0].content();
   expect(isVNode(download) && download.type).toBe(mocks.download);
   expect(mocks.edit).not.toHaveBeenCalled();
   expect(mocks.save).not.toHaveBeenCalled();

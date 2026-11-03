@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWebPlatform } from "./web";
-import { createElectronPlatform } from "./electron";
 import { createMygoPlatform } from "./mygo";
 import { externalHttpURL, systemFromUserAgent } from "./types";
 
@@ -76,7 +75,6 @@ describe("platform adapters", () => {
     const mygo = createMygoPlatform();
     expect(mygo.os).toBe("darwin");
     expect(mygo.capabilities.windowControls).toBe(true);
-    expect(mygo.capabilities.electronStartup).toBe(false);
     expect(mygo.capabilities.tray).toBe(false);
     expect(mygo.capabilities.desktopLyrics).toBe(false);
     expect(mygo.capabilities.localMusic).toBe(false);
@@ -97,27 +95,6 @@ describe("platform adapters", () => {
     );
     await expect(mygo.openExternal("file:///tmp/test")).rejects.toThrow();
     expect(bridge.call).toHaveBeenCalledOnce();
-  });
-
-  it("Electron 保留原 IPC，并只移除自己的窗口监听", async () => {
-    const off = vi.fn();
-    const ipc = { send: vi.fn(), sendSync: vi.fn(), on: vi.fn().mockReturnValue(off) };
-    vi.stubGlobal("window", { electron: { ipcRenderer: ipc } });
-    vi.stubGlobal("navigator", { userAgent: "Macintosh Electron" });
-    const electron = createElectronPlatform();
-    expect(electron.capabilities.electronStartup).toBe(true);
-    ipc.sendSync.mockReturnValue(true);
-    await electron.window?.toggleMaximize();
-    expect(ipc.send).toHaveBeenCalledWith("win-restore");
-    ipc.sendSync.mockReturnValue(false);
-    await electron.window?.toggleMaximize();
-    expect(ipc.send).toHaveBeenCalledWith("win-max");
-    const listener = vi.fn();
-    const unsubscribe = electron.window?.onMaximized(listener);
-    ipc.on.mock.calls[0][1]({}, true);
-    expect(listener).toHaveBeenCalledWith(true);
-    unsubscribe?.();
-    expect(off).toHaveBeenCalledOnce();
   });
 
   it("识别系统并拒绝非 HTTP(S) 外链", () => {

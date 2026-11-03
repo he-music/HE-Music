@@ -2,8 +2,6 @@ import { applicationStorage } from "@/platform/applicationStorage";
 import { defineStore } from "pinia";
 import type { SongInfo } from "@/types/main.hemusic";
 import { getSizeCover } from "@/utils/format";
-import { isElectron } from "@/utils/env";
-import { cloneDeep } from "lodash-es";
 import { SongLyric } from "@/types/lyric";
 import blob from "@/utils/blob";
 import { artistPhotos } from "@/api/artist";
@@ -135,9 +133,6 @@ export const useMusicStore = defineStore("music", {
       }
       this.playSong = { ...defaultMusicData };
       this.setSongLyric({ lrcData: [], yrcData: [] }, true);
-      if (isElectron) {
-        window.electron.ipcRenderer.send("play-song-change", undefined);
-      }
     },
     /**
      * 设置/更新歌曲歌词数据
@@ -155,18 +150,6 @@ export const useMusicStore = defineStore("music", {
           lrcData: updates.lrcData ?? this.songLyric.lrcData,
           yrcData: updates.yrcData ?? this.songLyric.yrcData,
         };
-      }
-      // 更新歌词窗口数据
-      if (isElectron) {
-        window.electron.ipcRenderer.send(
-          "play-lyric-change",
-          cloneDeep({
-            songId: this.playSong?.id,
-            lyricLoading: false,
-            lrcData: this.songLyric.lrcData ?? [],
-            yrcData: this.songLyric.yrcData ?? [],
-          }),
-        );
       }
     },
     /**

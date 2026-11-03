@@ -38,7 +38,7 @@ vi.mock("axios", async (importOriginal) => ({
   },
 }));
 
-vi.mock("@/utils/env", () => ({ isDev: false, isElectron: false }));
+vi.mock("@/utils/env", () => ({ isDev: false }));
 vi.mock("@/stores", () => ({
   useDataStore: () => ({ ...mocks.dataStore, clearUserData: mocks.clearUserData }),
   useSettingStore: () => ({ language: "zh-CN", proxyProtocol: "off" }),
@@ -67,6 +67,8 @@ describe("HE Music Token 刷新", () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.clearAllMocks();
+    vi.stubEnv("VITE_API_URL", "https://api.fixture.invalid");
+    vi.stubEnv("VITE_NETEASE_API_URL", "/api/netease");
     vi.stubGlobal("window", { $message: { error: mocks.messageError } });
     mocks.axiosCreate
       .mockReturnValueOnce(mocks.neteaseServer)
@@ -81,7 +83,10 @@ describe("HE Music Token 刷新", () => {
     handleResponseError = mocks.hemusicServer.interceptors.response.use.mock.calls[0][1];
   });
 
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
+  });
 
   it("由界面处理曲谱请求错误时不重复显示通用错误消息", async () => {
     const error = {

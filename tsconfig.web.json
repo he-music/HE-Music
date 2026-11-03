@@ -1,23 +1,25 @@
 {
-  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
-  "include": [
-    "src/env.d.ts",
-    "src/**/*",
-    "src/**/*.vue",
-    "electron/main/index.d.ts",
-    "electron/preload/index.d.ts"
-  ],
+  "include": ["src/env.d.ts", "src/**/*", "src/**/*.vue"],
   "compilerOptions": {
     "composite": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node", "vite/client", "./auto-imports.d.ts", "./components.d.ts"],
+    "strict": true,
+    "noImplicitAny": false,
+    "noImplicitReturns": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "jsx": "preserve",
     "esModuleInterop": true,
-    "moduleResolution": "bundler",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
     "maxNodeModuleJsDepth": 2,
     "baseUrl": ".",
-    "paths": {
-      "@/*": ["src/*"]
-    },
-    "types": ["node", "electron", "electron-vite/node", "./auto-imports.d.ts", "./components.d.ts"],
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "target": "es2022"
+    "paths": { "@/*": ["src/*"] }
   }
 }

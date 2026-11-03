@@ -9,7 +9,7 @@ afterEach(() => {
   close.splice(0).forEach((stop) => stop());
   vi.unstubAllGlobals();
 });
-function mount(kind: "mygo" | "electron" | "web", initial = "network") {
+function mount(kind: "mygo" | "web", initial = "network") {
   const currentRoute = shallowRef({ query: { type: initial } });
   const push = vi.fn(async (route: { path: string; query: { type: string } }) => {
     currentRoute.value = { query: route.query };
@@ -36,7 +36,7 @@ function mount(kind: "mygo" | "electron" | "web", initial = "network") {
     new URL("./Setting.vue", import.meta.url),
     {
       "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
-      "@/utils/env": { isElectron: kind === "electron", isMygo: kind === "mygo" },
+      "@/utils/env": { isMygo: kind === "mygo" },
       "@/composables/useSettingLifecycle": lifecycle,
       "@/components/Setting/config/play": { usePlaySettings: () => config("play") },
       "@/components/Setting/config/general": { useGeneralSettings: () => config("general") },
@@ -62,7 +62,7 @@ function mount(kind: "mygo" | "electron" | "web", initial = "network") {
   };
 }
 
-it.each(["mygo", "electron", "web"] as const)(
+it.each(["mygo", "web"] as const)(
   "exposes desktop tabs only for desktop hosts: %s",
   async (kind) => {
     const page = mount(kind);

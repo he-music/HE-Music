@@ -10,15 +10,7 @@ import type { SettingGroup, SettingConfig } from "@/types/settings";
 import type { SettingsImportResult } from "./mygo.bindings";
 import * as settingLifecycle from "@/composables/useSettingLifecycle";
 
-const host = vi.hoisted(() => ({ electron: false }));
-vi.mock("@/utils/env", () => ({
-  get isElectron() {
-    return host.electron;
-  },
-  get isMygo() {
-    return !host.electron;
-  },
-}));
+vi.mock("@/utils/env", () => ({ isMygo: true }));
 vi.mock("@/utils/modal", () => ({
   openFontManager: vi.fn(),
   openThemeConfig: vi.fn(),
@@ -51,7 +43,6 @@ const platform: { -readonly [K in keyof PlatformAdapter]: PlatformAdapter[K] } =
     tray: false,
     desktopLyrics: false,
     localMusic: false,
-    electronStartup: false,
   },
   window: null,
   openExternal: async () => {},
@@ -104,13 +95,11 @@ type Dialog = {
 let confirmation: Dialog;
 const messages = { success: vi.fn(), warning: vi.fn(), error: vi.fn() };
 const reload = vi.fn();
-const electronImport = vi.fn<() => Promise<unknown>>();
 const cleanups: Array<() => void> = [];
 beforeEach(() => {
   vi.useFakeTimers();
   setActivePinia(createPinia());
   locale.value = "zh-CN";
-  host.electron = false;
   platform.kind = "mygo";
   platform.files = undefined;
   const values = new Map<string, string>();
@@ -131,8 +120,6 @@ beforeEach(() => {
         confirmation = dialog;
       }),
     },
-    api: { store: { import: electronImport, export: vi.fn(async () => true) } },
-    electron: { ipcRenderer: { invoke: vi.fn(async () => undefined), on: vi.fn(), send: vi.fn() } },
   });
   // Stand in for the existing auto-import build transform, without changing SFC connections.
   for (const name of [
@@ -179,11 +166,7 @@ function mountPage(type: "general" | "lyrics" = "lyrics") {
     "vue-i18n": { useI18n: () => ({ t: (key: string) => `${locale.value}:${key}` }) },
     "@/composables/useMobile": { useMobile: () => ({ isSmallScreen: Vue.ref(false) }) },
     "@/utils/helper": { renderIcon: () => undefined },
-    "@/utils/env": {
-      get isElectron() {
-        return host.electron;
-      },
-    },
+    "@/utils/env": { isMygo: true },
     "@/../package.json": { default: { author: "Synthetic", version: "0" } },
     "./config/generalActions": generalActionsModule,
     "./config/general": generalModule,
@@ -309,174 +292,135 @@ describe("MainSetting production lazy search/config ownership", () => {
     expect(current.value).toBe("#abcdef");
     expect(first.value).toBe("#123456");
   });
-  it.each(["mygo", "electron"] as const)(
-    "cancels %s successful import reload when a lyrics-entry page closes",
-    async (kind) => {
-      const native = provider();
-      platform.files = kind === "mygo" ? native : undefined;
-      platform.kind = kind;
-      host.electron = kind === "electron";
-      if (kind === "mygo") await new FilesSession(native).start();
-      electronImport.mockResolvedValue({
+  it("cancels successful import reload when a lyrics-entry page closes", async () => {
+    const native = provider();
+    platform.files = native;
+    await new FilesSession(native).start();
+    const page = mountPage();
+    expect(page.search().some((option) => option.value === "general::importSettings")).toBe(true);
+    await page.general();
+    page.import();
+    await confirmation.onPositiveClick?.();
+    expect(localStorage.setItem).toHaveBeenCalledTimes(2);
+    page.close();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reload).not.toHaveBeenCalled();
+    expect(native.teardown).not.toHaveBeenCalled();
+  });
+  it("ignores old confirmation after unmount", async () => {
+    const native = provider();
+    platform.files = native;
+    await new FilesSession(native).start();
+    const page = mountPage();
+    await page.general();
+    page.import();
+    page.close();
+    await confirmation.onPositiveClick?.();
+    expect(native.importSettings).not.toHaveBeenCalled();
+  });
+  it("ignores pending import results after unmount", async () => {
+    const native = provider();
+    platform.files = native;
+    const session = new FilesSession(native);
+    await session.start();
+    const panel = deferred<SettingsImportResult>();
+    native.importSettings = vi.fn(() => panel.promise);
+    const page = mountPage();
+    await page.general();
+    page.import();
+    const done = confirmation.onPositiveClick?.();
+    expect(native.importSettings).toHaveBeenCalledTimes(1);
+    page.close();
+    panel.resolve({
+      status: "selected",
+      document: {
+        format: "he-music-renderer-settings",
+        version: 1,
         renderer: { "setting-store": "{}", "shortcut-store": "{}" },
-      });
-      const page = mountPage();
-      expect(page.search().some((option) => option.value === "general::importSettings")).toBe(true);
-      await page.general();
-      page.import();
-      await confirmation.onPositiveClick?.();
-      expect(localStorage.setItem).toHaveBeenCalledTimes(2);
-      page.close();
-      await vi.advanceTimersByTimeAsync(1000);
-      expect(reload).not.toHaveBeenCalled();
-      expect(native.teardown).not.toHaveBeenCalled();
-    },
-  );
-  it.each(["mygo", "electron"] as const)(
-    "ignores %s old confirmation after unmount",
-    async (kind) => {
-      const native = provider();
-      platform.files = kind === "mygo" ? native : undefined;
-      platform.kind = kind;
-      host.electron = kind === "electron";
-      if (kind === "mygo") await new FilesSession(native).start();
-      const page = mountPage();
-      await page.general();
-      page.import();
-      page.close();
-      await confirmation.onPositiveClick?.();
-      expect(native.importSettings).not.toHaveBeenCalled();
-      expect(electronImport).not.toHaveBeenCalled();
-    },
-  );
-  it.each(["mygo", "electron"] as const)(
-    "ignores %s pending import results after unmount",
-    async (kind) => {
-      const native = provider();
-      platform.files = kind === "mygo" ? native : undefined;
-      platform.kind = kind;
-      host.electron = kind === "electron";
-      const session = kind === "mygo" ? new FilesSession(native) : undefined;
-      await session?.start();
-      const panel = deferred<SettingsImportResult>();
-      const electronPanel = deferred<unknown>();
-      native.importSettings = vi.fn(() => panel.promise);
-      electronImport.mockReturnValue(electronPanel.promise);
-      const page = mountPage();
-      await page.general();
-      page.import();
-      const done = confirmation.onPositiveClick?.();
-      expect(kind === "mygo" ? native.importSettings : electronImport).toHaveBeenCalledTimes(1);
-      page.close();
-      panel.resolve({
-        status: "selected",
-        document: {
-          format: "he-music-renderer-settings",
-          version: 1,
-          renderer: { "setting-store": "{}", "shortcut-store": "{}" },
-        },
-      });
-      electronPanel.resolve({ renderer: { "setting-store": "{}", "shortcut-store": "{}" } });
-      await done;
-      expect(localStorage.setItem).not.toHaveBeenCalled();
-      expect(messages.success).not.toHaveBeenCalled();
-      expect(messages.error).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(1000);
-      expect(reload).not.toHaveBeenCalled();
-      expect(native.teardown).not.toHaveBeenCalled();
-      if (session) expect(filesSession.value).toBe(session);
-    },
-  );
-  it.each(["mygo", "electron"] as const)(
-    "ignores %s pending import errors after unmount",
-    async (kind) => {
-      const native = provider();
-      platform.files = kind === "mygo" ? native : undefined;
-      platform.kind = kind;
-      host.electron = kind === "electron";
-      if (kind === "mygo") await new FilesSession(native).start();
-      const gate = deferred<void>();
-      native.importSettings = vi.fn(async () => {
-        await gate.promise;
-        throw new Error("synthetic host failure");
-      });
-      electronImport.mockImplementation(async () => {
-        await gate.promise;
-        throw new Error("synthetic host failure");
-      });
-      const page = mountPage();
-      await page.general();
-      page.import();
-      const done = confirmation.onPositiveClick?.();
-      page.close();
-      gate.resolve();
-      await done;
-      expect(localStorage.setItem).not.toHaveBeenCalled();
-      expect(messages.success).not.toHaveBeenCalled();
-      expect(messages.error).not.toHaveBeenCalled();
-      await vi.advanceTimersByTimeAsync(1000);
-      expect(reload).not.toHaveBeenCalled();
-      expect(native.teardown).not.toHaveBeenCalled();
-    },
-  );
-  it.each(["mygo", "electron"] as const)(
-    "keeps %s controller identity and pending panel while locale recomputes labels/search",
-    async (kind) => {
-      const native = provider();
-      platform.files = kind === "mygo" ? native : undefined;
-      platform.kind = kind;
-      host.electron = kind === "electron";
-      if (kind === "mygo") await new FilesSession(native).start();
-      const page = mountPage();
-      await page.general();
-      page.import();
-      const first = confirmation;
-      const action = page.item("importSettings").action;
-      const disabled = page.item("importSettings").disabled;
-      locale.value = "en";
-      useSettingStore().language = "en";
-      await flush();
-      expect(page.item("importSettings").label).toBe("en:setting.other.import_settings");
-      expect(
-        page.search().find((option) => option.value === "general::importSettings")?.label,
-      ).toBe("en:setting.other.import_settings");
-      expect(page.item("importSettings").action).toBe(action);
-      expect(page.item("importSettings").disabled).toBe(disabled);
-      expect(page.disabled()).toBe(true);
-      page.import();
-      expect(window.$dialog.warning).toHaveBeenCalledTimes(1);
-      expect(confirmation).toBe(first);
-      first.onNegativeClick?.();
-      expect(page.disabled()).toBe(false);
-      const panel = deferred<SettingsImportResult>();
-      const electronPanel = deferred<unknown>();
-      native.importSettings = vi.fn(() => panel.promise);
-      electronImport.mockReturnValue(electronPanel.promise);
-      page.import();
-      const done = confirmation.onPositiveClick?.();
-      locale.value = "zh-CN";
-      useSettingStore().language = "zh-CN";
-      await flush();
-      expect(page.item("importSettings").label).toBe("zh-CN:setting.other.import_settings");
-      expect(page.disabled()).toBe(true);
-      page.import();
-      expect(window.$dialog.warning).toHaveBeenCalledTimes(2);
-      expect(kind === "mygo" ? native.importSettings : electronImport).toHaveBeenCalledTimes(1);
-      panel.resolve({
-        status: "selected",
-        document: {
-          format: "he-music-renderer-settings",
-          version: 1,
-          renderer: { "setting-store": "{}", "shortcut-store": "{}" },
-        },
-      });
-      electronPanel.resolve({ renderer: { "setting-store": "{}", "shortcut-store": "{}" } });
-      await done;
-      expect(page.disabled()).toBe(true);
-      page.close();
-      await vi.advanceTimersByTimeAsync(1000);
-      expect(reload).not.toHaveBeenCalled();
-      expect(native.teardown).not.toHaveBeenCalled();
-    },
-  );
+      },
+    });
+    await done;
+    expect(localStorage.setItem).not.toHaveBeenCalled();
+    expect(messages.success).not.toHaveBeenCalled();
+    expect(messages.error).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reload).not.toHaveBeenCalled();
+    expect(native.teardown).not.toHaveBeenCalled();
+    expect(filesSession.value).toBe(session);
+  });
+  it("ignores pending import errors after unmount", async () => {
+    const native = provider();
+    platform.files = native;
+    await new FilesSession(native).start();
+    const gate = deferred<void>();
+    native.importSettings = vi.fn(async () => {
+      await gate.promise;
+      throw new Error("synthetic host failure");
+    });
+    const page = mountPage();
+    await page.general();
+    page.import();
+    const done = confirmation.onPositiveClick?.();
+    page.close();
+    gate.resolve();
+    await done;
+    expect(localStorage.setItem).not.toHaveBeenCalled();
+    expect(messages.success).not.toHaveBeenCalled();
+    expect(messages.error).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reload).not.toHaveBeenCalled();
+    expect(native.teardown).not.toHaveBeenCalled();
+  });
+  it("keeps controller identity and pending panel while locale recomputes labels/search", async () => {
+    const native = provider();
+    platform.files = native;
+    await new FilesSession(native).start();
+    const page = mountPage();
+    await page.general();
+    page.import();
+    const first = confirmation;
+    const action = page.item("importSettings").action;
+    const disabled = page.item("importSettings").disabled;
+    locale.value = "en";
+    useSettingStore().language = "en";
+    await flush();
+    expect(page.item("importSettings").label).toBe("en:setting.other.import_settings");
+    expect(page.search().find((option) => option.value === "general::importSettings")?.label).toBe(
+      "en:setting.other.import_settings",
+    );
+    expect(page.item("importSettings").action).toBe(action);
+    expect(page.item("importSettings").disabled).toBe(disabled);
+    expect(page.disabled()).toBe(true);
+    page.import();
+    expect(window.$dialog.warning).toHaveBeenCalledTimes(1);
+    expect(confirmation).toBe(first);
+    first.onNegativeClick?.();
+    expect(page.disabled()).toBe(false);
+    const panel = deferred<SettingsImportResult>();
+    native.importSettings = vi.fn(() => panel.promise);
+    page.import();
+    const done = confirmation.onPositiveClick?.();
+    locale.value = "zh-CN";
+    useSettingStore().language = "zh-CN";
+    await flush();
+    expect(page.item("importSettings").label).toBe("zh-CN:setting.other.import_settings");
+    expect(page.disabled()).toBe(true);
+    page.import();
+    expect(window.$dialog.warning).toHaveBeenCalledTimes(2);
+    expect(native.importSettings).toHaveBeenCalledTimes(1);
+    panel.resolve({
+      status: "selected",
+      document: {
+        format: "he-music-renderer-settings",
+        version: 1,
+        renderer: { "setting-store": "{}", "shortcut-store": "{}" },
+      },
+    });
+    await done;
+    expect(page.disabled()).toBe(true);
+    page.close();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(reload).not.toHaveBeenCalled();
+    expect(native.teardown).not.toHaveBeenCalled();
+  });
 });

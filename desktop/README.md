@@ -1,6 +1,6 @@
 # mygo 桌面入口与原生探针
 
-正常入口为 `main.go`，平台服务位于 `platform.go`。Web、Electron 与 mygo 共用
+正常入口为 `main.go`，平台服务位于 `platform.go`。Web 与 mygo 共用
 `src/platform` 的 `PlatformAdapter`：系统平台、能力声明、窗口控制、可退订的最大化事件和
 HTTP(S) 外链。`mygo.bindings.ts` 由固定版本 CLI 生成并纳入源码；`mygo.json` 的 bindings
 路径保持一致。修改服务后执行 `pnpm generate:desktop`，不要手改生成客户端。
@@ -8,9 +8,7 @@ HTTP(S) 外链。`mygo.bindings.ts` 由固定版本 CLI 生成并纳入源码；
 mygo 采用系统原生标题栏，托盘初始化成功且应用壳就绪后沿用关闭提示及隐藏/退出偏好；
 托盘不可用或壳卸载后原生关闭放行，显式退出绕过提示。
 托盘菜单图标复用 Electron 的图片并嵌入程序，按菜单状态选择播放／收藏／模式／锁定图标。macOS／Windows 使用原生模板着色，Linux 使用明暗及禁用图片并随原生主题更新；Linux 面板是否显示图标由桌面环境决定。图标在托盘生命周期内按样式缓存，菜单重建复用句柄。
-Electron 原有 IPC、认证身份及协议兼容分支暂留。mygo 不会设置 `isElectron`，未实现的桌面
-歌词、本地音乐、更新和协议注册不会因此启用。全局快捷键仅注册播放/暂停、前后切歌与音量
-五项。认证服务使用独立 Go 服务与生成客户端，不伪造 Electron 的 app_type/client_type。
+Electron 宿主、旧 IPC 与专用构建依赖已移除。认证仍保留后端接受的 app_type/client_type，历史 Electron 数据导入格式与导出助手继续维护；协议字段不代表加载旧宿主。原生能力通过 Go 服务和生成客户端访问。
 
 ## 固定 SDK 与 Windows 透明修正
 

@@ -1,6 +1,5 @@
 import { applicationStorage } from "@/platform/applicationStorage";
 import { useDataStore, useSettingStore } from "@/stores";
-import { isElectron } from "@/utils/env";
 import { SettingConfig } from "@/types/settings";
 import { computed, defineAsyncComponent } from "vue";
 import { t } from "@/i18n";
@@ -15,12 +14,6 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
   const dataStore = useDataStore();
   const settingStore = useSettingStore();
 
-  // 任务栏进度
-  const closeTaskbarProgress = (val: boolean) => {
-    if (!isElectron) return;
-    if (!val) window.electron.ipcRenderer.send("set-bar", "none");
-  };
-
   // 重置设置
   const resetSetting = () => {
     if (platform.kind === "mygo") {
@@ -34,8 +27,6 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
       negativeText: t("common.cancel"),
       onPositiveClick: () => {
         settingStore.$reset();
-        // electron
-        if (isElectron) window.electron.ipcRenderer.send("reset-setting");
         window.$message.success(t("message.reset_setting_success"));
       },
     });
@@ -58,8 +49,6 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
         window.sessionStorage.clear();
         // deleteDB
         await dataStore.deleteDB();
-        // electron
-        if (isElectron) window.electron.ipcRenderer.send("reset-setting");
         window.$message.loading(t("message.clear_all_data_success"), {
           duration: 3000,
           onAfterLeave: () => window.location.reload(),
@@ -72,7 +61,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
     groups: [
       {
         title: t("setting.general.system_behavior"),
-        show: isElectron || platform.kind === "mygo",
+        show: platform.kind === "mygo",
         items: [
           {
             key: "closeAppMethod",
@@ -107,7 +96,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
           },
           {
             key: "showTaskbarProgress",
-            show: isElectron || Boolean(platform.taskbar),
+            show: Boolean(platform.taskbar),
             label: t("setting.general.show_taskbar_progress"),
             type: "switch",
             description: t("setting.general.show_taskbar_progress_tip"),
@@ -115,13 +104,12 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
               get: () => settingStore.showTaskbarProgress,
               set: (v) => {
                 settingStore.showTaskbarProgress = v;
-                closeTaskbarProgress(v);
               },
             }),
           },
           {
             key: "registryProtocols",
-            show: isElectron || Boolean(platform.protocols),
+            show: Boolean(platform.protocols),
             label: t("setting.general.registry_protocols"),
             type: "select",
             options: [
@@ -147,7 +135,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
           },
           {
             key: "checkUpdateOnStart",
-            show: isElectron || Boolean(platform.updates),
+            show: Boolean(platform.updates),
             label: t("setting.general.check_update_on_start"),
             type: "switch",
             description: t("setting.general.check_update_on_start_tip"),
@@ -175,7 +163,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
       {
         title: t("setting.other.backup_and_restore"),
         tags: [{ text: "Beta", type: "warning" }],
-        show: isElectron || Boolean(platform.files),
+        show: Boolean(platform.files),
         items: [
           {
             key: "exportSettings",

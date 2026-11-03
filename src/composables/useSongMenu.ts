@@ -10,14 +10,13 @@ import {
 import { deleteSongs, isLogin } from "@/utils/auth";
 import { FeatureSupportFlag } from "@/api/platform";
 import { buildSourceUrl } from "@/api/source";
-import DownloadManager from "@/utils/downloadManager";
 import { useI18n } from "vue-i18n";
 import type { SongInfo } from "@/types/main.hemusic";
 import { songEqual } from "@/utils/song";
 import { usePlayer } from "@/utils/player";
 import songManager from "@/utils/songManager";
 import { getSizeCover } from "@/utils/format";
-import { isElectron, isMygo } from "@/utils/env";
+import { isMygo } from "@/utils/env";
 import { filesSession } from "@/platform/filesSession";
 import { nativeLocalEntry, localFilesSession } from "@/platform/localFilesSession";
 import { LocalFileActions } from "@/platform/localFileActions";
@@ -100,12 +99,7 @@ export const useSongMenu = () => {
       positiveText: t("common.delete"),
       negativeText: t("common.cancel"),
       onPositiveClick: async () => {
-        const result = isMygo
-          ? await localFileActions.remove(song)
-          : {
-              removed: await window.electron.ipcRenderer.invoke("delete-file", song.path),
-              current: true,
-            };
+        const result = await localFileActions.remove(song);
         if (result.removed && !result.current) return;
         if (result.removed) {
           // 通知父组件删除歌曲
@@ -149,9 +143,7 @@ export const useSongMenu = () => {
     // 是否为用户歌单
     const isUserPlaylist = !!(playlist?.id && playlist?.type === "user-playlist");
     const nativeDownload = isMygo ? mygoSongDownload(filesSession, song) : undefined;
-    const isDownloading = isMygo
-      ? !!nativeDownload && !nativeDownload.task.done
-      : isElectron && dataStore.downloadingSongs.some((item) => songEqual(song, item.song));
+    const isDownloading = !!nativeDownload && !nativeDownload.task.done;
 
     return [
       {
@@ -335,7 +327,7 @@ export const useSongMenu = () => {
       {
         key: "delete-file",
         label: t("menu.delete_file"),
-        show: isLocal && (isElectron || isMygo) && !songEqual(musicStore.playSong, song),
+        show: isLocal && isMygo && !songEqual(musicStore.playSong, song),
         props: {
           onClick: () => deleteLocalSong(song, emit),
         },
@@ -344,7 +336,7 @@ export const useSongMenu = () => {
       {
         key: "open-folder",
         label: t("menu.open_folder"),
-        show: isLocal && (isElectron || isMygo),
+        show: isLocal && isMygo,
         props: {
           onClick: async () => {
             if (isMygo) {
@@ -352,7 +344,6 @@ export const useSongMenu = () => {
                 window.$message.error(t("message.local_file_action_failed"));
               return;
             }
-            window.electron.ipcRenderer.send("open-folder", song.path);
           },
         },
         icon: renderIcon("SnippetFolder"),
@@ -378,7 +369,6 @@ export const useSongMenu = () => {
         show: isMygo ? !!nativeDownload?.task.retryable : isDownloading,
         props: {
           onClick: async () => {
-            if (!isMygo) return DownloadManager.retryDownload(song);
             if (!nativeDownload) return;
             try {
               if (!(await nativeDownload.retry()) && nativeDownload.current())
@@ -404,9 +394,7 @@ export const useSongMenu = () => {
     const { artist, album } = songManager.getPlayerInfoObj(song) || {};
     const isLocal = !!song?.path;
     const nativeDownload = isMygo ? mygoSongDownload(filesSession, song) : undefined;
-    const isDownloading = isMygo
-      ? !!nativeDownload && !nativeDownload.task.done
-      : isElectron && dataStore.downloadingSongs.some((item) => songEqual(song, item.song));
+    const isDownloading = !!nativeDownload && !nativeDownload.task.done;
 
     return [
       {

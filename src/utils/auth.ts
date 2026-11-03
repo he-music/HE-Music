@@ -15,7 +15,6 @@ import {
 } from "@/api/user";
 import { useDataStore } from "@/stores";
 import { debounce, isFunction } from "lodash-es";
-import { isElectron } from "./env";
 import type {
   AlbumInfo,
   IDPlatformInfo,
@@ -167,7 +166,6 @@ export const toLikeSong = debounce(
         likeSongList.song_count = likeList.length.toString();
       }
       // ipc
-      if (isElectron) window.electron.ipcRenderer.send("like-status-change", like);
     } catch {
       window.$message.error(
         like

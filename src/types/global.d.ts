@@ -2,6 +2,12 @@ import { MessageApi, DialogApi, NotificationApi, LoadingBarApi, ModalApi } from 
 
 type Player = typeof import("@/utils/player").default;
 declare global {
+  interface Navigator {
+    userAgentData?: {
+      brands: Array<{ brand: string; version: string }>;
+      getHighEntropyValues(hints: string[]): Promise<{ model?: string }>;
+    };
+  }
   interface Window {
     player?: null | Player;
     $player?: null | Player;
@@ -11,18 +17,6 @@ declare global {
     $notification: NotificationApi;
     $loadingBar: LoadingBarApi;
     $modal: ModalApi;
-    // electron
-    api: {
-      store: {
-        get: (key: string) => Promise<any>;
-        set: (key: string, value: unknown) => Promise<boolean>;
-        has: (key: string) => Promise<boolean>;
-        delete: (key: string) => Promise<boolean>;
-        reset: (keys?: string[]) => Promise<boolean>;
-        export: (data: any) => Promise<boolean>;
-        import: () => Promise<any>;
-      };
-    };
     queryLocalFonts?: () => Promise<FontData[]>;
   }
 }

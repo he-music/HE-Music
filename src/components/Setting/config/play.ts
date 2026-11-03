@@ -1,5 +1,5 @@
 import { useSettingStore, useStatusStore } from "@/stores";
-import { isElectron, isMygo } from "@/utils/env";
+import { isMygo } from "@/utils/env";
 import { platform } from "@/platform";
 import { renderOption } from "@/utils/helper";
 import { SettingConfig } from "@/types/settings";
@@ -15,7 +15,7 @@ export const usePlaySettings = (): SettingConfig => {
   const settingStore = useSettingStore();
   const statusStore = useStatusStore();
   const player = usePlayer();
-  const isDesktop = isElectron || isMygo;
+  const isDesktop = isMygo;
 
   const canRequestOutputAccess = isMygo && platform.os === "darwin";
   const outputDevices = ref<SelectOption[]>([{ label: t("common.system_default"), value: "" }]);

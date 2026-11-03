@@ -1,30 +1,5 @@
 <template>
-  <div v-if="isElectron" class="local-music-directory">
-    <n-text class="local-list-tip">{{ t("setting.local.local_files_path") }}</n-text>
-    <n-scrollbar style="max-height: 50vh">
-      <n-list class="local-list" hoverable clickable bordered>
-        <div v-if="!settingStore.localFilesPath.length" class="empty">
-          <n-empty :description="t('local.none_folder')" />
-        </div>
-        <n-list-item v-for="(path, index) in settingStore.localFilesPath" :key="index">
-          <template #prefix><SvgIcon :size="20" name="Folder" /></template>
-          <template #suffix>
-            <n-button :focusable="false" quaternary @click="changeLocalPath(index)">
-              <template #icon><SvgIcon :size="20" name="Delete" /></template>
-            </n-button>
-          </template>
-          <n-thing :title="path" />
-        </n-list-item>
-      </n-list>
-    </n-scrollbar>
-    <n-flex justify="center" style="margin-top: 20px">
-      <n-button class="add-path" strong secondary @click="changeLocalPath()">
-        <template #icon><SvgIcon name="FolderPlus" /></template>
-        {{ t("local.add_folder") }}
-      </n-button>
-    </n-flex>
-  </div>
-  <div v-else-if="isMygo" class="local-music-directory">
+  <div v-if="isMygo" class="local-music-directory">
     <n-text class="local-list-tip">{{ t("setting.local.local_files_path") }}</n-text>
     <n-text v-if="filesSession?.persistenceError.value" role="alert">
       {{ t("setting.local.directory_persist_failed") }}
@@ -89,13 +64,12 @@
 
 <script setup lang="ts">
 import { computed } from "vue";
-import { isElectron, isMygo } from "@/utils/env";
+import { isMygo } from "@/utils/env";
 import { createLocalDirectorySession } from "@/platform/localDirectorySession";
 import { createLibraryDirectoryRecovery } from "@/platform/libraryDirectoryRecovery";
 import { filesSession } from "@/platform/filesSession";
 import { useSettingStore } from "@/stores";
 import SvgIcon from "@/components/Global/SvgIcon.vue";
-import { changeLocalPath } from "@/utils/helper";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
 

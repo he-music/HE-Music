@@ -2,10 +2,9 @@ import { gatewayProxyUrl } from "@/platform/gateway";
 import { NTooltip, SelectOption } from "naive-ui";
 import { h, VNode } from "vue";
 import { useClipboard } from "@vueuse/core";
-import { useSettingStore } from "@/stores";
 import SvgIcon from "@/components/Global/SvgIcon.vue";
 import { t } from "@/i18n";
-import { isElectron, isMygo } from "@/utils/env";
+import { isMygo } from "@/utils/env";
 import { API_URL } from "@/utils/request";
 import { platform } from "@/platform";
 
@@ -151,68 +150,6 @@ export const getClipboardData = async (): Promise<string | null> => {
 };
 
 /**
- * 格式化为 Electron 快捷键
- * @param shortcut 快捷键
- * @returns Accelerator
- */
-export const formatForGlobalShortcut = (shortcut: string): string => {
-  return shortcut
-    .split("+")
-    .map((part) => {
-      // 字母
-      if (part.startsWith("Key")) {
-        return part.replace("Key", "");
-      }
-      // 数字
-      if (part.startsWith("Digit")) {
-        return part.replace("Digit", "num");
-      }
-      if (part.startsWith("Numpad")) {
-        return part.replace("Numpad", "num");
-      }
-      // 方向键
-      if (part.startsWith("Arrow")) {
-        return part.replace("Arrow", "");
-      }
-      return part;
-    })
-    .join("+");
-};
-
-/**
- * 更改本地目录
- * @param delIndex 删除文件夹路径的索引
- */
-export const changeLocalPath = async (delIndex?: number) => {
-  try {
-    if (!isElectron) return;
-    const settingStore = useSettingStore();
-    if (typeof delIndex === "number" && delIndex >= 0) {
-      settingStore.localFilesPath.splice(delIndex, 1);
-    } else {
-      const selectedDir = await window.electron.ipcRenderer.invoke("choose-path");
-      if (!selectedDir) return;
-      // 检查是否为子文件夹
-      const defaultMusicPath = await window.electron.ipcRenderer.invoke("get-default-dir", "music");
-      const allPath = [defaultMusicPath, ...settingStore.localFilesPath];
-      const isSubfolder = await window.electron.ipcRenderer.invoke(
-        "check-if-subfolder",
-        allPath,
-        selectedDir,
-      );
-      if (!isSubfolder) {
-        settingStore.localFilesPath.push(selectedDir);
-      } else {
-        window.$message.error(t("message.local_path_overlapping"));
-      }
-    }
-  } catch (error) {
-    console.error("Error changing local path:", error);
-    window.$message.error(t("message.change_local_path_fail"));
-  }
-};
-
-/**
  * 洗牌数组（Fisher-Yates）
  */
 export const shuffleArray = <T>(arr: T[]): T[] => {
@@ -323,7 +260,7 @@ export const parseFontDataStyle = (style: string) => {
 };
 
 export const getShareUrl = (type: string, id: string, platform: string) => {
-  const host = isElectron || isMygo ? API_URL : location.origin;
+  const host = isMygo ? API_URL : location.origin;
   const u = new URL(host);
   const searchParams = new URLSearchParams({
     id,

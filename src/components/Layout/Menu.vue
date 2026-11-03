@@ -31,7 +31,6 @@ import { useMobile } from "@/composables/useMobile";
 import { useDataStore, useSettingStore, useStatusStore } from "@/stores";
 import { RouterLink, useRouter } from "vue-router";
 import { renderIcon } from "@/utils/helper";
-import { isElectron } from "@/utils/env";
 import { platform } from "@/platform";
 import { openCreatePlaylist } from "@/utils/modal";
 import { useI18n } from "vue-i18n";
@@ -147,14 +146,14 @@ const menuOptions = computed<MenuOption[] | MenuGroupOption[]>(() => {
         {
           key: "download",
           label: t("nav.download_manager"),
-          show: isElectron || platform.kind === "mygo",
+          show: platform.kind === "mygo",
           icon: renderIcon("Download"),
         },
         {
           key: "local",
           link: "local",
           label: t("common.local_music"),
-          show: isElectron || platform.capabilities.localMusic,
+          show: platform.capabilities.localMusic,
           icon: renderIcon("FolderMusic"),
         },
         {

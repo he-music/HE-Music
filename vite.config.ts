@@ -7,7 +7,7 @@ import Components from "unplugin-vue-components/vite";
 import viteCompression from "vite-plugin-compression";
 import wasm from "vite-plugin-wasm";
 
-// Web 与 mygo 共用渲染配置；旧 Electron 入口仅作为迁移对照保留。
+// Web 与 mygo 共用渲染配置。
 export function createFrontendConfig(mode: string, desktop = false): UserConfig {
   const env = loadEnv(mode, process.cwd());
   const port = desktop ? 14667 : Number(env.VITE_WEB_PORT || 14666);

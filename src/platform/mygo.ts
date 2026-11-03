@@ -37,7 +37,6 @@ export function createMygoPlatform(): PlatformAdapter {
     get localMusic() {
       return filesSession.value?.ready.value === true;
     },
-    electronStartup: false,
   });
   return {
     kind: "mygo",

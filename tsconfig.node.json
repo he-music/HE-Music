@@ -1,20 +1,5 @@
 {
-  "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
-  "include": [
-    "electron.vite.config.*",
-    "electron/**/*",
-    "electron/main/index.ts",
-    "electron/main/logger/index.ts",
-    "electron/main/store/index.ts",
-    "electron/main/utils/*.ts",
-    "electron/main/index.d.ts",
-    "electron/preload/index.d.ts",
-    "electron/preload/index.ts",
-    "src/assets/data/*"
-  ],
-  "compilerOptions": {
-    "composite": true,
-    "types": ["electron-vite/node"],
-    "moduleResolution": "bundler"
-  }
+  "extends": "./tsconfig.vite.json",
+  "compilerOptions": { "composite": true },
+  "include": ["vite.config.ts", "vite.desktop.config.ts", "vitest.config.ts", "env.d.ts"]
 }

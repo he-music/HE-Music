@@ -8,7 +8,7 @@ vi.mock("./lyricsWindow", () => ({ mountLyricsWindow: mounts.lyrics }));
 afterEach(() => vi.resetAllMocks());
 
 describe("窗口启动角色", () => {
-  it.each(["mygo", "electron"] as const)("%s 歌词窗口只加载子页入口", async (kind) => {
+  it.each(["mygo"] as const)("%s 歌词窗口只加载子页入口", async (kind) => {
     await bootstrapWindow(kind, "#/desktop-lyric");
     expect(mounts.lyrics).toHaveBeenCalledOnce();
     expect(mounts.main).not.toHaveBeenCalled();

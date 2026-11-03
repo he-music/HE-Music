@@ -1,7 +1,7 @@
 <template>
   <n-flex :size="8" align="center" class="right-menu">
     <n-badge
-      v-if="isElectron || platform.capabilities.desktopLyrics"
+      v-if="platform.capabilities.desktopLyrics"
       value="ON"
       :show="statusStore.showDesktopLyric"
     >
@@ -92,7 +92,6 @@
 
 <script setup lang="ts">
 import { useDataStore, useMusicStore, useSettingStore, useStatusStore } from "@/stores";
-import { isElectron } from "@/utils/env";
 import { renderIcon } from "@/utils/helper";
 import { openAutoClose, openChangeRate, openEqualizer } from "@/utils/modal";
 import type { DropdownOption } from "naive-ui";
@@ -112,9 +111,8 @@ const player = usePlayer();
 
 const desktopLyricsUnavailable = computed(
   () =>
-    !isElectron &&
-    (!desktopLyricsSession.value?.ready.value ||
-      desktopLyricsSession.value?.window.value?.pending === true),
+    !desktopLyricsSession.value?.ready.value ||
+    desktopLyricsSession.value?.window.value?.pending === true,
 );
 const { getQualityMenuOptions } = useSongMenu();
 const playModeOptions = computed(() => [

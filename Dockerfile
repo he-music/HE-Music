@@ -1,25 +1,18 @@
 # build
-FROM node:20-alpine AS builder
-
-RUN apk update && apk add --no-cache git
+FROM node:24-alpine AS builder
 
 WORKDIR /app
-
-COPY package*.json ./
-
-RUN npm install
-
+RUN npm install -g pnpm@10.28.1
+COPY package.json pnpm-lock.yaml .npmrc ./
+RUN pnpm install --frozen-lockfile
 COPY . .
-
-# add .env.example to .env
 RUN [ ! -e ".env" ] && cp .env.example .env || true
-
-RUN npm run build
+RUN pnpm build:web
 
 # nginx
 FROM nginx:1.27-alpine-slim AS app
 
-COPY --from=builder /app/out/renderer /usr/share/nginx/html
+COPY --from=builder /app/dist/web /usr/share/nginx/html
 
 COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
 

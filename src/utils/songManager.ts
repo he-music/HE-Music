@@ -83,7 +83,6 @@ class SongManager {
     if (!songData || !songData?.url) return null;
     // 返回歌曲地址
     // 都返回 原始地址
-    // const url = isElectron ? songData.url : songData.url.replace(/^http:/, "https:");
     return songData.url;
   };
 

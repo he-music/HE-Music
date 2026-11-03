@@ -160,14 +160,12 @@ import { toLikeSong } from "@/utils/auth";
 import { isObject } from "lodash-es";
 import { secondsToTime } from "@/utils/time";
 import { usePlayer } from "@/utils/player";
-import blob from "@/utils/blob";
 import type { SongInfo } from "@/types/main.hemusic";
 import { getSizeCover } from "@/utils/format";
 import type { TagProps } from "naive-ui";
 import { IsValidId, songEqual } from "@/utils/song";
 import { FeatureSupportFlag } from "@/api/platform";
 import { useI18n } from "vue-i18n";
-import { isElectron } from "@/utils/env";
 const { t } = useI18n();
 import { useLocalArtwork } from "@/composables/useLocalArtwork";
 import { useSettingStore } from "@/stores";
@@ -212,14 +210,6 @@ const { isSmallScreen } = useMobile();
 // 加载本地歌曲封面
 const localCover = async (show: boolean) => {
   localArtworkVisible.value = show;
-  if (!isElectron || !show || !localArtworkEnabled.value || !song.value.path) return;
-  if (song.value.cover || song.value.cover === "/images/song.jpg?asset") return;
-  // 获取封面
-  const coverData = await window.electron.ipcRenderer.invoke("get-music-cover", song.value.path);
-  if (!coverData) return;
-  const { data, format } = coverData;
-  const blobURL = blob.createBlobURL(data, format, song.value.path);
-  if (blobURL) song.value.cover = blobURL;
 };
 
 const getQuality = (song: SongInfo): { name?: string; type?: TagProps["type"] } => {

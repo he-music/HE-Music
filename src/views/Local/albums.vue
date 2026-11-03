@@ -15,7 +15,6 @@
           <n-image
             v-else
             :key="item?.[0]?.cover"
-            v-visible.once="(show: boolean) => loadAlbumCover(show, key)"
             :src="gatewayProxyUrl(item?.[0]?.cover || '/images/album.jpg?asset')"
             preview-disabled
             class="cover"
@@ -43,7 +42,6 @@ import { isMygo } from "@/utils/env";
 import LocalArtworkImage from "@/components/Local/LocalArtworkImage.vue";
 import { gatewayProxyUrl } from "@/platform/gateway";
 import { groupSongs } from "@/utils/songGroup";
-import blob from "@/utils/blob";
 import type { SongInfo } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
@@ -66,18 +64,6 @@ watch(
   },
   { immediate: true },
 );
-
-// 加载专辑封面
-const loadAlbumCover = async (show: boolean, key: string) => {
-  if (isMygo || !show) return;
-  const song = albumData.value.get(key)?.[0];
-  if (!song?.path) return;
-  const coverData = await window.electron.ipcRenderer.invoke("get-music-cover", song.path);
-  if (!coverData) return;
-  const { data, format } = coverData;
-  const blobURL = blob.createBlobURL(data, format, song.path);
-  if (blobURL) song.cover = blobURL;
-};
 
 watch(
   () => chooseAlbum.value,

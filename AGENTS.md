@@ -4,8 +4,8 @@
 
 ## 项目概况
 
-- HE-Music 是基于 SPlayer 修改的音乐播放器，支持网页端和 Electron 桌面端，运行时需要配套的后端服务。
-- 技术栈：Vue 3、TypeScript、Vue Router、Pinia、Naive UI、Sass、Electron 和 electron-vite。
+- HE-Music 是基于 SPlayer 修改的音乐播放器，支持网页端和 mygo 桌面端，运行时需要配套的后端服务。
+- 技术栈：Vue 3、TypeScript、Vue Router、Pinia、Naive UI、Sass、Go、mygo 和 Vite。
 - 使用 pnpm 管理依赖，以 `package.json` 的 `packageManager` 字段为准；当前为 `pnpm@10.28.1`，Node.js 统一使用 24 LTS，最低为 24.12.0（版本见 `.nvmrc`）。
 - 修改业务前阅读 `CONTEXT.md`，沿用其中的页面、内容模型和歌词展示术语。
 
@@ -19,14 +19,15 @@
 - `src/router/`：路由定义。
 - `src/types/`、`src/constants/`、`src/utils/`：类型、常量和工具函数。
 - `src/style/`、`src/assets/`、`src/i18n/`：样式、静态资源和国际化内容。
-- `electron/main/`、`electron/preload/`、`electron/server/`：桌面主进程、预加载桥接和服务相关实现。
+- `desktop/`：mygo 原生服务与桌面入口；`src/platform/`：Web／mygo 适配与生成绑定。
+- `vendor/`、`patches/mygo/`：固定 Go 依赖、SDK 补丁及锁定摘要，使用 `pnpm vendor:refresh` 更新。
 - `scripts/`：开发辅助脚本；`docs/`：项目文档。
 
 ## 开发约定
 
 - 使用中文沟通、编写开发说明和解释变更；代码标识符遵循现有命名风格。
 - 优先沿用现有 Vue Composition API、组件、组合式函数和状态管理模式，避免为局部需求引入额外框架或无关重构。
-- 明确组件、状态管理、接口调用与 Electron 进程之间的职责，网页端代码不得直接依赖 Node.js 或 Electron 专属能力；桌面能力通过现有桥接访问，并考虑网页端兼容性。
+- 明确组件、状态管理、接口调用与 Go 原生服务之间的职责，网页端代码不得直接依赖 Node.js 或原生桌面能力；桌面能力通过现有 mygo 适配访问，并考虑网页端兼容性。
 - 保留类型约束，避免用 `any` 或类型断言掩盖真实问题。
 - 遵循 `.editorconfig`、`.prettierrc.json` 和 ESLint 配置：UTF-8、LF、两空格缩进、双引号、分号，格式化行宽为 100。
 - 修改界面文案时遵循现有国际化方式；涉及歌词展示时区分歌词效果、半屏歌词布局和纯歌词模式。

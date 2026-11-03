@@ -15,7 +15,6 @@ import type { RendererSettingsDocument, SettingsImportResult } from "./mygo.bind
 const host = vi.hoisted(
   (): {
     platform: { -readonly [K in keyof PlatformAdapter]: PlatformAdapter[K] };
-    electron: boolean;
   } => ({
     platform: {
       kind: "mygo",
@@ -25,20 +24,13 @@ const host = vi.hoisted(
         tray: false,
         desktopLyrics: false,
         localMusic: false,
-        electronStartup: false,
       },
       window: null,
       openExternal: async () => {},
     },
-    electron: false,
   }),
 );
 vi.mock("@/platform", () => ({ platform: host.platform }));
-vi.mock("@/utils/env", () => ({
-  get isElectron() {
-    return host.electron;
-  },
-}));
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
 vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => ({}) }));
@@ -103,8 +95,6 @@ let failures: number[];
 let values: Map<string, string>;
 const messages = { success: vi.fn(), error: vi.fn(), warning: vi.fn() };
 const reload = vi.fn();
-const electronExport = vi.fn(async () => true);
-const electronImport = vi.fn(async () => ({ renderer: document().renderer }));
 beforeEach(() => {
   vi.useFakeTimers();
   setActivePinia(createPinia());
@@ -117,7 +107,6 @@ beforeEach(() => {
     shortcuts: undefined,
     capabilities: { tray: false },
   });
-  host.electron = false;
   values = new Map();
   calls = 0;
   failures = [];
@@ -139,7 +128,6 @@ beforeEach(() => {
       }),
     },
     location: { reload },
-    api: { store: { export: electronExport, import: electronImport } },
   });
 });
 afterEach(async () => {
@@ -245,24 +233,19 @@ describe("actual General settings file actions", () => {
     expect(life.quit).not.toHaveBeenCalled();
   });
 
-  it.each(["web", "electron"] as const)(
-    "does not call native files on %s without provider",
-    async (kind) => {
-      host.platform.kind = kind;
-      host.electron = kind === "electron";
-      const page = general();
-      await page.export();
-      expect(filesSession.value).toBeUndefined();
-      expect(electronExport).toHaveBeenCalledTimes(kind === "electron" ? 1 : 0);
-      expect(
-        Vue.toValue(
-          page.config.groups.find((group) =>
-            group.items.some((item) => item.key === "exportSettings"),
-          )!.show,
-        ),
-      ).toBe(kind === "electron");
-    },
-  );
+  it("does not call native files on web without provider", async () => {
+    host.platform.kind = "web";
+    const page = general();
+    await page.export();
+    expect(filesSession.value).toBeUndefined();
+    expect(
+      Vue.toValue(
+        page.config.groups.find((group) =>
+          group.items.some((item) => item.key === "exportSettings"),
+        )!.show,
+      ),
+    ).toBe(false);
+  });
   it("enables only after begin and exports live two-store Pinia state without storage or native secrets", async () => {
     const native = provider();
     host.platform.files = native;
@@ -280,8 +263,6 @@ describe("actual General settings file actions", () => {
     expect(JSON.parse(snapshot["setting-store"]).language).toBe("en");
     expect(JSON.parse(snapshot["shortcut-store"]).globalOpen).toBe(false);
     expect(localStorage.getItem).not.toHaveBeenCalled();
-    expect(electronExport).not.toHaveBeenCalled();
-    expect(electronImport).not.toHaveBeenCalled();
     expect(messages.success).toHaveBeenCalledWith("message.export_settings_success");
   });
   it("rejects double clicks, handles cancellation silently, and recovers after a failure", async () => {
@@ -543,14 +524,10 @@ describe("actual desktop lifecycle file setup", () => {
     expect(report).toHaveBeenCalledExactlyOnceWith("文件会话初始化失败");
     report.mockRestore();
   });
-  it.each(["web", "electron"] as const)(
-    "does not create a native session in %s shell",
-    async (kind) => {
-      host.platform.kind = kind;
-      mountShell();
-      await flush();
-      expect(filesSession.value).toBeUndefined();
-      expect(electronExport).not.toHaveBeenCalled();
-    },
-  );
+  it("does not create a native session in web shell", async () => {
+    host.platform.kind = "web";
+    mountShell();
+    await flush();
+    expect(filesSession.value).toBeUndefined();
+  });
 });

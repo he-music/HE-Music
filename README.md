@@ -40,8 +40,8 @@
 > - 禁止在二开项目中修改程序原版权信息（ 您可以添加二开作者信息 ）
 > - 感谢您的尊重与理解
 
-- 本项目采用 [Vue 3](https://cn.vuejs.org/) + [TypeScript](https://www.typescriptlang.org/) + [Naïve UI](https://www.naiveui.com/) + [Electron](https://www.electronjs.org/zh/docs/latest/) 开发
-- 支持网页端与客户端，由于设备有限，目前仅适配 `Win`，其他平台可自行解决兼容性后进行构建
+- 本项目采用 [Vue 3](https://cn.vuejs.org/) + [TypeScript](https://www.typescriptlang.org/) + [Naïve UI](https://www.naiveui.com/) + [Go](https://go.dev/) + [mygo](https://github.com/egoist/mygo) 开发
+- 支持独立网页端和 macOS／Windows／Linux 桌面端，平台验收范围见[实测清单](docs/plans/mygo-windows-checklist.md)。
 - 仅对移动端做了基础适配，**不保证功能全部可用**
 - 该项目为前端项目，运行时需要搭配对应的后端服务。不知道后端服务的用户，请使用SPlayer[https://github.com/imsyy/SPlayer](https://github.com/imsyy/SPlayer)
 
@@ -71,31 +71,18 @@
 
 ## 🖥️ 桌面运行环境
 
-- 客户端使用 Electron 44，macOS 最低要求为 macOS 13。
-- Linux 默认使用 X11 后端；在 Wayland 会话中需要安装并启用 XWayland，以支持桌面歌词的全局坐标、置顶和非激活显示。
-- 启动时显式指定 `--ozone-platform=wayland` 或其他后端会保留该选择；原生 Wayland 下上述桌面歌词能力受 Electron/窗口管理器限制。
+- 桌面端使用 mygo 系统 WebView：macOS 使用 WKWebView，Windows 需要已安装 WebView2 Runtime，Linux 使用 GTK3／WebKitGTK。
+- Linux 需安装 GStreamer base、good、bad、libav 和 pulseaudio 插件；桌面歌词兼容模式和 X11 穿透说明见[桌面指南](desktop/README.md)。Wayland 歌词交互尚未实机验收。
+- 开发使用 Node.js 24 LTS、pnpm 10.28.1 和 Go 1.27.3；mygo 应用运行时不需要 Node.js。
 
-## mygo 桌面迁移候选
+## 桌面与 Web 开发
 
-迁移分支使用固定 mygo / mygo-runtime 和 Go 1.27.3，保留独立 Web 构建。普通 mygo 包不携带 Node/Electron，也不启动旧网易或解灰 Node 服务；Node 24 仅用于前端开发与构建工具。现有 `pnpm dev` 仍是旧 Electron 命令，mygo 使用 `pnpm run dev:desktop`，普通 macOS 候选位于 `build/mygo/darwin-arm64/HE-Music.app`。完整迁移状态见[迁移计划](docs/plans/mygo-migration.md)。
+默认 `pnpm dev` 启动 mygo 桌面开发，网页开发使用 `pnpm dev:web`。Go SDK 及官方 CLI 固定在仓库 vendor 中，构建前运行 `pnpm vendor:check`；不直接覆盖 vendor 或升级 SDK。补丁维护见[固定 SDK 说明](patches/mygo/README.md)。
 
-- 系统媒体复用 `smtcOpen`（默认开启），可反复关闭/开启。原生 provider 接管时避免页面 Web MediaSession 重复发布；Web/Electron 保留既有 navigator 能力及兼容保护。
-- 在线歌曲支持播放、暂停、上一首、下一首和跳转（包括 0），事件校验当前壳代际、曲目与版本；无歌和本地歌曲不接受原生播放命令。发布实际倍速与必要的播放/暂停、曲目、跳转状态，系统自行推进位置，不按进度/歌词时钟持续 IPC。
-- 防休眠复用 `preventSleep`（默认关闭），mygo 仅有实际 provider 时显示开关。用户显式开启且长期壳 Ready 时持有 display lease；关闭、退出或 context 撤销后释放，与播放状态和系统媒体开关独立。
-- mygo 原生系统媒体 Artwork 已接入受限 PNG/JPEG 加载，复用当前在线歌曲封面；异步取消和曲目/版本校验避免迟到封面覆盖新歌，缺图或 CORS 失败仅清封面、不阻断播放，Web/Electron 保留原行为。真实跨 origin 图片、普通打包 origin、真实账号/可闻音乐、OS 封面/媒体按键/面板及显示器阻睡眠效果仍需人工验收；Windows 构建和运行全部延后，见[统一实测清单](docs/plans/mygo-windows-checklist.md)。
-- mygo 设置 JSON 导入/导出已接入临时文件会话，只处理播放器设置与快捷键，并验证字段、取消、迟到结果及存储失败；页面所有权 P1 已修复并通过真实 SFC 回归。普通 Web/macOS 构建已通过，但三轮 WK 文件探针均停在初始弹层准备，尚无原生导入/导出端到端通过证据。目录授权仅当前会话有效，本地音乐、下载和持久授权未因此开放，详见迁移计划。
-
-以下为历史 macOS 合成探针命令（Node 24.22.1、Go 1.27.3，PATH 按本机安装调整）。`PathUserData` 只隔离 Go 应用目录，不能证明独立 WK 存储；新的 WK 场景应先采用并核对私有数据存储配置，见[原生探针说明](desktop/README.md)。
-
-```sh
-task_probe_output="$(mktemp -d /tmp/hemusic-system-media-probe.XXXXXX)"
-PATH=/Users/wangjian/.govm/go/bin:$PATH \
-  GOFLAGS='-tags=nativeprobe,mediaprobe' \
-  HE_MUSIC_NATIVE_PROBE=1 HE_MUSIC_NATIVE_PROBE_OUTPUT="$task_probe_output" \
-  mise exec node@24.22.1 -- pnpm run dev:desktop
-```
-
-探针使用随机 loopback origin 和临时应用数据目录（不等于独立 WK profile），先禁用媒体、防休眠与全局快捷键，再显式开启合成 fixture；自产 PNG 通过实际 typed session/API 附图，检查 NowPlaying 模块图像字节/hash、Rate 新版本保留和关闭后不再 showing，退出前 Clear/off/release 并清理临时资源。运行期间不要写源码、生成绑定、格式化或构建，防止 Vite reload 污染证据。`result.json` 的模块快照、API 计数、程序定向 callback 和合成 Player 入口仅证明调用/生命周期，不证明 OS 封面显示、真实系统按键或屏幕休眠效果；不得用它控制其他应用。
+- 原生能力包括桌面歌词、托盘、快捷键、系统媒体、本地音乐、下载、标签编辑、代理及播放控制；共用原有 Vue 界面和歌词效果。
+- Web 使用浏览器存储与下载，桌面端的业务数据由 Go 保存。旧 Electron 数据导出助手和导入兼容仍保留，见[数据迁移说明](docs/mygo-data.md)。
+- `pnpm check:runtime` 检查生产源码、类型配置和直接依赖不再引用旧宿主桥接；该检查不替代类型检查、测试和实际界面验收。
+- 自动更新尚未配置真实 feed、公钥和 CI 私钥，目前不可用。普通构建与签名更新发布是不同入口，见[更新发布说明](docs/mygo-updates.md)。
 
 ## ⚙️ 本地部署
 
@@ -109,7 +96,7 @@ PATH=/Users/wangjian/.govm/go/bin:$PATH \
 3. 克隆仓库并拉取至本地，此处不再赘述
 4. 使用 `pnpm install` 安装项目依赖（若安装过程中遇到网络错误，请使用国内镜像源替代，此处不再赘述）
 5. 复制 `/.env.example` 文件并重命名为 `/.env` 并修改配置
-6. 打包客户端，请依据你的系统类型来选择，打包成功后，会输出安装包或可执行文件在 `/dist` 目录中，可自行安装
+6. 打包客户端，请依据你的系统类型来选择，打包成功后，会输出安装包或可执行文件在 `build/mygo/<平台>-<架构>/` 目录中，可自行安装
 
    | 命令               | 系统类型 |
    | ------------------ | -------- |
@@ -119,7 +106,7 @@ PATH=/Users/wangjian/.govm/go/bin:$PATH \
 
 ## ⚙️ 发布构建配置
 
-GitHub Actions 发布构建需要在仓库 `Secrets and variables` 中配置 `VITE_API_URL`。该变量会在 CI 构建时通过环境变量注入，优先级高于 `.env` 文件中的同名配置，因此无需把真实 API 地址提交到 `.env.example`。
+GitHub Actions 使用独立 Web 构建与 mygo 平台矩阵，后端地址由 `VITE_API_URL`／`VITE_NETEASE_API_URL` secrets 注入。手动运行生成测试产物；tag 构建必须通过真实更新配置、密钥与产物验签，缺配置时明确失败。验签后的 Release 保持草稿，供安装验收后发布。
 
 ## 😘 鸣谢
 

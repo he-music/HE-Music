@@ -31,7 +31,7 @@
       </n-tab-pane>
       <!-- 快捷键 -->
       <n-tab-pane
-        v-if="isElectron || isMygo"
+        v-if="isMygo"
         name="keyboard"
         :tab="t('setting.shortcut.shortcut_setting')"
         display-directive="show:lazy"
@@ -40,7 +40,7 @@
       </n-tab-pane>
       <!-- 本地 -->
       <n-tab-pane
-        v-if="isElectron || isMygo"
+        v-if="isMygo"
         name="local"
         :tab="t('setting.local.local_setting')"
         display-directive="show:lazy"
@@ -68,7 +68,7 @@ import type { SettingConfig } from "@/types/settings";
 import { useI18n } from "vue-i18n";
 import { computed, type ComputedRef } from "vue";
 import { useScopedSettingConfig, useSettingActivation } from "@/composables/useSettingLifecycle";
-import { isElectron, isMygo } from "@/utils/env";
+import { isMygo } from "@/utils/env";
 import { usePlaySettings } from "@/components/Setting/config/play";
 import { useGeneralSettings } from "@/components/Setting/config/general";
 import { useGeneralSettingsActions } from "@/components/Setting/config/generalActions";

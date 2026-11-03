@@ -129,7 +129,7 @@
 import type { DropdownOption } from "naive-ui";
 import { useSettingStore } from "@/stores";
 import { openLink, renderIcon } from "@/utils/helper";
-import { isDev, isElectron, isMac } from "@/utils/env";
+import { isMac } from "@/utils/env";
 import { platform } from "@/platform";
 import { openParseSourceUrl, openSetting, openThemeConfig } from "@/utils/modal";
 import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
@@ -151,8 +151,6 @@ const showCloseModal = ref(false);
 // 是否记住
 const rememberNotAsk = ref(false);
 const desktopLifecycle = useDesktopLifecycle({ showCloseModal, rememberNotAsk });
-// 是否启用无边框窗口
-const useBorderless = ref(true);
 // A failed optional appearance read must not hide controls on an already frameless window.
 const nativeBorderless = computed(
   () =>
@@ -160,12 +158,7 @@ const nativeBorderless = computed(
     (windowAppearanceSession.value?.state.value?.appliedUseBorderless ?? true),
 );
 const showWindowControls = computed(
-  () =>
-    platform.capabilities.windowControls &&
-    !isMac &&
-    (platform.kind === "mygo"
-      ? nativeBorderless.value
-      : isElectron && !isMac && !isSmallScreen.value),
+  () => platform.capabilities.windowControls && !isMac && nativeBorderless.value,
 );
 // 当前窗口状态
 const isMax = ref(false);
@@ -183,13 +176,8 @@ const hideOrClose = (action: "hide" | "exit") => {
     void desktopLifecycle.resolveClose(action);
     return;
   }
-  if (rememberNotAsk.value) {
-    settingStore.showCloseAppTip = false;
-    settingStore.closeAppMethod = action;
-  }
   showCloseModal.value = false;
-  // 延迟执行，等待模态对话框关闭动画完成（150ms）
-  window.electron.ipcRenderer.send(action === "hide" ? "win-hide" : "quit-app");
+  void platform.window?.close().catch(console.error);
 };
 
 // 尝试关闭软件
@@ -246,12 +234,6 @@ const setOptions = computed<DropdownOption[]>(() => [
     icon: renderIcon("Restart"),
   },
   {
-    key: "dev-tools",
-    label: t("nav.open_dev_tool"),
-    show: isElectron && isDev,
-    icon: renderIcon("Code"),
-  },
-  {
     key: "parse-source-url",
     label: t("nav.parse_source_url"),
     icon: renderIcon("Parse"),
@@ -288,9 +270,6 @@ const setSelect = (key: string) => {
       }
       openSetting();
       break;
-    case "dev-tools":
-      window.electron.ipcRenderer.send("open-dev-tools");
-      break;
     case "parse-source-url":
       openParseSourceUrl();
       break;
@@ -303,7 +282,6 @@ const setSelect = (key: string) => {
 };
 
 let stopMaximized = () => {};
-let stopClose = () => {};
 let disposed = false;
 
 onMounted(async () => {
@@ -312,16 +290,9 @@ onMounted(async () => {
       isMax.value = value;
     });
   }
-  if (isElectron) {
-    stopClose = window.electron.ipcRenderer.on("win-close-triggered", () => tryClose());
-  }
   try {
     const maximized = await platform.window?.isMaximized();
     if (!disposed) isMax.value = maximized ?? false;
-    if (isElectron) {
-      const windowConfig = await window.api.store.get("window");
-      if (!disposed) useBorderless.value = windowConfig?.useBorderless ?? true;
-    }
   } catch (error) {
     console.error("获取窗口状态失败：", error);
   }
@@ -330,7 +301,6 @@ onMounted(async () => {
 onUnmounted(() => {
   disposed = true;
   stopMaximized();
-  stopClose();
 });
 </script>
 

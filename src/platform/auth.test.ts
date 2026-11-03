@@ -24,7 +24,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("desktop auth bindings", () => {
-  it.each(["mygo", "electron"])("%s接入实际流程且只退订自身事件", async (kind) => {
+  it.each(["mygo"])("%s接入实际流程且只退订自身事件", async (kind) => {
     mocks.platform.kind = kind;
     const off = vi.fn();
     const ipcOn = vi.fn().mockReturnValue(off);
@@ -50,19 +50,11 @@ describe("desktop auth bindings", () => {
       provider: "backend-dynamic",
       redirect_uri: "http://127.0.0.1:25666/login/success",
     });
-    if (kind === "mygo") {
-      expect(mocks.native.prepare).toHaveBeenCalledWith(0);
-      const listener: (event: AuthCallbackEvent) => void = mocks.on.mock.calls[0][0];
-      listener({ sessionId: "wrong", state: "synthetic" });
-      expect(mocks.exchange).not.toHaveBeenCalled();
-      listener({ sessionId: "native-session", state: "synthetic" });
-    } else {
-      expect(mocks.native.prepare).not.toHaveBeenCalled();
-      const listener: (event: object, data: { state: string }) => void = ipcOn.mock.calls[0][1];
-      listener({}, { state: "wrong" });
-      expect(mocks.exchange).not.toHaveBeenCalled();
-      listener({}, { state: "synthetic" });
-    }
+    expect(mocks.native.prepare).toHaveBeenCalledWith(0);
+    const listener: (event: AuthCallbackEvent) => void = mocks.on.mock.calls[0][0];
+    listener({ sessionId: "wrong", state: "synthetic" });
+    expect(mocks.exchange).not.toHaveBeenCalled();
+    listener({ sessionId: "native-session", state: "synthetic" });
     for (let i = 0; i < 10; i++) await Promise.resolve();
     expect(accept).toHaveBeenCalledOnce();
     expect(off).toHaveBeenCalledOnce();

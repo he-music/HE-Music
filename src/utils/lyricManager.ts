@@ -2,7 +2,6 @@ import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { songLyric } from "@/api/song";
 import { type SongLyric } from "@/types/lyric";
 import { type LyricLine } from "@applemusic-like-lyrics/lyric";
-import { isElectron } from "./env";
 import { isWordLyric, parseLineLyric, parseWordLyric, splitLocalLyrics } from "@/utils/lyric";
 import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
@@ -48,43 +47,36 @@ class LyricManager {
    * @returns 歌词数据
    */
   private async handleLocalLyric(path: string, songID: string): Promise<SongLyric> {
-    if (isElectron) console.log("path", path);
     try {
-      let lyric = "";
-      if (isElectron) {
-        lyric = await window.electron.ipcRenderer.invoke("get-music-lyric", path);
-      } else {
-        const entry = nativeLocalEntry(songID);
-        const owner = filesSession.value;
-        if (
-          !entry ||
-          entry.relativePath !== path ||
-          entry.ref.relativePath !== path ||
-          !owner?.ready.value
-        ) {
-          return { lrcData: [], yrcData: [] };
-        }
-        const ref = { ...entry.ref };
-        // 扫描字段是最多1024字节的展示预览，歌词必须从当前授权读取完整标签。
-        const result = await readLocalDisplay(owner, ref, "lyrics");
-        const current = nativeLocalEntry(songID);
-        if (
-          filesSession.value !== owner ||
-          !owner.ready.value ||
-          !current ||
-          current.relativePath !== path ||
-          current.ref.grantToken !== ref.grantToken ||
-          current.ref.relativePath !== ref.relativePath ||
-          current.ref.fileId !== ref.fileId ||
-          current.ref.version !== ref.version
-        )
-          return { lrcData: [], yrcData: [] };
-        lyric = result?.info?.Lyrics ?? "";
+      const entry = nativeLocalEntry(songID);
+      const owner = filesSession.value;
+      if (
+        !entry ||
+        entry.relativePath !== path ||
+        entry.ref.relativePath !== path ||
+        !owner?.ready.value
+      ) {
+        return { lrcData: [], yrcData: [] };
       }
+      const ref = { ...entry.ref };
+      // 扫描字段是最多1024字节的展示预览，歌词必须从当前授权读取完整标签。
+      const result = await readLocalDisplay(owner, ref, "lyrics");
+      const current = nativeLocalEntry(songID);
+      if (
+        filesSession.value !== owner ||
+        !owner.ready.value ||
+        !current ||
+        current.relativePath !== path ||
+        current.ref.grantToken !== ref.grantToken ||
+        current.ref.relativePath !== ref.relativePath ||
+        current.ref.fileId !== ref.fileId ||
+        current.ref.version !== ref.version
+      )
+        return { lrcData: [], yrcData: [] };
+      const lyric = result?.info?.Lyrics ?? "";
       if (!lyric) return { lrcData: [], yrcData: [] };
 
       const splitLyric = splitLocalLyrics(lyric);
-      if (isElectron) console.log("splitLyric", splitLyric);
       // 解析
       const lrcLines: LyricLine[] = parseLineLyric(splitLyric).line;
 
@@ -171,12 +163,6 @@ class LyricManager {
     try {
       // 歌词加载状态
       statusStore.lyricLoading = true;
-      // 通知桌面歌词
-      if (isElectron) {
-        window.electron.ipcRenderer.send("update-desktop-lyric-data", {
-          lyricLoading: true,
-        });
-      }
       let lyricData;
       if (path) {
         lyricData = await this.handleLocalLyric(path, id);
@@ -199,7 +185,7 @@ class LyricManager {
       ) {
         return;
       }
-      if (isElectron || !path) console.log("最终歌词数据", lyricData);
+      if (!path) console.log("最终歌词数据", lyricData);
       this.setFinalLyric(lyricData);
     } catch (error) {
       if (

@@ -90,13 +90,3 @@ it("文件路由例外不放宽Web、无文件provider或其它桌面路由", as
   await router.push({ name: "local" });
   expect(router.currentRoute.value.name).toBe("local");
 });
-it("Electron 的现有桌面路由入口保持可用", async () => {
-  mocks.platform.kind = "electron";
-  mocks.electron = true;
-  delete mocks.platform.files;
-  const router = (await import("./index")).default;
-  await router.push({ name: "download-downloading" });
-  expect(router.currentRoute.value.name).toBe("download-downloading");
-  await router.push({ name: "desktop-only" });
-  expect(router.currentRoute.value.name).toBe("desktop-only");
-});

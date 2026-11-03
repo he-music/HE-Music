@@ -122,40 +122,4 @@ describe("网页端直接下载", () => {
     expect(mocks.saveAs).toHaveBeenCalledTimes(2);
     expect(mocks.useDataStore).not.toHaveBeenCalled();
   });
-
-  it("网页端不能通过任务管理入口添加或重试队列任务", async () => {
-    const { default: manager } = await import("./downloadManager");
-
-    await manager.addDownload(song, "320mp3");
-    manager.retryDownload(song);
-    manager.retryAllDownloads();
-    expect(mocks.useDataStore).not.toHaveBeenCalled();
-    expect(mocks.songUrl).not.toHaveBeenCalled();
-  });
-});
-
-describe("桌面端下载任务", () => {
-  it("下载失败时仍保留任务供下载管理重试", async () => {
-    mocks.isElectron = true;
-    const tasks: Array<{ song: SongInfo; quality: string }> = [];
-    const store = {
-      downloadingSongs: tasks,
-      addDownloadingSong: vi.fn((song: SongInfo, quality: string) => {
-        tasks.push({ song, quality });
-      }),
-      updateDownloadStatus: vi.fn(),
-      markDownloadFailed: vi.fn(),
-      removeDownloadingSong: vi.fn(),
-    };
-    mocks.useDataStore.mockReturnValue(store);
-    mocks.invoke.mockResolvedValue({ status: "error", message: "写入失败" });
-    const { default: manager } = await import("./downloadManager");
-
-    await manager.addDownload(song, "320mp3");
-    await vi.waitFor(() => expect(store.markDownloadFailed).toHaveBeenCalledWith(song));
-    expect(tasks).toHaveLength(1);
-    expect(store.removeDownloadingSong).not.toHaveBeenCalled();
-    expect(mocks.removeListener).toHaveBeenCalledOnce();
-    expect(mocks.saveAs).not.toHaveBeenCalled();
-  });
 });

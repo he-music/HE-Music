@@ -36,7 +36,7 @@
         />
       </n-card>
     </div>
-    <div class="set-list" v-if="isElectron || isMygo">
+    <div class="set-list" v-if="isMygo">
       <n-h3 prefix="bar">{{ t("common.desktop_lyrics") }}</n-h3>
       <n-card class="set-item">
         <div class="label">
@@ -140,12 +140,12 @@ import { platform } from "@/platform";
 import { createSystemFontsSession } from "@/platform/systemFonts";
 import { parseDesktopLyricOptions } from "@/platform/desktopLyricOptions";
 import { useSettingStore } from "@/stores";
-import { isElectron, isMygo } from "@/utils/env";
+import { isMygo } from "@/utils/env";
 import type { SelectOption } from "naive-ui";
 import { LyricFontConfig, lyricFontConfigs } from "@/utils/lyric/lyricFontConfig";
 import { LyricConfig } from "@/types/desktop-lyric";
 import defaultDesktopLyricConfig from "@/assets/data/lyricConfig";
-import { cloneDeep, isEqual, snakeCase } from "lodash-es";
+import { snakeCase } from "lodash-es";
 import { useI18n } from "vue-i18n";
 import { FontData, FontStyleSelection } from "@/types/global";
 import { parseFontDataStyle } from "@/utils/helper";
@@ -226,36 +226,6 @@ const getAllSystemFonts = async () => {
     return;
   }
   await getWebSystemFonts();
-  if (systemFonts.value.length > 0) return;
-  if (!isElectron) {
-    return;
-  }
-  try {
-    const allFonts = await window.electron.ipcRenderer.invoke("get-all-fonts");
-    systemFonts.value = allFonts
-      .sort((a: any, b: any) => a.name.localeCompare(b.name))
-      .map((v: any) => {
-        const fontWeight = parseFontDataStyle(v.weight).fontWeight;
-        const fontStyle = parseFontDataStyle(v.style).fontStyle;
-        return {
-          label: v.name,
-          value: v.postScriptName,
-          style: {
-            fontFamily: v.familyName,
-            fontWeight,
-            fontStyle,
-          },
-          fontStyleSelection: {
-            family: v.familyName,
-            weight: fontWeight,
-            style: fontStyle,
-            postscriptName: v.postScriptName,
-          },
-        };
-      });
-  } catch (error) {
-    console.error("Failed to get system fonts:", error);
-  }
 };
 
 // 获取全部系统字体
@@ -301,15 +271,6 @@ const getDesktopLyricConfig = async () => {
     });
     return;
   }
-  if (!isElectron) return;
-  const config = await window.electron.ipcRenderer.invoke("request-desktop-lyric-option");
-  if (config) Object.assign(desktopLyricConfig, config);
-  // 监听更新
-  window.electron.ipcRenderer.on("update-desktop-lyric-option", (_, config) => {
-    if (config && !isEqual(desktopLyricConfig, config)) {
-      Object.assign(desktopLyricConfig, config);
-    }
-  });
 };
 
 // 保存桌面歌词配置
@@ -332,19 +293,6 @@ const saveDesktopLyricConfig = () => {
     settingStore.desktopLyricOptions = options;
     window.$message.success(t("message.desktop_lyrics_save_success"));
     return;
-  }
-  try {
-    if (!isElectron) return;
-    window.electron.ipcRenderer.send(
-      "update-desktop-lyric-option",
-      cloneDeep(desktopLyricConfig),
-      true,
-    );
-    window.$message.success(t("message.desktop_lyrics_save_success"));
-  } catch (error) {
-    console.error("Failed to save options:", error);
-    window.$message.error(t("message.desktop_lyrics_save_fail"));
-    getDesktopLyricConfig();
   }
 };
 

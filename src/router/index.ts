@@ -1,6 +1,5 @@
 import { createRouter, createWebHashHistory, Router } from "vue-router";
 import { openUserLogin } from "@/utils/modal";
-import { isElectron } from "@/utils/env";
 import { platform } from "@/platform";
 import { isLogin } from "@/utils/auth";
 import routes from "./routes";
@@ -34,7 +33,7 @@ const router: Router = createRouter({
 router.beforeEach((to, from, next) => {
   // console.log("前置守卫", to, from);
   // 进度条
-  if (!isElectron && to.path !== from.path) {
+  if (to.path !== from.path) {
     window.$loadingBar?.start();
   }
   const platformStore = usePlatformStore();
@@ -56,7 +55,7 @@ router.beforeEach((to, from, next) => {
 
   // 需要登录
   if (to.meta.needLogin && !isLogin()) {
-    if (!isElectron) window.$loadingBar?.error();
+    window.$loadingBar?.error();
     window.$message?.warning(t("message.login_required"));
     openUserLogin();
     next(false);
@@ -69,7 +68,7 @@ router.beforeEach((to, from, next) => {
     platform.kind === "mygo" &&
     Boolean(platform.files) &&
     to.matched.some((route) => route.name === "local" || route.name === "download");
-  if (to.meta.needApp && !isElectron && !nativeFilesRoute) {
+  if (to.meta.needApp && !nativeFilesRoute) {
     window.$message?.warning(t("message.client_only_function"));
     next("/403");
     return;
@@ -79,7 +78,7 @@ router.beforeEach((to, from, next) => {
   if (!to.meta.offline && !platformStore.platforms.length) {
     void platformStore.loadPlatforms().catch((error) => {
       console.error("加载平台列表失败：", error);
-      if (!isElectron) window.$loadingBar?.error();
+      window.$loadingBar?.error();
     });
   }
 

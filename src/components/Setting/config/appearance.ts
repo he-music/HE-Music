@@ -1,5 +1,4 @@
 import { useSettingStore, useStatusStore } from "@/stores";
-import { isElectron } from "@/utils/env";
 import { openFontManager, openThemeConfig } from "@/utils/modal";
 import { SettingConfig } from "@/types/settings";
 import { computed, ref } from "vue";
@@ -43,13 +42,6 @@ export const useAppearanceSettings = (): SettingConfig => {
       }
       return;
     }
-    if (!isElectron) return;
-    const windowConfig = await window.api.store.get("window");
-    window.api.store.set("window", {
-      ...windowConfig,
-      useBorderless: val,
-    });
-    window.$message.warning(t("message.setting_saved_and_restart_required"));
   };
 
   const handleGraphicsChange = async (enabled: boolean) => {
@@ -98,10 +90,6 @@ export const useAppearanceSettings = (): SettingConfig => {
         }
       }
       return;
-    }
-    if (isElectron) {
-      const windowConfig = await window.api.store.get("window");
-      useBorderless.value = windowConfig?.useBorderless ?? true;
     }
   };
 
@@ -170,7 +158,7 @@ export const useAppearanceSettings = (): SettingConfig => {
             key: "useBorderless",
             label: t("setting.appearance.borderless_windows"),
             type: "switch",
-            show: isElectron || Boolean(platform.windowAppearance),
+            show: Boolean(platform.windowAppearance),
             description: computed(() =>
               platform.kind === "mygo"
                 ? t(
@@ -192,7 +180,6 @@ export const useAppearanceSettings = (): SettingConfig => {
                   ? (windowAppearanceSession.value?.state.value?.useBorderless ?? false)
                   : useBorderless.value,
               set: (v) => {
-                if (isElectron) useBorderless.value = v;
                 handleBorderlessChange(v);
               },
             }),

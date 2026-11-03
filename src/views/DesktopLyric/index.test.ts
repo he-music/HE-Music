@@ -166,11 +166,9 @@ interface ViewState {
   sendToMain: (event: string, ...args: unknown[]) => void;
   sendToMainWin: (event: string, ...args: unknown[]) => void;
   toggleLyricLock: () => void;
-  tempToggleLyricLock: (lock: boolean) => void;
   onDocPointerDown: (event: PointerEvent) => void;
   onDocPointerMove: (event: PointerEvent) => void;
   onDocPointerUp: () => void;
-  debouncedSaveConfig: (size: number) => void;
   lineRefs: Map<string, HTMLElement>;
   contentRefs: Map<string, HTMLElement>;
 }
@@ -245,7 +243,7 @@ function allNodes(root: HostNode): HostNode[] {
 function text(root: HostNode): string {
   return root.text + root.children.map(text).join("");
 }
-function mountView(kind: "mygo" | "electron" | "web", fixture = providerFixture()) {
+function mountView(kind: "mygo" | "web", fixture = providerFixture()) {
   const size = { width: Vue.ref(800), height: Vue.ref(180) };
   const autoImports = {
     ref: Vue.ref,
@@ -588,7 +586,6 @@ describe("DesktopLyric production SFC", () => {
     view.state.sendToMain("begin");
     view.state.sendToMain("open-setting", "other");
     view.state.sendToMainWin("arbitrary");
-    view.state.tempToggleLyricLock(true);
     expect(view.state.lyricConfig.isLock).toBe(false);
     expect(view.fixture.provider.setLocked).not.toHaveBeenCalled();
     expect(view.fixture.provider.command).toHaveBeenCalledTimes(5);
@@ -651,7 +648,6 @@ describe("DesktopLyric production SFC", () => {
   it("卸载前Attach未回与排队debounce不复活，迟到事件/窗口回执无效果", async () => {
     const view = mountView("mygo");
     const lateSnapshot = [...view.fixture.snapshots][0];
-    view.state.debouncedSaveConfig(42);
     view.unmount();
     view.fixture.attachment.resolve({ window: windowState(), snapshot: snapshot() });
     lateSnapshot(snapshot(99));
@@ -667,62 +663,6 @@ describe("DesktopLyric production SFC", () => {
     );
   });
 
-  it("Electron保留旧IPC/config/时钟/2秒fallback并精确退订，首次字体watch可发送", async () => {
-    const handlers = new Map<string, (event: unknown, value: unknown) => void>();
-    const off = [vi.fn(), vi.fn()];
-    const send = vi.fn();
-    const invoke = vi.fn(async (name: string) =>
-      name === "get-window-bounds" ? { x: 3, y: 4 } : {},
-    );
-    Object.defineProperty(hostWindow, "electron", {
-      value: {
-        ipcRenderer: {
-          send,
-          invoke,
-          on: (name: string, handler: (event: unknown, value: unknown) => void) => {
-            const index = handlers.size;
-            handlers.set(name, handler);
-            return () => {
-              handlers.delete(name);
-              off[index]();
-            };
-          },
-        },
-      },
-    });
-    Object.defineProperty(hostWindow, "api", {
-      value: { store: { get: vi.fn(async () => ({ width: 810, height: 190 })) } },
-    });
-    const view = mountView("electron");
-    expect(send).toHaveBeenCalledWith("update-window-height", expect.any(Number));
-    expect(send).toHaveBeenCalledWith("request-desktop-lyric-data");
-    expect(invoke).toHaveBeenCalledWith("request-desktop-lyric-option");
-    expect(view.fixture.provider.attach).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(2000);
-    await flush();
-    expect(view.state.isInitializing.value).toBe(false);
-    handlers.get("update-desktop-lyric-data")?.(null, {
-      playName: "Electron song",
-      currentTime: 1000,
-      songOffset: 20,
-      playStatus: true,
-    });
-    tick(10);
-    expect(view.state.playSeekMs.value).toBe(1030);
-    const config = { ...defaultConfig, isLock: true, font: { ...defaultConfig.font, size: 30 } };
-    handlers.get("update-desktop-lyric-option")?.(null, config);
-    expect(view.state.lyricConfig.isLock).toBe(true);
-    view.state.sendToMainWin("playNext");
-    expect(send).toHaveBeenCalledWith("send-to-mainWin", "playNext");
-    expect(send).toHaveBeenCalledWith("toggleDesktopLyricLock", { lock: true });
-    view.state.debouncedSaveConfig(44);
-    const sends = send.mock.calls.length;
-    view.unmount();
-    vi.runAllTimers();
-    expect(send).toHaveBeenCalledTimes(sends);
-    expect(off.every((unsubscribe) => unsubscribe.mock.calls.length === 1)).toBe(true);
-    expect(handlers.size).toBe(0);
-  });
   it("先到跨曲clock保留到对应完整快照，晚Attach不丢B10", async () => {
     const view = mountView("mygo");
     view.fixture.emitClock({ ...clock(10, "B"), positionMs: 2400 });
@@ -818,7 +758,6 @@ describe("DesktopLyric production SFC", () => {
     view.state.onDocPointerDown(pointer(10, 20));
     view.state.onDocPointerMove(pointer(30, 40));
     expect(view.fixture.provider.setBounds).not.toHaveBeenCalled();
-    view.state.tempToggleLyricLock(false);
     expect(view.fixture.provider.setLocked).toHaveBeenCalledTimes(1);
     view.fixture.emitWindow({ ...windowState(6), locked: false });
     expect(view.state.lyricConfig.isLock).toBe(false);

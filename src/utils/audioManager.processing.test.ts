@@ -642,15 +642,4 @@ describe("production AudioManager Web Audio consumption", () => {
     await manager.setSinkId("default");
     expect(lastMedia().setSinkId).toHaveBeenLastCalledWith("");
   });
-  it("preserves the Electron graph path without running a CORS probe", async () => {
-    host.isElectron = true;
-    vi.resetModules();
-    const electron = (await import("./audioManager")).default;
-    electron.setFilterGain(1, 3);
-    await electron.play("https://audio.invalid/electron.mp3");
-    expect(fetcher).not.toHaveBeenCalled();
-    expect(lastContext().filters[1].gain.value).toBe(3);
-    expect(lastMedia().crossOrigin).toBe("anonymous");
-    electron.clearSource();
-  });
 });

@@ -210,13 +210,5 @@ export async function exportApplicationBackup(mygo: boolean): Promise<Applicatio
   }
   // Validate the exact file we produce, too; export must never claim portability
   // for runtime handles or an unsupported persisted record.
-  if (typeof window !== "undefined" && window.api?.store) {
-    const electron = {
-      window: await window.api.store.get("window"),
-      lyric: await window.api.store.get("lyric"),
-      proxy: await window.api.store.get("proxy"),
-    };
-    migrateElectronLyrics(records, electron);
-  }
   return parseApplicationBackup(JSON.stringify({ format: backupFormat, version: 1, records }));
 }

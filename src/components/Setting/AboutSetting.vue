@@ -136,7 +136,6 @@ import { useStatusStore } from "@/stores";
 import "github-markdown-css/github-markdown.css";
 import packageJson from "@/../package.json";
 import { useI18n } from "vue-i18n";
-import { isElectron } from "@/utils/env";
 import { platform } from "@/platform";
 import { updatesSession } from "@/platform/updatesSession";
 import { openMygoUpdate } from "@/utils/mygoUpdateModal";
@@ -238,12 +237,7 @@ const checkUpdate = debounce(
       }
       return;
     }
-    if (!isElectron) {
-      window.open(packageJson.github + "/releases", "_blank");
-      return;
-    }
-    statusStore.updateCheck = true;
-    window.electron.ipcRenderer.send("check-update", true);
+    window.open(packageJson.github + "/releases", "_blank");
   },
   300,
   { leading: true, trailing: false },

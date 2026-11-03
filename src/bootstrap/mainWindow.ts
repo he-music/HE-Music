@@ -8,12 +8,11 @@ import GoCaptcha from "go-captcha-vue";
 import router from "@/router";
 import { debounceDirective, throttleDirective, visibleDirective } from "@/utils/instruction";
 import { touchContextMenuDirective } from "@/utils/touchContextMenu";
-import initIpc from "@/utils/initIpc";
 import i18n from "@/i18n";
 import "@/style/main.scss";
 import "@/style/animate.scss";
 
-/** 主窗口保留原有插件、路由和 IPC 初始化顺序。 */
+/** 主窗口保留原有插件和路由初始化顺序。 */
 export function mountMainWindow(): void {
   const app = createApp(App);
   const pinia = createPinia();
@@ -29,5 +28,4 @@ export function mountMainWindow(): void {
   app.directive("visible", visibleDirective);
   app.directive("touch-context-menu", touchContextMenuDirective);
   app.mount("#app");
-  initIpc();
 }

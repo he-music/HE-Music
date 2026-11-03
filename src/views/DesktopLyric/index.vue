@@ -53,15 +53,6 @@
           >
             <SvgIcon :name="lyricConfig.isLock ? 'LockOpen' : 'Lock'" />
           </div>
-          <div
-            v-if="isElectron"
-            class="menu-btn lock-btn"
-            @mouseenter.stop="tempToggleLyricLock(false)"
-            @mouseleave.stop="tempToggleLyricLock(true)"
-            @click.stop="toggleLyricLock"
-          >
-            <SvgIcon :name="lyricConfig.isLock ? 'LockOpen' : 'Lock'" />
-          </div>
           <div class="menu-btn" @click.stop="sendToMain('closeDesktopLyric')">
             <SvgIcon name="Close" />
           </div>
@@ -189,15 +180,11 @@ import {
   parseDesktopLyricOptions,
 } from "@/platform/desktopLyricOptions";
 
-const FALLBACK_INITIALIZATION_TIMEOUT = 2000; // 歌词窗口初始化后备超时时间，用于防止无数据时无限期空白
-const isElectron = platform.kind === "electron";
 const isNative = platform.kind === "mygo";
 const consumer = createDesktopLyricsConsumer(isNative ? platform.desktopLyrics : undefined);
 const { t } = useI18n();
 let disposed = false;
 let releaseFrame: number | undefined;
-const electronUnsubscribers: Array<() => void> = [];
-let stopFallback: (() => void) | undefined;
 const nativeRate = ref(1);
 
 // 桌面歌词数据
@@ -349,15 +336,13 @@ const getLineTop = (index: number) => {
  * @returns 渲染的歌词行数组
  */
 const renderLyricLines = computed<RenderLine[]>(() => {
-  if (!isElectron) {
-    if (consumer.status.value === "connecting") {
-      return placeholder(t("message.desktop_lyrics_connecting"));
-    }
-    if (consumer.status.value === "failed") {
-      return placeholder(t("message.desktop_lyrics_connection_failed"));
-    }
-    if (!consumer.snapshot.value) return placeholder(t("message.desktop_lyrics_not_ready"));
+  if (consumer.status.value === "connecting") {
+    return placeholder(t("message.desktop_lyrics_connecting"));
   }
+  if (consumer.status.value === "failed") {
+    return placeholder(t("message.desktop_lyrics_connection_failed"));
+  }
+  if (!consumer.snapshot.value) return placeholder(t("message.desktop_lyrics_not_ready"));
   // 在初始化阶段，不渲染任何内容
   if (isInitializing.value) {
     return [];
@@ -624,28 +609,7 @@ watch(
  */
 const updateCachedBounds = async () => {
   if (disposed) return;
-  if (!isElectron) {
-    if (isNative) await consumer.refreshBounds();
-    return;
-  }
-  try {
-    const [winBounds, stored, screenBounds] = await Promise.all([
-      window.electron.ipcRenderer.invoke("get-window-bounds"),
-      window.api.store.get("lyric"),
-      window.electron.ipcRenderer.invoke("get-virtual-screen-bounds"),
-    ]);
-    if (disposed) return;
-    cachedBounds.x = winBounds?.x ?? 0;
-    cachedBounds.y = winBounds?.y ?? 0;
-    cachedBounds.width = Number(stored?.width) > 0 ? Number(stored.width) : 800;
-    cachedBounds.height = Number(stored?.height) > 0 ? Number(stored.height) : 180;
-    cachedBounds.screenMinX = screenBounds?.minX ?? -99999;
-    cachedBounds.screenMinY = screenBounds?.minY ?? -99999;
-    cachedBounds.screenMaxX = screenBounds?.maxX ?? 99999;
-    cachedBounds.screenMaxY = screenBounds?.maxY ?? 99999;
-  } catch (e) {
-    console.warn("Failed to update cached bounds:", e);
-  }
+  if (isNative) await consumer.refreshBounds();
 };
 
 // 拖拽窗口状态
@@ -669,7 +633,7 @@ const dragState = reactive({
  * @param event 指针事件
  */
 const onDocPointerDown = (event: PointerEvent) => {
-  if (disposed || (!isElectron && consumer.status.value !== "connected")) return;
+  if (disposed || consumer.status.value !== "connected") return;
   if (lyricConfig.isLock) return;
   // 仅主按钮触发（鼠标左键或触摸）
   if (event.button !== 0) return;
@@ -693,14 +657,6 @@ const onDocPointerDown = (event: PointerEvent) => {
     dragState.minY = cachedBounds.screenMinY;
     dragState.maxX = cachedBounds.screenMaxX;
     dragState.maxY = cachedBounds.screenMaxY;
-  }
-  // 固定最大尺寸以规避 DPI 缩放 bug
-  if (isElectron) {
-    sendToMain("toggle-fixed-max-size", {
-      width: safeWidth,
-      height: safeHeight,
-      fixed: true,
-    });
   }
   document.addEventListener("pointermove", onDocPointerMove);
   document.addEventListener("pointerup", onDocPointerUp);
@@ -751,17 +707,6 @@ const onDocPointerUp = () => {
     if (disposed || dragState.isDragging) return;
     // 恢复拖拽前宽高
     sendToMain("update-lyric-size", dragState.winWidth, dragState.winHeight);
-    // 根据字体大小恢复一次高度
-    const height = fontSizeToHeight(lyricConfig.font.size);
-    if (height) pushWindowHeight(height);
-    // 恢复最大宽高
-    if (isElectron) {
-      sendToMain("toggle-fixed-max-size", {
-        width: dragState.winWidth,
-        height: dragState.winHeight,
-        fixed: false,
-      });
-    }
     // 更新缓存的边界数据
     updateCachedBounds();
   });
@@ -800,86 +745,9 @@ watch([winWidth, winHeight], ([w, h]) => {
   }
 });
 
-/**
- * 根据窗口高度计算字体大小
- * 线性映射并取整，范围 20-96
- */
-const computedFontSize = computed(() => {
-  const h = dragState.isDragging ? dragState.winHeight : Math.round(Number(winHeight?.value ?? 0));
-  const minH = 140;
-  const maxH = 360;
-  const minF = 20;
-  const maxF = 96;
-  if (!Number.isFinite(h) || h <= minH) return minF;
-  if (h >= maxH) return maxF;
-  const ratio = (h - minH) / (maxH - minH);
-  return Math.round(minF + ratio * (maxF - minF));
-});
-
-// 保存配置
-const debouncedSaveConfig = useDebounceFn((size: number) => {
-  if (!isElectron || disposed) return;
-  sendToMain("update-desktop-lyric-option", { fontSize: size }, true);
-}, 500);
-
-// 监听字体大小变化
-watch(computedFontSize, (size) => {
-  if (isNative) return;
-  if (!Number.isFinite(size)) return;
-  if (dragState.isDragging) return;
-  if (isInitializing.value) return;
-
-  // 容差判断：差异 > 1 才更新
-  if (Math.abs(lyricConfig.font.size - size) > 1) {
-    lyricConfig.font.size = size;
-    // 防抖保存
-    if (isElectron) debouncedSaveConfig(size);
-  }
-});
-
-/**
- * 根据字体大小计算窗口高度（20-96 <-> 140-360）
- * @param size 字体大小
- * @returns 窗口高度
- */
-const fontSizeToHeight = (size: number) => {
-  const minH = 140;
-  const maxH = 360;
-  const minF = 20;
-  const maxF = 96;
-  const s = Math.min(Math.max(Math.round(size), minF), maxF);
-  const ratio = (s - minF) / (maxF - minF);
-  return Math.round(minH + ratio * (maxH - minH));
-};
-
-// 推送窗口高度更新
-const pushWindowHeight = (nextHeight: number) => {
-  if (!isElectron || disposed) return;
-  if (!Number.isFinite(nextHeight)) return;
-  if (dragState.isDragging) return;
-  sendToMain("update-window-height", nextHeight);
-};
-
-// 监听配置中的字体大小变化，同步更新窗口高度
-watch(
-  () => lyricConfig.font.size,
-  (size) => {
-    const height = fontSizeToHeight(size);
-    // 只有当当前高度与目标高度差异较大时才调整（防止循环触发）
-    if (height && Math.abs(height - winHeight.value) > 2) {
-      pushWindowHeight(height);
-    }
-  },
-  { immediate: true },
-);
-
 // 发送至主进程
 function sendToMain(eventName: string, ...args: unknown[]) {
   if (disposed) return;
-  if (isElectron) {
-    window.electron.ipcRenderer.send(eventName, ...args);
-    return;
-  }
   if (!isNative) return;
   if (eventName === "win-show") void consumer.command("show-main");
   else if (eventName === "open-setting" && args[0] === "lyrics" && args[1] === "showDesktopLyric") {
@@ -924,10 +792,6 @@ function sendToMain(eventName: string, ...args: unknown[]) {
 // 发送至主窗口
 function sendToMainWin(eventName: string, ...args: unknown[]) {
   if (disposed) return;
-  if (isElectron) {
-    window.electron.ipcRenderer.send("send-to-mainWin", eventName, ...args);
-    return;
-  }
   if (!isNative || args.length) return;
   if (eventName === "playPrev") void consumer.command("previous");
   else if (eventName === "playOrPause") void consumer.command("toggle");
@@ -941,104 +805,12 @@ const toggleLyricLock = () => {
     void consumer.setLocked(!lyricConfig.isLock);
     return;
   }
-  if (!isElectron) return;
-  sendToMain("toggleDesktopLyricLock", { lock: !lyricConfig.isLock });
-  lyricConfig.isLock = !lyricConfig.isLock;
 };
-
-/**
- * 临时切换桌面歌词锁定状态
- * @param isLock 是否锁定
- */
-const tempToggleLyricLock = (isLock: boolean) => {
-  if (!isElectron || disposed) return;
-  // 是否已经解锁
-  if (!lyricConfig.isLock) return;
-  sendToMain("toggleDesktopLyricLock", { lock: isLock, temp: true });
-};
-
-function initializeElectronLyrics() {
-  // 接收歌词数据
-  const stopData = window.electron.ipcRenderer.on(
-    "update-desktop-lyric-data",
-    (_event, data: LyricData & { sendTimestamp?: number }) => {
-      if (disposed) return;
-      Object.assign(lyricData, data);
-      // 首次接收到歌词数据时，立即结束初始化状态
-      if (isInitializing.value) {
-        isInitializing.value = false;
-      }
-      // 更新锚点：以传入的 currentTime + songOffset 建立毫秒级基准，并重置帧时间
-      if (typeof lyricData.currentTime === "number") {
-        const offset = Number(lyricData.songOffset ?? 0);
-        let newBaseMs = Math.floor(lyricData.currentTime + offset);
-        // 补偿传输延迟
-        if (typeof data.sendTimestamp === "number") {
-          const ipcDelay = performance.now() - data.sendTimestamp;
-          // 正延迟才补偿
-          if (ipcDelay > 0 && ipcDelay < 1000) {
-            newBaseMs += ipcDelay;
-          }
-        }
-        // 阈值检测：只有当新时间与当前插值时间差距超过阈值时才重置锚点
-        // 这样可以避免在正常播放时频繁重置导致的微小抖动
-        const SYNC_THRESHOLD = 300; // 300ms 阈值
-        const drift = Math.abs(newBaseMs - playSeekMs.value);
-        if (drift > SYNC_THRESHOLD) {
-          baseMs = newBaseMs;
-          anchorTick = performance.now();
-        }
-      }
-      // 按播放状态节能：暂停时暂停 RAF，播放时恢复 RAF
-      if (typeof lyricData.playStatus === "boolean") {
-        if (lyricData.playStatus) {
-          resumeSeek();
-        } else {
-          // 重置锚点到当前毫秒游标，避免因暂停后时间推进造成误差
-          baseMs = playSeekMs.value;
-          anchorTick = performance.now();
-          pauseSeek();
-        }
-      }
-    },
-  );
-  electronUnsubscribers.push(stopData);
-  const stopConfig = window.electron.ipcRenderer.on(
-    "update-desktop-lyric-option",
-    (_event, config: LyricConfig) => {
-      if (disposed) return;
-      Object.assign(lyricConfig, config);
-      // 根据文字大小改变一次高度
-      const height = fontSizeToHeight(config.font.size);
-      if (height) pushWindowHeight(height);
-      // 是否锁定
-      sendToMain("toggleDesktopLyricLock", { lock: config.isLock });
-    },
-  );
-  electronUnsubscribers.push(stopConfig);
-  // 请求歌词数据及配置
-  sendToMain("request-desktop-lyric-data");
-  window.electron.ipcRenderer.invoke("request-desktop-lyric-option");
-
-  // 初始化缓存边界数据
-  updateCachedBounds();
-
-  // 后备超时结束初始化状态：如果 IPC 事件未触发，则在超时后结束初始化
-  const { stop } = useTimeoutFn(() => {
-    if (!disposed && isInitializing.value) {
-      isInitializing.value = false;
-    }
-  }, FALLBACK_INITIALIZATION_TIMEOUT);
-  stopFallback = stop;
-}
 
 onMounted(() => {
-  if (isElectron) initializeElectronLyrics();
-  else {
-    pauseSeek();
-    void consumer.start();
-    if (!isNative) return;
-  }
+  pauseSeek();
+  void consumer.start();
+  if (!isNative) return;
 
   // 启动 RAF 插值
   if (lyricData.playStatus) {
@@ -1057,15 +829,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   disposed = true;
   consumer.dispose();
-  stopFallback?.();
   stopHoverTimer();
-  for (const unsubscribe of electronUnsubscribers.splice(0)) {
-    try {
-      unsubscribe();
-    } catch {
-      // 已失效的桥接不得阻断其余本地清理。
-    }
-  }
   if (releaseFrame !== undefined) cancelAnimationFrame(releaseFrame);
   releaseFrame = undefined;
   // 关闭 RAF

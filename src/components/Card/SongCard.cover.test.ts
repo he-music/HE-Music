@@ -135,11 +135,3 @@ it("SongCard candidate gates native artwork with visibility and keeps song data 
   expect(h.enabled()).toBe(false);
   expect(h.image()).toBeUndefined();
 });
-
-it("SongCard candidate retains the existing Electron cover fallback", async () => {
-  const h = fixture(true);
-  await h.image()!.props!["onUpdate:show"](true);
-  expect(h.invoke).toHaveBeenCalledWith("get-music-cover", "song.mp3");
-  expect(h.song.cover).toBe("blob:electron");
-  expect(h.image()?.props?.src).toBe("blob:electron");
-});

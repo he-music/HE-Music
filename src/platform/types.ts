@@ -20,7 +20,7 @@ import type {
   TrayRequest,
   TrayPlaybackState,
 } from "./mygo.bindings";
-export type PlatformKind = "web" | "electron" | "mygo";
+export type PlatformKind = "web" | "mygo";
 export type SystemPlatform = "darwin" | "win32" | "linux" | "unknown";
 
 export interface PlatformCapabilities {
@@ -28,7 +28,6 @@ export interface PlatformCapabilities {
   readonly tray: boolean;
   readonly desktopLyrics: boolean;
   readonly localMusic: boolean;
-  readonly electronStartup: boolean;
 }
 
 export interface PlatformWindow {

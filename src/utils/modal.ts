@@ -1,6 +1,6 @@
 import { applicationStorage } from "@/platform/applicationStorage";
 import { h } from "vue";
-import type { SettingType, UpdateInfoType } from "@/types/main";
+import type { SettingType } from "@/types/main";
 import type { ModalReactive } from "naive-ui";
 import type { SongInfo, UserPlaylistInfo } from "@/types/main.hemusic";
 import { isLogin } from "./auth";
@@ -129,19 +129,6 @@ export const openJumpArtist = async (platform: string, data: SongInfo["artists"]
 // 编辑歌曲信息
 export const openSongInfoEditor = async (song: SongInfo) => {
   if (platform.kind === "mygo") return openMygoSongInfoEditor(song);
-  const { default: SongInfoEditor } = await import("@/components/Modal/SongInfoEditor.vue");
-  const modal = window.$modal.create({
-    preset: "card",
-    transformOrigin: "center",
-    autoFocus: false,
-    trapFocus: false,
-    // contentStyle: { padding: 0 },
-    style: { width: "600px" },
-    title: t("modal.song_info_edit"),
-    content: () => {
-      return h(SongInfoEditor, { song, onClose: () => modal.destroy() });
-    },
-  });
 };
 
 // 添加到歌单
@@ -268,21 +255,6 @@ export const openSetting = async (type: SettingType = "general", scrollTo?: stri
     },
     content: () => {
       return h(MainSetting, { type, scrollTo });
-    },
-  });
-};
-
-// 软件更新
-export const openUpdateApp = async (data: UpdateInfoType) => {
-  const { default: UpdateApp } = await import("@/components/Modal/UpdateApp.vue");
-  const modal = window.$modal.create({
-    preset: "card",
-    transformOrigin: "center",
-    autoFocus: false,
-    style: { width: "600px" },
-    title: t("modal.found_new_version"),
-    content: () => {
-      return h(UpdateApp, { data, onClose: () => modal.destroy() });
     },
   });
 };

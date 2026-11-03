@@ -29,48 +29,30 @@
             </n-flex>
           </n-radio-group>
         </n-collapse-item>
-        <n-collapse-item v-if="isElectron" :title="t('modal.download_path')" name="path">
-          <n-input-group>
-            <n-input :value="downloadPath || t('modal.download_path_not_configured')" disabled>
-              <template #prefix>
-                <SvgIcon name="Folder" />
-              </template>
-            </n-input>
-            <n-button type="primary" strong secondary @click="openSetting('local')">
-              <template #icon>
-                <SvgIcon name="Settings" />
-              </template>
-              {{ t("setting.local.download_config") }}
-            </n-button>
-          </n-input-group>
-        </n-collapse-item>
       </n-collapse>
     </n-collapse-transition>
     <n-flex class="menu" justify="end">
       <n-button strong secondary @click="emit('close')">
         {{ t("common.cancel") }}
       </n-button>
-      <n-button :loading="loading" type="primary" :disabled="!canDownload" @click="download">
-        {{ t(isElectron ? "download.add" : "common.download_song") }}
+      <n-button :loading="loading" type="primary" @click="download">
+        {{ t("common.download_song") }}
       </n-button>
     </n-flex>
   </div>
 </template>
 
 <script setup lang="ts">
-import { usePlatformStore, useSettingStore } from "@/stores";
+import { usePlatformStore } from "@/stores";
 import { formatFileSize } from "@/utils/helper";
-import { openSetting } from "@/utils/modal";
 import type { SongInfo } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
-import { isElectron } from "@/utils/env";
 import downloadManager from "@/utils/downloadManager";
 
 const props = defineProps<{ song: SongInfo }>();
 const emit = defineEmits<{ close: [] }>();
 
-const settingStore = useSettingStore();
 const platformStore = usePlatformStore();
 
 // 歌曲数据
@@ -84,14 +66,6 @@ if (!props.song.links?.find((item) => item.name === songLevelChosen.value)) {
   songLevelChosen.value = props.song.links?.at(-1)?.name || "";
 }
 
-const downloadPath = computed(() => settingStore.downloadPath);
-
-// 是否可以下载（需要配置下载目录）
-const canDownload = computed(() => {
-  if (!isElectron) return true; // 非 Electron 环境允许下载
-  return !!downloadPath.value;
-});
-
 const getQualityDescription = (name: string) => {
   const desc = platformStore.getPlatformQualityDescription(props.song?.platform, name);
   return desc ? `${name}(${desc})` : `${name}`;
@@ -99,22 +73,13 @@ const getQualityDescription = (name: string) => {
 
 // 下载歌曲
 const download = async () => {
-  if (!canDownload.value) {
-    window.$message.warning(t("message.please_set_download_path"));
-    return;
-  }
   if (!props.song || loading.value) return;
   loading.value = true;
   try {
-    if (isElectron) {
-      await downloadManager.addDownload(props.song, songLevelChosen.value);
-      window.$message.success(t("message.download_added"));
-    } else {
-      const result = await downloadManager.downloadInBrowser(props.song, songLevelChosen.value);
-      if (!result.success) {
-        window.$message.error(result.message || t("message.download_fail"));
-        return;
-      }
+    const result = await downloadManager.downloadInBrowser(props.song, songLevelChosen.value);
+    if (!result.success) {
+      window.$message.error(result.message || t("message.download_fail"));
+      return;
     }
     emit("close");
   } finally {

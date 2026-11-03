@@ -104,7 +104,6 @@
 <script setup lang="ts">
 import { useMobile } from "@/composables/useMobile";
 import { useStatusStore, useMusicStore, useSettingStore, usePlatformStore } from "@/stores";
-import { isElectron } from "@/utils/env";
 import { FeatureSupportFlag } from "@/api/platform";
 
 const musicStore = useMusicStore();
@@ -203,15 +202,10 @@ watch(
 
 onMounted(() => {
   mainCoverColor.value = `${statusStore.playerMainColor.r}, ${statusStore.playerMainColor.g}, ${statusStore.playerMainColor.b}`;
-  // 阻止息屏
-  if (isElectron && settingStore.preventSleep) {
-    window.electron.ipcRenderer.send("prevent-sleep", true);
-  }
 });
 
 onBeforeUnmount(() => {
   stopShow();
-  if (isElectron) window.electron.ipcRenderer.send("prevent-sleep", false);
 });
 </script>
 

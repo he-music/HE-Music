@@ -1,66 +1,62 @@
-# Electron 待移除范围与服务去向
+# Electron 移除记录与服务去向
 
-本文是删除前的审查清单。当前 Electron 源码、依赖、入口和条件分支全部保留；实际移除须得到用户最终确认。本文不表示已完成 Windows 实机、系统音频、普通安装流程或更新发布验收。
+本轮已按用户确认移除 Electron 运行时，桌面端统一使用 mygo，Web 保留独立构建。本变更基于 `27ffc7c`，构建与实机验收范围见下文。源码移除和构建通过不表示所有平台安装、真实业务数据或更新链路已实机验收。
+
+## 已完成的移除
+
+- 删除 `electron/` 主进程、preload、Node 服务及其专用测试；删除旧 builder/Vite 配置、开发脚本、更新配置和 `web/` 加载页。
+- 删除 Electron adapter、IPC 初始化、旧更新／标签弹窗、旧下载页和旧本地音乐布局；共享 Vue 界面只保留 Web／mygo 分支。本地歌曲、歌手和专辑子页继续使用 mygo 文件会话。
+- 移除 Electron、toolkit、旧 Fastify 服务、Node 标签与字体库等专用依赖，重算 pnpm lockfile。Node 继续作为 pnpm／Vite 开发工具使用。
+- 默认 `pnpm dev`／`start` 启动 mygo，`pnpm build` 构建当前桌面平台，`build:mac/win/linux` 转到 mygo。Web 使用 `dev:web`／`build:web`，产物为 `dist/web`。
+- Web 类型配置不再继承 Electron toolkit 或引用 preload 声明；Node 类型检查仅负责 Vite／Vitest 配置。
+- Docker 构建改用 Node 24、pnpm 和 `dist/web`；GitHub Actions 改为 Web 验证与 mygo 平台构建，测试包归档保留权限。tag 发布必须通过真实更新配置、密钥及产物验签，并保持 Release 草稿。
+- 新增 `pnpm check:runtime`，检查直接依赖、生产源码桥接／导入、类型配置和构建命令中的旧宿主引用。
+
+## 继续保留的兼容合同
+
+- `scripts/migration/export-electron-data.js` 用于已发布 Electron 版本的数据导出，继续保留 `electron-migration-1` 导入模型及测试。
+- 二维码登录的 `client_type: "electron_vue"`、当前 `app_type` 兼容值与已保存设备 ID 保持原合同；这些协议字段不加载旧宿主。
+- `public/icons/tray/`、字体、许可证、版权和致谢继续保留。托盘图标仍由 Go 嵌入并缓存使用。
+- 文件 grant/ref/epoch、下载完整性校验、会话所有权、损坏保护、metadata 事务与回滚逻辑继续保留，未因删除旧宿主而放宽。
+- mygo SDK 及 vendor 补丁维持固定版本，未升级至 0.7.4，也未改动模块缓存。
 
 ## 服务去向
 
-| 旧入口                                                    | mygo / Web 的实际去向                                                                                                                            | 移除时的边界                                                                                                                                                               |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `electron/server/index.ts` 的 Fastify 总服务与静态文件    | mygo 使用嵌入前端及 Go 服务，Web 使用 `dist/web` 独立部署                                                                                        | 不引入 Node sidecar；保留独立 Web 构建                                                                                                                                     |
-| `electron/server/netease/index.ts` 的网易路由             | 配置 `VITE_NETEASE_API_URL`；相对 `/api/netease` 通过 HE-Music 后端提供。mygo 的 Go gateway 转发配置的固定 API 路由                              | 不把 npm 网易 API 实现搬进 Go，不把 HTTP 控制端口当成音乐后端                                                                                                              |
-| `electron/server/unblock/` 的网易、酷我、波点、歌曲宝解灰 | `src/api/song.ts` 的 `/api/unblock` 请求由外部 HE-Music 后端提供；mygo gateway 使用后端的对应固定路由                                            | 不在客户端重新实现这些第三方服务                                                                                                                                           |
-| Electron 专用 `/lyric/ttml`                               | Web/mygo 沿用直接读取 TTML 数据库的分支；mygo 通过现有资源 gateway 处理远程资源                                                                  | 保留 TTML 与现有歌词数据、效果及布局实现                                                                                                                                   |
-| `electron/server/login/index.ts` 的 `/login/success`      | `desktop/auth.go` 预留独立 loopback listener，前端将返回的 callback URL 交给 HE-Music `/v1/auth/session`；state 事件返回发起页，再由后端兑换结果 | `prepare(0)` 由系统分配端口，避免与长驻控制服务争用 25666；保留 owner/session/state/期限与消费保护                                                                         |
-| `electron/server/control/index.ts`                        | `desktop/control_http.go`、`control_runtime.go` → `ControlSession` → `shellControl` → 现有 Player                                                | 保留六条 GET `/api/control/{play,pause,toggle,next,prev,status}`、响应 envelope 与可配置端口；默认 25666、仅 loopback。HTTP 200 表示命令已发出，receipt 不证明扬声器已发声 |
-| Electron 文件、标签、下载 IPC                             | `NativeFiles`、grant/ref/epoch、流式播放、metadata 保存事务与下载事务                                                                            | 不保存运行时授权到历史，不因清理失败丢失已提交状态，不自动覆盖重试                                                                                                         |
-| Electron 更新与安装                                       | mygo updater provider、签名清单与发布检查脚本                                                                                                    | feed、公钥和 CI 私钥尚未配置；不能称已具备可发布更新源                                                                                                                     |
+- 旧 Fastify 总服务与静态文件：mygo 使用嵌入前端及 Go 服务；Web 使用独立静态部署，不引入 Node sidecar。
+- 网易接口：由 `VITE_NETEASE_API_URL` 配置，或由 HE-Music 后端提供相对 `/api/netease`；mygo gateway 转发固定 API 路由。
+- 网易、酷我、波点和歌曲宝解灰：由外部 HE-Music 后端提供 `/api/unblock`，客户端不重新实现第三方服务。
+- TTML 歌词：Web／mygo 读取既有数据库资源；mygo 通过资源 gateway 访问，保留歌词效果及布局实现。
+- OAuth 回调：`desktop/auth.go` 使用 `prepare(0)` 预留独立 loopback 端口，由后端创建会话及兑换结果；继续校验 owner/session/state、期限和消费状态。
+- HTTP 播放控制：保留六条 GET `/api/control/{play,pause,toggle,next,prev,status}`、响应 envelope 和可配置端口；默认 25666，仅 loopback。命令 receipt 不证明扬声器已发声。
+- 文件、标签、扫描与下载：由 `NativeFiles` 和对应的授权、持久任务及事务实现负责。
+- 更新与安装：使用 mygo updater provider、签名清单与发布检查脚本。真实 feed、公钥和 CI 私钥缺失时明确拒绝发布。
 
-当前 `.env.example` 中 `VITE_API_URL` 为占位地址，需由部署方提供实际后端；开发工具 Node 仍用于 pnpm/Vite，产品运行时不依赖 Node。`VITE_SERVER_PORT` 只控制本地播放控制服务，mygo OAuth 不再要求占用该固定端口。
+## 本轮验证结果
 
-## 确认后可移除的专用文件
+在仓库忽略的独立目录中复制当前源码和锁文件，未复制 `node_modules`、本机 `.env` 或旧构建目录，然后执行：
 
-`electron/` 当前有 47 个 Git 跟踪文件，删除范围为整个目录，包含：
+- `pnpm install --frozen-lockfile`：通过；独立依赖树未安装 `electron`、`electron-builder`、`electron-vite`、`electron-updater` 或 `@electron-toolkit/*`。
+- `pnpm check:runtime`、`pnpm typecheck`：通过。
+- `pnpm test`：176 个文件、1579 项测试通过。
+- `pnpm build:web`：通过。
 
-- `main/index.ts`、`main/index.d.ts`，以及 `main/i18n/`、`ipc/`、`logger/`、`shortcut/`、`store/`、`thumbar/`、`tray/`、`update/`、`utils/`、`windows/`。
-- `preload/index.ts`、`preload/index.d.ts`。
-- `server/index.ts`、`index.test.ts`、`port.ts`，以及 `server/control/`、`login/`、`netease/`、`unblock/`。
+第一次干净验证发现两个网关请求测试隐式依赖本机 `.env`，已在测试中显式注入合成 API 地址并清理环境；第二次独立目录验证全部通过，生产后端配置规则保持原样。
 
-以下根文件也是专用删除候选：
+主工作目录还执行了以下检查：
 
-- `electron-builder.config.ts`。
-- `electron.vite.config.ts`。
-- `dev-app-update.yml`。
-- `scripts/dev.mjs`（当前仅启动 electron-vite）。
+- 固定 vendor 校验、Go 全包测试、34 项 vendor／发布／Linux 诊断脚本测试通过。
+- 官方固定 CLI 一次构建 `darwin/arm64,windows/amd64,linux/amd64` 通过；输出在 `build/mygo/electron-removed-final/`。
+- macOS `.app` 的 ad hoc 签名通过 `codesign --verify --deep --strict`；Windows 生成便携 EXE；Linux 生成 ELF、DEB 和 tar.gz。已核对二进制架构及产物目录，没有发现 Electron／Node 运行时文件。
+- 使用独立 Chrome 会话加载干净 Web 产物，完成首次协议、设置弹窗及播放／歌词／网络设置检查。设置交互期间给旧 `window.electron`／`window.api` 安装拒绝读取的探针，读取次数为零，页面脚本错误为零；随后关闭浏览器和测试服务。
 
-图标、字体、版权、许可证、歌词实现和其他公用资源不因位于旧配置引用路径而删除。`assets.go` 仍嵌入 `public/icons/tray/`，这些图标必须保留。
+日志位于本机 `/tmp/hemusic-electron-verified-*.log` 与 `/tmp/hemusic-electron-removal-*.log`。浏览器结果位于 `/tmp/hemusic-electron-removal-web-*.json`。
 
-## 需配套修改，不能只删文件
+## 发布限制与后续验收
 
-1. `src/platform/electron.ts`、`electronShortcuts.ts`、宿主选择器及 Electron 专用测试：在移除 adapter 前清理导入和对应分支，保留 Web/mygo 的 capability 路径。
-2. `src/utils/initIpc.ts`、初始化流程，以及共享 Vue、组合式函数、设置、文件弹窗、播放器中的 `isElectron` / `window.electron` 分支：按功能移除旧实现，保留已接入的 mygo 和 Web 逻辑。不能以全局文本替换改变播放或歌词行为。
-3. `tsconfig.web.json` 当前仍 extends `@electron-toolkit/tsconfig`，并包含 Electron/preload 声明及 `electron`、`electron-vite/node` types。先换成独立配置并清理共享类型，再删除相应依赖。
-4. `tsconfig.node.json` 当前专用于 Electron 源码。独立 Vite 配置检查沿用 `tsconfig.vite.json`；重新安排 `typecheck:node` / `typecheck`，保留构建工具的 Node 类型。
-5. `package.json` 的 `main`、`start`、`dev`、默认 `build`、`install:electron-deps`、`build:unpack`、旧 `build:win/mac/linux`：改为明确的 mygo/Web 入口，不留指向已删除文件的默认命令。
-6. `.github/workflows/release.yml` 当前为 Electron 构建与发布流程，必须替换为已验证的 mygo 打包及独立 Web 构建。发布签名与更新源缺失时应明确失败，不能填假密钥或伪造发布条件。
-7. README、开发指南和打包文档：更新命令、平台运行要求和能力限制，保留迁移记录中的历史验证事实。
-8. 最后由 pnpm 更新 lockfile，重新进行无 Electron 依赖的安装、类型检查、测试、Web/desktop 构建及产物审计；本轮仍保留 Electron 的检查不能代替删除后的验收。
+- 当前没有 NSIS，因此本机没有生成 Windows 安装器；WebView2 安装引导继续暂停。
+- 当前 macOS 为 ad hoc 签名，未公证；自动更新未配置真实 feed、公钥和 CI 私钥，不能宣称已可发布或可自动更新。
+- Windows 托盘左键、新托盘菜单图标、普通安装、真实业务数据迁移和更新安装链路仍需要相应平台实机验收。
+- Linux 兼容模式与 X11 穿透沿用已有验证；Wayland 输入尚未验收，用户已停止排查的正常模式拖影不作为移除阻塞。
+- 浏览器检查没有验证真实账号、后端音乐接口和可闻播放；Docker 镜像及 GitHub Actions 工作流尚未实际执行。
 
-## 依赖清理候选
-
-确认移除所有专用引用后，再移除以下直接依赖并由 pnpm 重算传递依赖：
-
-- `electron`、`electron-vite`、`electron-builder`、`electron-log`。
-- `@electron-toolkit/preload`、`@electron-toolkit/utils`、`@electron-toolkit/tsconfig`。
-- `electron-dl`、`electron-store`、`electron-updater`、`font-list`、`node-taglib-sharp`。
-- `@neteasecloudmusicapienhanced/api`、`get-port`、`change-case`。
-- 旧服务专用 `fastify`、`@fastify/cookie`、`@fastify/http-proxy`、`@fastify/multipart`、`@fastify/static`；先随旧服务测试一同核对，不能仅按包名判断公用依赖。
-
-`file-saver`、`md5`、Axios、Vue、Pinia、歌词库、媒体与图像库、Node 开发类型和 Vite 插件不列入整包删除范围；需要根据保留的 Web/业务引用分别处理。
-
-## 验证范围与限制
-
-- 本轮用真实生产路径的 CPU SFC/Player/Driver 测试、Go 测试、静态构建、交叉编译与 Podman Linux 执行验证。没有启动或操作用户 App、真实音乐库、系统音频设备或真实认证 API。
-- Linux 验证会记录冻结提交、Go/CGO/文件系统/ffmpeg/fontconfig 环境与跳过事件；不能用作者候选或旧冻结结果替代新的生产快照。
-- Windows 的 amd64/arm64 编译与 vet 不等于 NTFS、WebView2、快捷键、托盘或安装程序已实机运行。
-- 下载开放 11 个后缀，不表示任意容器布局和标签组合都能写入。WebM/M4A/MP4/APE 的本轮组合可返回 `unsupported` 并保留原文件；APE 结构夹具不等于真实编码/解码兼容验收。
-- 实际删除前需再次检查差异并取得用户确认；实际删除后还需重新验收，不能沿用本清单作为完成证明。
+删除前的审查基线为 `27ffc7c`：当时默认命令、静态 adapter、共享分支、类型继承和发布流程仍依赖 Electron。上述配套清理已经执行；历史阶段记录继续保留在 [迁移执行记录](./mygo-migration-log.md)，不能把历史构建结果当作本轮验收证据。

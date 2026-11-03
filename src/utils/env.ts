@@ -1,4 +1,4 @@
-import { isElectronHost, platform } from "@/platform";
+import { platform } from "@/platform";
 
 /** 是否为开发环境 */
 export const isDev = import.meta.env.MODE === "development" || import.meta.env.DEV;
@@ -12,8 +12,6 @@ export const isWin = platform.os === "win32";
 export const isMac = platform.os === "darwin";
 /** 是否为 Linux 系统 */
 export const isLinux = platform.os === "linux";
-/** 是否为 Electron 环境 */
-export const isElectron = isElectronHost;
 
 /** 是否为 mygo 环境（不会启用 Electron IPC） */
 export const isMygo = platform.kind === "mygo";

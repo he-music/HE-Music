@@ -4,7 +4,6 @@
  * @author imsyy
  */
 
-import { isElectron } from "@/utils/env";
 import { shallowRef } from "vue";
 import { AudioProcessingDriver } from "./audioCapability";
 
@@ -49,7 +48,6 @@ class AudioManager {
   }
 
   /** 音频源节点 */
-  private sourceNode: MediaElementAudioSourceNode | null = null;
   /** 增益节点 */
   private gainNode: GainNode | null = null;
   /** 分析节点 */
@@ -81,21 +79,16 @@ class AudioManager {
    * 构造函数
    */
   constructor() {
-    if (isElectron) {
-      this.legacyElement = new Audio();
-      this.legacyElement.crossOrigin = "anonymous";
-    } else {
-      this.driver = new AudioProcessingDriver({
-        createElement: () => new Audio(),
-        frequencies: this.eqFrequencies,
-        volume: this.volume,
-        prepareOutput: (element, context) => {
-          this.output.setSource(element, context, this.driver?.gain);
-          return this.output.play();
-        },
-      });
-      this.driver.on("processingchange", () => this.syncProcessingGraph());
-    }
+    this.driver = new AudioProcessingDriver({
+      createElement: () => new Audio(),
+      frequencies: this.eqFrequencies,
+      volume: this.volume,
+      prepareOutput: (element, context) => {
+        this.output.setSource(element, context, this.driver?.gain);
+        return this.output.play();
+      },
+    });
+    this.driver.on("processingchange", () => this.syncProcessingGraph());
     this.output.setSource(this.audioElement);
     this.bindInternalEvents();
   }
@@ -104,7 +97,6 @@ class AudioManager {
     const driver = this.driver;
     if (!driver) return;
     this.audioCtx = driver.context ?? null;
-    this.sourceNode = null;
     this.gainNode = driver.gain ?? null;
     this.analyserNode = driver.analyser ?? null;
     this.filters = [...driver.filters];
@@ -125,42 +117,6 @@ class AudioManager {
     if (this.isInitialized) return;
 
     try {
-      if (isElectron) {
-        // 使用标准 AudioContext
-        this.audioCtx = new AudioContext();
-        // 创建节点
-        this.sourceNode = this.audioCtx.createMediaElementSource(this.audioElement!);
-        this.gainNode = this.audioCtx.createGain();
-        this.analyserNode = this.audioCtx.createAnalyser();
-
-        // 配置分析器
-        this.analyserNode.fftSize = 512;
-
-        // 创建均衡器滤波器
-        this.filters = this.eqFrequencies.map((freq) => {
-          const filter = this.audioCtx!.createBiquadFilter();
-          filter.type = "peaking";
-          filter.frequency.value = freq;
-          filter.Q.value = 1;
-          filter.gain.value = 0; // 默认平坦
-          return filter;
-        });
-
-        // 连接图谱: Source -> EQ[0] -> ... -> EQ[9] -> Analyser -> Gain -> Destination
-        let currentNode: AudioNode = this.sourceNode;
-        for (const filter of this.filters) {
-          currentNode.connect(filter);
-          currentNode = filter;
-        }
-
-        currentNode.connect(this.analyserNode);
-        this.analyserNode.connect(this.gainNode);
-        this.gainNode.connect(this.audioCtx.destination);
-        // 同步音量
-        this.gainNode.gain.value = this.volume;
-        this.output.setSource(this.audioElement, this.audioCtx, this.gainNode);
-      }
-
       this.isInitialized = true;
       audioProcessingAvailable.value = Boolean(this.analyserNode);
       this.filters.forEach((filter, index) => {

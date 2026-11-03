@@ -9,7 +9,6 @@ export function createWebPlatform(): PlatformAdapter {
       tray: false,
       desktopLyrics: false,
       localMusic: false,
-      electronStartup: false,
     },
     window: null,
     async openExternal(url, target = "_blank") {

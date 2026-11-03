@@ -1,7 +1,6 @@
 import { useDataStore, useSettingStore, useShortcutStore, useStatusStore } from "@/stores";
 import { useEventListener } from "@vueuse/core";
 import { openUserAgreement } from "@/utils/modal";
-import { cloneDeep } from "lodash-es";
 import { platform } from "@/platform";
 import { shortcutSession } from "@/platform/shortcutSession";
 import packageJson from "@/../package.json";
@@ -35,29 +34,10 @@ const init = async () => {
     settingStore.autoPlay,
     settingStore.memoryLastSeek ? statusStore.currentTime : 0,
   );
-  // 同步播放模式
-  player.playModeSyncIpc();
 
   // 初始化自动关闭定时器
   if (statusStore.autoClose.enable) {
     player.startAutoCloseTimer(statusStore.autoClose.time, statusStore.autoClose.remainTime);
-  }
-
-  if (platform.capabilities.electronStartup) {
-    console.log("register-protocol", settingStore.registryProtocols);
-    // 显示窗口
-    window.electron.ipcRenderer.send("win-loaded");
-    // 显示桌面歌词
-    window.electron.ipcRenderer.send("toggle-desktop-lyric", statusStore.showDesktopLyric);
-    // 检查更新
-    if (settingStore.checkUpdateOnStart) window.electron.ipcRenderer.send("check-update");
-    // 语言切换
-    window.electron.ipcRenderer.send("change-language", settingStore.language);
-    // 注册协议
-    window.electron.ipcRenderer.send(
-      "register-protocol",
-      cloneDeep(settingStore.registryProtocols),
-    );
   }
 };
 

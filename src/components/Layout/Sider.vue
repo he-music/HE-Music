@@ -7,7 +7,7 @@
         'logo',
         {
           collapsed: statusStore.menuCollapsed,
-          'mac-traffic-light-safe': isMac && (isElectron || platform.kind === 'mygo'),
+          'mac-traffic-light-safe': isMac && platform.kind === 'mygo',
         },
       ]"
       @click="router.push('/')"
@@ -27,7 +27,7 @@
 
 <script setup lang="ts">
 import { useMusicStore, useStatusStore } from "@/stores";
-import { isElectron, isMac } from "@/utils/env";
+import { isMac } from "@/utils/env";
 import { platform } from "@/platform";
 import Logo from "@/components/Layout/Logo.vue";
 

@@ -112,7 +112,7 @@
       </n-card>
     </n-scrollbar>
     <n-flex justify="center">
-      <n-button v-if="isElectron || isMygo" type="error" @click="closeApp"> 不同意 </n-button>
+      <n-button v-if="isMygo" type="error" @click="closeApp"> 不同意 </n-button>
       <n-button type="success" :disabled="!isReadOver" @click="emit('close')">
         {{ isReadOver ? "同意并使用" : "请先完整阅读" }}
       </n-button>
@@ -121,7 +121,7 @@
 </template>
 
 <script setup lang="ts">
-import { isElectron, isMygo } from "@/utils/env";
+import { isMygo } from "@/utils/env";
 import { platform } from "@/platform";
 
 const emit = defineEmits<{
@@ -139,7 +139,6 @@ const closeApp = async () => {
     await platform.lifecycle?.quit();
     return;
   }
-  window.electron.ipcRenderer.send("quit-app");
 };
 </script>
 

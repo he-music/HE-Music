@@ -1,6 +1,5 @@
 import { type RouteRecordRaw } from "vue-router";
 import AppLayout from "@/layout/AppLayout.vue";
-import { platform } from "@/platform";
 
 /**
  * 应用路由
@@ -267,18 +266,18 @@ const appRoutes: Array<RouteRecordRaw> = [
     path: "/download",
     name: "download",
     meta: { needApp: true },
-    component: () => import("@/views/Download/layout.vue"),
+    component: () => import("@/views/Download/MygoDownloadManager.vue"),
     redirect: "/download/downloaded",
     children: [
       {
         path: "downloaded",
         name: "download-downloaded",
-        component: () => import("@/views/Download/downloaded.vue"),
+        components: {},
       },
       {
         path: "downloading",
         name: "download-downloading",
-        component: () => import("@/views/Download/downloading.vue"),
+        components: {},
       },
     ],
   },
@@ -287,10 +286,7 @@ const appRoutes: Array<RouteRecordRaw> = [
     path: "/local",
     name: "local",
     meta: { needApp: true, offline: true },
-    component: () =>
-      platform.kind === "mygo"
-        ? import("@/views/Local/MygoLibrary.vue")
-        : import("@/views/Local/layout.vue"),
+    component: () => import("@/views/Local/MygoLibrary.vue"),
     redirect: "/local/songs",
     children: [
       {

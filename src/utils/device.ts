@@ -1,5 +1,5 @@
 import { applicationStorage } from "@/platform/applicationStorage";
-import { isElectron, isMac, isWin, isLinux } from "./env";
+import { isMac, isWin, isLinux } from "./env";
 import type { DeviceInfo } from "@/types/main.hemusic";
 import packageJson from "@/../package.json";
 
@@ -30,11 +30,11 @@ function getPlatform(): string {
  */
 function getAppType(): string {
   // 后端兼容字段：尚未确认服务端接受 mygo 枚举，宿主身份以 platform.kind 为准。
-  return isElectron ? "electron" : "web";
+  return "web";
 }
 
 /**
- * 获取设备名称，Electron 下通过 IPC 获取真实机型名
+ * 获取设备名称，mygo 优先读取原生机型，Web 使用浏览器信息。
  */
 async function getDeviceName(): Promise<string> {
   const { platform } = await import("@/platform");
@@ -47,26 +47,17 @@ async function getDeviceName(): Promise<string> {
     }
     return isMac ? "Mac" : isWin ? "Windows PC" : isLinux ? "Linux PC" : "Desktop";
   }
-  if (!isElectron) {
-    // 优先使用 userAgentData 获取浏览器名
-    const uaData = (navigator as any).userAgentData;
-    if (uaData) {
-      const model = await uaData.getHighEntropyValues(["model"]).model;
-      if (model) return model;
-      const brand = uaData.brands.find(
-        (b) => !b.brand.includes("Not") && !b.brand.includes("Chromium"),
-      );
-      return brand ? `${brand.brand} ${brand.version}` : "Web Browser";
-    }
-    return "Web Browser";
+  // 优先使用 userAgentData 获取浏览器名。
+  const uaData = navigator.userAgentData;
+  if (uaData) {
+    const { model } = await uaData.getHighEntropyValues(["model"]);
+    if (model) return model;
+    const brand = uaData.brands.find(
+      (item) => !item.brand.includes("Not") && !item.brand.includes("Chromium"),
+    );
+    return brand ? `${brand.brand} ${brand.version}` : "Web Browser";
   }
-  try {
-    return await window.electron.ipcRenderer.invoke("get-device-name");
-  } catch {
-    if (isMac) return "Mac";
-    if (isWin) return "Windows";
-    return "Linux";
-  }
+  return "Web Browser";
 }
 
 /**
