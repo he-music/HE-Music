@@ -8,6 +8,8 @@ func trayMenuCommandCurrent(captured, current trayMenuState, command trayMenuCom
 	case trayShowMain, trayQuit, trayUnlockLyrics:
 		return true
 	default:
+		// A palette change rebuilds the menu without changing its command owner.
+		captured.icons = current.icons
 		return current.ready && captured == current
 	}
 }

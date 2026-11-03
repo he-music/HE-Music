@@ -30,7 +30,7 @@ func TestTrayControlsCapabilityMatrix(t *testing.T) {
 		for selected, mode := range modes {
 			p.PlayMode = mode
 			commands := []trayMenuCommand{}
-			items := buildTrayPlaybackControls(p, ready, LifecycleLabels{}, func(command trayMenuCommand) { commands = append(commands, command) })
+			items := buildTrayPlaybackControls(p, ready, LifecycleLabels{}, nil, func(command trayMenuCommand) { commands = append(commands, command) })
 			if len(items) != 2 || items[0].Type != mygo.MenuItemNormal || items[1].Type != mygo.MenuItemSubmenu || len(items[1].Submenu) != 3 {
 				t.Fatal("invalid controls")
 			}
@@ -88,7 +88,7 @@ func TestTrayControlsRestoreBeforeDispatch(t *testing.T) {
 			p := TrayPlaybackState{HasSong: true, CanSetMode: true, PlayMode: mode}
 			var items []*mygo.MenuItem
 			calls := 0
-			items = buildTrayPlaybackControls(p, true, LifecycleLabels{}, func(trayMenuCommand) {
+			items = buildTrayPlaybackControls(p, true, LifecycleLabels{}, nil, func(trayMenuCommand) {
 				calls++
 				// A stale guard rejection, emit failure, or same-state update all return
 				// without rebuilding the menu. The selection must already be restored.
@@ -110,7 +110,7 @@ func TestTrayControlsRestoreBeforeDispatch(t *testing.T) {
 		}
 	}
 	// Nil dispatch must restore too, including unsynced zero-state rendering.
-	items := buildTrayPlaybackControls(TrayPlaybackState{}, false, LifecycleLabels{}, nil)
+	items := buildTrayPlaybackControls(TrayPlaybackState{}, false, LifecycleLabels{}, nil, nil)
 	items[1].Submenu[2].Checked = true
 	items[1].Submenu[0].Checked = false
 	items[1].Submenu[2].Click(items[1].Submenu[2], nil)
@@ -124,7 +124,7 @@ func TestTrayControlsLocalizedLabels(t *testing.T) {
 	} {
 		for _, liked := range []bool{false, true} {
 			for selected, mode := range []TrayPlayMode{TrayModeRepeat, TrayModeRepeatOnce, TrayModeShuffle} {
-				items := buildTrayPlaybackControls(TrayPlaybackState{Liked: liked, PlayMode: mode}, true, labels, nil)
+				items := buildTrayPlaybackControls(TrayPlaybackState{Liked: liked, PlayMode: mode}, true, labels, nil, nil)
 				favorite := labels.AddToFavorites
 				if liked {
 					favorite = labels.RemoveFromFavorites
@@ -144,7 +144,7 @@ func TestTrayControlsLocalizedLabels(t *testing.T) {
 			}
 		}
 	}
-	items := buildTrayPlaybackControls(TrayPlaybackState{PlayMode: TrayModeRepeatOnce}, false, LifecycleLabels{Repeat: "Repeat"}, nil)
+	items := buildTrayPlaybackControls(TrayPlaybackState{PlayMode: TrayModeRepeatOnce}, false, LifecycleLabels{Repeat: "Repeat"}, nil, nil)
 	if items[1].Label != "单曲循环" || items[1].Submenu[0].Label != "Repeat" || items[1].Submenu[2].Label != "随机播放" {
 		t.Fatal("per-field fallback")
 	}

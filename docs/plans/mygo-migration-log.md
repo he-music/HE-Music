@@ -970,3 +970,11 @@
 - 用户随后反馈托盘左键没有显示主窗口。固定 SDK 已把 Windows `WM_LBUTTONUP` 转发到 `Tray.OnClick`，右键仍单独弹出菜单；应用此前仅设置菜单，没有订阅左键。
 - `DesktopLifecycle.createTray()` 在 Windows 注册 `tray.OnClick(l.show)`，复用最小化还原、显示和聚焦流程，并把取消订阅加入现有生命周期清理列表。该回调不依赖前端账户／播放会话；退出中或窗口已销毁时沿用原防护。macOS／Linux 的托盘激活语义保持现状，SDK 补丁与锁定记录无需变化。
 - Go 全包测试、Windows amd64 vet、gofmt 与官方 CLI Windows x64 构建通过。新便携包 `build/mygo/windows-tray-left-click-delivery/HE-Music-1.0.4-windows-x64-tray-left-click.zip`，9,818,904 字节，SHA-256 `237852c881a2cc98ce57fae9a975e9636f68e2ffc8a6c67a6724d69b03b85b55`；PE 架构、保留 v3 策略及 ZIP 全部内容／CRC 校验通过。待实机复测隐藏、最小化、被遮挡时左键恢复与右键菜单；代码未提交、未推送。
+
+### 恢复原生托盘菜单图标
+
+- 对照 Electron `createTrayMenu()` 确认此前只迁移了操作和文字，菜单图标遗漏；固定 SDK 已具备 `MenuItem.Icon`／`NewMenuIcon`，无需升级依赖或修改 vendor。复用 `public/icons/tray/` 的既有资源并通过 embed 随程序分发，补齐显示／隐藏、前后切歌、播放／暂停、收藏、播放模式与子菜单、歌词／锁定、设置及退出图标。
+- macOS／Windows 使用模板图标，交由原生菜单处理深浅色、高亮和禁用状态；Linux 使用已有深浅色／禁用 PNG，并订阅原生主题变化。面板是否显示导出的图标取决于 GNOME／KDE 等环境，尚未实机验收。播放与收藏图形随当前状态切换，锁定图形沿用 Electron 的当前状态表达。
+- 图标缓存由桌面生命周期持有、按样式惰性加载，菜单重建复用 `MenuIcon`；清理时释放引用并取消主题订阅。菜单状态包含图标样式以识别必要刷新，动作有效性只比较业务状态，避免单纯换色使当前点击失效；原会话、歌曲 revision 和原生恢复动作防护保留。
+- 新增真实嵌入资源／图标缓存、菜单完整性、播放／收藏／模式／禁用／锁定恢复，以及主题变化与动作有效性的测试。Go 全包测试、Windows／Linux amd64 vet、gofmt、文档格式与差异空白检查通过；vendor 摘要不变。完整 macOS 构建含前端类型检查通过，最终原生源码再次通过官方 CLI 的 darwin/arm64、windows/amd64、linux/amd64 构建；绑定保持一致。
+- 最终测试包位于 `build/mygo/tray-menu-icons-final/`；macOS 为 ad hoc 签名 App（未公证），Windows 缺 NSIS 仍仅生成便携 EXE。宿主检查不等于真实菜单视觉验收；尚未验证三平台菜单的深浅色、高亮、禁用外观和原生点击，不把图标指针测试当成截图证据。代码未提交、未推送。

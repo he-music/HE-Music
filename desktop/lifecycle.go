@@ -26,6 +26,7 @@ type DesktopLifecycle struct {
 	tray        *mygo.Tray
 	menu        *mygo.Menu
 	menuState   trayMenuState
+	menuIcons   trayMenuIconCache
 	traySession traySession
 	listeners   []func()
 	stopOwner   func() bool
@@ -304,6 +305,8 @@ func (l *DesktopLifecycle) cleanup() {
 	}
 	l.main = nil
 	l.menu = nil
+	l.menuState = trayMenuState{}
+	l.menuIcons = trayMenuIconCache{}
 	for _, off := range l.listeners {
 		off()
 	}
@@ -337,6 +340,10 @@ func (l *DesktopLifecycle) createTray() {
 		// Windows uses left-click to restore the window and right-click for the menu.
 		l.listeners = append(l.listeners, tray.OnClick(l.show))
 	}
+	if runtime.GOOS == "linux" {
+		// Linux exports the PNG itself; refresh its palette on native theme changes.
+		l.listeners = append(l.listeners, mygo.Theme.OnUpdated(l.updateMenu))
+	}
 	l.updateMenu()
 }
 
@@ -356,6 +363,7 @@ func (l *DesktopLifecycle) updateMenu() {
 		lyricsVisible:   desktopLyrics.state.window.Visible,
 		lyricsPending:   desktopLyrics.state.window.Pending,
 		lyricsLocked:    desktopLyrics.state.window.Locked,
+		icons:           l.menuIcons.get(trayMenuIconStyleForPlatform(runtime.GOOS, mygo.Theme.IsDark())),
 	}
 	if l.menu != nil && l.menuState == state {
 		return

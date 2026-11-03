@@ -4,20 +4,20 @@ import "github.com/egoist/mygo"
 
 // Build templates only. Dispatch belongs to the owner of the main Page, never
 // to the focused window supplied by the SDK callback.
-func buildTrayPlaybackControls(playback TrayPlaybackState, ready bool, labels LifecycleLabels, dispatch func(trayMenuCommand)) []*mygo.MenuItem {
+func buildTrayPlaybackControls(playback TrayPlaybackState, ready bool, labels LifecycleLabels, icons *trayMenuIcons, dispatch func(trayMenuCommand)) []*mygo.MenuItem {
 	label := func(value, fallback string) string {
 		if value != "" {
 			return value
 		}
 		return fallback
 	}
-	favoriteLabel := label(labels.AddToFavorites, "添加到收藏")
+	favoriteLabel, favoriteIcon := label(labels.AddToFavorites, "添加到收藏"), "unlike"
 	if playback.Liked {
-		favoriteLabel = label(labels.RemoveFromFavorites, "取消收藏")
+		favoriteLabel, favoriteIcon = label(labels.RemoveFromFavorites, "取消收藏"), "like"
 	}
 	favoriteEnabled := ready && playback.HasSong && playback.CanFavorite
 	modeEnabled := ready && playback.HasSong && playback.CanSetMode
-	favorite := &mygo.MenuItem{Type: mygo.MenuItemNormal, Label: favoriteLabel, Disabled: !favoriteEnabled}
+	favorite := &mygo.MenuItem{Type: mygo.MenuItemNormal, Label: favoriteLabel, Disabled: !favoriteEnabled, Icon: icons.get(favoriteIcon, !favoriteEnabled)}
 	favorite.Click = func(*mygo.MenuItem, *mygo.Window) {
 		if favoriteEnabled && dispatch != nil {
 			dispatch(trayFavorite)
@@ -38,8 +38,9 @@ func buildTrayPlaybackControls(playback TrayPlaybackState, ready bool, labels Li
 		authoritative = TrayModeRepeat
 	}
 	mode := &mygo.MenuItem{Type: mygo.MenuItemSubmenu, Disabled: !modeEnabled}
+	mode.Icon = icons.get(string(authoritative), !modeEnabled)
 	for _, choice := range choices {
-		item := &mygo.MenuItem{Type: mygo.MenuItemRadio, Label: choice.label, Disabled: !modeEnabled, Checked: choice.mode == authoritative}
+		item := &mygo.MenuItem{Type: mygo.MenuItemRadio, Label: choice.label, Disabled: !modeEnabled, Checked: choice.mode == authoritative, Icon: icons.get(string(choice.mode), !modeEnabled)}
 		if item.Checked {
 			mode.Label = choice.label
 		}
