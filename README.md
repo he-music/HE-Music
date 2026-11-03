@@ -69,6 +69,57 @@
 - 📱 移动端简单适配
 - 🌐 `i18n` 支持
 
+## 📦 客户端安装
+
+安装包和安装脚本均在 [GitHub Releases](https://github.com/he-music/HE-Music/releases) 中提供，运行客户端不需要安装 Node.js 或 Go。
+
+### 下载安装包
+
+| 系统            | 安装方式                                                                                                     |
+| --------------- | ------------------------------------------------------------------------------------------------------------ |
+| macOS           | 下载 `.dmg`，把应用复制到 `~/Applications` 等用户可写目录后运行；universal 包同时支持 Apple Silicon 和 Intel |
+| Windows         | 下载对应架构的 `*-setup-*.exe`，按当前用户安装；x64 对应 `amd64`，ARM64 对应 `arm64`                         |
+| Ubuntu / Debian | `.deb` 交给包管理器安装和更新；需要应用内自动更新时，使用下方脚本安装到用户目录                              |
+| 其他 Linux      | 下载对应架构的 tar.gz 和同一 Release 的 `install.sh`，将本地 tar.gz 路径作为 `install.sh` 的参数执行         |
+
+macOS 请从复制后的应用目录启动；Windows 需要 WebView2 Runtime。Linux 的运行依赖见下方「桌面运行环境」。
+
+### 当前 mygo 测试版快捷安装
+
+当前 mygo 更新演练使用独立的 **HE-Music Update Test** 应用和 `mygo-test-v` 频道。下列入口使用已发布的测试安装脚本，自动选择系统架构并安装测试频道的最新版本：
+
+macOS / Linux：
+
+```sh
+curl -fsSL https://github.com/he-music/HE-Music/releases/download/mygo-test-v2.0.1/install.sh | sh
+```
+
+Windows PowerShell：
+
+```powershell
+irm https://github.com/he-music/HE-Music/releases/download/mygo-test-v2.0.1/install.ps1 | iex
+```
+
+脚本按当前用户安装，无需在管理员终端或通过 `sudo` 运行。macOS 首次安装优先使用 `/Applications`，无写权限时使用 `~/Applications`，已有版本沿用原安装位置；Linux 安装到 `~/.local/he-music-update-test.app` 并添加应用菜单入口。脚本 URL 固定在一个已有 Release，其内置的测试频道会选择该频道最新版本；要安装指定旧版，请下载该版本的 tar.gz，并把本地文件作为 `install.sh` 参数传入。
+
+### 正式 mygo 版本快捷安装
+
+首次正式 mygo 版本发布并设为 latest 后，可使用以下长期入口。**当前 latest 仍是旧 Electron 版本，尚未提供这些脚本；现阶段请使用上方测试版入口或从 Releases 手动下载安装。**
+
+macOS / Linux：
+
+```sh
+curl -fsSL https://github.com/he-music/HE-Music/releases/latest/download/install.sh | sh
+```
+
+Windows PowerShell：
+
+```powershell
+irm https://github.com/he-music/HE-Music/releases/latest/download/install.ps1 | iex
+```
+
+首次从 Electron 迁移到 mygo 需要手动安装，旧数据按 [数据迁移说明](docs/mygo-data.md) 导入；之后同一频道的版本可从「设置 → 关于 → 检查更新」升级。正式版沿用应用标识 `com.hemusic.music`，测试应用使用独立标识。
+
 ## 🖥️ 桌面运行环境
 
 - 桌面端使用 mygo 系统 WebView：macOS 使用 WKWebView，Windows 需要已安装 WebView2 Runtime，Linux 使用 GTK3／WebKitGTK。
@@ -82,7 +133,7 @@
 - 原生能力包括桌面歌词、托盘、快捷键、系统媒体、本地音乐、下载、标签编辑、代理及播放控制；共用原有 Vue 界面和歌词效果。
 - Web 使用浏览器存储与下载，桌面端的业务数据由 Go 保存。旧 Electron 数据导出助手和导入兼容仍保留，见[数据迁移说明](docs/mygo-data.md)。
 - `pnpm check:runtime` 检查生产源码、类型配置和直接依赖不再引用旧宿主桥接；该检查不替代类型检查、测试和实际界面验收。
-- `v2.0.0` 已配置正式更新源与公钥；GitHub Secret 由发布负责人管理，签名发布及实机更新仍待验收。普通构建与签名更新发布是不同入口，见[更新发布说明](docs/mygo-updates.md)。
+- `v2.0.0` 已配置正式更新源与公钥；GitHub Secret 由发布负责人管理，测试频道签名发布及三平台安装已验证，更新交互修复仍需实机回归。普通构建与签名更新发布是不同入口，见[更新发布说明](docs/mygo-updates.md)。
 
 ## ⚙️ 本地部署
 
@@ -106,7 +157,7 @@
 
 ## ⚙️ GitHub 发布与更新测试
 
-发布准备、操作步骤和验收记录需要随代码维护。README 保留常用入口，完整流程见 [GitHub 发布与 mygo 自动更新](docs/mygo-updates.md)。已配置 `v2.0.0` 的正式更新源与公钥，首个启用更新的包需要手动安装；签名发布和自动升级仍需验收。
+发布准备、操作步骤和验收记录需要随代码维护。README 保留常用入口，完整流程见 [GitHub 发布与 mygo 自动更新](docs/mygo-updates.md)。已配置 `v2.0.0` 的正式更新源与公钥，首个启用更新的包需要手动安装；测试频道签名发布已跑通，正式发布与更新交互修复仍需实机验收。
 
 发布前准备：
 
