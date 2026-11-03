@@ -1,3 +1,4 @@
+/vendor/
 out
 dist
 pnpm-lock.yaml

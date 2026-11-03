@@ -1,0 +1,5 @@
+# 保留第三方源码和嵌入资源的原始字节，使 vendor 摘要跨平台一致。
+/vendor/** -text
+/patches/mygo/** text eol=lf
+/go.mod text eol=lf
+/go.sum text eol=lf

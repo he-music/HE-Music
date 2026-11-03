@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "sdkVersion": "v0.6.5-0.20261026063203-07ebe19ac0dc",
+  "patch": {
+    "id": "windows-transparent-shadowless-frame-v3",
+    "file": "github.com/egoist/mygo/internal/windows/window.go",
+    "upstreamSHA256": "6f9c3d76af2dc8cee5b4b5b0c1f631012f2bff49b51bc587d4d4f5d90ce24534",
+    "patchedSHA256": "ea6a355d709c522eacddc31f3e025b5a354f5308bc77fc5e7286fa9390ef6bef",
+    "before": "\tw.noRedirect = o.Vibrancy != \"\" && systemBackdrops() && (!w.hiddenTitleBar && !o.Surface || b.composition() != nil)",
+    "after": "\tw.noRedirect = !o.Surface && o.Transparent || o.Vibrancy != \"\" && systemBackdrops() && (!w.hiddenTitleBar && !o.Surface || b.composition() != nil)",
+    "additionalEdits": [
+      {
+        "before": "\t\"errors\"\n\t\"time\"",
+        "after": "\t\"errors\"\n\t\"log\"\n\t\"time\""
+      },
+      {
+        "before": "\tb.applyWindowTheme(w)\n\tif o.Vibrancy",
+        "after": "\tb.applyWindowTheme(w)\n\tw.applyTransparentFramePolicy()\n\tif o.Vibrancy"
+      },
+      {
+        "before": "\tswitch m {\n\tcase wmClose:",
+        "after": "\tswitch m {\n\tcase wmNCPaint:\n\t\tif w.plainTransparentFrame() {\n\t\t\treturn 0, true\n\t\t}\n\tcase wmNCActivate:\n\t\tif w.plainTransparentFrame() {\n\t\t\treturn 1, true\n\t\t}\n\tcase wmClose:"
+      },
+      {
+        "before": "func (w *window) SetHasShadow(v bool) {\n\tw.shadow = v\n",
+        "after": "func (w *window) SetHasShadow(v bool) {\n\tw.shadow = v\n\tw.applyTransparentFramePolicy()\n"
+      },
+      {
+        "before": "func (w *window) SetIgnoreMouseEvents(v bool) {",
+        "after": "// Transparent web overlays keep native sizing borders for hit testing, but a\n// shadowless frameless window must not draw DWM or GDI decorations over them.\nfunc (w *window) plainTransparentFrame() bool {\n\treturn w.frameless && w.opts.Transparent && !w.opts.Surface && !w.shadow\n}\n\nfunc (w *window) applyTransparentFramePolicy() {\n\tif !w.frameless || !w.opts.Transparent || w.opts.Surface {\n\t\treturn\n\t}\n\tpolicy := int32(0) // DWMNCRP_USEWINDOWSTYLE\n\tif w.plainTransparentFrame() {\n\t\tpolicy = 1 // DWMNCRP_DISABLED\n\t}\n\tconst dwmwaNCRenderingPolicy = 2\n\thr, _, _ := procDwmSetWindowAttribute.Call(w.hwnd, dwmwaNCRenderingPolicy, uintptr(unsafe.Pointer(&policy)), 4)\n\tif failed(hr) {\n\t\tlog.Print(hresultError(\"setting the transparent window frame policy\", hr))\n\t}\n}\n\nfunc (w *window) SetIgnoreMouseEvents(v bool) {"
+      }
+    ]
+  }
+}

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { main, SDK_VERSION, validateConfig, verifyArtifacts, runRelease } from "./mygo-release.mjs";
+import { vendorFixture } from "../vendor/fixture.mjs";
 
 const pair = () => {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -32,6 +33,7 @@ async function fixture(t) {
   const c = config();
   await writeFile(path.join(root, "mygo.json"), JSON.stringify(c));
   await writeFile(path.join(root, "go.mod"), goMod);
+  await vendorFixture(root);
   const dir = path.join(root, c.out, "darwin-arm64");
   await mkdir(dir, { recursive: true });
   const archive = Buffer.from("offline test archive bytes");
@@ -144,7 +146,7 @@ test("仅官方参数构建，ad hoc/跳过公证；离线模式零 spawn", asyn
   assert.equal(calls[0].options.stdio, "pipe");
   assert.equal(calls[0].options.env.GOWORK, "off");
   assert.equal(calls[0].options.env.GOTOOLCHAIN, "local");
-  assert.equal(calls[0].options.env.GOFLAGS, "-mod=readonly");
+  assert.equal(calls[0].options.env.GOFLAGS, "-mod=vendor");
   await assert.rejects(
     runRelease({
       root,
@@ -157,6 +159,19 @@ test("仅官方参数构建，ad hoc/跳过公证；离线模式零 spawn", asyn
   );
   await assert.rejects(runRelease({ root, mode: "build", targets: ["../bad"], env, spawn }));
   await assert.rejects(runRelease({ root, targets: ["darwin/arm64", "darwin/arm64"], spawn }));
+});
+test("vendor 被修改或缺失时，发布构建在调用 Go 前拒绝", async (t) => {
+  const { root } = await fixture(t);
+  let calls = 0;
+  const spawn = () => {
+    calls++;
+    return { status: 0 };
+  };
+  await writeFile(path.join(root, "vendor/fixture.txt"), "changed dependency");
+  await assert.rejects(runRelease({ root, mode: "build", env, spawn }), /vendor/);
+  await rm(path.join(root, "vendor"), { recursive: true });
+  await assert.rejects(runRelease({ root, mode: "build", env, spawn }), /vendor/);
+  assert.equal(calls, 0);
 });
 
 test("拒绝 SDK 漂移、replace 与并行 TS 配置，零 spawn", async (t) => {

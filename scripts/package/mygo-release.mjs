@@ -7,7 +7,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-export const SDK_VERSION = "v0.6.5-0.20261026063203-07ebe19ac0dc";
+import { SDK_VERSION, verifyVendoredDependencies } from "../vendor/mygo.mjs";
+export { SDK_VERSION };
 const targetsAllowed = new Set([
   "darwin/arm64",
   "darwin/amd64",
@@ -329,6 +330,11 @@ export async function runRelease({
       if (error.code !== "ENOENT") throw error;
     }
     await validateOutputDirectory(config, root);
+    try {
+      await verifyVendoredDependencies(root);
+    } catch {
+      fail("vendor 或 Windows 透明补丁校验失败；请运行 pnpm vendor:check 并审查依赖");
+    }
     const args = ["tool", "mygo", "build", "-platform", targets.join(",")];
     if (targets.some((target) => target.startsWith("darwin/")))
       args.push("-sign", "-", "-skip-notarize");
@@ -337,7 +343,7 @@ export async function runRelease({
     try {
       result = spawn("go", args, {
         cwd: root,
-        env: { ...env, GOTOOLCHAIN: "local", GOWORK: "off", GOFLAGS: "-mod=readonly" },
+        env: { ...env, GOTOOLCHAIN: "local", GOWORK: "off", GOFLAGS: "-mod=vendor" },
         shell: false,
         encoding: "utf8",
         stdio: "pipe",

@@ -945,3 +945,28 @@
 - 单元测试覆盖空区域设置／恢复、失效窗口、区域分配失败及资源释放。Ubuntu 22 arm64 的真实 GTK 3.24／Xvfb X11＋XTest 验证通过：原输入区域时点击停在上层，锁定后下层收到点击；解锁按钮区域、离开按钮后的穿透、锁定时缩放、解锁与重开均通过。正常和软件 GL 环境各执行一次，每轮下层收到 7 次、歌词层收到 5 次。输入注入前同步 GTK 所属显示连接，以接收事件验证结果，不以等待时长判定成功。
 - Go 全包测试、Linux 容器完整 desktop 测试、Linux amd64 vet、Windows amd64 交叉编译、gofmt 通过。图形测试须显式设置 `HE_MUSIC_GTK_INPUT_TEST=1` 并使用隔离 X11 显示；XTest 运行库仅是测试依赖，不加入产品依赖。用户随后确认其 Ubuntu 22 X11 x86-64 实体机鼠标穿透已可用，Wayland 仍未实测。
 - 已构建启用网页检查器的 Linux x64 候选包 `build/mygo/linux-lyrics-input-delivery/HE-Music-1.0.4-linux-x64-lyrics-click-through-v1.tar.gz`，SHA-256 `56f4e0c5a9bb86664c0bc0f0771edb6839d68692158d36f968a528721b874955`。核对 ELF 架构、新 GTK 输入绑定、开发构建参数、全部归档内容／校验值／执行位通过；附带日志启动器和本轮复测说明。用户已确认实体机修正可用，并授权提交本轮鼠标穿透代码，不推送。
+
+### 将 Windows 透明修正纳入可复现的正式依赖
+
+- 用户授权纳入此前已在 Windows 实体机确认的透明窗口 v2 修正。与固定上游及私有 v2 SDK 全树比较，确认私有副本只有 `internal/windows/window.go` 的一行 `w.noRedirect` 不同；未纳入尚未验收的 v3 细边框候选，WebView2 原生安装引导继续暂停。
+- 使用 Go 标准 `vendor/` 保存应用及官方 CLI 实际需要的依赖，`go.mod`／`go.sum` 与 SDK 固定版本保持不变，无 `replace`，不改模块缓存。共 1,006 个源码／资源／许可证文件，全部可纳入 Git；相对原始 vendor 只有 Windows 窗口文件改变，补丁后 SHA-256 `17fb8ab0550d42630e5c0ae7bf40265b27c103e7c959dbaf23008a97f32a58fc` 与已验收 v2 副本一致。
+- `patches/mygo/patch.json` 固定上游／结果字节摘要和唯一替换，`vendor-lock.json` 固定 Go 依赖与完整 vendor 树摘要。`pnpm vendor:refresh` 在临时目录重建并验证后再替换；上游漂移拒绝替换，失败回滚保留原目录。`.gitattributes` 保留 vendor 原始字节，格式与测试工具跳过第三方目录。完整树摘要重放两次一致为 `21ffc8d87e73700e3c44a4dcc55d6bc61842ad19e1d874ee076e7924acd21d45`。
+- 开发、绑定生成和三平台打包的 pnpm 入口先校验依赖，再用 `GOFLAGS=-mod=vendor`／`GOWORK=off` 调用固定官方 CLI。自动更新发布工具也加入 vendor 校验，移除原来的 `-mod=readonly` 绕过路径；缺少更新 feed／密钥仍明确拒绝，未改变验签合同或旧 Electron 发布工作流。
+- 验证：29 项依赖／发布脚本测试、前端 178 文件／1,614 测试、Node／Web 类型、Go 全包测试、macOS 宿主与 Linux amd64 构建、Windows amd64 vet 均通过。空模块缓存＋禁用 Go 下载时，官方绑定生成、Windows arm64 交叉编译及完整 `pnpm build:desktop:win`（含前端构建）通过，证明普通构建不再依赖临时 SDK／模块缓存。最初一次全包检查误收集了本轮大小测量的原始 vendor 副本，已将该临时目录移到 Go 不扫描的隐藏目录后重新通过。
+- 新 Windows x64 便携包 `build/mygo/windows-vendored-sdk-delivery/HE-Music-1.0.4-windows-x64-vendored-sdk.zip`，9,820,941 字节，SHA-256 `2ce1bb9bc3ea3ac625b1f2c474cf44ca59165ec9ee24cfaa57d9156e488870d0`。核对 PE x86-64、固定 SDK／无本地替换的构建元数据、ZIP 全部内容／CRC／摘要通过。构建机缺 NSIS，官方明确跳过安装器；未宣称新包已完成 Windows GUI／托盘／WebView2 实机验收。代码尚未提交或推送。
+
+### Windows 透明歌词细边框候选 v3
+
+- 用户运行正式 `pnpm build:desktop:win` 后提供 Windows 10 截图，仍可见歌词矩形四周细线及顶部亮边。v2 只修正透明重定向位图，没有包含当时尚未验收的非客户区边框处理；页面外层样式无此矩形 border。
+- 在保留 v2 的基础上，追加此前隔离 v3 候选：只对透明、无边框、无阴影的网页窗口关闭 DWM 非客户区绘制，并处理 `WM_NCPAINT`／`WM_NCACTIVATE`，保留原来的缩放样式、命中测试与尺寸约束。创建窗口及阴影设置变化时应用策略。当前 SDK 窗口文件 SHA-256 为 `ea6a355d709c522eacddc31f3e025b5a354f5308bc77fc5e7286fa9390ef6bef`，与隔离 v3 源码一致，仍未获用户实机边框验收。
+- 补丁定义支持顺序附加替换，所有上下文及最终字节摘要验证通过后才写入，任一步失败不留下部分补丁；锁定树摘要更新为 `0b9411825e84a3b4946865c20bbb8ed95fc0b7cf3b0b5a046f33e782ed55dc73`。正式构建仍只使用仓库 vendor，不读取临时 SDK 或修改模块缓存。
+- 新增 `pnpm test:desktop:windows-sdk`，通过 Go overlay 把 `patches/mygo/_tests/window_frame_test.go` 临时加入真实 SDK 包，覆盖歌词、普通主窗口、普通边框、请求阴影和原生 UI 的消息分支。Windows amd64／arm64 测试程序已交叉编译；宿主没有执行这些 Windows 测试，不宣称已通过运行或 DWM 显示验收。
+- 30 项依赖／发布脚本测试、Go 全包测试、Windows amd64 vet、ESLint／Prettier／gofmt 与官方 CLI Windows x64 构建通过。Windows release 大小对照：hello 从 9,841,152 到 9,842,176 字节，counter-native 从 9,767,424 到 9,768,448 字节，各增加 1,024 字节，来自公共窗口消息／边框策略代码，没有新增依赖或资源。大小对照只用原 v2／v3 隔离源码副本；不能把它当成正式构建依赖。
+- 新候选包 `build/mygo/windows-frame-v3-delivery/HE-Music-1.0.4-windows-x64-frame-v3.zip`，9,819,078 字节，SHA-256 `7da99aeebf5b9268a8ed9fe4716280c7f347658a22391682be1c5327036162cf`；已核对 PE 架构、新策略诊断字符串、全部 ZIP 内容／CRC／摘要。仍缺 NSIS，未生成安装器。等待实体机确认细边框消失及透明、焦点切换、缩放、锁定穿透与重开是否正常；未提交、未推送。
+
+### Windows 托盘左键恢复主窗口
+
+- 用户确认 Windows v3 边框修正版可用；该确认记录为边框修正实机验收，不扩展到未逐项报告的其他系统功能。
+- 用户随后反馈托盘左键没有显示主窗口。固定 SDK 已把 Windows `WM_LBUTTONUP` 转发到 `Tray.OnClick`，右键仍单独弹出菜单；应用此前仅设置菜单，没有订阅左键。
+- `DesktopLifecycle.createTray()` 在 Windows 注册 `tray.OnClick(l.show)`，复用最小化还原、显示和聚焦流程，并把取消订阅加入现有生命周期清理列表。该回调不依赖前端账户／播放会话；退出中或窗口已销毁时沿用原防护。macOS／Linux 的托盘激活语义保持现状，SDK 补丁与锁定记录无需变化。
+- Go 全包测试、Windows amd64 vet、gofmt 与官方 CLI Windows x64 构建通过。新便携包 `build/mygo/windows-tray-left-click-delivery/HE-Music-1.0.4-windows-x64-tray-left-click.zip`，9,818,904 字节，SHA-256 `237852c881a2cc98ce57fae9a975e9636f68e2ffc8a6c67a6724d69b03b85b55`；PE 架构、保留 v3 策略及 ZIP 全部内容／CRC 校验通过。待实机复测隐藏、最小化、被遮挡时左键恢复与右键菜单；代码未提交、未推送。

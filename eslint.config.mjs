@@ -19,6 +19,7 @@ export default [
   {
     ignores: [
       "**/node_modules",
+      "vendor/**",
       "**/dist",
       "**/out",
       "**/.gitignore",

@@ -6,6 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { runRelease, SDK_VERSION, verifyArtifacts } from "./mygo-release.mjs";
+import { vendorFixture } from "../vendor/fixture.mjs";
 
 async function fixture(t) {
   const base = await mkdtemp(path.join(tmpdir(), "mygo-release-boundary-"));
@@ -47,6 +48,7 @@ async function fixture(t) {
     path.join(root, "go.mod"),
     `module fixture\nrequire (\n github.com/egoist/mygo ${SDK_VERSION}\n)\ntool github.com/egoist/mygo/cmd/mygo\n`,
   );
+  await vendorFixture(root);
   const artifacts = (out) => {
     const dir = path.join(out, "darwin-arm64");
     mkdirSync(dir, { recursive: true });

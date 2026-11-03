@@ -1,7 +1,8 @@
 # mygo Windows 实测清单
 
-当前状态：尚未在 Windows 主机构建或运行。macOS 上的构建、fake 测试和 Windows 静态交叉编译不能替代以下验证。
-按用户授权，本轮不执行 Windows 实机测试；待功能迁移完成后统一执行本清单。
+当前状态：用户此前已在 Windows 实体机确认临时 SDK v2 的歌词透明修正及下载可用；该透明补丁现已纳入正式 vendor 依赖。以下清单仍包含待验收项目，历史未勾选项不表示用户已确认的功能再次失败。macOS 构建、fake 测试和静态交叉编译不能替代新包实机验证；WebView2 原生安装引导继续暂停。
+
+用户已确认追加 DWM／GDI 非客户区绘制抑制的 v3 在 Windows 可用，边框修正已获实机确认。其后反馈托盘左键未显示主窗口，现已补上 Windows 左键恢复／显示／聚焦接线；该新交互仍待实机复测，右键菜单沿用原实现。
 
 ## 准备与构建
 
@@ -10,8 +11,8 @@
 - [ ] 确认 WebView2 Runtime 可用；记录未安装时的提示与恢复方式。
 - [ ] 执行 `pnpm install --frozen-lockfile`；不需要执行旧 Electron 的 `install:electron-deps`。
 - [ ] 执行 `pnpm run build:web`，使用独立静态服务部署 `dist/web`，确认根路径静态资源和 hash 路由可用。
-- [ ] 执行 `go tool mygo doctor` 并记录结果。Windows 安装器需要 NSIS，签名工具缺失与运行依赖分开记录。
-- [ ] 执行 `go tool mygo build -platform windows/amd64`，检查 `build/mygo/windows-amd64` 的可执行文件和安装器；ARM64 设备另用 `windows/arm64` 验证。
+- [ ] 执行 `node scripts/vendor/mygo.mjs doctor` 并记录结果。Windows 安装器需要 NSIS，签名工具缺失与运行依赖分开记录。
+- [ ] 执行 `pnpm vendor:check` 和 `pnpm build:desktop:win`，检查 `build/mygo/windows-amd64` 的可执行文件和安装器；ARM64 设备另用 `node scripts/vendor/mygo.mjs build -platform windows/arm64` 验证。不得用 `-mod=mod`／`-mod=readonly` 绕过透明补丁。
 - [ ] 检查安装包与安装目录，不包含 Node、Electron、`app.asar` 或旧 Node 服务；运行时不创建 Node/Electron 子进程。
 
 ## M1 窗口与资源
@@ -107,4 +108,4 @@ M2 已在 macOS 实施并完成隔离 WKWebView 探针；以下 Windows 项目�
 
 每项记录构建提交、命令、实际结果、日志路径和截图；构建成功与交互通过分开记录。截图和日志不得包含账号、令牌、Cookie 或授权返回参数。安装、签名、更新与发布流程不属于 M1 的 macOS 骨架构建验证。
 
-本轮 Windows 均未实测；真实账号、可闻播放及打包媒体待用户验收。
+用户已确认的 Windows 透明／下载结果见迁移日志；新正式依赖包仍需按范围复测，未执行项目不得以交叉编译结果代替。

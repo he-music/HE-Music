@@ -333,6 +333,10 @@ func (l *DesktopLifecycle) createTray() {
 	}
 	l.tray = tray
 	l.state.tray = true
+	if runtime.GOOS == "windows" {
+		// Windows uses left-click to restore the window and right-click for the menu.
+		l.listeners = append(l.listeners, tray.OnClick(l.show))
+	}
 	l.updateMenu()
 }
 

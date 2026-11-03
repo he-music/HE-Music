@@ -1,0 +1,53 @@
+# Go build artefacts
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+bin/
+build/
+target/
+/vendor/
+
+# Coverage and profiling
+coverage.out
+coverage.html
+*.prof
+*.pprof
+
+# OS cruft
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+.AppleDouble
+.LSOverride
+ehthumbs.db
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+nul
+
+# Editor and IDE dotfiles — ignore every hidden entry except the ones
+# we explicitly check in.
+.*
+!/.github/
+!/.gitignore
+!/.gitattributes
+!/.editorconfig
+!/.golangci.yml
+
+# Swap, backup, and temporary files
+*.swp
+*.swo
+*.swn
+*.bak
+*.orig
+*.rej
+*.tmp
+*.log
+*~
+\#*\#

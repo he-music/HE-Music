@@ -3,13 +3,19 @@
 正常入口为 `main.go`，平台服务位于 `platform.go`。Web、Electron 与 mygo 共用
 `src/platform` 的 `PlatformAdapter`：系统平台、能力声明、窗口控制、可退订的最大化事件和
 HTTP(S) 外链。`mygo.bindings.ts` 由固定版本 CLI 生成并纳入源码；`mygo.json` 的 bindings
-路径保持一致。修改服务后执行 `go tool mygo generate`，不要手改生成客户端。
+路径保持一致。修改服务后执行 `pnpm generate:desktop`，不要手改生成客户端。
 
 mygo 采用系统原生标题栏，托盘初始化成功且应用壳就绪后沿用关闭提示及隐藏/退出偏好；
 托盘不可用或壳卸载后原生关闭放行，显式退出绕过提示。
 Electron 原有 IPC、认证身份及协议兼容分支暂留。mygo 不会设置 `isElectron`，未实现的桌面
 歌词、本地音乐、更新和协议注册不会因此启用。全局快捷键仅注册播放/暂停、前后切歌与音量
 五项。认证服务使用独立 Go 服务与生成客户端，不伪造 Electron 的 app_type/client_type。
+
+## 固定 SDK 与 Windows 透明修正
+
+正式依赖由根目录 `vendor/` 提供，包含用户已验证的 Windows 透明窗口 v2 修正；不再依赖临时 SDK 副本或本地 `replace`。构建前运行 `pnpm vendor:check`，开发／绑定生成／打包优先使用 `pnpm dev:desktop`、`pnpm generate:desktop`、`pnpm build:desktop:win`／`build:desktop:mac`／`build:desktop:linux`，这些入口会核对补丁与完整依赖摘要。更新 Go 依赖时使用 `pnpm vendor:refresh` 重放补丁，不直接覆盖 vendor。
+
+补丁范围、字节摘要、许可证保留与再生成流程见 [固定 SDK 说明](../patches/mygo/README.md)。Windows 细边框 v3 修正已获用户实体机确认；托盘左键恢复主窗口已接入，仍待该交互的实机复测。新版构建仍需分别做平台验收，WebView2 安装引导继续暂停。
 
 ## Linux 正常启动与图形兼容模式
 

@@ -37,7 +37,7 @@ env:
 run: node scripts/package/mygo-release.mjs --build --platform darwin/arm64
 ```
 
-`PATH` 应指向批准的 Node、Go、pnpm 工具链。工具不安装依赖或升级 SDK；构建前验证 `go.mod` 的固定 SDK/tool 并禁止 `replace`，设置 `GOTOOLCHAIN=local`、`GOWORK=off`、`GOFLAGS=-mod=readonly`。构建必须使用可信代码、依赖和前端命令。构建 stdout/stderr 不转发、不落盘，以防下游意外打印 secret；失败只输出受控说明，日志缓冲超过 16 MiB 也会失败。
+`PATH` 应指向批准的 Node、Go、pnpm 工具链。工具不安装依赖或升级 SDK；构建前验证 `go.mod` 的固定 SDK/tool 并禁止 `replace`，同时验证 `vendor/` 的整树摘要及已确认的 Windows 透明补丁，设置 `GOTOOLCHAIN=local`、`GOWORK=off`、`GOFLAGS=-mod=vendor`。依赖刷新使用 `pnpm vendor:refresh`，流程见 [固定 SDK 说明](../patches/mygo/README.md)。构建必须使用可信代码、依赖和前端命令。构建 stdout/stderr 不转发、不落盘，以防下游意外打印 secret；失败只输出受控说明，日志缓冲超过 16 MiB 也会失败。
 
 ## 命令
 
