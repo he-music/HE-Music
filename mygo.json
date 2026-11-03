@@ -2,7 +2,7 @@
   "name": "HE-Music Update Test",
   "slug": "he-music-update-test",
   "identifier": "top.hmusic.desktop.update-test",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "publisher": "he-music",
   "icon": "public/icons/favicon-1024x1024.png",
   "main": "./desktop",
