@@ -1077,11 +1077,11 @@
       "default": "Default",
       "duration": "Duration",
       "size": "Size",
+      "chapter": "Chapter",
       "title": "Title"
     },
     "order": {
       "asc": "Ascending",
-      "default": "Default",
       "desc": "Descending"
     }
   },

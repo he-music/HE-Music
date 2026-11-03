@@ -54,6 +54,7 @@ beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
   mocks.callbacks.clear();
+  mocks.song.platform = "test";
   mocks.audio.currentTime = 0;
   mocks.audio.src = "";
   mocks.audio.paused = true;
@@ -92,6 +93,23 @@ async function failHttp(code = 4, autoPlay = true, seek = 0) {
   });
   await expect(player.createPlayer("http://audio.example/a.mp3", autoPlay, seek)).rejects.toThrow();
 }
+describe("online source format admission", () => {
+  it.each([
+    ["migu", "m4a", true],
+    ["migu", "mp3", false],
+    ["qq", "m4a", false],
+  ] as const)("passes a source MIME hint only for %s/%s", async (platform, format, typed) => {
+    mocks.song.platform = platform;
+    vi.spyOn(player, "selectPlayQuality").mockReturnValue({ name: "test", format });
+    await player.initPlayer(false);
+    expect(mocks.audio.play).toHaveBeenCalledWith("https://audio.example/next.mp3", {
+      fadeIn: false,
+      autoPlay: false,
+      ...(typed ? { source: { platform, format } } : {}),
+    });
+  });
+});
+
 describe("media buffering state", () => {
   const emit = (name: string) => {
     const listener = mocks.callbacks.get(name);

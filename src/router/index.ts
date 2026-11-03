@@ -33,7 +33,7 @@ const router: Router = createRouter({
 router.beforeEach((to, from, next) => {
   // console.log("前置守卫", to, from);
   // 进度条
-  if (to.path !== from.path) {
+  if (platform.kind !== "mygo" && to.path !== from.path) {
     window.$loadingBar?.start();
   }
   const platformStore = usePlatformStore();
@@ -55,7 +55,7 @@ router.beforeEach((to, from, next) => {
 
   // 需要登录
   if (to.meta.needLogin && !isLogin()) {
-    window.$loadingBar?.error();
+    if (platform.kind !== "mygo") window.$loadingBar?.error();
     window.$message?.warning(t("message.login_required"));
     openUserLogin();
     next(false);
@@ -78,7 +78,7 @@ router.beforeEach((to, from, next) => {
   if (!to.meta.offline && !platformStore.platforms.length) {
     void platformStore.loadPlatforms().catch((error) => {
       console.error("加载平台列表失败：", error);
-      window.$loadingBar?.error();
+      if (platform.kind !== "mygo") window.$loadingBar?.error();
     });
   }
 
@@ -88,7 +88,7 @@ router.beforeEach((to, from, next) => {
 // 后置守卫
 router.afterEach(() => {
   // 进度条
-  window.$loadingBar?.finish();
+  if (platform.kind !== "mygo") window.$loadingBar?.finish();
 
   // 以搜索路由为准同步搜索框，确保所有搜索入口及前进、后退行为一致
   const currentRoute = router.currentRoute.value;

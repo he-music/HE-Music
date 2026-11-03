@@ -12,6 +12,7 @@ import { LocalAudioSession } from "@/platform/localAudioSession";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
 import lyricManager from "./lyricManager";
 import audioManager, { AudioEventType } from "./audioManager";
+import type { AudioSourceInfo } from "./audioCapability";
 import { listRadioSongs } from "@/api/radio";
 import { t } from "@/i18n";
 import type { Link, SongInfo } from "@/types/main.hemusic";
@@ -61,6 +62,7 @@ class Player {
     autoPlay: boolean;
     seek: number;
     requestId: number;
+    source?: AudioSourceInfo;
     canAutoPlay?: () => boolean;
   };
   private httpPlaybackDialog?: DialogReactive;
@@ -266,14 +268,18 @@ class Player {
         this.radioOperation = undefined;
         settled = true;
         this.httpPlaybackDialog = undefined;
-        void this.createPlayer(httpsUrl.href, attempt.autoPlay, seek, attempt.canAutoPlay).catch(
-          () => {
-            if (attempt.requestId !== this.playRequestId) return;
-            console.error("HTTPS 重试播放失败:");
-            // 媒体 error 事件负责普通错误；没有媒体错误码时补上恢复逻辑。
-            if (audioManager.getErrorCode() === 0) void this.handlePlaybackError();
-          },
-        );
+        void this.createPlayer(
+          httpsUrl.href,
+          attempt.autoPlay,
+          seek,
+          attempt.canAutoPlay,
+          attempt.source,
+        ).catch(() => {
+          if (attempt.requestId !== this.playRequestId) return;
+          console.error("HTTPS 重试播放失败:");
+          // 媒体 error 事件负责普通错误；没有媒体错误码时补上恢复逻辑。
+          if (audioManager.getErrorCode() === 0) void this.handlePlaybackError();
+        });
       },
       onClose: dismiss,
       onMaskClick: dismiss,
@@ -292,6 +298,7 @@ class Player {
     autoPlay: boolean = true,
     seek: number = 0,
     canAutoPlay = this.autoPlayOwner,
+    source?: AudioSourceInfo,
   ) {
     // 获取数据
     const dataStore = useDataStore();
@@ -306,7 +313,7 @@ class Player {
       console.error("Failed to restore audio output device:", error);
     });
     const requestId = this.playRequestId;
-    this.playbackAttempt = { src, autoPlay, seek, requestId, canAutoPlay };
+    this.playbackAttempt = { src, autoPlay, seek, requestId, canAutoPlay, source };
     const pending = this.pendingAutoPlay;
     if (pending && pending.owner === canAutoPlay && pending.requestId === requestId) {
       pending.src = src;
@@ -322,6 +329,7 @@ class Player {
       // A getter keeps explicit pause and owner revocation effective during it.
       await audioManager.play(src, {
         fadeIn: false,
+        ...(source ? { source } : {}),
         get autoPlay() {
           return allowsAutoPlay();
         },
@@ -599,11 +607,15 @@ class Player {
       else if (id && platform) {
         // 播放地址
         let playerUrl: string | null = null;
+        let source: AudioSourceInfo | undefined;
 
         // 获取歌曲 URL 单独 try-catch
         try {
           const link = this.selectPlayQuality(playSongData, quality);
           if (!link) throw new Error("Get song link error");
+          if (platform === "migu" && link.format === "m4a") {
+            source = { platform, format: link.format };
+          }
           statusStore.playQuality = link.name;
           console.log("Getting online song url...");
           playerUrl = await songManager.getOnlineUrl(id, platform, link);
@@ -623,7 +635,7 @@ class Player {
         // 有有效 URL 才创建播放器
         if (playerUrl) {
           try {
-            await this.createPlayer(playerUrl, autoPlay, seek);
+            await this.createPlayer(playerUrl, autoPlay, seek, undefined, source);
             if (currentRequestId !== this.playRequestId) return;
             if (quality) {
               window.$message.success(t("message.change_quality_to", { quality }));

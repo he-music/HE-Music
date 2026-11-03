@@ -5,7 +5,7 @@
  */
 
 import { shallowRef } from "vue";
-import { AudioProcessingDriver } from "./audioCapability";
+import { AudioProcessingDriver, type AudioSourceInfo } from "./audioCapability";
 
 import { AudioOutputRouter } from "./audioOutput";
 /** Only source admission changes update this ref; playback clocks stay inside consumers. */
@@ -134,7 +134,12 @@ class AudioManager {
    */
   public async play(
     url?: string,
-    options: { fadeIn?: boolean; fadeDuration?: number; autoPlay?: boolean } = {},
+    options: {
+      fadeIn?: boolean;
+      fadeDuration?: number;
+      autoPlay?: boolean;
+      source?: AudioSourceInfo;
+    } = {},
   ) {
     this.clearFadeOutTimer();
     const revision = ++this.playRevision;
@@ -142,7 +147,7 @@ class AudioManager {
       this.clearFadeOutTimer();
       const driver = this.driver;
       if (url) {
-        const loading = driver.load(url);
+        const loading = driver.load(url, options.source);
         const generation = driver.loadGeneration;
         const intent = driver.playIntentGeneration;
         await loading;
@@ -511,14 +516,15 @@ class AudioManager {
    * @returns 错误码
    */
   public getErrorCode(): number {
-    if (!this.audioElement?.error) return 0;
+    const errorCode = this.driver?.errorCode ?? this.audioElement?.error?.code ?? 0;
+    if (!errorCode) return 0;
 
     // 参考 HTML Audio Element 错误码
     // MEDIA_ERR_ABORTED (1): 用户中止了加载
     // MEDIA_ERR_NETWORK (2): 网络错误或资源过期
     // MEDIA_ERR_DECODE (3): 解码错误
     // MEDIA_ERR_SRC_NOT_SUPPORTED (4): 不支持的格式
-    switch (this.audioElement.error.code) {
+    switch (errorCode) {
       case MediaError.MEDIA_ERR_ABORTED:
         return 1;
       case MediaError.MEDIA_ERR_NETWORK:

@@ -2,6 +2,11 @@ import { isMygoGatewayResourceUrl } from "@/platform/gateway";
 
 export type AudioSourceAccess = "native" | "web-audio";
 
+export interface AudioSourceInfo {
+  readonly platform: string;
+  readonly format: string;
+}
+
 export interface AudioSourceProbeOptions {
   fetcher?: typeof fetch;
   signal?: AbortSignal;
@@ -267,6 +272,10 @@ export class AudioProcessingDriver {
   private seekCleanup: (() => void) | undefined;
   private pendingSeek: { element: HTMLAudioElement; position: number } | undefined;
   private currentUrl = "";
+  private sourceInfo: AudioSourceInfo | undefined;
+  private sourceError = false;
+  private sourceNode:
+    { element: HTMLAudioElement; source: HTMLSourceElement; onError: EventListener } | undefined;
   private disposed = false;
   private playRevision = 0;
   private wantsPlay = false;
@@ -284,6 +293,9 @@ export class AudioProcessingDriver {
   }
   get source(): string {
     return this.currentUrl;
+  }
+  get errorCode(): number {
+    return this.activeElement.error?.code ?? (this.sourceError ? 4 : 0);
   }
   /** Capture immediately after load(); a native result alone does not prove currency. */
   get loadGeneration(): number {
@@ -313,7 +325,7 @@ export class AudioProcessingDriver {
     return !this.disposed && this.generation.isCurrent(generation);
   }
 
-  async load(url: string): Promise<AudioSourceAccess> {
+  async load(url: string, sourceInfo?: AudioSourceInfo): Promise<AudioSourceAccess> {
     if (this.disposed) throw new Error("Audio driver is disposed");
     const generation = this.generation.next();
     this.cancelPendingPlay();
@@ -356,7 +368,8 @@ export class AudioProcessingDriver {
         this.activate(element, generation);
         if (!this.matches(generation, element)) return "native";
         this.emit("processingchange", new Event("processingchange"));
-        if (this.matches(generation, element)) this.assignSource(element, url, generation);
+        if (this.matches(generation, element))
+          this.assignSource(element, url, generation, sourceInfo);
         return this.matches(generation, element) && this.graph ? "web-audio" : "native";
       }
     }
@@ -364,7 +377,7 @@ export class AudioProcessingDriver {
     this.activate(this.plainElement, generation);
     if (this.matches(generation, this.plainElement)) {
       this.plainElement.crossOrigin = null;
-      this.assignSource(this.plainElement, url, generation);
+      this.assignSource(this.plainElement, url, generation, sourceInfo);
     }
     return "native";
   }
@@ -555,6 +568,10 @@ export class AudioProcessingDriver {
     for (const event of mediaEvents) {
       const handler: EventListener = (mediaEvent) => {
         if (!this.matches(generation, element)) return;
+        if (event === "error" && this.sourceNode?.element === element) {
+          if (this.sourceError) return;
+          this.sourceError = true;
+        }
         if (event === "error" && this.graph) {
           this.recoverPlayback(generation, element);
         } else {
@@ -572,15 +589,54 @@ export class AudioProcessingDriver {
     element.defaultPlaybackRate = this.rate;
     if (this.matches(generation, element)) element.playbackRate = this.rate;
   }
-  private assignSource(element: HTMLAudioElement, url: string, generation: number): void {
+  private assignSource(
+    element: HTMLAudioElement,
+    url: string,
+    generation: number,
+    sourceInfo?: AudioSourceInfo,
+  ): void {
     if (!this.matches(generation, element)) return;
     this.currentUrl = url;
-    element.src = url;
+    this.sourceInfo = sourceInfo;
+    this.sourceError = false;
+    this.removeSourceNode(element);
+    if (sourceInfo?.platform === "migu" && sourceInfo.format === "m4a") {
+      // Safari needs the container MIME hint for this resource. A parent src takes precedence.
+      element.removeAttribute("src");
+      if (!this.matches(generation, element)) return;
+      const source = element.ownerDocument.createElement("source");
+      const onError: EventListener = (event) => {
+        if (
+          !this.matches(generation, element) ||
+          this.sourceNode?.source !== source ||
+          this.sourceError
+        )
+          return;
+        this.sourceError = true;
+        if (this.graph) this.recoverPlayback(generation, element);
+        else this.emit("error", event);
+      };
+      source.type = "audio/mp4";
+      source.src = url;
+      source.addEventListener("error", onError);
+      this.sourceNode = { element, source, onError };
+      element.appendChild(source);
+    } else {
+      element.src = url;
+    }
     if (this.matches(generation, element)) element.load();
+  }
+  private removeSourceNode(element: HTMLAudioElement): void {
+    const node = this.sourceNode;
+    if (node?.element !== element) return;
+    this.sourceNode = undefined;
+    node.source.removeEventListener("error", node.onError);
+    node.source.remove();
   }
   private releaseElement(element: HTMLAudioElement, generation: number): void {
     element.pause();
     if (element === this.activeElement && !this.generation.isCurrent(generation)) return;
+    this.removeSourceNode(element);
     // removeAttribute avoids turning an empty src into a request for the current page.
     element.removeAttribute("src");
     if (element === this.activeElement && !this.generation.isCurrent(generation)) return;
@@ -597,6 +653,8 @@ export class AudioProcessingDriver {
     this.pendingSeek = undefined;
     this.graph = undefined;
     this.currentUrl = "";
+    this.sourceInfo = undefined;
+    this.sourceError = false;
     // Retire the owner before pause/load can synchronously reenter the driver.
     if (retirePlain && !this.disposed) this.plainElement = this.options.createElement();
     this.activeElement = this.plainElement;
@@ -610,12 +668,13 @@ export class AudioProcessingDriver {
     const position =
       this.pendingSeek?.element === element ? this.pendingSeek.position : element.currentTime;
     const url = this.currentUrl;
+    const sourceInfo = this.sourceInfo;
     this.stopCurrent(generation);
     if (!this.isCurrent(generation)) return;
     this.activate(this.plainElement, generation);
     if (!this.matches(generation, this.plainElement)) return;
     this.plainElement.crossOrigin = null;
-    this.assignSource(this.plainElement, url, generation);
+    this.assignSource(this.plainElement, url, generation, sourceInfo);
     if (this.matches(generation, this.plainElement))
       this.restorePosition(this.plainElement, generation, position);
   }

@@ -1077,11 +1077,11 @@
       "default": "默认",
       "duration": "时长",
       "size": "大小",
+      "chapter": "章节",
       "title": "标题"
     },
     "order": {
       "asc": "升序",
-      "default": "默认",
       "desc": "降序"
     }
   },

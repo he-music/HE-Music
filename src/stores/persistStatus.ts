@@ -61,6 +61,11 @@ export function persistStatus({ store, pinia }: PiniaPluginContext) {
       if (!saved) return;
       const snapshot = JSON.parse(saved);
       if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return;
+      // 旧版“默认方向”表示不排序，迁移到默认字段并保留原始列表顺序。
+      if (snapshot.listSortOrder === "default") {
+        snapshot.listSortField = "default";
+        snapshot.listSortOrder = "asc";
+      }
       store.$patch(
         Object.fromEntries(
           activeKeys.value

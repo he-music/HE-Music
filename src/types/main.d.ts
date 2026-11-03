@@ -260,6 +260,6 @@ export interface UpdateInfoType {
 // 登录方式
 export type LoginType = "qr" | "phone" | "cookie" | "uid" | "password";
 // sort
-export type SortField = "default" | "title" | "artist" | "album" | "duration" | "size";
+export type SortField = "default" | "title" | "chapter" | "artist" | "album" | "duration" | "size";
 
-export type SortOrder = "default" | "asc" | "desc";
+export type SortOrder = "asc" | "desc";

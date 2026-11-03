@@ -10,6 +10,10 @@ const ApplicationDataTransfer = defineAsyncComponent(
   () => import("@/components/Setting/ApplicationDataTransfer.vue"),
 );
 
+const RecommendationIdentityReset = defineAsyncComponent(
+  () => import("@/components/Setting/RecommendationIdentityReset.vue"),
+);
+
 export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConfig => {
   const dataStore = useDataStore();
   const settingStore = useSettingStore();
@@ -59,6 +63,19 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
 
   return {
     groups: [
+      {
+        title: t("recommendation_identity.group"),
+        show: computed(() => dataStore.userLoginStatus),
+        items: [
+          {
+            key: "resetRecommendationIdentity",
+            label: t("recommendation_identity.label"),
+            description: t("recommendation_identity.description"),
+            type: "custom",
+            component: RecommendationIdentityReset,
+          },
+        ],
+      },
       {
         title: t("setting.general.system_behavior"),
         show: platform.kind === "mygo",

@@ -14,7 +14,11 @@ const REFRESH_TOKEN_URL = "/v1/auth/token/refresh";
 type CaptchaRetryConfig = AxiosRequestConfig & { _captchaRetried?: boolean };
 
 /** 由页面展示可重试错误状态时，避免再弹出重复的通用错误。鉴权处理仍走统一流程。 */
-export type HemusicRequestConfig = AxiosRequestConfig & { skipErrorMessage?: boolean };
+export type HemusicRequestConfig = AxiosRequestConfig & {
+  skipErrorMessage?: boolean;
+  /** 非幂等操作禁止刷新令牌后重放原请求。 */
+  skipAuthRefresh?: boolean;
+};
 
 // Token 刷新并发保护
 let isRefreshing = false;
@@ -118,6 +122,8 @@ serverHemusic.interceptors.response.use(
         // 执行客户端错误的处理逻辑
         break;
       case 401: {
+        const options: HemusicRequestConfig | undefined = config;
+        if (options?.skipAuthRefresh) break;
         const dataStore = useDataStore();
         const refreshToken = dataStore.refreshToken;
         // 刷新请求的 401 交给发起刷新流程的外层请求统一处理，避免重复登出

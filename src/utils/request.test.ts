@@ -96,6 +96,44 @@ describe("HE Music Token 刷新", () => {
     await expect(handleResponseError(error)).rejects.toBe(error);
     expect(mocks.messageError).not.toHaveBeenCalled();
   });
+  it("推荐标识重置复用当前鉴权且只发送一次空请求体", async () => {
+    const intercept = mocks.hemusicServer.interceptors.request.use.mock.calls[0][0];
+    const config = intercept({
+      headers: new AxiosHeaders(),
+      url: "/v1/user/provider-identity/reset",
+    });
+    expect(config.headers.get("Authorization")).toBe("Bearer access-token");
+    mocks.hemusicServer.request.mockResolvedValueOnce({ data: {} });
+    const { resetProviderIdentity } = await import("@/api/providerIdentity");
+    await expect(resetProviderIdentity()).resolves.toBeUndefined();
+    expect(mocks.hemusicServer.request).toHaveBeenCalledExactlyOnceWith({
+      url: "/v1/user/provider-identity/reset",
+      method: "post",
+      data: {},
+      signal: undefined,
+      skipAuthRefresh: true,
+      skipErrorMessage: true,
+    });
+  });
+
+  it.each([401, undefined])("推荐重置遇到 %s 不刷新重放、不清登录也不重复提示", async (status) => {
+    mocks.hemusicServer.request.mockImplementationOnce((config: HemusicRequestConfig) => {
+      const original = createHttpError(status ?? 0);
+      return handleResponseError({
+        ...original,
+        config,
+        response: status ? original.response : undefined,
+      });
+    });
+    const { resetProviderIdentity } = await import("@/api/providerIdentity");
+    await expect(resetProviderIdentity()).rejects.toBeDefined();
+    expect(mocks.hemusicServer.request).toHaveBeenCalledOnce();
+    expect(mocks.refreshTokenApi).not.toHaveBeenCalled();
+    expect(mocks.clearUserData).not.toHaveBeenCalled();
+    expect(mocks.openUserLogin).not.toHaveBeenCalled();
+    expect(mocks.messageError).not.toHaveBeenCalled();
+    expect(mocks.dataStore.userLoginStatus).toBe(true);
+  });
 
   it("mygo 下载通过真实请求拦截器失败时不提前显示原始响应文本", async () => {
     const privateMessage =

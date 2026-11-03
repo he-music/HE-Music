@@ -1,0 +1,12 @@
+{
+  "recommendation_identity": {
+    "group": "Account and privacy",
+    "label": "Reset recommendation identity",
+    "description": "Replace the device identity used for anonymous recommendations on music platforms. This may affect recommendations and applies to all devices on this account. You do not need to sign in again.",
+    "confirm_title": "Reset recommendation identity?",
+    "confirm_content": "A new platform device identity will be used and recommendations may change. Your account, playlists and favorites are not affected.",
+    "confirm": "Confirm reset",
+    "success": "Recommendation identity reset. Refresh the page to update recommendations.",
+    "unknown_result": "Unable to confirm the reset result. Please refresh later."
+  }
+}

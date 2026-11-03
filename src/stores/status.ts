@@ -139,7 +139,7 @@ export const useStatusStore = defineStore("status", {
     // 桌面歌词
     showDesktopLyric: false,
     listSortField: "default",
-    listSortOrder: "default",
+    listSortOrder: "asc",
     // 播放器评论
     showPlayerComment: false,
     // 更新检查
@@ -273,7 +273,7 @@ export const useStatusStore = defineStore("status", {
         radioMode: false,
         playIndex: -1,
         listSortField: "default",
-        listSortOrder: "default",
+        listSortOrder: "asc",
       });
     },
   },

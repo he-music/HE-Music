@@ -23,6 +23,8 @@ import storageEN from "./locales/mygo/storage.en.json";
 import storageZH from "./locales/mygo/storage.zh-CN.json";
 import graphicsEN from "./locales/mygo/graphics.en.json";
 import graphicsZH from "./locales/mygo/graphics.zh-CN.json";
+import recommendationIdentityResetEN from "./locales/recommendationIdentityReset.en.json";
+import recommendationIdentityResetZH from "./locales/recommendationIdentityReset.zh-CN.json";
 
 const numberFormats = {
   en: {
@@ -52,6 +54,7 @@ const i18n = createI18n({
   messages: {
     en: {
       ...en,
+      ...recommendationIdentityResetEN,
       mygo: {
         ...libraryEN,
         ...downloadsEN,
@@ -68,6 +71,7 @@ const i18n = createI18n({
     },
     "zh-CN": {
       ...zhCN,
+      ...recommendationIdentityResetZH,
       mygo: {
         ...libraryZH,
         ...downloadsZH,

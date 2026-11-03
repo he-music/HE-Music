@@ -38,9 +38,9 @@
                 <div class="group">
                   <div class="label">排序字段</div>
                   <n-radio-group
-                    v-model:value="statusStore.listSortField"
+                    :value="statusStore.listSortField"
                     name="sortField"
-                    @update:value="(val) => handleSortFieldChange(val)"
+                    @update:value="handleSortFieldChange"
                   >
                     <n-flex :vertical="true" size="small">
                       <n-radio v-for="(_, key) in sortFieldOptions" :key="key" :value="key">
@@ -53,9 +53,10 @@
                 <div class="group">
                   <div class="label">排序方式</div>
                   <n-radio-group
-                    v-model:value="statusStore.listSortOrder"
+                    :value="statusStore.listSortOrder"
                     name="sortOrder"
-                    @update:value="(val) => handleSortOrderChange(val)"
+                    :disabled="statusStore.listSortField === 'default'"
+                    @update:value="handleSortOrderChange"
                   >
                     <n-flex :vertical="true" size="small">
                       <n-radio v-for="(_, key) in sortOrderOptions" :key="key" :value="key">
@@ -171,6 +172,7 @@ import type { SongInfo } from "@/types/main.hemusic";
 import { usePlayer } from "@/utils/player";
 import { useI18n } from "vue-i18n";
 import { songEqual } from "@/utils/song";
+import { sortChapterItems } from "@/utils/chapterSort";
 
 const collator = new Intl.Collator("zh-CN");
 const props = withDefaults(
@@ -292,7 +294,7 @@ const handleShowMenu = (e: MouseEvent, song: SongInfo, index: number) => {
 const listData = computed<SongInfo[]>(() => {
   if (props.disabledSort) return props.data;
   // 若未启用排序或默认排序
-  if (statusStore.listSortField === "default" || statusStore.listSortOrder === "default") {
+  if (statusStore.listSortField === "default") {
     return props.data;
   }
 
@@ -301,6 +303,10 @@ const listData = computed<SongInfo[]>(() => {
   const field = statusStore.listSortField;
   const order = statusStore.listSortOrder;
   const isAsc = order === "asc";
+
+  if (field === "chapter") {
+    return sortChapterItems(data, (song) => song.name, isAsc, collator.compare);
+  }
 
   return data.sort((a, b) => {
     let result = 0;
@@ -437,24 +443,12 @@ const updatePlayListOrder = () => {
 
 // 排序更改
 const handleSortFieldChange = (val: SortField) => {
-  // 单击已选择的字段 -> 切换升降序
-  if (statusStore.listSortField === val && val !== "default") {
-    statusStore.listSortOrder = statusStore.listSortOrder === "asc" ? "desc" : "asc";
-  } else {
-    statusStore.listSortField = val;
-    // 如果切换到具体的字段且当前顺序是默认，自动切换到降序(对于时间相关)或升序(对于文本)
-    if (statusStore.listSortOrder === "default") {
-      if (val === "duration") {
-        statusStore.listSortOrder = "desc";
-      } else {
-        statusStore.listSortOrder = "asc";
-      }
-    }
-  }
+  statusStore.listSortField = val;
   updatePlayListOrder();
 };
 
 const handleSortOrderChange = (val: SortOrder) => {
+  if (statusStore.listSortField === "default") return;
   statusStore.listSortOrder = val;
   updatePlayListOrder();
 };

@@ -80,6 +80,7 @@ export const renderToolbar = ({ nodes }: ImageRenderToolbarProps) => {
 export const sortFieldOptions = {
   default: { name: "默认" },
   title: { name: "标题" },
+  chapter: { name: "章节" },
   artist: { name: "歌手" },
   album: { name: "专辑" },
   duration: { name: "时长" },
@@ -90,7 +91,6 @@ export const sortFieldOptions = {
  * 排序方式选项
  */
 export const sortOrderOptions = {
-  default: { name: "默认" },
   asc: { name: "升序" },
   desc: { name: "降序" },
 } as const;

@@ -37,6 +37,43 @@ async function fixture(saved?: string, memoryLastSeek = true) {
   return { store, settingStore, storage, values, pinia, defineStore };
 }
 
+it.each(["default", "title", "duration"])(
+  "旧版默认排序方式在字段 %s 下恢复为原始顺序",
+  async (field) => {
+    const { store, storage, values } = await fixture(
+      JSON.stringify({ listSortField: field, listSortOrder: "default", playVolume: 0.8 }),
+    );
+    await nextTick();
+    expect(store.listSortField).toBe("default");
+    expect(store.listSortOrder).toBe("asc");
+    expect(store.playVolume).toBe(0.8);
+    expect(storage.setItem).not.toHaveBeenCalled();
+    store.$persist();
+    expect(JSON.parse(values.get("status-store")!)).toMatchObject({
+      listSortField: "default",
+      listSortOrder: "asc",
+    });
+  },
+);
+
+it("保留章节排序的降序，切到默认字段不改方向，重置时恢复默认字段和升序", async () => {
+  const { store, values } = await fixture(
+    JSON.stringify({ listSortField: "chapter", listSortOrder: "desc" }),
+  );
+  expect(store.listSortField).toBe("chapter");
+  expect(store.listSortOrder).toBe("desc");
+  store.listSortField = "default";
+  await nextTick();
+  expect(store.listSortOrder).toBe("desc");
+  expect(JSON.parse(values.get("status-store")!)).toMatchObject({
+    listSortField: "default",
+    listSortOrder: "desc",
+  });
+  store.resetPlayStatus();
+  expect(store.listSortField).toBe("default");
+  expect(store.listSortOrder).toBe("asc");
+});
+
 it("歌词、频谱等高频无关状态变化不触发持久化、序列化或存储读取", async () => {
   const { store, storage } = await fixture();
   store.duration = 10000;
