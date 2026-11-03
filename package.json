@@ -1,6 +1,6 @@
 {
   "name": "hemusic",
-  "productName": "HE-Music",
+  "productName": "HE-Music Update Test",
   "version": "2.0.0",
   "description": "A multi-platform online music player based on SPlayer.",
   "packageManager": "pnpm@10.28.1",
