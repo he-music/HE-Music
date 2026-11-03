@@ -26,6 +26,7 @@ interface Pending {
   acknowledged?: boolean;
   timer?: ReturnType<typeof setTimeout>;
 }
+type PendingCancellation = Pick<Pending, "id" | "revision" | "result" | "timer">;
 type OperationRequest = Pick<Pending, "id" | "operation" | "revision">;
 export interface UpdatesSessionOptions {
   acknowledgementTimeoutMs?: number;
@@ -41,6 +42,7 @@ export class UpdatesSession {
   private readonly available = shallowRef(false);
   private readonly waiting = shallowRef<Pending>();
   private readonly uncertainInstall = shallowRef(false);
+  private readonly cancellation = shallowRef<PendingCancellation>();
   readonly state = computed(() => this.native.value);
   readonly ready = computed(() => this.available.value);
   readonly busy = computed(
@@ -49,6 +51,23 @@ export class UpdatesSession {
       this.uncertainInstall.value ||
       !!this.native.value?.installBusy,
   );
+  readonly checking = computed(
+    () => this.waiting.value?.operation === "check" || this.native.value?.phase === "checking",
+  );
+  readonly cancelling = computed(
+    () => !!this.cancellation.value || this.native.value?.code === "cancel-requested",
+  );
+  readonly canCancel = computed(() => {
+    const state = this.native.value;
+    return (
+      this.available.value &&
+      !!this.provider.cancel &&
+      state?.phase === "installing" &&
+      state.installBusy &&
+      !this.cancelling.value &&
+      !(state.total > 0 && state.downloaded >= state.total)
+    );
+  });
   private readonly acknowledgementTimeout: number;
   private readonly operationTimeout: number;
   private readonly cleanupTimeout: number;
@@ -113,6 +132,31 @@ export class UpdatesSession {
     }
     return this.run("install");
   }
+  cancel(): Promise<UpdatesState> {
+    const cancel = this.provider.cancel;
+    if (!cancel || !this.canCancel.value || this.epoch === undefined) {
+      return Promise.reject(new Error("Update cancellation is unavailable"));
+    }
+    const pending: PendingCancellation = {
+      id: requestID(),
+      revision: this.native.value?.operationRevision ?? 0,
+      result: deferred<UpdatesState>(),
+    };
+    this.cancellation.value = pending;
+    pending.timer = setTimeout(() => {
+      if (this.cancellation.value === pending)
+        this.settleCancellation(undefined, "Update cancellation acknowledgement timed out");
+    }, this.acknowledgementTimeout);
+    try {
+      void cancel.call(this.provider, pending.id, this.epoch, pending.revision).catch(() => {
+        if (this.cancellation.value === pending)
+          this.settleCancellation(undefined, "Update cancellation could not be delivered");
+      });
+    } catch {
+      this.settleCancellation(undefined, "Update cancellation could not be delivered");
+    }
+    return pending.result.promise;
+  }
   restart(): Promise<UpdatesState> {
     if (this.native.value?.phase !== "installed" || this.busy.value) {
       return Promise.reject(new Error("Installed update is unavailable"));
@@ -133,6 +177,7 @@ export class UpdatesSession {
     if (activeSession.value === this) activeSession.value = undefined;
     this.native.value = undefined;
     this.settlePending(undefined, "Update session ended");
+    this.settleCancellation(undefined, "Update session ended");
     this.uncertainInstall.value = false;
     this.beginResult?.reject(new Error("Update session ended"));
     clearTimeout(this.beginTimer);
@@ -207,6 +252,12 @@ export class UpdatesSession {
       return;
     }
     if (this.closed || state.epoch !== this.epoch) return;
+    const cancellation = this.cancellation.value;
+    if (cancellation?.id === event.requestId) {
+      if (state.operationRevision !== cancellation.revision || !this.merge(state)) return;
+      this.settleCancellation(state, event.code || undefined);
+      return;
+    }
     const last = event.requestId === this.nativeOperation?.id ? this.nativeOperation : this.last;
     if (event.requestId !== 0 && event.requestId !== last?.id) return;
     const pending = this.waiting.value;
@@ -283,6 +334,14 @@ export class UpdatesSession {
     const pending = this.waiting.value;
     if (!pending) return;
     this.waiting.value = undefined;
+    clearTimeout(pending.timer);
+    if (error) pending.result.reject(new Error(error));
+    else if (state) pending.result.resolve(state);
+  }
+  private settleCancellation(state?: UpdatesState, error?: string): void {
+    const pending = this.cancellation.value;
+    if (!pending) return;
+    this.cancellation.value = undefined;
     clearTimeout(pending.timer);
     if (error) pending.result.reject(new Error(error));
     else if (state) pending.result.resolve(state);

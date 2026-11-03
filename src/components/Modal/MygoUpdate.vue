@@ -29,8 +29,18 @@
     }}</n-text>
     <n-alert v-if="failure" type="warning" :show-icon="false">{{ failure }}</n-alert>
     <n-flex class="menu" justify="end">
-      <n-button strong secondary :disabled="busy" @click="emit('close')">{{
-        t(phase === "installed" ? "updates.later" : "common.cancel")
+      <n-button strong secondary @click="emit('close')">{{
+        t(phase === "installed" ? "updates.later" : "common.close")
+      }}</n-button>
+      <n-button
+        v-if="phase === 'installing'"
+        :loading="session?.cancelling.value"
+        :disabled="!current || !session?.canCancel.value"
+        @click="cancelInstall"
+        >{{ t(session?.cancelling.value ? "updates.cancelling" : "updates.cancel") }}</n-button
+      >
+      <n-button v-if="phase === 'cancelled'" :disabled="busy" @click="checkAgain">{{
+        t("setting.about.check_update")
       }}</n-button>
       <n-button type="warning" strong secondary :disabled="busy" @click="goDownload">{{
         t("modal.click_download")
@@ -124,6 +134,37 @@ function jumpLink(event: MouseEvent): void {
   event.preventDefault();
   if (!disposed && /^https?:\/\//i.test(link.href)) void openExternal(link.href);
 }
+async function installUpdate(owner: UpdatesSession): Promise<void> {
+  try {
+    failure.value = "";
+    await owner.install();
+  } catch {
+    if (!disposed && current.value && session.value === owner)
+      failure.value = t("updates.operation_failed");
+  }
+}
+async function cancelInstall(): Promise<void> {
+  const owner = session.value;
+  if (disposed || !current.value || !owner?.canCancel.value) return;
+  try {
+    failure.value = "";
+    await owner.cancel();
+  } catch {
+    if (!disposed && current.value && session.value === owner && phase.value === "installing")
+      failure.value = t("updates.operation_failed");
+  }
+}
+async function checkAgain(): Promise<void> {
+  const owner = session.value;
+  if (disposed || !current.value || busy.value || !owner) return;
+  try {
+    failure.value = "";
+    await owner.check();
+  } catch {
+    if (!disposed && current.value && session.value === owner)
+      failure.value = t("updates.operation_failed");
+  }
+}
 function confirmInstall(): void {
   if (disposed || !current.value || busy.value || phase.value !== "available") return;
   const owner = session.value;
@@ -141,7 +182,7 @@ function confirmInstall(): void {
     onNegativeClick: release,
     onClose: release,
     onAfterLeave: release,
-    onPositiveClick: async () => {
+    onPositiveClick: () => {
       release();
       if (disposed || !current.value || session.value !== owner) return;
       if (
@@ -152,13 +193,7 @@ function confirmInstall(): void {
         failure.value = t("updates.candidate_changed");
         return;
       }
-      try {
-        failure.value = "";
-        await owner.install();
-      } catch {
-        if (!disposed && current.value && session.value === owner)
-          failure.value = t("updates.operation_failed");
-      }
+      void installUpdate(owner);
     },
   });
 }

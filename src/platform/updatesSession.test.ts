@@ -25,6 +25,7 @@ class FakeUpdates implements PlatformUpdates {
   install = vi.fn<PlatformUpdates["install"]>(async () => {});
   getState = vi.fn<PlatformUpdates["getState"]>(async () => {});
   download = vi.fn<PlatformUpdates["download"]>(async () => {});
+  cancel = vi.fn<NonNullable<PlatformUpdates["cancel"]>>(async () => {});
   restart = vi.fn<PlatformUpdates["restart"]>(async () => {});
   teardown = vi.fn<PlatformUpdates["teardown"]>(async () => {});
   onChange = vi.fn<PlatformUpdates["onChange"]>((listener) => {
@@ -62,6 +63,59 @@ afterEach(async () => {
   await cleanup;
   expect(vi.getTimerCount()).toBe(0);
   vi.useRealTimers();
+});
+it.each(["cancelled", "installed"])(
+  "keeps the install fence until the actual %s result after cancellation",
+  async (phase) => {
+    const f = fixture();
+    await start(f, snapshot({ phase: "available", operationRevision: 1, version: "2.0.0" }));
+    const installing = f.session.install();
+    const installID = onlyID(f.provider.install.mock.calls);
+    const native = {
+      operationRevision: 2,
+      phase: "installing",
+      installBusy: true,
+      total: 100,
+      downloaded: 20,
+    };
+    f.provider.emit(installID, snapshot({ ...native, stateRevision: 2 }));
+    expect(f.session.canCancel.value).toBe(true);
+    const cancelling = f.session.cancel();
+    const cancelID = onlyID(f.provider.cancel.mock.calls);
+    await Promise.resolve();
+    expect(f.session.cancelling.value).toBe(true);
+    expect(f.session.busy.value).toBe(true);
+    f.provider.emit(cancelID, snapshot({ ...native, stateRevision: 3, code: "cancel-requested" }));
+    await cancelling;
+    expect(f.session.busy.value).toBe(true);
+    expect(f.session.canCancel.value).toBe(false);
+    f.provider.emit(installID, snapshot({ operationRevision: 2, stateRevision: 4, phase }));
+    await expect(installing).resolves.toMatchObject({ phase });
+    expect(f.session.busy.value).toBe(false);
+  },
+);
+
+it("does not offer cancellation after the download completes", async () => {
+  const f = fixture();
+  await start(f, snapshot({ phase: "available" }));
+  const installing = f.session.install();
+  const id = onlyID(f.provider.install.mock.calls);
+  f.provider.emit(
+    id,
+    snapshot({
+      operationRevision: 1,
+      stateRevision: 2,
+      phase: "installing",
+      installBusy: true,
+      total: 100,
+      downloaded: 100,
+    }),
+  );
+  expect(f.session.canCancel.value).toBe(false);
+  await expect(f.session.cancel()).rejects.toThrow("unavailable");
+  expect(f.provider.cancel).not.toHaveBeenCalled();
+  f.provider.emit(id, snapshot({ operationRevision: 1, stateRevision: 3, phase: "installed" }));
+  await installing;
 });
 
 it("subscribes before Begin and an early event still waits for RPC queue acknowledgement", async () => {

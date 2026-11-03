@@ -6,6 +6,7 @@ export interface PlatformUpdates {
   check(requestID: number, epoch: number, revision: number): Promise<void>;
   download(requestID: number, epoch: number, revision: number): Promise<void>;
   install(requestID: number, epoch: number, revision: number): Promise<void>;
+  cancel?(requestID: number, epoch: number, revision: number): Promise<void>;
   restart(requestID: number, epoch: number, revision: number): Promise<void>;
   teardown(requestID: number, epoch: number): Promise<void>;
   onChange(listener: (event: UpdatesEvent) => void): () => void;

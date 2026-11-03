@@ -650,7 +650,7 @@ export interface UpdatesEvent {
 
 /**
  * UpdatesState never contains feed URLs, local paths, or SDK installation handles.
- * Phase is idle/checking/available/no-update/unavailable/installing/installed/error/inactive.
+ * Phase is idle/checking/available/no-update/unavailable/installing/installed/cancelled/error/inactive.
  * Installed means replacement completed; the running process still uses its old version.
  */
 export interface UpdatesState {
@@ -1140,6 +1140,13 @@ export const Taskbar = {
 export const Updates = {
   begin(requestID: number): Promise<void> {
     return call("Updates.Begin", requestID);
+  },
+  /**
+   * Cancel requests cancellation without releasing the installation fence. The SDK
+   * result decides whether cancellation succeeded or the update was already applied.
+   */
+  cancel(requestID: number, epoch: number, revision: number): Promise<void> {
+    return call("Updates.Cancel", requestID, epoch, revision);
   },
   check(requestID: number, epoch: number, revision: number): Promise<void> {
     return call("Updates.Check", requestID, epoch, revision);

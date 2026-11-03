@@ -3,7 +3,7 @@ package main
 import "context"
 
 // UpdatesState never contains feed URLs, local paths, or SDK installation handles.
-// Phase is idle/checking/available/no-update/unavailable/installing/installed/error/inactive.
+// Phase is idle/checking/available/no-update/unavailable/installing/installed/cancelled/error/inactive.
 // Installed means replacement completed; the running process still uses its old version.
 type UpdatesState struct {
 	Epoch             uint64 `json:"epoch"`
@@ -76,6 +76,29 @@ func (u *Updates) Download(ctx context.Context, requestID, epoch, revision uint6
 // no restart here and no promise that cancellation can prevent disk replacement.
 func (u *Updates) Install(ctx context.Context, requestID, epoch, revision uint64) {
 	u.command(ctx, requestID, func() string { return u.session.install(ctx, epoch, revision, requestID) })
+}
+
+// Cancel requests cancellation without releasing the installation fence. The SDK
+// result decides whether cancellation succeeded or the update was already applied.
+func (u *Updates) Cancel(ctx context.Context, requestID, epoch, revision uint64) {
+	u.command(ctx, requestID, func() string {
+		s := &u.session
+		if code := s.owns(ctx, epoch); code != "" {
+			return code
+		}
+		if revision != s.state.OperationRevision {
+			return "stale-operation"
+		}
+		if !s.installBusy || s.state.Phase != "installing" || s.cancel == nil ||
+			s.cancelRequested || (s.state.Total > 0 && s.state.Downloaded >= s.state.Total) {
+			return "cancel-unavailable"
+		}
+		s.cancelRequested = true
+		s.stopWork()
+		s.state.Code = "cancel-requested"
+		s.touch()
+		return ""
+	})
 }
 
 // Restart only follows an explicitly requested, completed installation. Its ack
