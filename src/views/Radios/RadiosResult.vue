@@ -11,16 +11,22 @@
         <RadioList :data="tab.radios" />
       </n-tab-pane>
     </n-tabs>
-    <div v-else class="skeleton-container">
-      <!-- 分类标签骨架屏 -->
-      <n-flex wrap class="category-skeleton">
-        <n-skeleton v-for="i in 10" :key="'tag-' + i" text :width="60" height="30px" />
-      </n-flex>
-
-      <!-- 内容列表骨架屏 -->
-      <div class="list-skeleton">
-        <RadioList :data="[]" loading />
-      </div>
+    <div v-else class="skeleton-container" aria-hidden="true" inert>
+      <n-tabs :value="0" class="tabs" type="card">
+        <n-tab-pane
+          v-for="(width, index) in categorySkeletonWidths"
+          :key="index"
+          :name="index"
+          display-directive="show:lazy"
+        >
+          <template #tab>
+            <span class="category-skeleton-label">
+              <n-skeleton :width="width" height="16px" :sharp="false" />
+            </span>
+          </template>
+          <RadioList :data="[]" loading />
+        </n-tab-pane>
+      </n-tabs>
     </div>
   </AsyncContent>
 </template>
@@ -49,6 +55,7 @@ const {
   return result.groups || [];
 });
 
+const categorySkeletonWidths = [32, 56, 40, 64, 32, 48];
 const tabValue = ref<string>("");
 
 const selectRadioGroup = () => {
@@ -80,21 +87,13 @@ watch(
   flex-direction: column;
   .skeleton-container {
     width: 100%;
-    //padding: 20px;
+    min-width: 0;
+  }
 
-    .category-skeleton {
-      margin-bottom: 24px;
-      padding: 0 4px;
-    }
-
-    .list-skeleton {
-      width: 100%;
-
-      .skeleton-item {
-        width: 100%;
-        padding: 12px;
-      }
-    }
+  .category-skeleton-label {
+    display: inline-flex;
+    align-items: center;
+    height: 1.5em;
   }
 
   .tabs {
