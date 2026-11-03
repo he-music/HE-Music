@@ -55,8 +55,10 @@ func (l *DesktopLyrics) startHoverUnlock() {
 			l.emitWindow()
 		},
 		onInput: func(interactive bool) {
-			if l.win == win && !win.IsDestroyed() {
-				win.SetIgnoreMouseEvents(l.state.window.Locked && !interactive)
+			if l.win == win && !win.IsDestroyed() && l.state.current(generation) {
+				if err := setLyricsIgnoreMouseEvents(win, l.state.window.Locked && !interactive); err != nil {
+					l.closeWindow(generation, "mouse-input-policy-failed")
+				}
 			}
 		},
 	}

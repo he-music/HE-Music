@@ -936,3 +936,12 @@
 - 新鲜验证：完整前端 178 文件、1,614 测试、Node／Web 类型、Go 全包测试、Linux amd64 vet，以及脚本 4 项测试通过。隔离 Ubuntu 22 arm64 容器的完整 desktop 测试通过，新增真实启动子进程检查确认 libc 读取到开启／关闭后的环境、PID 保留且不循环；首次全套运行因缺少测试用 FFmpeg 失败，在该自有容器安装 FFmpeg 后复验通过。此验证不代表新设置入口已在用户 x86-64 实体机验收；其正常模式拖影和音频卡顿仍未宣告解决。
 - 使用真实 `SettingItemRenderer.vue` 与外观配置在 Chrome 中验证开启／关闭、保存提示及重启后的模式显示，页面错误为空；该界面 fixture 使用内存 provider，磁盘持久化与 C 环境由上面的原生测试独立验证。相关 ESLint／Prettier、生产桌面前端构建、官方 CLI Linux amd64 生产构建和 Windows amd64 全包交叉编译通过。
 - 新版产物位于 `build/mygo/ubuntu22-graphics-settings-v5/linux-amd64/`。DEB SHA-256 `60b91f6b9d3b62c5cb05115b19c999ff154a40e4f51f2c712d7fb849b38e0263`，官方 tar SHA-256 `f957443746a5115e496930728fd1f71150df535278954de606bcc29e3cfacf52`；ELF x86-64、两种归档的程序摘要／执行位和五项音频依赖已核对。
+
+### Linux 桌面歌词锁定后的鼠标穿透
+
+- 用户反馈兼容模式下出现一次 Skia `GrResourceCache`／`THashTable` 空指针断言，重试未再次报错；保留待观察，不当作已修复。随后确认正常／兼容两种模式都存在锁定歌词后无法点击下方窗口的问题。
+- 根因已从固定 SDK 源码确认：Linux `window.SetIgnoreMouseEvents(bool)` 是空实现。应用增加独立 Linux 适配，复用已加载的 GTK ABI，对所属 GtkWindow 设置空输入区域；解锁时恢复默认输入区域，歌词绘制区域和图形兼容设置保持原行为。非 Linux 继续调用既有 SDK 方法，正式 SDK pin／模块缓存未改。
+- 锁定、悬停解锁按钮、关闭窗口均使用同一原生适配。初次锁定无法应用时回滚锁定状态，恢复输入失败时关闭所属歌词窗口；悬停回调补充代次检查，避免关闭后的旧回调修改新窗口。原有托盘解锁入口和按需悬停轮询保留，没有新增高频状态传播。
+- 单元测试覆盖空区域设置／恢复、失效窗口、区域分配失败及资源释放。Ubuntu 22 arm64 的真实 GTK 3.24／Xvfb X11＋XTest 验证通过：原输入区域时点击停在上层，锁定后下层收到点击；解锁按钮区域、离开按钮后的穿透、锁定时缩放、解锁与重开均通过。正常和软件 GL 环境各执行一次，每轮下层收到 7 次、歌词层收到 5 次。输入注入前同步 GTK 所属显示连接，以接收事件验证结果，不以等待时长判定成功。
+- Go 全包测试、Linux 容器完整 desktop 测试、Linux amd64 vet、Windows amd64 交叉编译、gofmt 通过。图形测试须显式设置 `HE_MUSIC_GTK_INPUT_TEST=1` 并使用隔离 X11 显示；XTest 运行库仅是测试依赖，不加入产品依赖。用户随后确认其 Ubuntu 22 X11 x86-64 实体机鼠标穿透已可用，Wayland 仍未实测。
+- 已构建启用网页检查器的 Linux x64 候选包 `build/mygo/linux-lyrics-input-delivery/HE-Music-1.0.4-linux-x64-lyrics-click-through-v1.tar.gz`，SHA-256 `56f4e0c5a9bb86664c0bc0f0771edb6839d68692158d36f968a528721b874955`。核对 ELF 架构、新 GTK 输入绑定、开发构建参数、全部归档内容／校验值／执行位通过；附带日志启动器和本轮复测说明。用户已确认实体机修正可用，并授权提交本轮鼠标穿透代码，不推送。

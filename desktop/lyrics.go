@@ -112,6 +112,7 @@ func (l *DesktopLyrics) setLocked(locked bool) error {
 	}
 	externalUnlock := desktopLifecycle.tray != nil && desktopLifecycle.state.tray &&
 		desktopLifecycle.state.owns(l.state.owner)
+	previouslyLocked := l.state.window.Locked
 	if err := l.state.setLocked(locked, externalUnlock); err != nil {
 		return err
 	}
@@ -122,8 +123,16 @@ func (l *DesktopLyrics) setLocked(locked bool) error {
 		return errors.New("desktop lyrics unlock menu unavailable")
 	}
 	l.stopHoverUnlock()
+	if err := setLyricsIgnoreMouseEvents(l.win, locked); err != nil {
+		if previouslyLocked {
+			l.closeWindow(l.state.generation, "mouse-input-policy-failed")
+		} else {
+			_ = l.state.setLocked(false, false)
+			l.emitWindow()
+		}
+		return err
+	}
 	l.win.SetMovable(!locked)
-	l.win.SetIgnoreMouseEvents(locked)
 	if !locked {
 		if err := l.syncOptionsBounds(); err != nil {
 			return err
@@ -438,7 +447,7 @@ func (l *DesktopLyrics) closeWindow(generation uint64, failure string) {
 	}
 	l.listeners = nil
 	if win != nil && !win.IsDestroyed() {
-		win.SetIgnoreMouseEvents(false)
+		_ = setLyricsIgnoreMouseEvents(win, false)
 		win.SetMovable(true)
 		win.Destroy()
 	}

@@ -35,6 +35,15 @@ sh scripts/diagnostics/mygo-linux.sh software-gl /opt/he-music/he-music
 
 用户的 Ubuntu 22 X11 x86-64 机器已确认 `software-gl` 无拖影，正常模式仍有拖影；不能将兼容模式通过记录为正常模式通过。Go 层显式启用歌词合成，两种启动模式都保留这项要求。图形兼容模式不代替 GStreamer 运行依赖，播放卡顿应独立检查。
 
+Linux 桌面歌词锁定通过 GTK 输入区域实现：锁定时歌词主体允许鼠标穿透，鼠标移到解锁按钮时可点击该按钮；解锁后恢复窗口交互。托盘仍提供外部解锁入口。原生输入适配的 X11 图形测试需在隔离显示上显式运行：
+
+```sh
+DISPLAY=:97 GDK_BACKEND=x11 HE_MUSIC_GTK_INPUT_TEST=1 CGO_ENABLED=0 \
+  go test ./desktop -run '^TestLinuxLyricsInputShapePointerDelivery$' -count=1 -v
+```
+
+测试使用 GTK 3、X11 和 XTest 运行库；默认测试不会创建图形窗口。自动输入验证来自 Ubuntu 22 arm64 的 Xvfb；用户已确认其 Ubuntu 22 X11 x86-64 实体机鼠标穿透可用，Wayland 仍需分别验收。
+
 ## macOS WKWebView 集成探针
 
 `nativeprobe.go` 只有显式 `-tags=nativeprobe` 构建才替代生产入口，且运行必须设置
