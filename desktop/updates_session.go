@@ -20,7 +20,8 @@ type updatesSession struct {
 	state     UpdatesState
 	candidate updatesCandidate
 	// This fence outlives every owner/epoch, even when SDK cancellation fails.
-	installBusy bool
+	installBusy     bool
+	cancelRequested bool
 }
 
 func newUpdates(driver updatesDriver, post func(func()), valid func(context.Context) bool, emit func(context.Context, UpdatesEvent) error) *Updates {
@@ -152,6 +153,7 @@ func (s *updatesSession) install(owner context.Context, epoch, revision, request
 	candidate := s.candidate
 	s.candidate = nil // A candidate is consumed once, even if SDK reports an error.
 	s.installBusy = true
+	s.cancelRequested = false
 	s.state.OperationRevision = revision
 	s.state.Phase, s.state.Code = "installing", ""
 	s.state.Downloaded, s.state.Total = 0, 0
@@ -160,7 +162,7 @@ func (s *updatesSession) install(owner context.Context, epoch, revision, request
 	s.cancel = cancel
 	go func() {
 		// Download bytes describe only the SDK download. Verification and swap
-		// still belong to this same non-cancellable install operation.
+		// still belong to this same fenced install operation.
 		progress := newUpdatesProgressReporter(func(downloaded, total int64) {
 			s.service.post(func() { s.progress(owner, epoch, revision, downloaded, total) })
 		})
@@ -179,10 +181,13 @@ func (s *updatesSession) install(owner context.Context, epoch, revision, request
 				return
 			}
 			s.cancel = nil
-			if err != nil {
-				s.state.Phase, s.state.Code = "error", "install-failed"
-			} else {
+			switch {
+			case err == nil:
 				s.state.Phase, s.state.Code = "installed", "restart-required"
+			case s.cancelRequested && errors.Is(err, context.Canceled):
+				s.state.Phase, s.state.Code = "cancelled", "install-cancelled"
+			default:
+				s.state.Phase, s.state.Code = "error", "install-failed"
 			}
 			s.touch()
 			s.service.publish(owner, requestID, "")

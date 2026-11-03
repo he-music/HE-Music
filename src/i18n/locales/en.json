@@ -12,12 +12,16 @@
     "version": "New version: {version}",
     "refresh": "Refresh update status",
     "apply": "Download and apply update",
-    "apply_notice": "The update will be downloaded and verified, then replace this app. It cannot be reliably cancelled once started. Choose Restart after completion to use the new version.",
+    "apply_notice": "The update will be downloaded and verified, then replace this app. You can request cancellation while downloading. Verification and application will finish once started. Choose Restart after completion to use the new version.",
     "candidate_changed": "The available update changed. Review the new version and confirm again.",
     "download_progress": "Downloaded {downloaded} / {total} MB",
     "download_received": "Downloaded {downloaded} MB",
     "restart": "Restart app",
     "later": "Later",
+    "view": "View update",
+    "cancel": "Cancel update",
+    "cancelling": "Cancelling…",
+    "phase_cancelled": "The update was cancelled. You can check for updates again.",
     "operation_failed": "The update result could not be confirmed. Refresh its status; do not reinstall while the previous result is unknown."
   },
   "auto_close": {

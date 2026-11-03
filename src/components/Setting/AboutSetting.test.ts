@@ -5,9 +5,10 @@ import { emitHostEvent, flushSfcHost, mountProductionSfc } from "@/test/producti
 
 const ready = ref(true);
 const busy = ref(false);
+const checking = ref(false);
 const state = ref({ phase: "available" });
 const check = vi.fn(async () => {});
-const session = { ready, busy, state, check };
+const session = { ready, busy, checking, state, check };
 const current = shallowRef<typeof session | undefined>(session);
 const open = vi.fn(async () => {});
 const message = { success: vi.fn(), error: vi.fn() };
@@ -49,7 +50,13 @@ function mount() {
   const button = () =>
     host
       .all()
-      .find((node) => node.tag === "NButton" && text(node).includes("setting.about.check_update"));
+      .find(
+        (node) =>
+          node.tag === "NButton" &&
+          ["setting.about.check_update", "updates.view", "setting.about.checking_update"].includes(
+            text(node),
+          ),
+      );
   return {
     ...host,
     button,
@@ -64,6 +71,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   ready.value = true;
   busy.value = false;
+  checking.value = false;
   state.value = { phase: "available" };
   current.value = session;
   check.mockReset();
@@ -114,3 +122,18 @@ it("ignores a late check when the page closes or its native owner changes", asyn
   expect(open).not.toHaveBeenCalled();
   expect(message.error).not.toHaveBeenCalled();
 });
+
+it.each(["installing", "installed"])(
+  "reopens the %s update without checking again",
+  async (phase) => {
+    state.value = { phase };
+    busy.value = phase === "installing";
+    const host = mount();
+    await flushSfcHost();
+    expect(host.button()?.props.loading).toBe(false);
+    host.click();
+    await flushSfcHost();
+    expect(open).toHaveBeenCalledExactlyOnceWith(session);
+    expect(check).not.toHaveBeenCalled();
+  },
+);

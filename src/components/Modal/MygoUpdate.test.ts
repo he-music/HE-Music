@@ -222,8 +222,7 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
       return () => listeners.delete(listener);
     },
   };
-  const warning =
-    vi.fn<(options: { content: string; onPositiveClick: () => Promise<void> }) => void>();
+  const warning = vi.fn<(options: { content: string; onPositiveClick: () => void }) => void>();
   vi.stubGlobal("window", { $dialog: { warning } });
   session = new UpdatesSession(provider);
   await session.start();
@@ -263,10 +262,12 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
   if (!second) throw new Error("Missing second confirmation");
   expect(second.content).toContain("3.0.0");
   const applying = second.onPositiveClick();
+  expect(applying).toBeUndefined(); // Naive UI must close the confirmation before installation ends.
   await flush();
   expect(provider.install).toHaveBeenCalledOnce();
   expect(provider.download).not.toHaveBeenCalled();
   expect(session.state.value?.phase).toBe("installing");
+  expect(ui.button("common.close").props.disabled).not.toBe(true);
   emit(0, {
     operationRevision: installRevision,
     stateRevision: 5,

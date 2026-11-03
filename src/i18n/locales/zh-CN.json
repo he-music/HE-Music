@@ -12,12 +12,16 @@
     "version": "新版本：{version}",
     "refresh": "刷新更新状态",
     "apply": "下载并应用更新",
-    "apply_notice": "将下载并验证更新包，然后替换当前应用。开始后无法可靠取消，完成后可选择重启应用。",
+    "apply_notice": "将下载并验证更新包，然后替换当前应用。下载中可请求取消，进入校验和安装阶段后会继续完成，完成后可选择重启应用。",
     "candidate_changed": "可用更新已变化，请查看新版本后重新确认。",
     "download_progress": "已下载 {downloaded} / {total} MB",
     "download_received": "已下载 {downloaded} MB",
     "restart": "重启应用",
     "later": "稍后",
+    "view": "查看更新",
+    "cancel": "取消更新",
+    "cancelling": "正在取消…",
+    "phase_cancelled": "更新已取消。可以重新检查更新。",
     "operation_failed": "未能确认更新结果。请刷新状态；安装结果未确认时，请勿重复安装。"
   },
   "auto_close": {

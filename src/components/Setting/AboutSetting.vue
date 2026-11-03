@@ -14,7 +14,11 @@
         </n-flex>
         <n-button :loading="checkingUpdate" type="primary" strong secondary @click="checkUpdate">
           {{
-            checkingUpdate ? t("setting.about.checking_update") : t("setting.about.check_update")
+            checkingUpdate
+              ? t("setting.about.checking_update")
+              : viewingUpdate
+                ? t("updates.view")
+                : t("setting.about.check_update")
           }}
         </n-button>
       </n-card>
@@ -144,8 +148,19 @@ import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
 const { t } = useI18n();
 const statusStore = useStatusStore();
 const checkingUpdate = computed(() =>
-  platform.kind === "mygo" ? updatesSession.value?.busy.value === true : statusStore.updateCheck,
+  platform.kind === "mygo"
+    ? updatesSession.value?.checking.value === true
+    : statusStore.updateCheck,
 );
+const viewingUpdate = computed(() => {
+  const session = updatesSession.value;
+  return (
+    platform.kind === "mygo" &&
+    (session?.state.value?.phase === "installing" ||
+      session?.state.value?.phase === "installed" ||
+      (session?.busy.value === true && !session.checking.value))
+  );
+});
 let active = true;
 onScopeDispose(() => {
   active = false;
@@ -222,8 +237,13 @@ const checkUpdate = debounce(
   async () => {
     if (platform.kind === "mygo") {
       const session = updatesSession.value;
-      if (!session?.ready.value || session.busy.value) return;
+      if (!session?.ready.value) return;
       try {
+        if (viewingUpdate.value) {
+          await openMygoUpdate(session);
+          return;
+        }
+        if (session.busy.value) return;
         await session.check();
         if (!active || updatesSession.value !== session || !session.ready.value) return;
         if (session.state.value?.phase === "available") await openMygoUpdate(session);
