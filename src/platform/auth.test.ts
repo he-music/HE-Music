@@ -1,63 +1,97 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   platform: { kind: "mygo", openExternal: vi.fn(async () => {}) },
-  native: { prepare: vi.fn(), arm: vi.fn(), cancel: vi.fn() },
-  on: vi.fn(),
   create: vi.fn(),
+  status: vi.fn(),
   exchange: vi.fn(),
-  device: vi.fn(async () => ({})),
+  device: vi.fn(),
 }));
 vi.mock("./index", () => ({ platform: mocks.platform }));
-vi.mock("./mygo.bindings", () => ({
-  AuthCallback: mocks.native,
-  events: { desktopAuthCallback: { on: mocks.on } },
-}));
+vi.mock("./mygo.bindings", () => {
+  throw new Error("OAuth polling must not load native callback bindings");
+});
 vi.mock("@/api/auth", () => ({
   createAuthSession: mocks.create,
+  getAuthStatus: mocks.status,
   exchangeAuthResult: mocks.exchange,
 }));
 vi.mock("@/utils/device", () => ({ getDeviceInfo: mocks.device }));
 import { createDesktopOAuth } from "./auth";
-import type { AuthCallbackEvent } from "./oauthFlow";
-afterEach(() => {
-  vi.clearAllMocks();
-  vi.unstubAllGlobals();
+
+beforeEach(() => {
+  vi.useFakeTimers();
+  mocks.device.mockResolvedValue({ app_type: "mygo", device_id: "persisted-device-id" });
+  mocks.create.mockResolvedValue({
+    url: "https://example.test/auth",
+    state: "synthetic",
+    check_interval: 2,
+    expires_at: Math.floor(Date.now() / 1000) + 120,
+  });
+  mocks.status.mockResolvedValue({
+    status: "success",
+    error: "",
+    check_interval: 2,
+    expires_at: Math.floor(Date.now() / 1000) + 120,
+  });
+  mocks.exchange.mockResolvedValue({ access_token: "synthetic" });
 });
-describe("desktop auth bindings", () => {
-  it.each(["mygo"])("%s接入实际流程且只退订自身事件", async (kind) => {
-    mocks.platform.kind = kind;
-    const off = vi.fn();
-    const ipcOn = vi.fn().mockReturnValue(off);
-    vi.stubGlobal("window", { electron: { ipcRenderer: { on: ipcOn } } });
-    mocks.on.mockReturnValue(off);
-    mocks.native.prepare.mockResolvedValue({
-      sessionId: "native-session",
-      callbackUrl: "http://127.0.0.1:25666/login/success",
+afterEach(() => {
+  vi.clearAllTimers();
+  vi.useRealTimers();
+  vi.clearAllMocks();
+});
+
+describe("desktop OAuth polling bindings", () => {
+  it("不传 redirect_uri、不监听本机回调，先查 status 再领取结果", async () => {
+    mocks.status.mockResolvedValueOnce({
+      status: "pending",
+      error: "",
+      check_interval: 2,
+      expires_at: Math.floor(Date.now() / 1000) + 120,
     });
-    mocks.native.arm.mockResolvedValue(undefined);
-    mocks.native.cancel.mockResolvedValue(undefined);
-    mocks.create.mockResolvedValue({
-      url: "https://example.test/auth",
-      state: "synthetic",
-      expires_at: Math.floor(Date.now() / 1000) + 60,
-    });
-    mocks.exchange.mockResolvedValue({ access_token: "synthetic" });
     const accept = vi.fn(async () => {});
     const error = vi.fn();
-    const flow = createDesktopOAuth(accept, error);
+    const pending = vi.fn();
+    const flow = createDesktopOAuth(accept, error, pending);
     await flow.start("backend-dynamic");
-    expect(mocks.create.mock.calls[0][0]).toMatchObject({
-      provider: "backend-dynamic",
-      redirect_uri: "http://127.0.0.1:25666/login/success",
-    });
-    expect(mocks.native.prepare).toHaveBeenCalledWith(0);
-    const listener: (event: AuthCallbackEvent) => void = mocks.on.mock.calls[0][0];
-    listener({ sessionId: "wrong", state: "synthetic" });
+    expect(mocks.create).toHaveBeenCalledExactlyOnceWith(
+      {
+        provider: "backend-dynamic",
+        device_info: { app_type: "mygo", device_id: "persisted-device-id" },
+      },
+      expect.any(AbortSignal),
+    );
+    expect(mocks.create.mock.calls[0][0]).not.toHaveProperty("redirect_uri");
+    expect(mocks.platform.openExternal).toHaveBeenCalledExactlyOnceWith(
+      "https://example.test/auth",
+    );
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(mocks.status).toHaveBeenCalledExactlyOnceWith("synthetic", expect.any(AbortSignal));
     expect(mocks.exchange).not.toHaveBeenCalled();
-    listener({ sessionId: "native-session", state: "synthetic" });
-    for (let i = 0; i < 10; i++) await Promise.resolve();
+    expect(pending.mock.calls).toEqual([[true]]);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(mocks.exchange).toHaveBeenCalledExactlyOnceWith("synthetic", expect.any(AbortSignal));
     expect(accept).toHaveBeenCalledOnce();
-    expect(off).toHaveBeenCalledOnce();
+    expect(error).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    expect(pending.mock.calls).toEqual([[true], [false]]);
+  });
+
+  it("读取设备信息时关闭登录，不再创建后端会话", async () => {
+    let resolve!: (value: object) => void;
+    mocks.device.mockReturnValueOnce(
+      new Promise<object>((done) => {
+        resolve = done;
+      }),
+    );
+    const error = vi.fn();
+    const flow = createDesktopOAuth(vi.fn(), error);
+    const pending = flow.start("provider");
+    flow.cancel();
+    resolve({ app_type: "mygo" });
+    await pending;
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.platform.openExternal).not.toHaveBeenCalled();
     expect(error).not.toHaveBeenCalled();
   });
 });

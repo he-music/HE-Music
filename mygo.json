@@ -19,6 +19,7 @@
   "macos": {
     "entitlements": "desktop/macos.entitlements.plist",
     "infoPlist": {
+      "CFBundleIconFile": "HE-Music.icns",
       "NSMicrophoneUsageDescription": "仅在你读取音频输出设备时访问麦克风，以获取可选输出设备列表，不保存或上传音频。"
     }
   },

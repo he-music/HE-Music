@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as Vue from "vue";
 import { parse, compileScript } from "vue/compiler-sfc";
 import ts from "typescript";
 import { createQrLoginFlow } from "@/utils/qrLogin";
+import { createOAuthFlow, type OAuthDependencies } from "@/platform/oauthFlow";
 
 // 编译真实 SFC 的 script setup；用 Vue 自定义 renderer 运行生命周期，无 DOM/账号依赖。
 function mountScript(file: string, modules: Record<string, unknown>, props = {}) {
@@ -225,5 +226,174 @@ describe("登录 SFC 真实 setup 生命周期", () => {
     const list = component.state.value.providers;
     expect(Vue.isRef(list) && list.value).toEqual([]);
     vi.unstubAllGlobals();
+  });
+});
+
+function mountOAuthLogin() {
+  const session = {
+    url: "https://example.test/oauth",
+    state: "synthetic-state",
+    check_interval: 2,
+    expires_at: Date.now() / 1000 + 120,
+  };
+  const deps = {
+    create: vi.fn<OAuthDependencies["create"]>(async () => session),
+    status: vi.fn<OAuthDependencies["status"]>(async () => ({
+      status: "pending",
+      error: "",
+      check_interval: 2,
+      expires_at: session.expires_at,
+    })),
+    exchange: vi.fn<OAuthDependencies["exchange"]>(async () => ({
+      access_token: "synthetic-access",
+      refresh_token: "synthetic-refresh",
+      expires_at: Date.now() / 1000 + 3600,
+    })),
+    open: vi.fn(async () => {}),
+  };
+  const complete = vi.fn(async () => {});
+  const notifications = { success: vi.fn(), error: vi.fn() };
+  vi.stubGlobal("window", { $message: notifications });
+  const component = mountScript("./Login.vue", {
+    "@/utils/login": { completeLogin: complete },
+    "@/stores": { useDataStore: () => ({ userLoginStatus: false }) },
+    "@/components/Modal/Login/LoginPassword.vue": {},
+    "@/components/Layout/Logo.vue": {},
+    "vue-i18n": i18n,
+    "@/api/auth": { authProviders: async () => ({ list: ["LinuxDo", "Other"] }) },
+    "@/components/Global/SvgIcon.vue": {},
+    "@/utils/device": { getDeviceInfo: async () => ({}) },
+    "@/platform/auth": {
+      createDesktopOAuth: (
+        accept: OAuthDependencies["accept"],
+        onError: OAuthDependencies["onError"],
+        onPendingChange: OAuthDependencies["onPendingChange"],
+      ) => createOAuthFlow({ ...deps, accept, onError, onPendingChange }),
+    },
+    "@/platform": { platform: { kind: "mygo" } },
+  });
+  const value = (key: string) => {
+    const field = component.state.value[key];
+    if (!Vue.isRef(field)) throw new Error(`Missing ref ${key}`);
+    return field;
+  };
+  const start = async (provider = "LinuxDo") => {
+    const login = component.state.value.oauthLogin;
+    if (typeof login !== "function") throw new Error("Missing OAuth handler");
+    await login(provider);
+  };
+  return { component, deps, session, complete, notifications, value, start };
+}
+
+describe("OAuth 登录等待与取消", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  it("整个等待期间保持 loading，阻止重复发起，取消后可重试且不关闭弹窗", async () => {
+    const s = mountOAuthLogin();
+    try {
+      await s.start();
+      expect(s.value("oauthPending").value).toBe(true);
+      expect(s.value("oauthProvider").value).toBe("LinuxDo");
+      await s.start("Other");
+      expect(s.deps.create).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(s.value("oauthPending").value).toBe(true);
+      call(s.component.state.value, "cancelOAuth");
+      expect(s.value("oauthPending").value).toBe(false);
+      expect(s.value("oauthProvider").value).toBe("");
+      expect(s.deps.create.mock.calls[0][1].aborted).toBe(true);
+      expect(s.component.emit).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+      await s.start("Other");
+      expect(s.deps.create).toHaveBeenCalledTimes(2);
+      expect(s.value("oauthPending").value).toBe(true);
+    } finally {
+      s.component.unmount();
+    }
+  });
+
+  it.each(["cancel", "switch", "close", "unmount"])(
+    "%s 结束等待，迟到授权不能登录",
+    async (boundary) => {
+      const s = mountOAuthLogin();
+      const pending = deferred<Awaited<ReturnType<OAuthDependencies["status"]>>>();
+      s.deps.status.mockReturnValueOnce(pending.promise);
+      try {
+        await s.start();
+        await vi.advanceTimersByTimeAsync(2000);
+        if (boundary === "cancel") call(s.component.state.value, "cancelOAuth");
+        if (boundary === "switch") s.value("activeTab").value = "login-qr";
+        if (boundary === "close") call(s.component.state.value, "closeLogin");
+        if (boundary === "unmount") s.component.unmount();
+        expect(s.value("oauthPending").value).toBe(false);
+        pending.resolve({
+          status: "success",
+          error: "",
+          check_interval: 2,
+          expires_at: s.session.expires_at,
+        });
+        await flush();
+        expect(s.deps.exchange).not.toHaveBeenCalled();
+        expect(s.complete).not.toHaveBeenCalled();
+        expect(s.notifications.error).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        if (boundary !== "unmount") s.component.unmount();
+      }
+    },
+  );
+
+  it.each(["failed", "expired", "timeout"] as const)(
+    "%s 后恢复登录选项并可再次发起",
+    async (status) => {
+      const s = mountOAuthLogin();
+      try {
+        if (status === "timeout") s.session.expires_at = Date.now() / 1000 + 3;
+        else
+          s.deps.status.mockResolvedValueOnce({
+            status,
+            error: "",
+            check_interval: 2,
+            expires_at: 0,
+          });
+        await s.start();
+        await vi.advanceTimersByTimeAsync(3000);
+        expect(s.value("oauthPending").value).toBe(false);
+        expect(s.notifications.error).toHaveBeenCalledOnce();
+        expect(s.component.emit).not.toHaveBeenCalled();
+        expect(vi.getTimerCount()).toBe(0);
+        s.session.expires_at = Date.now() / 1000 + 120;
+        await s.start();
+        expect(s.value("oauthPending").value).toBe(true);
+      } finally {
+        s.component.unmount();
+      }
+    },
+  );
+
+  it("成功时结束 loading 并关闭弹窗，卸载不撤回登录结果", async () => {
+    const s = mountOAuthLogin();
+    try {
+      s.deps.status.mockResolvedValueOnce({
+        status: "success",
+        error: "",
+        check_interval: 2,
+        expires_at: s.session.expires_at,
+      });
+      await s.start();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(s.value("oauthPending").value).toBe(false);
+      expect(s.complete).toHaveBeenCalledOnce();
+      expect(s.component.emit).toHaveBeenCalledExactlyOnceWith("close");
+      expect(s.notifications.success).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      s.component.unmount();
+    }
   });
 });

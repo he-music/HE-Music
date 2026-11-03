@@ -16,18 +16,6 @@ export interface ApplicationStorageRecord {
   data: StorageValue;
 }
 
-/** AuthCallbackPrepared reserves the callback listener before the backend creates a session. */
-export interface AuthCallbackPrepared {
-  sessionId: string;
-  callbackUrl: string;
-}
-
-/** AuthCallbackReceived only confirms a matching callback, never backend token exchange. */
-export interface AuthCallbackReceived {
-  sessionId: string;
-  state: string;
-}
-
 export type CloseAppMethod = "exit" | "hide";
 
 export interface CloseRequested {
@@ -689,20 +677,6 @@ export interface WindowAppearanceState {
 
 // ---- Services ----
 
-/** AuthCallback exposes only loopback callback coordination, with no credentials or tokens. */
-export const AuthCallback = {
-  /** Arm must complete before opening the system browser. The expiry is Unix milliseconds. */
-  arm(sessionID: string, state: string, expiresAtUnixMs: number): Promise<void> {
-    return call("AuthCallback.Arm", sessionID, state, expiresAtUnixMs);
-  },
-  cancel(sessionID: string): Promise<void> {
-    return call("AuthCallback.Cancel", sessionID);
-  },
-  prepare(preferredPort: number): Promise<AuthCallbackPrepared> {
-    return call("AuthCallback.Prepare", preferredPort);
-  },
-} as const;
-
 /**
  * PlaybackControl acquires its loopback listener only after the shell subscribes.
  * Binding generation neither opens sockets nor touches native resources.
@@ -1212,7 +1186,6 @@ export const WindowAppearanceService = {
 
 /** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */
 export const events = {
-  desktopAuthCallback: event<AuthCallbackReceived>("desktop:auth-callback"),
   desktopControlCommand: event<ControlCommand>("desktop:control-command"),
   desktopTrayAction: event<TrayRequest>("desktop:tray-action"),
   desktopCloseRequested: event<CloseRequested>("desktop:close-requested"),

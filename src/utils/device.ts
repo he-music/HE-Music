@@ -1,5 +1,5 @@
 import { applicationStorage } from "@/platform/applicationStorage";
-import { isMac, isWin, isLinux } from "./env";
+import { isMac, isWin, isLinux, isMygo } from "./env";
 import type { DeviceInfo } from "@/types/main.hemusic";
 import packageJson from "@/../package.json";
 
@@ -29,8 +29,7 @@ function getPlatform(): string {
  * 获取应用类型
  */
 function getAppType(): string {
-  // 后端兼容字段：尚未确认服务端接受 mygo 枚举，宿主身份以 platform.kind 为准。
-  return "web";
+  return isMygo ? "mygo" : "web";
 }
 
 /**

@@ -50,7 +50,7 @@ export const authProviders = () => {
 };
 export interface CreateAuthSessionParams {
   provider: string;
-  redirect_uri: string;
+  redirect_uri?: string;
   device_info?: DeviceInfo;
 }
 
@@ -58,15 +58,24 @@ export interface CreateAuthSessionResponse {
   url: string;
   state: string;
   check_interval: number;
-  expires_at: number;
+  expires_at: number | string;
+}
+
+export interface GetAuthStatusResponse {
+  status: "pending" | "success" | "failed" | "expired";
+  error: string;
+  check_interval: number;
+  expires_at: number | string;
 }
 
 /** 创建 OAuth 授权会话，支持携带设备信息 */
-export const createAuthSession = (data: CreateAuthSessionParams) => {
+export const createAuthSession = (data: CreateAuthSessionParams, signal?: AbortSignal) => {
   return requestHemusic({
     url: "/v1/auth/session",
     method: "post",
     data,
+    signal,
+    skipErrorMessage: signal !== undefined,
   }) as Promise<CreateAuthSessionResponse>;
 };
 
@@ -122,6 +131,17 @@ export const logoutApi = () => {
 
 // ==================== OAuth 授权结果 ====================
 
+/** 查询轮询模式的授权状态，成功后才可领取一次性结果。 */
+export const getAuthStatus = (state: string, signal?: AbortSignal) => {
+  return requestHemusic({
+    url: "/v1/auth/status",
+    method: "get",
+    params: { state },
+    signal,
+    skipErrorMessage: signal !== undefined,
+  }) as Promise<GetAuthStatusResponse>;
+};
+
 export interface ExchangeAuthResultResponse {
   user?: UserInfo;
   access_token: string;
@@ -130,11 +150,13 @@ export interface ExchangeAuthResultResponse {
 }
 
 /** 用 state 兑换 OAuth 授权结果 */
-export const exchangeAuthResult = (state: string) => {
+export const exchangeAuthResult = (state: string, signal?: AbortSignal) => {
   return requestHemusic({
     url: "/v1/auth/result",
     method: "get",
     params: { state },
+    signal,
+    skipErrorMessage: signal !== undefined,
   }) as Promise<ExchangeAuthResultResponse>;
 };
 

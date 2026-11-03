@@ -1,25 +1,30 @@
 import { createOAuthFlow } from "./oauthFlow";
-import { AuthCallback, events } from "./mygo.bindings";
 import { platform } from "./index";
-import { createAuthSession, exchangeAuthResult, type ExchangeAuthResultResponse } from "@/api/auth";
+import {
+  createAuthSession,
+  getAuthStatus,
+  exchangeAuthResult,
+  type ExchangeAuthResultResponse,
+} from "@/api/auth";
 import { getDeviceInfo } from "@/utils/device";
 
-/** 桌面 OAuth 使用原生预留端口和有期限的回调会话。 */
+/** 桌面 OAuth 不传 redirect_uri，通过状态轮询领取一次性授权结果。 */
 export function createDesktopOAuth(
   accept: (result: ExchangeAuthResultResponse) => Promise<void>,
   onError: () => void,
+  onPendingChange?: (pending: boolean) => void,
 ) {
   return createOAuthFlow({
-    subscribe: (listener) => events.desktopAuthCallback.on(listener),
-    prepare: () => AuthCallback.prepare(0),
-    arm: (sessionId, state, expiry) => AuthCallback.arm(sessionId, state, expiry),
-    cancel: (sessionId) => AuthCallback.cancel(sessionId),
-    async create(provider, redirect_uri) {
-      return createAuthSession({ provider, redirect_uri, device_info: await getDeviceInfo() });
+    async create(provider, signal) {
+      const device_info = await getDeviceInfo();
+      if (signal.aborted) throw new Error("Authorization cancelled");
+      return createAuthSession({ provider, device_info }, signal);
     },
+    status: getAuthStatus,
     exchange: exchangeAuthResult,
     open: (url) => platform.openExternal(url),
     accept,
     onError,
+    onPendingChange,
   });
 }

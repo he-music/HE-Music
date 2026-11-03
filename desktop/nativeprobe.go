@@ -80,7 +80,7 @@ func main() {
 	mygo.App.WhenReady(func() {
 		win := mygo.NewWindow(mygo.WindowOptions{
 			Title: "HE-Music Native Probe", Width: 1280, Height: 800,
-			Page: mygo.PageOptions{PreloadScript: nativeAuthRequestObserver + `
+			Page: mygo.PageOptions{PreloadScript: nativePublicRequestObserver + `
 window.__m2Probe = { errors: 0, rejections: 0, resourceErrors: 0, errorDiagnostics: [] };
 addEventListener("error", (event) => {
   if (event.target === window) {
@@ -160,7 +160,7 @@ addEventListener("unhandledrejection", () => window.__m2Probe.rejections++);
   await router.push("/setting");
   await until(() => document.querySelector(".setting"));
   await new Promise(resolve => setTimeout(resolve, 500));
-  return { ...initial, route: location.hash, setting: !!document.querySelector(".setting"),
+  return { ...initial, publicRequests: window.__nativePublicRequests ?? [], route: location.hash, setting: !!document.querySelector(".setting"),
     maximizeChanged: initialMax !== changedMax, eventReceived: eventsBeforeRestore > 0,
     eventUnsubscribed: maximizeEvents === eventsBeforeRestore, ...window.__m2Probe };
 })()`)
@@ -187,10 +187,8 @@ addEventListener("unhandledrejection", () => window.__m2Probe.rejections++);
 						return
 					}
 					setResult("page", value)
-					authResult := runAuthNativeProbe(win)
-					setResult("authIntegration", authResult)
-					finalRuntime := nativeDiagnosticCheckpoint(win, "auth-complete")
-					setResult("postAuthRuntime", finalRuntime)
+					finalRuntime := nativeDiagnosticCheckpoint(win, "page-complete")
+					setResult("postPageRuntime", finalRuntime)
 					mediaResult := map[string]any{"passed": false, "diagnosticOnlySkipped": true}
 					if os.Getenv("HE_MUSIC_NATIVE_DIAGNOSTIC") != "1" {
 						mediaResult = runMediaNativeProbe(win, output)
@@ -214,7 +212,7 @@ addEventListener("unhandledrejection", () => window.__m2Probe.rejections++);
 						page["eventReceived"] == true && page["eventUnsubscribed"] == true &&
 						page["errors"] == float64(0) && page["rejections"] == float64(0) &&
 						page["resourceErrors"] == float64(0)
-					passed = passed && authResult["passed"] == true && nativeDiagnosticRuntimeClean(finalRuntime)
+					passed = passed && nativeDiagnosticRuntimeClean(finalRuntime)
 					passed = passed && (mediaResult["passed"] == true || mediaResult["developmentOnlySkipped"] == true || mediaResult["diagnosticOnlySkipped"] == true)
 					setResult("passed", passed)
 				}()

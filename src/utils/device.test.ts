@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("./env", () => ({ isElectron: false, isMac: false, isWin: false, isLinux: false }));
+vi.mock("./env", () => ({ isMygo: false, isMac: false, isWin: false, isLinux: false }));
 
 import { getDeviceId } from "./device";
 

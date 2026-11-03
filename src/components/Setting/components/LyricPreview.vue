@@ -319,6 +319,7 @@ const romaFontSize = fontSizeComputed("lyricRomaFontSize");
     width: 100%;
     height: 320px;
     background: #24282c;
+    color: rgb(var(--main-cover-color));
     border-radius: 12px;
     overflow: hidden;
     --main-cover-color: 239, 239, 239;

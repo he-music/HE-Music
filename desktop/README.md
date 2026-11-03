@@ -8,7 +8,17 @@ HTTP(S) 外链。`mygo.bindings.ts` 由固定版本 CLI 生成并纳入源码；
 mygo 采用系统原生标题栏，托盘初始化成功且应用壳就绪后沿用关闭提示及隐藏/退出偏好；
 托盘不可用或壳卸载后原生关闭放行，显式退出绕过提示。
 托盘菜单图标复用 Electron 的图片并嵌入程序，按菜单状态选择播放／收藏／模式／锁定图标。macOS／Windows 使用原生模板着色，Linux 使用明暗及禁用图片并随原生主题更新；Linux 面板是否显示图标由桌面环境决定。图标在托盘生命周期内按样式缓存，菜单重建复用句柄。
-Electron 宿主、旧 IPC 与专用构建依赖已移除。认证仍保留后端接受的 app_type/client_type，历史 Electron 数据导入格式与导出助手继续维护；协议字段不代表加载旧宿主。原生能力通过 Go 服务和生成客户端访问。
+Electron 宿主、旧 IPC 与专用构建依赖已移除。认证中 mygo 的 `DeviceInfo.app_type` 为 `mygo`，Web 为 `web`；已有 device_id 和 `client_type: "electron_vue"` 保持兼容。历史 Electron 数据导入格式与导出助手继续维护；协议字段不代表加载旧宿主。原生能力通过 Go 服务和生成客户端访问。
+
+mygo OAuth 使用后端轮询模式：`POST /v1/auth/session` 不传 `redirect_uri`，打开返回的授权 URL 后，按 `check_interval` 查询 `GET /v1/auth/status`；`pending` 继续等待，`success` 时仅调用一次 `GET /v1/auth/result` 领取结果，`failed`／`expired` 停止。每次尝试独立持有 state、过期时间和取消信号；关闭、重试或卸载会取消定时器和请求，迟到响应不能登录。兼容后端 protobuf JSON 中以字符串编码的绝对过期时间。Web 保留 `redirect_uri` 回跳流程。
+
+授权期间显示等待动画与“取消授权”，暂停密码／扫码登录并阻止重复发起。取消后恢复原登录方式；失败或过期时恢复选项，成功时完成登录并关闭弹窗。
+
+mygo 的本机 OAuth 回调服务、事件、绑定及专用探针已移除；登录不监听本机端口。HTTP 播放控制、媒体网关等其他本机服务独立保留。
+
+## macOS 应用图标
+
+macOS 沿用 main 分支 Electron 包使用的 `public/icons/icon.icns`，其中的透明留白保证图标与系统应用的视觉尺寸一致。其普通文件副本 `resources/darwin/HE-Music.icns` 仅进入 macOS 包，通过 `macos.infoPlist.CFBundleIconFile` 引用；更新源 ICNS 时同步复制该文件。Windows／Linux 继续使用全局 PNG。固定 SDK 的 `macos.icon` 只接受资产目录，不用于引用 ICNS。
 
 ## 固定 SDK 与 Windows 透明修正
 
@@ -96,20 +106,17 @@ Go 数据目录，开发 CLI 随应用退出清理 Vite。输出为 `result.json
 `pnpm run build:desktop:mac` 恢复生产产物，并检查二进制构建参数没有 nativeprobe 标签。
 Windows 需要按迁移清单单独实测；macOS 的合成检查不代替 WebView2、真实认证或媒体播放验收。
 
-## M3 原生认证串接检查
+## OAuth 轮询与登录交互检查
 
-同属 `nativeprobe` 构建标签的 `nativeprobe_auth.go` 复用上述隔离、总超时和清理。
-页面通过实际 `window.mygo.call` 调用 `AuthCallback.Prepare/Arm/Cancel`，由 Go HTTP
-客户端发送合成回调，再验证 `desktop:auth-callback` 事件中的 sessionId/state，以及错误
-state、取消后的迟到回调、重复回调、退订和端口释放。检查不创建真实授权会话、不兑换令牌，
-因此仅证明原生回调与页面事件串接，不能代表真实第三方登录或扫码确认通过。
+OAuth 的状态轮询、一次性结果领取、等待提示、取消、重试和迟到响应处理由前端测试覆盖：
 
-公开请求通过 XHR 被动观察应用原有的 providers/platforms 请求，仅保留类别、HTTP 状态、
-CORS 是否可读和 provider 数量，不记录请求头、令牌、完整 URL 或响应正文。公开请求的结果
-独立记录，不影响合成回调的 passed 判定，不能由其推断全部后端或所有 origin 已兼容。
+```sh
+pnpm exec vitest run src/platform/auth.test.ts src/platform/oauthFlow.test.ts src/components/Modal/Login/Login.lifecycle.test.ts
+```
 
-普通生产构建排除所有 nativeprobe 探针文件；官方生成客户端所需的 `MYGO_GENERATE` 优先分支保留。
-探针完成后仍需恢复普通生产包，并分别记录未验证的真实账号授权、Windows 与媒体场景。
+`nativeprobe_requests.go` 只被动观察应用原有的 providers/platforms 公开请求，记录类别、HTTP 状态、CORS 是否可读和 provider 数量，不记录请求头、令牌、完整 URL 或响应正文。其结果位于页面探针的 `page.publicRequests`，仅辅助诊断，不代替真实 OAuth 登录或全部后端兼容性验收。
+
+普通生产构建排除所有 nativeprobe 探针文件；官方生成客户端所需的 `MYGO_GENERATE` 优先分支保留。探针完成后仍需恢复普通生产包，并分别记录未验证的真实账号授权、Windows 与媒体场景。
 
 ## M4 合成媒体与播放器内歌词
 

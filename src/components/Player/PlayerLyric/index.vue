@@ -290,6 +290,17 @@ const resetOffset = () => {
     }
   }
 }
+@media (hover: none), (any-pointer: coarse), (max-width: 989.98px) {
+  .player-lyric {
+    padding-right: 44px;
+  }
+  .lyric-menu {
+    width: 44px;
+    padding: 12px 0;
+    pointer-events: auto;
+    opacity: 0.8;
+  }
+}
 .offset-menu {
   width: 180px;
   .title {

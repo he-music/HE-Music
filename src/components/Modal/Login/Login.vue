@@ -1,27 +1,47 @@
 <template>
-  <div class="login">
+  <div class="login" :aria-busy="oauthPending">
     <Logo :size="60" class="logo" />
     <!-- 登录方式 -->
-    <n-tabs class="login-tabs" v-model:value="activeTab" type="segment" animated>
+    <n-tabs
+      v-show="!oauthPending"
+      class="login-tabs"
+      v-model:value="activeTab"
+      type="segment"
+      animated
+    >
       <n-tab-pane
         name="login-password"
         :tab="t('modal.login_password_tab')"
         display-directive="show:lazy"
       >
-        <LoginPassword :pause="activeTab !== 'login-password' || closed" @save-login="saveLogin" />
+        <LoginPassword
+          :pause="activeTab !== 'login-password' || closed || oauthPending"
+          @save-login="saveLogin"
+        />
       </n-tab-pane>
       <n-tab-pane name="login-qr" :tab="t('modal.login_qr_tab')" display-directive="show:lazy">
-        <LoginQRCode :pause="activeTab !== 'login-qr' || closed" @save-login="saveLogin" />
+        <LoginQRCode
+          :pause="activeTab !== 'login-qr' || closed || oauthPending"
+          @save-login="saveLogin"
+        />
       </n-tab-pane>
     </n-tabs>
 
+    <n-flex v-if="oauthPending" class="oauth-pending" align="center" justify="center" vertical>
+      <n-spin size="medium" />
+      <n-text role="status" aria-live="polite">
+        {{ t("modal.oauth_waiting", { provider: oauthProvider }) }}
+      </n-text>
+    </n-flex>
+
     <!-- 其他方式 -->
-    <n-flex align="center" class="other">
+    <n-flex v-show="!oauthPending" align="center" class="other">
       <n-button
         v-for="item in providers"
         :key="item"
         text
         style="font-size: 16px"
+        :disabled="oauthPending"
         @click="oauthLogin(item)"
       >
         <template #icon>
@@ -31,11 +51,18 @@
       </n-button>
     </n-flex>
     <!-- 关闭登录 -->
-    <n-button :focusable="false" class="close" strong secondary round @click="closeLogin">
+    <n-button
+      :focusable="false"
+      class="close"
+      strong
+      secondary
+      round
+      @click="oauthPending ? cancelOAuth() : closeLogin()"
+    >
       <template #icon>
         <SvgIcon name="WindowClose" />
       </template>
-      {{ t("common.cancel") }}
+      {{ t(oauthPending ? "modal.oauth_cancel" : "common.cancel") }}
     </n-button>
   </div>
 </template>
@@ -58,14 +85,15 @@ const dataStore = useDataStore();
 const providers = ref<string[]>([]);
 const activeTab = ref("login-password");
 const closed = ref(false);
+const oauthPending = ref(false);
+const oauthProvider = ref("");
 let webAttempt = 0;
 let accepted = false;
 const loginFailed = () => window.$message.error(t("modal.login_failed"));
 const saveLogin = async (result: LoginResult) => {
   if (closed.value || accepted) return;
   accepted = true;
-  desktopOAuth.cancel();
-  webAttempt++;
+  cancelOAuth();
   try {
     // completeLogin 在第一次 await 前同步接受凭据；随后关闭引发卸载不会丢弃结果。
     const completion = completeLogin(result);
@@ -77,18 +105,26 @@ const saveLogin = async (result: LoginResult) => {
     loginFailed();
   }
 };
-const desktopOAuth = createDesktopOAuth(saveLogin, loginFailed);
-const closeLogin = () => {
-  closed.value = true;
+const desktopOAuth = createDesktopOAuth(saveLogin, loginFailed, (pending) => {
+  oauthPending.value = pending;
+  if (!pending) oauthProvider.value = "";
+});
+const cancelOAuth = () => {
   webAttempt++;
   desktopOAuth.cancel();
+  oauthPending.value = false;
+  oauthProvider.value = "";
+};
+const closeLogin = () => {
+  closed.value = true;
+  cancelOAuth();
   emit("close");
 };
 const oauthLogin = async (provider: string) => {
-  activeTab.value = "login-password";
-  if (closed.value || accepted) return;
-  webAttempt++;
-  desktopOAuth.cancel();
+  if (closed.value || accepted || oauthPending.value) return;
+  cancelOAuth();
+  oauthProvider.value = provider;
+  oauthPending.value = true;
   if (platform.kind !== "web") {
     await desktopOAuth.start(provider);
     return;
@@ -105,14 +141,16 @@ const oauthLogin = async (provider: string) => {
     if (closed.value || attempt !== webAttempt) return;
     window.location.href = url;
   } catch {
-    if (!closed.value && attempt === webAttempt) loginFailed();
+    if (!closed.value && attempt === webAttempt) {
+      cancelOAuth();
+      loginFailed();
+    }
   }
 };
 watch(
   activeTab,
   () => {
-    webAttempt++;
-    desktopOAuth.cancel();
+    cancelOAuth();
   },
   { flush: "sync" },
 );
@@ -127,8 +165,7 @@ onMounted(() => {
 });
 onBeforeUnmount(() => {
   closed.value = true;
-  webAttempt++;
-  desktopOAuth.cancel();
+  cancelOAuth();
 });
 onBeforeMount(() => {
   if (dataStore.userLoginStatus) {
@@ -149,6 +186,11 @@ onBeforeMount(() => {
     width: 60px;
     height: 60px;
     margin: 20px auto 30px auto;
+  }
+  .oauth-pending {
+    min-height: 240px;
+    padding: 24px 0;
+    text-align: center;
   }
   .other {
     margin: 10px;

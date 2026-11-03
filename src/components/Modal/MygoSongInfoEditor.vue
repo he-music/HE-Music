@@ -14,7 +14,8 @@
     </n-alert>
     <n-tabs type="segment" animated>
       <n-tab-pane name="info" :tab="t('common.info')" display-directive="show">
-        <n-flex class="match" justify="space-between" align="center">
+        <!-- 在线匹配服务停用，暂时隐藏入口，保留手动编辑。 -->
+        <n-flex class="match" style="display: none" justify="space-between" align="center">
           <n-text>{{ t("modal.auto_match_tag_tip") }}</n-text>
           <n-button
             type="primary"

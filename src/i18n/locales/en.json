@@ -501,6 +501,8 @@
     "login_password_tab": "Password Login",
     "login_qr_tab": "QR Login",
     "login_success": "Login successful",
+    "oauth_cancel": "Cancel authorization",
+    "oauth_waiting": "Waiting for {provider} authorization…",
     "lyrics_placeholder": "Enter lyrics",
     "modify_password": "Change Password",
     "more_setting": "More Settings",
