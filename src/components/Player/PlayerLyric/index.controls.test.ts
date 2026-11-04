@@ -1,15 +1,14 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { reactive, ref } from "vue";
-import { emitHostEvent, flushSfcHost, mountProductionSfc } from "@/test/productionSfc";
+import { h, ref } from "vue";
+import { flushSfcHost, mountProductionSfc } from "@/test/productionSfc";
 
 const cleanups: Array<() => void> = [];
 afterEach(() => cleanups.splice(0).forEach((close) => close()));
 
-it("shows bottom lyric options and a working play control only at phone/tablet widths", async () => {
+it("shows bottom lyric options and the shared play control only at phone/tablet widths", async () => {
   const compact = ref(true);
   const time = ref(0);
-  const status = reactive({ playStatus: true, playLoading: false, getSongOffset: () => 0 });
-  const player = { playOrPause: vi.fn(() => (status.playStatus = !status.playStatus)) };
+  const status = { playStatus: true, getSongOffset: () => 0 };
   const host = mountProductionSfc(
     new URL("./index.vue", import.meta.url),
     {
@@ -18,9 +17,13 @@ it("shows bottom lyric options and a working play control only at phone/tablet w
         useSettingStore: () => ({ lyricRenderer: "amll" }),
         useStatusStore: () => status,
       },
-      "@/utils/player": { usePlayer: () => player },
+      "@/utils/player": { usePlayer: () => ({}) },
       "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
       "./LyricToolbar.vue": { default: { render: () => null } },
+      "../PlayerStylePanel.vue": { default: { render: () => null } },
+      "../PlayerComponents/MobilePlayButton.vue": {
+        default: { render: () => h("mobile-play-button") },
+      },
       "@/utils/audioManager": { default: { on: vi.fn(), off: vi.fn() } },
       "@/components/LyricStage/useLyricPlaybackClock": { useLyricPlaybackClock: () => time },
       "@vueuse/core": {
@@ -35,15 +38,8 @@ it("shows bottom lyric options and a working play control only at phone/tablet w
   const findPlay = () => host.all().find((node) => node.props.class === "lyric-play-button");
   const stage = host.all().find((node) => node.props.class === "lyric-stage");
   expect(host.all().some((node) => node.props.class === "mobile-lyric-controls")).toBe(true);
-  expect(findPlay()?.props["aria-label"]).toBe("common.pause");
-  const playButton = findPlay();
-  if (!playButton) throw new Error("Missing mobile play control");
-  emitHostEvent(playButton, "onClick", { stopPropagation: vi.fn() });
-  await flushSfcHost();
-  expect(status.playStatus).toBe(false);
-  expect(findPlay()?.props["aria-label"]).toBe("common.play");
-  expect(player.playOrPause).toHaveBeenCalledOnce();
-  expect(host.all().find((node) => node.props.class === "lyric-stage")).toBe(stage);
+  expect(findPlay()?.tag).toBe("mobile-play-button");
+  expect(findPlay()?.props.compact).toBe("");
 
   compact.value = false;
   await flushSfcHost();

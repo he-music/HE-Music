@@ -70,16 +70,27 @@
       type="button"
       class="menu-icon"
       :aria-label="t('lyricToolbar.settings')"
-      @click="openSetting('lyrics')"
+      @click="openLyricSetting"
     >
       <SvgIcon name="Settings" />
     </button>
+    <button
+      v-if="compact"
+      type="button"
+      class="menu-icon"
+      :aria-label="t('setting.play.style')"
+      aria-haspopup="dialog"
+      @click="emit('style')"
+    >
+      <SvgIcon name="Palette" />
+    </button>
     <n-popover
+      v-else
       v-model:show="styleMenuShow"
       raw
       :show-arrow="false"
       trigger="click"
-      :placement="compact ? 'bottom-end' : 'left-end'"
+      placement="left-end"
       style="border-radius: 8px"
     >
       <template #trigger>
@@ -106,8 +117,10 @@ import { useI18n } from "vue-i18n";
 import { useMusicStore, useStatusStore } from "@/stores";
 import { openSetting, openCopyLyrics } from "@/utils/modal";
 import PlayerStylePanel from "../PlayerStylePanel.vue";
+import router from "@/router";
 
-defineProps<{ compact?: boolean }>();
+const props = defineProps<{ compact?: boolean }>();
+const emit = defineEmits<{ close: []; style: [] }>();
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
 const { t } = useI18n();
@@ -124,21 +137,31 @@ const offsetMilliseconds = computed({
 });
 const changeOffset = (delta: number) => statusStore.incSongOffset(currentSong.value, delta);
 const resetOffset = () => statusStore.resetSongOffset(currentSong.value);
+const openLyricSetting = () => {
+  emit("close");
+  if (props.compact) {
+    statusStore.showFullPlayer = false;
+    void router.push({ path: "/setting", query: { type: "lyrics" } });
+    return;
+  }
+  void openSetting("lyrics");
+};
 </script>
 
 <style scoped lang="scss">
 .lyric-toolbar {
   position: absolute;
   pointer-events: none;
-  top: 0;
+  top: 50%;
   right: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  height: 100%;
+  justify-content: center;
+  gap: 12px;
   width: 80px;
-  padding: 20% 0;
+  padding: 12px 0;
+  transform: translateY(-50%);
   opacity: 0;
   transition: opacity 0.3s;
 
@@ -213,6 +236,7 @@ const resetOffset = () => statusStore.resetSongOffset(currentSong.value);
   }
   &.compact {
     position: static;
+    transform: none;
     pointer-events: auto;
     flex-direction: row;
     width: auto;

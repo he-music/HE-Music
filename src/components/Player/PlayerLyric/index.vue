@@ -45,25 +45,28 @@
             <span>{{ t("lyricToolbar.shortLabel") }}</span>
           </button>
         </template>
-        <div role="dialog" :aria-label="t('lyricToolbar.label')" @keydown.esc.stop="closeToolbar">
-          <LyricToolbar compact />
+        <div
+          role="dialog"
+          :class="{ 'lyric-style-options': toolbarView === 'style' }"
+          :aria-label="t(toolbarView === 'style' ? 'setting.play.style' : 'lyricToolbar.label')"
+          @keydown.esc.stop="closeToolbar"
+        >
+          <template v-if="toolbarView === 'style'">
+            <button type="button" class="options-back" @click="toolbarView = 'tools'">
+              <span aria-hidden="true">←</span>
+              {{ t("lyricToolbar.label") }}
+            </button>
+            <PlayerStylePanel />
+          </template>
+          <LyricToolbar
+            v-else
+            compact
+            @close="toolbarShow = false"
+            @style="toolbarView = 'style'"
+          />
         </div>
       </n-popover>
-      <n-button
-        circle
-        class="lyric-play-button"
-        color="#fff"
-        text-color="#24323c"
-        style="width: 52px; height: 52px"
-        :bordered="false"
-        :loading="statusStore.playLoading"
-        :aria-label="t(statusStore.playStatus ? 'common.pause' : 'common.play')"
-        @click.stop="player.playOrPause()"
-      >
-        <template #icon>
-          <SvgIcon :name="statusStore.playStatus ? 'Pause' : 'Play'" :size="30" />
-        </template>
-      </n-button>
+      <MobilePlayButton compact class="lyric-play-button" />
     </div>
     <LyricToolbar v-else class="lyric-menu" />
   </div>
@@ -74,6 +77,8 @@ import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { usePlayer } from "@/utils/player";
 import { useI18n } from "vue-i18n";
 import LyricToolbar from "./LyricToolbar.vue";
+import MobilePlayButton from "../PlayerComponents/MobilePlayButton.vue";
+import PlayerStylePanel from "../PlayerStylePanel.vue";
 import audioManager from "@/utils/audioManager";
 import { useLyricPlaybackClock } from "@/components/LyricStage/useLyricPlaybackClock";
 
@@ -89,6 +94,10 @@ const player = usePlayer();
 const { t } = useI18n();
 const compactToolbar = useMediaQuery("(max-width: 989.98px)");
 const toolbarShow = ref(false);
+const toolbarView = ref<"tools" | "style">("tools");
+watch(toolbarShow, (show) => {
+  if (!show) toolbarView.value = "tools";
+});
 const toolbarTrigger = ref<HTMLButtonElement>();
 const closeToolbar = () => {
   toolbarShow.value = false;
@@ -197,6 +206,36 @@ const lyricClock = { time: playSeek };
       outline-offset: 2px;
       border-radius: 12px;
     }
+  }
+}
+.lyric-style-options {
+  --main-cover-color: 239, 239, 239;
+  width: min(280px, calc(100vw - 32px));
+  color: rgb(var(--main-cover-color));
+  background: rgba(28, 28, 30, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  .options-back {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    min-height: 44px;
+    padding: 8px 12px;
+    border: 0;
+    border-radius: 12px;
+    color: inherit;
+    background: transparent;
+    font: inherit;
+    cursor: pointer;
+    &:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: -2px;
+    }
+  }
+  :deep(.player-style-panel) {
+    width: 100%;
+    padding-top: 0;
   }
 }
 .player-lyric.compact {
