@@ -50,7 +50,7 @@
         type="primary"
         :loading="busy"
         :disabled="!current || busy"
-        @click="confirmInstall"
+        @click="installUpdate"
         >{{ t(phase === "installing" ? "updates.phase_installing" : "modal.update_now") }}</n-button
       >
       <n-button
@@ -87,7 +87,6 @@ const current = computed(() => {
 });
 const state = computed(() => (current.value ? session.value?.state.value : undefined));
 const phase = computed(() => state.value?.phase ?? "unavailable");
-const confirming = ref(false);
 const restarting = ref(false);
 const downloadPercent = computed(() => {
   const value = state.value;
@@ -99,11 +98,7 @@ const downloadedMB = computed(() => ((state.value?.downloaded ?? 0) / 1024 / 102
 const totalMB = computed(() => ((state.value?.total ?? 0) / 1024 / 1024).toFixed(1));
 const failure = ref("");
 const busy = computed(
-  () =>
-    confirming.value ||
-    restarting.value ||
-    session.value?.busy.value === true ||
-    phase.value === "installing",
+  () => restarting.value || session.value?.busy.value === true || phase.value === "installing",
 );
 const renderedNotes = computed(() =>
   state.value?.notes ? marked.parse(state.value.notes, { async: false }) : "",
@@ -134,7 +129,9 @@ function jumpLink(event: MouseEvent): void {
   event.preventDefault();
   if (!disposed && /^https?:\/\//i.test(link.href)) void openExternal(link.href);
 }
-async function installUpdate(owner: UpdatesSession): Promise<void> {
+async function installUpdate(): Promise<void> {
+  const owner = session.value;
+  if (disposed || !current.value || busy.value || phase.value !== "available" || !owner) return;
   try {
     failure.value = "";
     await owner.install();
@@ -164,38 +161,6 @@ async function checkAgain(): Promise<void> {
     if (!disposed && current.value && session.value === owner)
       failure.value = t("updates.operation_failed");
   }
-}
-function confirmInstall(): void {
-  if (disposed || !current.value || busy.value || phase.value !== "available") return;
-  const owner = session.value;
-  const candidate = state.value;
-  if (!candidate || !owner) return;
-  confirming.value = true;
-  const release = () => {
-    confirming.value = false;
-  };
-  window.$dialog.warning({
-    title: t("modal.update_now"),
-    content: `${t("updates.version", { version: candidate.version })}\n\n${t("updates.apply_notice")}`,
-    positiveText: t("modal.update_now"),
-    negativeText: t("common.cancel"),
-    onNegativeClick: release,
-    onClose: release,
-    onAfterLeave: release,
-    onPositiveClick: () => {
-      release();
-      if (disposed || !current.value || session.value !== owner) return;
-      if (
-        state.value?.phase !== "available" ||
-        state.value.operationRevision !== candidate.operationRevision ||
-        state.value.version !== candidate.version
-      ) {
-        failure.value = t("updates.candidate_changed");
-        return;
-      }
-      void installUpdate(owner);
-    },
-  });
 }
 async function restartApp(): Promise<void> {
   const owner = session.value;

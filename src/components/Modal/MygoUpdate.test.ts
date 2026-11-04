@@ -164,7 +164,7 @@ function mount(owner?: UpdatesSession) {
   };
 }
 
-it("uses native acknowledgements, confirms the exact candidate and keeps installation owned by the shell", async () => {
+it("uses native acknowledgements, starts the current candidate with one click and keeps installation owned by the shell", async () => {
   const listeners = new Set<(event: UpdatesEvent) => void>();
   const emit = (id: number, state: Partial<UpdatesState> = {}) => {
     listeners.forEach((listener) =>
@@ -247,22 +247,11 @@ it("uses native acknowledgements, confirms the exact candidate and keeps install
   expect(openExternal).toHaveBeenCalledWith("https://github.test/music/releases");
   expect(ui.all().map((element) => element.props.style)).toContainEqual({ "max-height": "500px" });
   expect(ui.all().some((element) => element.props.class === "menu")).toBe(true);
+  const applying = ui.click("modal.update_now");
+  expect(provider.install).toHaveBeenCalledOnce();
+  expect(warning).not.toHaveBeenCalled();
   ui.click("modal.update_now");
-  expect(provider.install).not.toHaveBeenCalled();
-  const first = warning.mock.calls.at(-1)?.[0];
-  if (!first) throw new Error("Missing confirmation");
-  expect(first.content).toContain("2.0.0");
-  emit(0, { operationRevision: 2, stateRevision: 3, phase: "available", version: "3.0.0" });
-  await first.onPositiveClick();
-  await flush();
-  expect(provider.install).not.toHaveBeenCalled();
-  expect(ui.all().some((element) => element.text === "updates.candidate_changed")).toBe(true);
-  ui.click("modal.update_now");
-  const second = warning.mock.calls.at(-1)?.[0];
-  if (!second) throw new Error("Missing second confirmation");
-  expect(second.content).toContain("3.0.0");
-  const applying = second.onPositiveClick();
-  expect(applying).toBeUndefined(); // Naive UI must close the confirmation before installation ends.
+  expect(provider.install).toHaveBeenCalledOnce();
   await flush();
   expect(provider.install).toHaveBeenCalledOnce();
   expect(provider.download).not.toHaveBeenCalled();
