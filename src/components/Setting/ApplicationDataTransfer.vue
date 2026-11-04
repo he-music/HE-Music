@@ -1,15 +1,25 @@
 <template>
-  <n-space>
-    <n-button :disabled="pending" @click="exportData">{{ t("mygo.export_data") }}</n-button>
-    <n-button v-if="isMygo" :disabled="pending || !filesSession?.ready.value" @click="selectFile">
-      {{ t("mygo.import_data") }}
-    </n-button>
-  </n-space>
-  <input ref="fileInput" type="file" accept=".json,application/json" hidden @change="readFile" />
+  <n-button
+    type="primary"
+    strong
+    secondary
+    :disabled="pending || (operation === 'import' && (!isMygo || !filesSession?.ready.value))"
+    @click="operation === 'export' ? exportData() : selectFile()"
+  >
+    {{ t(operation === "export" ? "mygo.export_data" : "mygo.import_data") }}
+  </n-button>
+  <input
+    v-if="operation === 'import' && isMygo"
+    ref="fileInput"
+    type="file"
+    accept=".json,application/json"
+    hidden
+    @change="readFile"
+  />
 </template>
 
 <script setup lang="ts">
-import { nextTick, onScopeDispose, ref } from "vue";
+import { nextTick, onScopeDispose, ref, toRef } from "vue";
 import { saveAs } from "file-saver";
 import { t } from "@/i18n";
 import { platform } from "@/platform";
@@ -21,8 +31,12 @@ import {
   parseApplicationBackup,
 } from "@/platform/applicationBackup";
 
+const props = defineProps<{
+  operation: "export" | "import";
+  state: { pending: boolean };
+}>();
 const isMygo = platform.kind === "mygo";
-const pending = ref(false);
+const pending = toRef(props.state, "pending");
 const fileInput = ref<HTMLInputElement>();
 let disposed = false;
 onScopeDispose(() => {

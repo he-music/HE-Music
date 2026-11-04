@@ -1,7 +1,9 @@
 {
   "data_transfer": "Application data",
-  "export_data": "Export data",
-  "import_data": "Import data",
+  "export_data": "Export application data",
+  "export_data_tip": "Back up settings, login information, playlists, history, and other application data",
+  "import_data": "Import application data",
+  "import_data_tip": "Restore an application backup or legacy Electron migration file, replacing current application data",
   "import_data_confirm": "Importing replaces application data, stops downloads, and reloads the app. Music files and directory permissions are not imported.",
   "data_transfer_failed": "Unable to import or export application data",
   "data_read_failed": "Unable to read application data. Existing data has been preserved.",

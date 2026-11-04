@@ -1,7 +1,9 @@
 {
   "data_transfer": "应用数据",
-  "export_data": "导出数据",
-  "import_data": "导入数据",
+  "export_data": "导出应用数据",
+  "export_data_tip": "备份设置、登录信息、歌单、历史记录等应用数据",
+  "import_data": "导入应用数据",
+  "import_data_tip": "恢复应用备份或旧版 Electron 迁移文件，将替换当前应用数据",
   "import_data_confirm": "导入将替换当前应用数据、停止下载并重新加载。音乐文件和目录授权不会导入。",
   "data_transfer_failed": "数据导入或导出失败",
   "data_read_failed": "无法读取应用数据，原数据已保留。",

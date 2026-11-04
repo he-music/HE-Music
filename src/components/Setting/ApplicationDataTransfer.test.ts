@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { shallowRef } from "vue";
+import { reactive, shallowRef } from "vue";
 import { mountProductionSfc, flushSfcHost, emitHostEvent } from "@/test/productionSfc";
 import { parseApplicationBackup } from "@/platform/applicationBackup";
 
@@ -12,7 +12,7 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
-function mount() {
+function mount(state = reactive({ pending: false }), operation: "import" | "export" = "import") {
   const reload = vi.fn();
   const error = vi.fn();
   let dialog: { onPositiveClick(): Promise<void>; onNegativeClick(): void } | undefined;
@@ -46,6 +46,8 @@ function mount() {
       },
     },
     ["NSpace", "NButton"],
+    "",
+    { operation, state },
   );
   stops.push(page.close);
   const choose = async (text: string) => {
@@ -101,4 +103,21 @@ it("drains the current owner before restoration and reloads only after durable n
   finish?.();
   await operation;
   expect(page.reload).toHaveBeenCalledOnce();
+});
+
+it("keeps both backup actions disabled while either operation is pending", async () => {
+  const state = reactive({ pending: false });
+  const exportPage = mount(state, "export");
+  const importPage = mount(state);
+  await importPage.choose(backup);
+  expect(state.pending).toBe(true);
+  for (const page of [exportPage, importPage]) {
+    expect(page.all().find((node) => node.tag === "NButton")?.props.disabled).toBe(true);
+  }
+  importPage.dialog().onNegativeClick();
+  await flushSfcHost();
+  expect(state.pending).toBe(false);
+  for (const page of [exportPage, importPage]) {
+    expect(page.all().find((node) => node.tag === "NButton")?.props.disabled).toBe(false);
+  }
 });

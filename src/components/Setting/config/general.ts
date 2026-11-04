@@ -1,7 +1,7 @@
 import { applicationStorage } from "@/platform/applicationStorage";
 import { useDataStore, useSettingStore } from "@/stores";
 import { SettingConfig } from "@/types/settings";
-import { computed, defineAsyncComponent } from "vue";
+import { computed, defineAsyncComponent, reactive } from "vue";
 import { t } from "@/i18n";
 import { platform } from "@/platform";
 import type { GeneralSettingsActions } from "./generalActions";
@@ -17,6 +17,7 @@ const RecommendationIdentityReset = defineAsyncComponent(
 export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConfig => {
   const dataStore = useDataStore();
   const settingStore = useSettingStore();
+  const dataTransferState = reactive({ pending: false });
 
   // 重置设置
   const resetSetting = () => {
@@ -203,10 +204,21 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
             componentProps: { type: "primary" },
           },
           {
-            key: "applicationData",
-            label: t("mygo.data_transfer"),
+            key: "exportApplicationData",
+            label: t("mygo.export_data"),
+            description: t("mygo.export_data_tip"),
             type: "custom",
             component: ApplicationDataTransfer,
+            componentProps: { operation: "export", state: dataTransferState },
+          },
+          {
+            key: "importApplicationData",
+            label: t("mygo.import_data"),
+            description: t("mygo.import_data_tip"),
+            type: "custom",
+            component: ApplicationDataTransfer,
+            componentProps: { operation: "import", state: dataTransferState },
+            show: platform.kind === "mygo",
           },
         ],
       },
