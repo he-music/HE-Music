@@ -1,4 +1,14 @@
 {
+  "lyricToolbar": {
+    "label": "Lyric options",
+    "shortLabel": "Lyrics",
+    "delay": "Delay lyrics by 0.5 seconds",
+    "advance": "Advance lyrics by 0.5 seconds",
+    "offset": "Lyric offset",
+    "offsetHint": "Positive values advance lyrics. Unit: milliseconds.",
+    "reset": "Reset",
+    "settings": "Lyric settings"
+  },
   "updates": {
     "phase_idle": "Ready to check for updates.",
     "phase_checking": "Checking for updates…",

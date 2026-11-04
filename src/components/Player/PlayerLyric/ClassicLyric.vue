@@ -81,11 +81,11 @@ function seek(time: number) {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  padding-right: 48px;
+  padding-right: var(--lyric-toolbar-space, 48px);
   box-sizing: border-box;
 
   &.pure {
-    padding: 0 48px;
+    padding: 0 var(--lyric-toolbar-space, 48px);
   }
 
   @media (max-width: 990px) {

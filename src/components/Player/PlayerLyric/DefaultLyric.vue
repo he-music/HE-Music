@@ -630,7 +630,7 @@ onBeforeUnmount(() => {
     overflow-y: auto;
     overflow-x: hidden;
     padding-left: var(--lrc-left-padding, 10px);
-    padding-right: 80px;
+    padding-right: var(--lyric-toolbar-space, 80px);
     box-sizing: border-box;
     /* 隐藏滚动条 */
     scrollbar-width: none;
@@ -639,7 +639,7 @@ onBeforeUnmount(() => {
       display: none;
     }
     @media (max-width: 990px) {
-      padding-right: 20px;
+      padding-right: var(--lyric-toolbar-space, 20px);
     }
   }
   .placeholder {
@@ -914,7 +914,7 @@ onBeforeUnmount(() => {
   }
   &.pure {
     .lyric-scroll-container {
-      padding: 0 80px;
+      padding: 0 var(--lyric-toolbar-space, 80px);
     }
     .lyric-content {
       .placeholder {

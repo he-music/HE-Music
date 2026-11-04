@@ -97,12 +97,12 @@ function seek(time: number) {
   height: 100%;
   min-width: 0;
   min-height: 0;
-  padding-right: 64px;
+  padding-right: var(--lyric-toolbar-space, 64px);
   box-sizing: border-box;
   font-weight: 600;
 
   &.pure {
-    padding: 0 64px;
+    padding: 0 var(--lyric-toolbar-space, 64px);
   }
 
   .monet-rail-container {

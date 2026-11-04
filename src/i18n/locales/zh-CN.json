@@ -1,4 +1,14 @@
 {
+  "lyricToolbar": {
+    "label": "歌词选项",
+    "shortLabel": "词",
+    "delay": "歌词延后 0.5 秒",
+    "advance": "歌词提前 0.5 秒",
+    "offset": "歌词偏移",
+    "offsetHint": "正值为歌词提前，单位毫秒",
+    "reset": "清零",
+    "settings": "歌词设置"
+  },
   "updates": {
     "phase_idle": "可以检查应用更新。",
     "phase_checking": "正在检查更新…",

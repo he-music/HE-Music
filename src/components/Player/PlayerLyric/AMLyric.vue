@@ -138,7 +138,7 @@ watch(lyricPlayerRef, (player) => {
     left: 0;
     top: 0;
     padding-left: var(--amll-lyric-left-padding, 10px);
-    padding-right: 80px;
+    padding-right: var(--lyric-toolbar-space, 80px);
     div {
       div[class^="_interludeDots"] {
         display: var(--display-count-down-show);
@@ -151,7 +151,7 @@ watch(lyricPlayerRef, (player) => {
 
   &.align-right {
     :deep(.am-lyric) {
-      padding-left: 80px;
+      padding-left: var(--lyric-toolbar-space, 80px);
       padding-right: var(--amll-lyric-right-padding, 10px);
 
       @media (max-width: 990px) {
@@ -174,7 +174,7 @@ watch(lyricPlayerRef, (player) => {
 
     :deep(.am-lyric) {
       margin: 0;
-      padding: 0 80px;
+      padding: 0 var(--lyric-toolbar-space, 80px);
     }
   }
 
