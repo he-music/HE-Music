@@ -84,7 +84,27 @@
 
 macOS 请从复制后的应用目录启动；Windows 需要 WebView2 Runtime。Linux 的运行依赖见下方「桌面运行环境」。
 
-### 当前 mygo 测试版快捷安装
+### 正式 mygo 版本快捷安装
+
+v2.0.0 已正式发布，可使用以下长期入口安装正式频道的最新版本：
+
+macOS / Linux：
+
+```sh
+curl -fsSL https://github.com/he-music/HE-Music/releases/latest/download/install.sh | sh
+```
+
+Windows PowerShell：
+
+```powershell
+irm https://github.com/he-music/HE-Music/releases/latest/download/install.ps1 | iex
+```
+
+脚本会自动选择架构并按当前用户安装，无需使用 `sudo` 或管理员终端；Linux 默认安装到 `~/.local/he-music.app`。
+
+首次从 Electron 迁移到 mygo 需要手动安装，旧数据按 [数据迁移说明](docs/mygo-data.md) 导入；之后同一频道的版本可从「设置 → 关于 → 检查更新」升级。正式版沿用应用标识 `com.hemusic.music`，测试应用使用独立标识。
+
+### 测试频道（仅供更新演练）
 
 当前 mygo 更新演练使用独立的 **HE-Music Update Test** 应用和 `mygo-test-v` 频道。下列入口使用已发布的测试安装脚本，自动选择系统架构并安装测试频道的最新版本：
 
@@ -101,24 +121,6 @@ irm https://github.com/he-music/HE-Music/releases/download/mygo-test-v2.0.1/inst
 ```
 
 脚本按当前用户安装，无需在管理员终端或通过 `sudo` 运行。macOS 首次安装优先使用 `/Applications`，无写权限时使用 `~/Applications`，已有版本沿用原安装位置；Linux 安装到 `~/.local/he-music-update-test.app` 并添加应用菜单入口。脚本 URL 固定在一个已有 Release，其内置的测试频道会选择该频道最新版本；要安装指定旧版，请下载该版本的 tar.gz，并把本地文件作为 `install.sh` 参数传入。
-
-### 正式 mygo 版本快捷安装
-
-首次正式 mygo 版本发布并设为 latest 后，可使用以下长期入口。**当前 latest 仍是旧 Electron 版本，尚未提供这些脚本；现阶段请使用上方测试版入口或从 Releases 手动下载安装。**
-
-macOS / Linux：
-
-```sh
-curl -fsSL https://github.com/he-music/HE-Music/releases/latest/download/install.sh | sh
-```
-
-Windows PowerShell：
-
-```powershell
-irm https://github.com/he-music/HE-Music/releases/latest/download/install.ps1 | iex
-```
-
-首次从 Electron 迁移到 mygo 需要手动安装，旧数据按 [数据迁移说明](docs/mygo-data.md) 导入；之后同一频道的版本可从「设置 → 关于 → 检查更新」升级。正式版沿用应用标识 `com.hemusic.music`，测试应用使用独立标识。
 
 ## 🖥️ 桌面运行环境
 
