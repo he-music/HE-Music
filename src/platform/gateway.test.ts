@@ -21,6 +21,11 @@ describe("mygo gateway request boundaries", () => {
     for (const other of [
       `${gateway}/__api/hemusic/song?target=anything`,
       `${gateway}/__proxy?target=`,
+      `${gateway}/__proxy?target=aHR0cHM6Ly9jZG4uZXhhbXBsZS9hLmZsYWM`,
+      `${gateway}/__proxy/media.flac?target=anything`,
+      `${gateway}/__proxy/file:///private/a.flac`,
+      `${gateway}/__proxy/https://user:pass@cdn.example/a.flac`,
+      `${gateway}/__proxy/invalid`,
       resource.replace("session-secret", "another-session"),
       resource.replace("49234", "49235"),
       resource.replace("127.0.0.1", "user:password@127.0.0.1"),
@@ -103,19 +108,30 @@ describe("mygo gateway request boundaries", () => {
     const source = "https://cdn.example/歌曲.mp3?signature=a%2Bb&part=1&part=2#t=10";
     const local = module.gatewayProxyUrl(source);
     const parsed = new URL(local);
-    expect(`${parsed.origin}${parsed.pathname}`).toBe(`${gateway}/__proxy`);
-    const encoded = parsed.searchParams.get("target") ?? "";
-    const remote = new TextDecoder().decode(
-      Uint8Array.from(atob(encoded.replaceAll("-", "+").replaceAll("_", "/")), (value) =>
-        value.charCodeAt(0),
-      ),
+    expect(`${parsed.origin}${parsed.pathname}`).toBe(
+      `${gateway}/__proxy/https://cdn.example/%E6%AD%8C%E6%9B%B2.mp3`,
     );
-    expect(remote).toBe("https://cdn.example/%E6%AD%8C%E6%9B%B2.mp3?signature=a%2Bb&part=1&part=2");
+    expect(parsed.search).toBe("?signature=a%2Bb&part=1&part=2");
     expect(parsed.hash).toBe("#t=10");
     expect(module.gatewayProxyUrl(local)).toBe(local);
     expect(source).toContain("歌曲");
   });
 
+  it.each([
+    "/song.FLAC?signature=secret",
+    "/music/a%2Fb.flac?target=upstream&signature=a%2Bb&part=1&part=2&empty=",
+    "/audio.m4a",
+    "/cover.jpg",
+    "/playlist.m3u8",
+    "/play?filename=audio.flac",
+    "/audio.%66lac",
+  ])("maps the original resource path and query for %s", async (path) => {
+    const module = await setup();
+    const result = module.gatewayProxyUrl(`https://cdn.example${path}`);
+    expect(result).toBe(`${gateway}/__proxy/https://cdn.example${path}`);
+    expect(module.isMygoGatewayResourceUrl(result)).toBe(true);
+    expect(module.gatewayProxyUrl(result)).toBe(result);
+  });
   it("preserves local grants, blobs, packaged assets and IPv6 loopback", async () => {
     const module = await setup();
     for (const source of [
@@ -129,7 +145,9 @@ describe("mygo gateway request boundaries", () => {
     ]) {
       expect(module.gatewayProxyUrl(source)).toBe(source);
     }
-    expect(module.gatewayProxyUrl("//cdn.example/image.png")).toContain("/__proxy?target=");
+    expect(module.gatewayProxyUrl("//cdn.example/image.png")).toContain(
+      "/__proxy/https://cdn.example/image.png",
+    );
   });
 
   it("rejects unavailable or invalid mygo setup instead of silently falling back to direct API traffic", async () => {

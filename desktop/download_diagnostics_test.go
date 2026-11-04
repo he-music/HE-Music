@@ -67,6 +67,10 @@ func TestDownloadPayloadFailureReasonsAreFixedCodes(t *testing.T) {
 		cause error
 		want  string
 	}{
+		{fmt.Errorf("PRIVATE_SOURCE: %w: FLAC metadata type 7", metadata.ErrUnsupportedPayload), "flac_metadata_type"},
+		{fmt.Errorf("PRIVATE_SOURCE: %w: too many FLAC metadata blocks", metadata.ErrUnsupportedPayload), "flac_metadata_block_limit"},
+		{fmt.Errorf("PRIVATE_SOURCE: %w: FLAC blocking strategy change", metadata.ErrUnsupportedPayload), "flac_blocking_strategy"},
+		{fmt.Errorf("PRIVATE_SOURCE: %w: trailing FLAC bytes", metadata.ErrUnsupportedPayload), "flac_trailing_bytes"},
 		{fmt.Errorf("PRIVATE_SOURCE: %w: ID3 flags", metadata.ErrUnsupportedPayload), "mp3_id3_flags"},
 		{fmt.Errorf("PRIVATE_SOURCE: %w: CRC-protected MPEG", metadata.ErrUnsupportedPayload), "mp3_crc_protection"},
 		{fmt.Errorf("PRIVATE_SOURCE: %w: unknown MPEG/trailing bytes at 123", metadata.ErrUnsupportedPayload), "mp3_unknown_prefix_or_trailer"},

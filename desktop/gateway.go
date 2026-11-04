@@ -198,12 +198,16 @@ func (g *NetworkGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	var target *url.URL
 	var err error
 	apiRequest := false
-	if path == "/__proxy" {
+	if strings.HasPrefix(path, "/__proxy/") {
 		if r.Method != "GET" && r.Method != "HEAD" {
 			http.Error(w, "media requires GET or HEAD", 405)
 			return
 		}
-		target, err = decodeDesktopGatewayTarget(r.URL.Query().Get("target"))
+		raw := strings.TrimPrefix(r.URL.EscapedPath(), prefix+"/__proxy/")
+		if r.URL.RawQuery != "" || r.URL.ForceQuery {
+			raw += "?" + r.URL.RawQuery
+		}
+		target, err = parseDesktopGatewayURL(raw)
 	} else if strings.HasPrefix(path, "/__api/") {
 		name, tail, _ := strings.Cut(strings.TrimPrefix(path, "/__api/"), "/")
 		api, found := apis[name]
@@ -252,6 +256,9 @@ func gatewayCORS(header http.Header, r *http.Request) {
 	header.Set("Referrer-Policy", "no-referrer")
 }
 func parseDesktopGatewayURL(raw string) (*url.URL, error) {
+	if len(raw) == 0 || len(raw) > desktopGatewayMaxTarget {
+		return nil, errors.New("invalid target length")
+	}
 	target, err := url.Parse(raw)
 	if err != nil || target == nil {
 		return nil, errors.New("invalid URL")
@@ -260,12 +267,4 @@ func parseDesktopGatewayURL(raw string) (*url.URL, error) {
 		return nil, errors.New("invalid HTTP URL")
 	}
 	return target, nil
-}
-func base64GatewayURL(raw string) string { return base64.RawURLEncoding.EncodeToString([]byte(raw)) }
-func decodeDesktopGatewayTarget(encoded string) (*url.URL, error) {
-	decoded, err := base64.RawURLEncoding.DecodeString(encoded)
-	if err != nil || len(decoded) == 0 || len(decoded) > desktopGatewayMaxTarget {
-		return nil, errors.New("invalid target encoding")
-	}
-	return parseDesktopGatewayURL(string(decoded))
 }

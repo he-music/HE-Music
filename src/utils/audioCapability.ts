@@ -600,7 +600,13 @@ export class AudioProcessingDriver {
     this.sourceInfo = sourceInfo;
     this.sourceError = false;
     this.removeSourceNode(element);
-    if (sourceInfo?.platform === "migu" && sourceInfo.format === "m4a") {
+    const sourceType =
+      sourceInfo?.format === "flac"
+        ? "audio/flac"
+        : sourceInfo?.platform === "migu" && sourceInfo.format === "m4a"
+          ? "audio/mp4"
+          : undefined;
+    if (sourceType) {
       // Safari needs the container MIME hint for this resource. A parent src takes precedence.
       element.removeAttribute("src");
       if (!this.matches(generation, element)) return;
@@ -616,7 +622,7 @@ export class AudioProcessingDriver {
         if (this.graph) this.recoverPlayback(generation, element);
         else this.emit("error", event);
       };
-      source.type = "audio/mp4";
+      source.type = sourceType;
       source.src = url;
       source.addEventListener("error", onError);
       this.sourceNode = { element, source, onError };

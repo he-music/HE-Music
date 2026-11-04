@@ -177,7 +177,7 @@ describe("audio capability", () => {
     vi.stubGlobal("window", { __HE_MUSIC_GATEWAY_ORIGIN__: gateway });
     try {
       const fetcher = vi.fn(async () => new Response(null, { status: 200 }));
-      const url = `${gateway}/__proxy?target=aHR0cHM6Ly9hdWRpby5leGFtcGxlL3Nvbmc`;
+      const url = `${gateway}/__proxy/https://audio.example/song`;
       await expect(canUseWebAudioSource(url, { fetcher })).resolves.toBe(true);
       expect(fetcher).not.toHaveBeenCalled();
       const controller = new AbortController();

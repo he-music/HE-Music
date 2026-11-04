@@ -23,7 +23,7 @@ func TestGatewayRejectsHLSFeaturesWithUnroutedSecondaryResources(t *testing.T) {
 			}))
 			defer upstream.Close()
 			_, base := gatewayTestServer(t, GatewayAPIConfig{})
-			response, body := gatewayRequest(t, "GET", base+"/__proxy?target="+gatewayTarget(t, upstream.URL+"/master.m3u8"), "", nil)
+			response, body := gatewayRequest(t, "GET", base+"/__proxy/"+gatewayTarget(t, upstream.URL+"/master.m3u8"), "", nil)
 			if response.StatusCode != http.StatusBadGateway || strings.Contains(body, "https://") {
 				t.Fatalf("unsupported manifest was returned to the player: status %d, body %q", response.StatusCode, body)
 			}

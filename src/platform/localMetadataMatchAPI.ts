@@ -1,6 +1,6 @@
 import { matchSong, neteaseSongLyric } from "@/api/song";
 import { romaSeparator, transSeparator } from "@/utils/lyric";
-import { gatewayProxyUrl, mygoGatewayOrigin } from "./gateway";
+import { gatewayProxyUrl, isMygoGatewayResourceUrl } from "./gateway";
 import { loadSystemMediaArtwork } from "./systemMediaArtwork";
 import type { MetadataMatchAPI, MetadataMatchCandidate } from "./localMetadataMatch";
 
@@ -106,8 +106,7 @@ export function createMetadataMatchAPI(
       const cover = new URL(matchCoverURL(option.cover));
       if (!/^https?:$/.test(cover.protocol) || cover.username || cover.password)
         throw new Error("Unsupported match artwork");
-      const gateway = mygoGatewayOrigin();
-      if (!gateway || !gatewayProxyUrl(cover.href).startsWith(`${gateway}/__proxy?target=`))
+      if (!isMygoGatewayResourceUrl(gatewayProxyUrl(cover.href)))
         throw new Error("Match artwork requires the controlled gateway");
       const data = await loadSystemMediaArtwork(cover.href, signal);
       const mime = atob(data).startsWith("\x89PNG") ? "image/png" : "image/jpeg";

@@ -131,7 +131,7 @@ func (g *NetworkGateway) forward(w http.ResponseWriter, r *http.Request, client 
 				http.Error(w, "invalid upstream location", 502)
 				return
 			}
-			w.Header().Set("Location", prefix+"/__proxy?target="+base64GatewayURL(resolved.String()))
+			w.Header().Set("Location", prefix+"/__proxy/"+resolved.String())
 		}
 		if isGatewayManifest(response) {
 			g.writeManifest(w, r, response, prefix)

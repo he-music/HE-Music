@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"io"
@@ -17,7 +16,10 @@ import (
 
 func gatewayTarget(t *testing.T, raw string) string {
 	t.Helper()
-	return base64.RawURLEncoding.EncodeToString([]byte(raw))
+	if _, err := parseDesktopGatewayURL(raw); err != nil {
+		t.Fatal(err)
+	}
+	return raw
 }
 func gatewayTestServer(t *testing.T, config GatewayAPIConfig) (*NetworkGateway, string) {
 	t.Helper()
@@ -191,7 +193,7 @@ func TestGatewayMediaRangeRedirectAndHeaders(t *testing.T) {
 	}))
 	defer upstream.Close()
 	_, origin := gatewayTestServer(t, GatewayAPIConfig{})
-	target := origin + "/__proxy?target=" + gatewayTarget(t, upstream.URL+"/redirect")
+	target := origin + "/__proxy/" + gatewayTarget(t, upstream.URL+"/redirect")
 	for _, method := range []string{"GET", "HEAD"} {
 		response, body := gatewayRequest(t, method, target, "", map[string]string{"Range": "bytes=0-3", "Authorization": "fixture", "Cookie": "session=fixture", "Origin": "https://app.example"})
 		if response.StatusCode != 206 || response.Header.Get("Content-Range") != "bytes 0-3/4" || response.Header.Get("Access-Control-Allow-Origin") != "https://app.example" || response.Header.Get("Access-Control-Allow-Private-Network") != "" || response.Header.Get("X-Secret") != "" {
@@ -231,13 +233,13 @@ func TestGatewayHLSFinalBaseAndResources(t *testing.T) {
 	}))
 	defer upstream.Close()
 	_, origin := gatewayTestServer(t, GatewayAPIConfig{})
-	target := origin + "/__proxy?target=" + gatewayTarget(t, upstream.URL+"/start")
+	target := origin + "/__proxy/" + gatewayTarget(t, upstream.URL+"/start")
 	response, body := gatewayRequest(t, "GET", target, "", nil)
 	if response.StatusCode != 200 || response.Header.Get("ETag") != "" || !strings.Contains(body, "#comment stays") || !strings.Contains(body, "data:text/plain;base64,AAAA") {
 		t.Fatalf("manifest %d %q", response.StatusCode, body)
 	}
 	for _, path := range []string{"/hls/key?k=1", "/hls/init.mp4", "/audio.m3u8", "/hls/seg.ts?q=2"} {
-		rewritten := "/test-secret/__proxy?target=" + gatewayTarget(t, upstream.URL+path)
+		rewritten := "/test-secret/__proxy/" + gatewayTarget(t, upstream.URL+path)
 		if !strings.Contains(body, rewritten) {
 			t.Fatalf("missing rewritten resource %s in %q", path, body)
 		}
@@ -273,7 +275,7 @@ func TestGatewaySecretCORSAndOptions(t *testing.T) {
 	if body != "OPTIONS" {
 		t.Fatal("ordinary OPTIONS swallowed")
 	}
-	response, _ = gatewayRequest(t, "GET", origin+"/__proxy?target=invalid", "", headers)
+	response, _ = gatewayRequest(t, "GET", origin+"/__proxy/invalid", "", headers)
 	if response.StatusCode != 400 || response.Header.Get("Access-Control-Allow-Origin") != "https://app.example" || response.Header.Get("Access-Control-Expose-Headers") == "" {
 		t.Fatal("error unreadable")
 	}
@@ -317,7 +319,7 @@ func TestGatewayStopCancellationGenerationAndDuplicateStart(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "GET", origin+"/__proxy?target="+gatewayTarget(t, upstream.URL), nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", origin+"/__proxy/"+gatewayTarget(t, upstream.URL), nil)
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)

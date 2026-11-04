@@ -61,13 +61,6 @@ export async function initializeGateway(
   apiBases = config;
 }
 
-function encodeTarget(value: string): string {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replaceAll("+", "-").replaceAll("/", "_").replaceAll("=", "");
-}
-
 function localHost(hostname: string): boolean {
   const host = hostname
     .toLowerCase()
@@ -92,9 +85,7 @@ export function gatewayProxyUrl(value: string): string {
     return value;
   }
   if (!/^https?:$/.test(target.protocol) || localHost(target.hostname)) return value;
-  const fragment = target.hash;
-  target.hash = "";
-  return `${gateway}/__proxy?target=${encodeTarget(target.href)}${fragment}`;
+  return `${gateway}/__proxy/${target.href}`;
 }
 
 /** The injected proxy always supplies its own CORS headers, independent of the CDN. */
@@ -104,6 +95,9 @@ export function isMygoGatewayResourceUrl(value: string): boolean {
   try {
     const base = new URL(gateway);
     const resource = new URL(value);
+    const prefix = `${base.pathname.replace(/\/+$/, "")}/__proxy/`;
+    if (!resource.pathname.startsWith(prefix)) return false;
+    const target = new URL(`${resource.pathname.slice(prefix.length)}${resource.search}`);
     return (
       base.protocol === "http:" &&
       localHost(base.hostname) &&
@@ -112,8 +106,9 @@ export function isMygoGatewayResourceUrl(value: string): boolean {
       !resource.username &&
       !resource.password &&
       resource.origin === base.origin &&
-      resource.pathname === `${base.pathname.replace(/\/+$/, "")}/__proxy` &&
-      Boolean(resource.searchParams.get("target"))
+      /^https?:$/.test(target.protocol) &&
+      !target.username &&
+      !target.password
     );
   } catch {
     return false;

@@ -89,7 +89,7 @@ afterEach(() => {
   drivers.splice(0).forEach((driver) => driver.dispose());
 });
 
-describe("咪咕 M4A 容器类型加载", () => {
+describe("音源容器类型加载", () => {
   it("uses a typed source with no parent src, preserving the supplied URL", async () => {
     const { driver, current } = fixture();
     const url = "https://audio.example/wlansst?FN=filename.m4a";
@@ -102,6 +102,25 @@ describe("咪咕 M4A 容器类型加载", () => {
     expect(element.play).not.toHaveBeenCalled();
     expect(driver.source).toBe(url);
   });
+
+  it.each(["kuwo", "kugou", "migu", "qq", "netease"])(
+    "provides a FLAC container hint for %s URLs without a filename extension",
+    async (platform) => {
+      const { driver, current } = fixture();
+      const url = "http://127.0.0.1:1234/__proxy/https://audio.example/song.flac";
+      await driver.load(url, { platform, format: "flac" });
+      const element = current();
+      expect(element.getAttribute("src")).toBeNull();
+      expect(sourceOf(element)).toMatchObject({ src: url, type: "audio/flac" });
+      expect(driver.source).toBe(url);
+      await driver.play();
+      expect(element.play).toHaveBeenCalledOnce();
+      await driver.load("https://audio.example/next.mp3", { platform, format: "mp3" });
+      expect(current().src).toBe("https://audio.example/next.mp3");
+      expect(current().children.size).toBe(0);
+      expect(element.children.size).toBe(0);
+    },
+  );
 
   it.each([
     { platform: "migu", format: "mp3" },

@@ -42,8 +42,8 @@ beforeEach(() => {
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockImplementation(async (input) => {
     const request = new URL(String(input));
-    expect(request.pathname).toBe("/session/__proxy");
-    const target = Buffer.from(request.searchParams.get("target") ?? "", "base64url").toString();
+    expect(request.pathname).toBe("/session/__proxy/https://covers.fixture.invalid/original.jpg");
+    const target = `${request.pathname.slice("/session/__proxy/".length)}${request.search}`;
     targets.push(target);
     return new Response(
       new URL(target).searchParams.get("param") === "1024y1024" ? thumbnail : original,

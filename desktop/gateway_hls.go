@@ -75,8 +75,7 @@ func rewriteGatewayManifest(manifest string, base *url.URL, prefix string) (stri
 		if _, err = parseDesktopGatewayURL(target.String()); err != nil {
 			return "", err
 		}
-		encoded := base64GatewayURL(target.String())
-		return prefix + "/__proxy?target=" + encoded, nil
+		return prefix + "/__proxy/" + target.String(), nil
 	}
 	lines := strings.Split(manifest, "\n")
 	for i, line := range lines {

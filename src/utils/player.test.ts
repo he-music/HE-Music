@@ -96,6 +96,10 @@ async function failHttp(code = 4, autoPlay = true, seek = 0) {
 describe("online source format admission", () => {
   it.each([
     ["migu", "m4a", true],
+    ["kuwo", "flac", true],
+    ["kugou", "flac", true],
+    ["migu", "flac", true],
+    ["qq", "flac", true],
     ["migu", "mp3", false],
     ["qq", "m4a", false],
   ] as const)("passes a source MIME hint only for %s/%s", async (platform, format, typed) => {

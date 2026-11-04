@@ -613,7 +613,7 @@ class Player {
         try {
           const link = this.selectPlayQuality(playSongData, quality);
           if (!link) throw new Error("Get song link error");
-          if (platform === "migu" && link.format === "m4a") {
+          if (link.format === "flac" || (platform === "migu" && link.format === "m4a")) {
             source = { platform, format: link.format };
           }
           statusStore.playQuality = link.name;

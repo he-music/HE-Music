@@ -80,6 +80,10 @@ func downloadPayloadFailureReason(cause error) string {
 	}
 	message := cause.Error()
 	for _, reason := range []struct{ detail, code string }{
+		{"FLAC metadata type", "flac_metadata_type"},
+		{"too many FLAC metadata blocks", "flac_metadata_block_limit"},
+		{"FLAC blocking strategy change", "flac_blocking_strategy"},
+		{"trailing FLAC bytes", "flac_trailing_bytes"},
 		{"ID3 version", "mp3_id3_version"},
 		{"ID3 flags", "mp3_id3_flags"},
 		{"ID3 reserved flags", "mp3_id3_reserved_flags"},

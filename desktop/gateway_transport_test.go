@@ -53,7 +53,7 @@ func TestGatewayActualProxyRoutesAPIAndMediaDynamically(t *testing.T) {
 	_, origin := gatewayTestServer(t, gatewayConfig("http://api.invalid/base"))
 	for _, item := range []struct{ proxy, name string }{{first.URL, "first"}, {second.URL, "second"}} {
 		setProxy(proxyConfig(item.proxy))
-		for _, route := range []string{"/__api/hemusic/cover", "/__proxy?target=" + gatewayTarget(t, "http://media.invalid/art")} {
+		for _, route := range []string{"/__api/hemusic/cover", "/__proxy/" + gatewayTarget(t, "http://media.invalid/art")} {
 			response, body := gatewayRequest(t, "GET", origin+route, "", map[string]string{"Authorization": "Bearer fixture"})
 			if response.StatusCode != 200 || body != item.name+":media.invalid:/art" {
 				t.Fatalf("actual proxy %d %q", response.StatusCode, body)
@@ -83,7 +83,7 @@ func TestGatewayStreamSmallChunkAndClientDisconnect(t *testing.T) {
 	_, origin := gatewayTestServer(t, GatewayAPIConfig{})
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "GET", origin+"/__proxy?target="+gatewayTarget(t, upstream.URL), nil)
+	req, _ := http.NewRequestWithContext(ctx, "GET", origin+"/__proxy/"+gatewayTarget(t, upstream.URL), nil)
 	response, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -113,17 +113,17 @@ func TestGatewayManifestLimitMIMEAndAttributes(t *testing.T) {
 			}))
 			defer upstream.Close()
 			_, origin := gatewayTestServer(t, GatewayAPIConfig{})
-			target := origin + "/__proxy?target=" + gatewayTarget(t, upstream.URL+"/dir/list.m3u8")
+			target := origin + "/__proxy/" + gatewayTarget(t, upstream.URL+"/dir/list.m3u8")
 			response, body := gatewayRequest(t, "GET", target, "", nil)
 			for _, raw := range []string{"https://cdn.invalid/i.m3u8?q=1", upstream.URL + "/key", "https://cdn.invalid/s.ts?x=1"} {
-				if !strings.Contains(body, "/test-secret/__proxy?target="+gatewayTarget(t, raw)) {
+				if !strings.Contains(body, "/test-secret/__proxy/"+gatewayTarget(t, raw)) {
 					t.Fatalf("URI not rewritten %q in %q", raw, body)
 				}
 			}
 			if response.StatusCode != 200 || !strings.Contains(body, "\r\n") {
 				t.Fatal("MIME/path detection or CRLF lost")
 			}
-			response, _ = gatewayRequest(t, "GET", origin+"/__proxy?target="+gatewayTarget(t, upstream.URL+"/dir/list.m3u8?large=1"), "", nil)
+			response, _ = gatewayRequest(t, "GET", origin+"/__proxy/"+gatewayTarget(t, upstream.URL+"/dir/list.m3u8?large=1"), "", nil)
 			if response.StatusCode != 502 {
 				t.Fatal("oversized manifest accepted")
 			}
