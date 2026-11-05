@@ -42,7 +42,6 @@ const openDropdown = async (
   type: "playlist" | "album" | "video" | "ranking",
 ) => {
   try {
-    console.log(item, type);
     e.preventDefault();
     dropdownShow.value = false;
     // 生成菜单

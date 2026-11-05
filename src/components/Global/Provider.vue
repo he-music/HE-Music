@@ -153,7 +153,6 @@ const changeGlobalTheme = () => {
       primaryColorSuppl: colors.primary12,
     } as GlobalThemeOverrides["common"];
 
-    console.log("commonBase:", commonBase);
     document.body.style.fontWeight = fontWeight;
     document.body.style.fontStyle = fontStyle;
     /**

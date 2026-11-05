@@ -12,7 +12,7 @@ class FakeAudio extends EventTarget {
   defaultPlaybackRate = 1;
   playbackRate = 1;
   paused = true;
-  error: { code: number } | null = null;
+  error: { code: number; message?: string } | null = null;
   removeAttribute = vi.fn((name: string) => {
     if (name === "src") this.src = "";
   });
@@ -121,7 +121,7 @@ describe.each(["web", "mygo"])("AudioManager %s HTMLAudio path", (kind) => {
     audio.play.mockRejectedValueOnce(rejection);
     await expect(manager.play("https://audio.example/first.mp3")).rejects.toBe(rejection);
     expect(mediaError).not.toHaveBeenCalled();
-    expect(console.error).toHaveBeenCalledWith("AudioManager: 播放失败");
+    expect(console.error).toHaveBeenCalledWith("AudioManager: 播放失败", rejection);
     await manager.play();
     expect(manager.paused).toBe(false);
     expect(audio.load).toHaveBeenCalled();
@@ -130,11 +130,13 @@ describe.each(["web", "mygo"])("AudioManager %s HTMLAudio path", (kind) => {
   it.each([2, 3, 4])("preserves media error code %s for existing recovery", async (code) => {
     const listener = vi.fn<(event: Event) => void>();
     manager.on("error", listener);
-    audio.error = { code };
+    audio.error = { code, message: "Media load failed" };
     audio.dispatchEvent(new Event("error"));
     expect(manager.getErrorCode()).toBe(code);
     expect(listener).toHaveBeenCalledWith(
-      expect.objectContaining({ detail: expect.objectContaining({ errorCode: code }) }),
+      expect.objectContaining({
+        detail: expect.objectContaining({ errorCode: code, errorMessage: "Media load failed" }),
+      }),
     );
   });
 

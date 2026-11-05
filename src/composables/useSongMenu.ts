@@ -58,8 +58,8 @@ export const useSongMenu = () => {
     },
     isPlaying: (song) => songEqual(musicStore.playSong, song),
     onRemoved() {
-      void localFilesSession.value?.refreshAfterWrite().catch(() => {
-        console.error("文件已删除，但本地列表刷新失败");
+      void localFilesSession.value?.refreshAfterWrite().catch((error: unknown) => {
+        console.error("文件已删除，但本地列表刷新失败", error);
       });
     },
   });

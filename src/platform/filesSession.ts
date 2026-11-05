@@ -182,9 +182,9 @@ export class FilesSession {
       activeSession.value = this;
       this.local = new LocalFilesSession(shallowRef(this));
       if (this.directoryGrants.value.length) await this.local.scan();
-    } catch {
+    } catch (error) {
       // File capability failure must not fail the media, shortcut or tray lifecycle.
-      console.error("文件会话初始化失败");
+      console.error("文件会话初始化失败", error);
     }
   }
 

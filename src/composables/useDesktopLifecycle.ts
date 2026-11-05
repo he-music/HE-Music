@@ -70,8 +70,8 @@ export function useDesktopLifecycle(ui: {
   const setting = useSettingStore();
   const status = useStatusStore();
   const tray = createShellTraySession(lifecycle, {
-    reportPlaybackFailure: () => {
-      console.error("托盘播放操作失败");
+    reportPlaybackFailure: (error) => {
+      console.error("托盘播放操作失败", error);
       window.$message?.error(t("message.song_play_fail"));
     },
   });
@@ -94,7 +94,7 @@ export function useDesktopLifecycle(ui: {
     );
   }
   const subscriptions: Array<() => void> = [];
-  const reportFailure = () => console.error("桌面生命周期操作失败");
+  const reportFailure = (error: unknown) => console.error("桌面生命周期操作失败", error);
   const config = (): LifecycleConfig => ({
     showCloseAppTip: setting.showCloseAppTip,
     closeAppMethod: setting.closeAppMethod === "hide" ? "hide" : "exit",
@@ -134,8 +134,8 @@ export function useDesktopLifecycle(ui: {
         await nextTick();
       }
       await lifecycle.resolveClose(id, resolution);
-    } catch {
-      reportFailure();
+    } catch (error) {
+      reportFailure(error);
     }
   };
 
@@ -153,12 +153,12 @@ export function useDesktopLifecycle(ui: {
               if (disposed) return;
               await lifecycle.acknowledgeClose(id);
             });
-            void acknowledgement.catch(() => {
+            void acknowledgement.catch((error: unknown) => {
               if (requestId === id) {
                 requestId = null;
                 ui.showCloseModal.value = false;
               }
-              reportFailure();
+              reportFailure(error);
             });
           }),
           lifecycle.onTrayAction(tray.handle),
@@ -166,25 +166,39 @@ export function useDesktopLifecycle(ui: {
         const nativeStatus = await lifecycle.ready(config());
         if (disposed) return;
         await tray.start(nativeStatus.epoch);
-        void control?.start().catch(() => console.error("HTTP 播放控制初始化失败"));
-        void protocols?.start().catch(() => console.error("应用协议会话初始化失败"));
-        void taskbar?.start().catch(() => console.error("任务栏会话初始化失败"));
-        void appearance?.start().catch(() => console.error("窗口外观会话初始化失败"));
-        void graphics?.start().catch(() => console.error("Linux 图形设置会话初始化失败"));
-        void updates?.start().catch(() => console.error("应用更新会话初始化或检查失败"));
+        void control
+          ?.start()
+          .catch((error: unknown) => console.error("HTTP 播放控制初始化失败", error));
+        void protocols
+          ?.start()
+          .catch((error: unknown) => console.error("应用协议会话初始化失败", error));
+        void taskbar
+          ?.start()
+          .catch((error: unknown) => console.error("任务栏会话初始化失败", error));
+        void appearance
+          ?.start()
+          .catch((error: unknown) => console.error("窗口外观会话初始化失败", error));
+        void graphics
+          ?.start()
+          .catch((error: unknown) => console.error("Linux 图形设置会话初始化失败", error));
+        void updates
+          ?.start()
+          .catch((error: unknown) => console.error("应用更新会话初始化或检查失败", error));
         void files?.start();
         await shortcuts?.start();
         await media?.start();
         if (disposed) return;
-        void lyrics?.start().catch(() => console.error("桌面歌词会话初始化失败"));
+        void lyrics
+          ?.start()
+          .catch((error: unknown) => console.error("桌面歌词会话初始化失败", error));
         stops.push(
           watch(
             () => [setting.showCloseAppTip, setting.closeAppMethod, setting.language],
             () => void lifecycle.syncConfig(config()).catch(reportFailure),
           ),
         );
-      } catch {
-        reportFailure();
+      } catch (error) {
+        reportFailure(error);
         tray.dispose();
         artwork?.dispose();
         appearance?.dispose();

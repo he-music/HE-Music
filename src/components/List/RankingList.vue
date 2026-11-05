@@ -231,7 +231,7 @@ const playList = debounce(
         type: "ranking",
       });
     } catch (error) {
-      console.log("Error to play: ", error);
+      console.error(`排行榜播放失败: platform=${item.platform}, id=${item.id}`, error);
     } finally {
       item.loading = false;
     }

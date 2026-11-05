@@ -32,7 +32,7 @@ export class ControlSession {
       current(): unknown;
       execute(action: ControlAction): Promise<void>;
     },
-    private readonly failure: () => void,
+    private readonly failure: (error: unknown) => void,
   ) {}
 
   start(port = 0): Promise<void> {
@@ -96,8 +96,8 @@ export class ControlSession {
           try {
             await this.source.execute(action);
             applied = pauseRevision === this.pauseRevision;
-          } catch {
-            this.failure();
+          } catch (error) {
+            this.failure(error);
           }
           await this.acknowledge(generation, requestId, applied);
         })();
@@ -113,8 +113,8 @@ export class ControlSession {
     if (this.disposed || generation !== this.generation) return;
     try {
       await this.provider.receipt(generation, requestId, applied);
-    } catch {
-      this.failure();
+    } catch (error) {
+      this.failure(error);
     }
   }
 

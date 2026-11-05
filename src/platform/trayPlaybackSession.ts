@@ -24,7 +24,7 @@ export class TrayPlaybackSession {
 
   constructor(
     private readonly provider: Pick<PlatformLifecycle, "syncPlayback">,
-    private readonly reportFailure: () => void,
+    private readonly reportFailure: (error: unknown) => void,
   ) {}
 
   get ready() {

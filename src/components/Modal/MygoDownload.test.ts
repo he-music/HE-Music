@@ -5,6 +5,7 @@ import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 import { createMygoDownloadResolver } from "../../utils/localDownloadResolver";
 import { defaultGrantIndex } from "@/platform/localDownloadOptions";
+import { audioOutputFormat } from "@/platform/audioSource";
 const settings = Vue.reactive({ downloadPath: "Music one" });
 const openSettings = vi.fn();
 const success = vi.fn();
@@ -64,6 +65,7 @@ function mount(props: object) {
     "@/utils/modal": { openSetting: openSettings },
     "@/utils/helper": { formatFileSize: (bytes: number) => `${bytes} B` },
     "@/platform/localDownloadPersistence": { validLocalDownloadFormat },
+    "@/platform/audioSource": { audioOutputFormat },
     vue: Vue,
     "vue-i18n": {
       useI18n: () => ({

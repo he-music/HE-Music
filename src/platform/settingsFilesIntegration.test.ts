@@ -521,7 +521,10 @@ describe("actual desktop lifecycle file setup", () => {
     expect(life.syncPlayback).toHaveBeenCalled();
     expect(life.teardown).not.toHaveBeenCalled();
     expect(filesSession.value).toBeUndefined();
-    expect(report).toHaveBeenCalledExactlyOnceWith("文件会话初始化失败");
+    expect(report).toHaveBeenCalledExactlyOnceWith(
+      "文件会话初始化失败",
+      expect.objectContaining({ message: "private" }),
+    );
     report.mockRestore();
   });
   it("does not create a native session in web shell", async () => {

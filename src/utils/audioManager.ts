@@ -122,8 +122,8 @@ class AudioManager {
       this.filters.forEach((filter, index) => {
         filter.gain.value = this.desiredGains[index];
       });
-    } catch {
-      console.error("AudioManager: 初始化 AudioContext 失败");
+    } catch (error) {
+      console.error("AudioManager: 初始化 AudioContext 失败", error);
     }
   }
 
@@ -172,7 +172,7 @@ class AudioManager {
         await driver.play();
       } catch (error) {
         if (revision === this.playRevision) this.output.pause();
-        console.error("AudioManager: 播放失败");
+        console.error("AudioManager: 播放失败", error);
         throw error;
       }
       return;
@@ -215,7 +215,7 @@ class AudioManager {
         await this.audioElement?.play();
       } catch (error) {
         if (revision === this.playRevision) this.output.pause();
-        console.error("AudioManager: 播放失败");
+        console.error("AudioManager: 播放失败", error);
         throw error;
       }
     }
@@ -418,7 +418,11 @@ class AudioManager {
         const forwarded =
           event === "error"
             ? new CustomEvent("error", {
-                detail: { originalEvent: e, errorCode: this.getErrorCode() },
+                detail: {
+                  originalEvent: e,
+                  errorCode: this.getErrorCode(),
+                  errorMessage: this.audioElement?.error?.message ?? "",
+                },
               })
             : e;
         const driver = this.driver;

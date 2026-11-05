@@ -29,7 +29,7 @@ export function createShellControlSession(provider: ControlProvider | undefined)
         else await player.nextOrPrev(action, true, false, canAutoPlay);
       },
     },
-    () => console.error("HTTP 播放控制操作失败"),
+    (error: unknown) => console.error("HTTP 播放控制操作失败", error),
   );
   return {
     start: () => session.start(controlPort(import.meta.env.VITE_SERVER_PORT)),

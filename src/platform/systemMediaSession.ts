@@ -33,7 +33,7 @@ export class SystemMediaSession {
   constructor(
     private readonly provider: PlatformSystemMedia,
     private readonly source: SystemMediaSource,
-    private readonly reportFailure: () => void,
+    private readonly reportFailure: (error: unknown) => void,
   ) {
     if (provider.setArtwork && source.artwork) {
       this.artwork = new SystemMediaArtworkSession(source, () => this.syncArtwork());

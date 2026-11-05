@@ -45,9 +45,9 @@ export class LocalFileActions {
     if (result.removed && current) {
       try {
         this.deps.onRemoved(captured);
-      } catch {
+      } catch (error) {
         // Refresh failures cannot undo a committed deletion.
-        console.error("文件已删除，但本地列表刷新失败");
+        console.error("文件已删除，但本地列表刷新失败", error);
       }
     }
     return { removed: result.removed, current };

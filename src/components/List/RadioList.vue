@@ -102,7 +102,7 @@ const playList = debounce(
       musicStore.radio.platform = item.platform;
       await player.nextRadio(true);
     } catch (error) {
-      console.log("Error to play: ", error);
+      console.error(`电台播放失败: platform=${item.platform}, id=${item.id}`, error);
     } finally {
       item.loading = false;
     }

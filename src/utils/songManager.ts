@@ -78,8 +78,15 @@ class SongManager {
     link?: Link,
   ): Promise<SongAudioSource | null> => {
     const res = await songUrl(id, platform, link?.quality, link?.format);
-    console.log("🌐 music URL resolved");
-    if (!res?.url) return null;
+    if (!res?.url) {
+      console.warn(
+        `未获取到歌曲地址: platform=${platform}, id=${id}, quality=${link?.quality ?? "auto"}`,
+      );
+      return null;
+    }
+    console.log(
+      `🌐 music URL resolved: platform=${platform}, id=${id}, format=${res.format ?? link?.format ?? "unknown"}`,
+    );
     return res;
   };
 

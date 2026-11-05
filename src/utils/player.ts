@@ -76,6 +76,24 @@ class Player {
     // 绑定音频事件
     this.bindAudioEvents();
   }
+  /** 使用明确的歌曲字段，避免日志只留下标题或展开整个歌曲对象。 */
+  private getSongLogInfo(): string {
+    const song = songManager.getPlaySongData();
+    if (!song) return "未知歌曲";
+    const { name, artist } = songManager.getPlayerInfoObj(song) || {};
+    return `${name} - ${artist} (platform=${song.platform}, id=${song.id})`;
+  }
+
+  private logPlaybackError(message: string, error: unknown) {
+    const reason =
+      error instanceof Error
+        ? `${error.name}: ${error.message}`
+        : typeof error === "string"
+          ? error
+          : "未知错误";
+    // mygo 文件日志只保存首个参数；原始异常留在控制台，便于展开堆栈。
+    console.error(`${message} ${this.getSongLogInfo()}; ${reason}`, error);
+  }
   /**
    * 解绑 AudioManager 事件
    */
@@ -101,7 +119,7 @@ class Player {
       window.document.title = `${playTitle} | HE-Music`;
       statusStore.playStatus = true;
       statusStore.playLoading = true;
-      console.log("▶️ song play:");
+      console.log(`▶️ song play: ${this.getSongLogInfo()}`);
     };
     audioManager.on("play", playCallback);
     this.eventCallbacks.set("play", playCallback);
@@ -129,14 +147,14 @@ class Player {
       statusStore.playStatus = false;
       statusStore.playLoading = false;
       window.document.title = "HE-Music";
-      console.log("⏸️ song pause:");
+      console.log(`⏸️ song pause: ${this.getSongLogInfo()}`);
     };
     audioManager.on("pause", pauseCallback);
     this.eventCallbacks.set("pause", pauseCallback);
     // 结束
     const endedCallback = () => {
       const statusStore = useStatusStore();
-      console.log("⏹️ song end:");
+      console.log(`⏹️ song end: ${this.getSongLogInfo()}`);
       // 检查自动关闭
       if (
         statusStore.autoClose.enable &&
@@ -152,13 +170,22 @@ class Player {
     this.eventCallbacks.set("ended", endedCallback);
     // 错误
     const errorCallback = (e: Event) => {
-      console.error("❌ song error:");
       const customEvent = e as CustomEvent<{
         originalEvent: Event;
         errorCode: number;
+        errorMessage?: string;
       }>;
-
-      const errorCode = customEvent.detail.errorCode;
+      const { errorCode, errorMessage } = customEvent.detail;
+      const reasons: Record<number, string> = {
+        1: "加载被中止",
+        2: "网络错误或音源过期",
+        3: "音频解码失败",
+        4: "音源不可用或格式不受支持",
+      };
+      this.logPlaybackError(
+        "❌ song error:",
+        `code=${errorCode}; ${reasons[errorCode] || "未知媒体错误"}${errorMessage ? `; ${errorMessage}` : ""}`,
+      );
       if (this.offerHttpsRetry(errorCode)) return;
       this.handlePlaybackError(errorCode);
     };
@@ -198,7 +225,7 @@ class Player {
         count: 0,
         total: 0,
       };
-      console.log("▶️ song canplay:");
+      console.log(`▶️ song canplay: ${this.getSongLogInfo()}`);
       // 恢复均衡器
       if (statusStore.eqEnabled) {
         // 简单恢复 EQ 增益
@@ -274,9 +301,9 @@ class Player {
           seek,
           attempt.canAutoPlay,
           attempt.source,
-        ).catch(() => {
+        ).catch((error: unknown) => {
           if (attempt.requestId !== this.playRequestId) return;
-          console.error("HTTPS 重试播放失败:");
+          this.logPlaybackError("HTTPS 重试播放失败:", error);
           // 媒体 error 事件负责普通错误；没有媒体错误码时补上恢复逻辑。
           if (audioManager.getErrorCode() === 0) void this.handlePlaybackError();
         });
@@ -310,7 +337,7 @@ class Player {
     audioManager.setVolume(statusStore.playVolume);
     audioManager.setRate(statusStore.playRate);
     void this.toggleOutputDevice().catch((error: unknown) => {
-      console.error("Failed to restore audio output device:", error);
+      this.logPlaybackError("Failed to restore audio output device:", error);
     });
     const requestId = this.playRequestId;
     this.playbackAttempt = { src, autoPlay, seek, requestId, canAutoPlay, source };
@@ -343,7 +370,7 @@ class Player {
     } catch (error) {
       if (requestId !== this.playRequestId) return;
       if (!this.handlePlayRejection(error)) {
-        console.error("Player create failed");
+        this.logPlaybackError("Player create failed:", error);
         throw error;
       }
       if (seek > 0) {
@@ -487,7 +514,9 @@ class Player {
     this.retryInfo.count += 1;
     this.retryInfo.total += 1;
 
-    console.log("Playback retry", this.retryInfo.count, this.retryInfo.total);
+    console.log(
+      `Playback retry: ${this.getSongLogInfo()}; count=${this.retryInfo.count}, total=${this.retryInfo.total}`,
+    );
     // 错误码 2：资源过期或临时网络错误，允许较少次数的刷新
     if (errCode === 2 && this.retryInfo.count <= 2) {
       if (this.autoPlayOwner)
@@ -591,9 +620,9 @@ class Player {
           const url = await this.localAudio.open(nativeEntry.ref);
           if (!url || currentRequestId !== this.playRequestId) return;
           await this.createPlayer(url, autoPlay, seek);
-        } catch {
+        } catch (error) {
           if (currentRequestId !== this.playRequestId) return;
-          console.error("播放器初始化错误（本地）：");
+          this.logPlaybackError("播放器初始化错误（本地）：", error);
           // createPlayer 内部已触发 handlePlaybackError，这里只记录日志
           // 如果 createPlayer 没有触发错误处理，则手动触发
           const errCode = audioManager.getErrorCode();
@@ -614,7 +643,7 @@ class Player {
           const link = this.selectPlayQuality(playSongData, quality);
           if (!link) throw new Error("Get song link error");
           statusStore.playQuality = link.name;
-          console.log("Getting online song url...");
+          console.log(`Getting online song url: ${this.getSongLogInfo()}; quality=${link.name}`);
           const resolved = await songManager.getOnlineSource(id, platform, link);
           playerUrl = resolved?.url ?? null;
           const format = resolved?.format;
@@ -627,7 +656,7 @@ class Player {
           }
         } catch (err) {
           if (currentRequestId !== this.playRequestId) return;
-          console.error("❌ 获取歌曲地址出错：");
+          this.logPlaybackError("❌ 获取歌曲地址出错：", err);
           // 如果是 AxiosError 的 401 就忽略
           if (err instanceof AxiosError && err.response?.status === 401) {
             return;
@@ -646,9 +675,9 @@ class Player {
             if (quality) {
               window.$message.success(t("message.change_quality_to", { quality }));
             }
-          } catch {
+          } catch (error) {
             if (currentRequestId !== this.playRequestId) return;
-            console.error("播放器初始化错误（在线）：");
+            this.logPlaybackError("播放器初始化错误（在线）：", error);
             // createPlayer 内部已触发 handlePlaybackError，这里只记录日志
             // 如果 createPlayer 没有触发错误处理，则手动触发
             const errCode = audioManager.getErrorCode();
@@ -659,9 +688,9 @@ class Player {
           }
         }
       }
-    } catch {
+    } catch (error) {
       if (currentRequestId !== this.playRequestId) return;
-      console.error("❌ 初始化音乐播放器出错：");
+      this.logPlaybackError("❌ 初始化音乐播放器出错：", error);
       window.$message.error(t("message.song_play_fail"));
       await this.handlePlaybackError(undefined);
     }
@@ -825,7 +854,7 @@ class Player {
       // 初始化播放器（不传入seek参数，确保从头开始播放）
       await this.initPlayer(play, 0, "", canAutoPlay);
     } catch (error) {
-      console.error("Error in nextOrPrev:");
+      this.logPlaybackError("Error in nextOrPrev:", error);
       statusStore.playLoading = false;
       throw error;
     }
@@ -1159,7 +1188,7 @@ class Player {
       statusStore.lyricIndex = -1;
       await this.initPlayer(true, 0);
     } catch (error) {
-      console.error("Error in togglePlayIndex:");
+      this.logPlaybackError("Error in togglePlayIndex:", error);
       statusStore.playLoading = false;
       throw error;
     }
@@ -1382,8 +1411,8 @@ class Player {
       if (!isCurrent()) return;
       // initPlayer consumes the token as it acquires a new source request.
       await this.initPlayer(this.autoPlayIntent, 0, "", canAutoPlay);
-    } catch {
-      if (isCurrent()) console.error("Failed to initialize radio:");
+    } catch (error) {
+      if (isCurrent()) this.logPlaybackError("Failed to initialize radio:", error);
     }
   }
 

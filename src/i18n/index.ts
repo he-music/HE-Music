@@ -43,14 +43,14 @@ const numberFormats = {
       maximumFractionDigits: 2,
     },
   },
-};
+} satisfies Record<string, Record<string, Intl.NumberFormatOptions>>;
 
 const i18n = createI18n({
   globalInjection: false,
-  allowComposition: true,
+  legacy: false,
   locale: "zh-CN",
   fallbackLocale: "zh-CN",
-  numberFormats: numberFormats as any,
+  numberFormats,
   messages: {
     en: {
       ...en,

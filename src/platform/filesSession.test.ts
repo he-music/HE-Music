@@ -101,14 +101,17 @@ describe("FilesSession", () => {
     expect(filesSession.value).toBe(next);
     expect(native.teardown).toHaveBeenCalledTimes(1);
   });
-  it("contains begin and operation errors without logging host error objects", async () => {
+  it("contains begin and operation errors and keeps the initialization error available for diagnostics", async () => {
     const report = vi.spyOn(console, "error").mockImplementation(() => {});
     const native = provider();
     vi.mocked(native.begin).mockRejectedValueOnce(new Error("private host detail"));
     const session = new FilesSession(native);
     await session.start();
     expect(session.ready.value).toBe(false);
-    expect(report).toHaveBeenCalledExactlyOnceWith("文件会话初始化失败");
+    expect(report).toHaveBeenCalledExactlyOnceWith(
+      "文件会话初始化失败",
+      expect.objectContaining({ message: "private host detail" }),
+    );
     const next = new FilesSession(native);
     await next.start();
     vi.mocked(native.importSettings).mockRejectedValueOnce(new Error("private picker detail"));

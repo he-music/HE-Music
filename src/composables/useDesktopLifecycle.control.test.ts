@@ -235,7 +235,12 @@ describe("useDesktopLifecycle control cleanup on the CPU renderer", () => {
       expect(f.controlOffs[0]).toHaveBeenCalledOnce();
       expect(f.listeners.size).toBe(0);
       f.lifecycleOffs.forEach((stop) => expect(stop).toHaveBeenCalledOnce());
-      expect(console.error).toHaveBeenCalledWith("桌面生命周期操作失败");
+      expect(console.error).toHaveBeenCalledWith(
+        "桌面生命周期操作失败",
+        expect.objectContaining({
+          message: `synthetic ${failure === "start" ? "Start" : "Teardown"} rejected`,
+        }),
+      );
       mountShell();
       await flush();
       expect(f.lifecycle.ready).toHaveBeenCalledTimes(2);

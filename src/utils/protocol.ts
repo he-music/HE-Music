@@ -31,11 +31,11 @@ export const handleProtocolUrl = (url: string) => {
 };
 
 export const handleOpenKuwo = async (url: string) => {
-  console.log("🚀 Open kuwo:", url);
   try {
     const urlObj = new URL(url);
     const musicrid0 = atob(urlObj.searchParams.get("musicrid0") || "");
     const id = musicrid0.replace("MUSIC_", "");
+    console.log(`🚀 Open kuwo: command=${urlObj.hostname}, id=${id}`);
     const player = usePlayer();
     let result: any;
     switch (urlObj.hostname) {
@@ -44,25 +44,25 @@ export const handleOpenKuwo = async (url: string) => {
         player.addNextSong(result?.list[0], true);
         break;
       default:
-        console.log("❌ Unsupported Command or Type:", urlObj.hostname);
+        console.warn("❌ Unsupported Command or Type:", urlObj.hostname);
         break;
     }
-  } catch {
-    console.error("❌ Invalid URL:", url);
+  } catch (error) {
+    console.error("❌ 酷我协议处理失败:", error);
   }
 };
 
 export const handleOpenOrpheus = async (url: string) => {
   const data = parseOrpheus(url);
   if (!data) return;
-  console.log("🚀 Open Orpheus:", data);
+  console.log(`🚀 Open Orpheus: command=${data.cmd}, type=${data.type}, id=${data.id}`);
 
   if (data.cmd === "play" && data.type === "song") {
     const player = usePlayer();
     const result = await songInfo("netease", data.id);
     player.addNextSong(result?.list[0], true);
   } else {
-    console.log("❌ Unsupported Command or Type:", data);
+    console.warn(`❌ Unsupported Command or Type: command=${data.cmd}, type=${data.type}`);
   }
 };
 
@@ -95,7 +95,7 @@ const parseOrpheus = (url: string): OrpheusData | undefined => {
   try {
     jsonString = atob(path);
   } catch (e) {
-    console.error("❌ Failed to decode base64:", path, e);
+    console.error("❌ Failed to decode base64:", e);
     return;
   }
   let data: OrpheusData;

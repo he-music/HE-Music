@@ -74,6 +74,6 @@ export function createShellSystemMediaSession(): SystemMediaSession | undefined 
         }
       },
     },
-    () => console.error("系统媒体操作失败"),
+    (error: unknown) => console.error("系统媒体操作失败", error),
   );
 }

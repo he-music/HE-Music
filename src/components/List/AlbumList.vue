@@ -170,7 +170,7 @@ const playList = debounce(
         type: "album",
       });
     } catch (error) {
-      console.log("Error to play: ", error);
+      console.error(`专辑播放失败: platform=${item.platform}, id=${item.id}`, error);
     } finally {
       item.loading = false;
     }

@@ -13,8 +13,8 @@ interface TrayDependencies {
   player?: Pick<ReturnType<typeof usePlayer>, "playOrPause" | "nextOrPrev" | "togglePlayMode">;
   loadFavorite?: () => Promise<Favorite>;
   loadSettings?: () => Promise<() => unknown>;
-  reportFailure?: () => void;
-  reportPlaybackFailure?: () => void;
+  reportFailure?: (error: unknown) => void;
+  reportPlaybackFailure?: (error: unknown) => void;
 }
 
 export const createShellTraySession = (
@@ -29,7 +29,8 @@ export const createShellTraySession = (
     dependencies.loadFavorite ?? (async () => (await import("@/utils/auth")).toLikeSong);
   const loadSettings =
     dependencies.loadSettings ?? (async () => (await import("@/utils/modal")).openSetting);
-  const report = dependencies.reportFailure ?? (() => console.error("托盘操作失败"));
+  const report =
+    dependencies.reportFailure ?? ((error: unknown) => console.error("托盘操作失败", error));
   const session = new TrayPlaybackSession(provider, report);
   let disposed = false;
   let favoriteBusy = false;
@@ -114,8 +115,8 @@ export const createShellTraySession = (
           .then((open) => {
             if (current()) return open();
           })
-          .catch(() => {
-            if (current()) report();
+          .catch((error: unknown) => {
+            if (current()) report(error);
           });
         return;
       case "set-favorite": {
@@ -129,8 +130,8 @@ export const createShellTraySession = (
           if (current() && data.userLoginStatus && !captured.path)
             await favorite(captured, desired);
         })()
-          .catch(() => {
-            if (current()) report();
+          .catch((error: unknown) => {
+            if (current()) report(error);
           })
           .finally(() => {
             if (disposed) return;
@@ -148,8 +149,8 @@ export const createShellTraySession = (
         publish();
         void player
           .togglePlayMode(intent.mode, modeCurrent)
-          .catch(() => {
-            if (modeCurrent()) report();
+          .catch((error: unknown) => {
+            if (modeCurrent()) report(error);
           })
           .finally(() => {
             if (disposed) return;
@@ -166,8 +167,8 @@ export const createShellTraySession = (
           intent.action === "toggle"
             ? player.playOrPause()
             : player.nextOrPrev(intent.action === "previous" ? "prev" : "next")
-        ).catch(() => {
-          if (current()) (dependencies.reportPlaybackFailure ?? report)();
+        ).catch((error: unknown) => {
+          if (current()) (dependencies.reportPlaybackFailure ?? report)(error);
         });
         return;
     }

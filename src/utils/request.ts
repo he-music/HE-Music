@@ -105,7 +105,7 @@ serverHemusic.interceptors.request.use(
     return request;
   },
   (error: AxiosError) => {
-    console.error("请求发送失败");
+    console.error("请求发送失败", error);
     return Promise.reject(error);
   },
 );
@@ -163,12 +163,12 @@ serverHemusic.interceptors.response.use(
             if (isInvalidRefreshTokenError(refreshError)) {
               try {
                 await dataStore.clearUserData();
-              } catch {
-                console.error("清除登录信息失败");
+              } catch (clearError) {
+                console.error("清除登录信息失败", clearError);
               }
               openUserLogin();
             }
-            console.error("Token 刷新失败");
+            console.error("Token 刷新失败", refreshError);
           } finally {
             isRefreshing = false;
           }
@@ -221,7 +221,7 @@ serverHemusic.interceptors.response.use(
         break;
       default:
         // 处理其他状态码或错误条件
-        console.error("未处理的请求错误");
+        console.error("未处理的请求错误", error);
     }
 
     if (!(config as HemusicRequestConfig | undefined)?.skipErrorMessage) {

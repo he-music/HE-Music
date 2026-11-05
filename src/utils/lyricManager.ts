@@ -185,7 +185,6 @@ class LyricManager {
       ) {
         return;
       }
-      if (!path) console.log("最终歌词数据", lyricData);
       this.setFinalLyric(lyricData);
     } catch (error) {
       if (

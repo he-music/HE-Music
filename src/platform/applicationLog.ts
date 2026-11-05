@@ -2,8 +2,7 @@ export interface ApplicationLogProvider {
   write(level: string, message: string): Promise<void>;
 }
 
-/** Persist diagnostic categories only. Keep objects, response bodies and stacks
- * in the original console, rather than serializing account/application state. */
+/** 保存有界的文本与错误摘要；完整对象、响应内容和堆栈仅保留在控制台。 */
 export function installApplicationLogging(
   provider: ApplicationLogProvider,
   target: Pick<Window, "addEventListener" | "removeEventListener"> = window,
@@ -28,20 +27,54 @@ export function installApplicationLogging(
       }
     }
   };
-  const description = (value: unknown) =>
-    typeof value === "string" ? value : value instanceof Error ? value.name : "Console diagnostic";
+  const description = (values: unknown[]): string => {
+    const parts: string[] = [];
+    for (const value of values.slice(0, 8)) {
+      if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+        parts.push(String(value));
+      } else if (value instanceof Error) {
+        const summary = `${value.name}: ${value.message}`;
+        if (!parts.some((part) => part.includes(summary))) parts.push(summary);
+        if ("code" in value && (typeof value.code === "string" || typeof value.code === "number")) {
+          parts.push(`code=${value.code}`);
+        }
+        if (
+          "response" in value &&
+          typeof value.response === "object" &&
+          value.response !== null &&
+          "status" in value.response &&
+          typeof value.response.status === "number"
+        ) {
+          parts.push(`status=${value.response.status}`);
+        }
+      }
+    }
+    return parts.join(" ") || "Console diagnostic";
+  };
   const warn: Console["warn"] = (...values: unknown[]) => {
     originalWarn.apply(output, values);
-    send("warn", description(values[0]));
+    send("warn", description(values));
   };
   const error: Console["error"] = (...values: unknown[]) => {
     originalError.apply(output, values);
-    send("error", description(values[0]));
+    send("error", description(values));
   };
   output.warn = warn;
   output.error = error;
-  const onError = () => send("error", "Unhandled page error");
-  const onRejection = () => send("error", "Unhandled promise rejection");
+  const onError = (event: Event) =>
+    send(
+      "error",
+      description([
+        "Unhandled page error",
+        ("error" in event ? event.error : undefined) ||
+          ("message" in event ? event.message : undefined),
+      ]),
+    );
+  const onRejection = (event: Event) =>
+    send(
+      "error",
+      description(["Unhandled promise rejection", "reason" in event ? event.reason : undefined]),
+    );
   target.addEventListener("error", onError);
   target.addEventListener("unhandledrejection", onRejection);
   return () => {

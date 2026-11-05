@@ -129,7 +129,7 @@ const playList = debounce(
     try {
       return router.push({ name: "video", query: { id: item.id, platform: item.platform } });
     } catch (error) {
-      console.log("Error to play: ", error);
+      console.error(`视频跳转失败: platform=${item.platform}, id=${item.id}`, error);
     }
   },
   300,

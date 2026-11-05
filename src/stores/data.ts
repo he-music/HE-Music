@@ -135,7 +135,6 @@ export const useDataStore = defineStore("data", {
       try {
         // 获取 music-data
         const musicDataKeys = await musicDB.keys();
-        console.log(musicDataKeys);
         await Promise.all(
           musicDataKeys.map(async (key) => {
             const data = await musicDB.getItem(key);
