@@ -241,6 +241,7 @@ func (g *NetworkGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 
 func serveGatewayProbe(w http.ResponseWriter, r *http.Request, path string) bool {
 	if r.Method == "OPTIONS" && r.Header.Get("Origin") != "" && r.Header.Get("Access-Control-Request-Method") != "" {
+		w.Header().Add("Vary", "Access-Control-Request-Method, Access-Control-Request-Headers")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, DELETE, OPTIONS, PATCH")
 		w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
 		w.Header().Set("Access-Control-Max-Age", "600")
@@ -272,10 +273,12 @@ func joinGatewayAPI(base *url.URL, tail, query string) *url.URL {
 }
 
 func gatewayCORS(header http.Header, r *http.Request) {
+	// 普通图片可能先以无 Origin 的请求写入缓存，后续取色再以 CORS 模式读取。
+	// 两种响应都必须声明 Vary，避免复用缺少 Allow-Origin 的缓存。
+	header.Add("Vary", "Origin")
 	if origin := r.Header.Get("Origin"); origin != "" {
 		header.Set("Access-Control-Allow-Origin", origin)
 		header.Set("Access-Control-Allow-Credentials", "true")
-		header.Add("Vary", "Origin")
 	}
 	header.Set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges")
 	header.Set("Referrer-Policy", "no-referrer")
