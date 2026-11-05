@@ -56,13 +56,20 @@ it.each(["kuwo", "migu", "soda", "qq"])("mygo 的 %s 请求默认开启客户端
   requestHemusicMock.mockResolvedValue({
     url: "https://cdn.example/audio",
     format: "m4a",
-    ...(platform === "qq" ? {} : { key: "auth+/=" }),
+    ...(platform === "qq" ? {} : { audio_params: "prepared_params" }),
   });
   const result = await songUrl("song", platform, 320, "m4a", { skipErrorMessage: true });
   expect(requestHemusicMock).toHaveBeenCalledExactlyOnceWith({
     skipErrorMessage: true,
     url: "/v1/song/url",
-    params: { id: "song", platform, quality: 320, format: "m4a", client_decrypt: true },
+    params: {
+      id: "song",
+      platform,
+      quality: 320,
+      format: "m4a",
+      client_decrypt: true,
+      audio_params_version: 1,
+    },
   });
   expect(result.url).toContain(platform === "qq" ? "https://cdn.example" : "/secret/__audio?");
 });

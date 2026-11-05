@@ -19,10 +19,10 @@ export const songUrl = async (
       platform,
       quality,
       format,
-      ...(mygoGatewayOrigin() ? { client_decrypt: true } : {}),
+      ...(mygoGatewayOrigin() ? { client_decrypt: true, audio_params_version: 1 } : {}),
     },
   });
-  return resolveSongAudioSource(platform, response);
+  return resolveSongAudioSource(response);
 };
 
 // 获取解锁歌曲 URL

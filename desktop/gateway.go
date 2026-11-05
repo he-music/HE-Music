@@ -17,7 +17,8 @@ import (
 
 	"github.com/egoist/mygo"
 
-	"github.com/he-music/HE-Music/desktop/internal/audiodecrypt/soda"
+	"github.com/he-music/HE-Music/desktop/internal/audiodecrypt/transform"
+	"github.com/he-music/HE-Music/desktop/internal/httpclient"
 )
 
 const desktopGatewayMaxTarget = 64 << 10
@@ -44,7 +45,7 @@ type NetworkGateway struct {
 	config GatewayAPIConfig
 	apis   map[string]gatewayAPI
 	media  *http.Client
-	audio  *soda.AudioServer
+	audio  *transform.AudioServer
 	host   string
 	prefix string
 }
@@ -174,7 +175,7 @@ func newDesktopGatewayClient() *http.Client {
 	transport.ResponseHeaderTimeout = 15 * time.Second
 	transport.MaxIdleConns = 100
 	transport.MaxIdleConnsPerHost = 10
-	return &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	return &http.Client{Transport: &httpclient.Transport{Base: transport}, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
 
 func (g *NetworkGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {

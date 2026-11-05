@@ -15,6 +15,7 @@ import (
 
 	"github.com/egoist/mygo"
 
+	"github.com/he-music/HE-Music/desktop/internal/httpclient"
 	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
@@ -90,7 +91,7 @@ func downloadCoordinatorFor(s *nativeFilesState) *downloadCoordinator {
 		transport := http.DefaultTransport.(*http.Transport).Clone()
 		configureDownloadProxyTransport(transport)
 		c = &downloadCoordinator{jobs: make(map[string]*downloadJob), client: &http.Client{
-			Transport: transport,
+			Transport: &httpclient.Transport{Base: transport},
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				// Signed query strings must not become a redirect Referer.
 				req.Header.Del("Referer")

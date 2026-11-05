@@ -12,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/he-music/HE-Music/desktop/internal/httpclient"
 )
 
 func gatewayTarget(t *testing.T, raw string) string {
@@ -365,7 +367,7 @@ func TestGatewayProxyLoopbackAndDynamicConfig(t *testing.T) {
 	}()
 	client := newDesktopGatewayClient()
 	defer client.CloseIdleConnections()
-	transport := client.Transport.(*http.Transport)
+	transport := client.Transport.(*httpclient.Transport).Base.(*http.Transport)
 	for _, config := range []NetworkProxyConfig{{Protocol: "HTTP", Server: "127.0.0.1", Port: 8080}, {Protocol: "off"}, {Protocol: "HTTPS", Server: "proxy.example", Port: 8443}} {
 		desktopNetworkProxy.mu.Lock()
 		desktopNetworkProxy.config = config

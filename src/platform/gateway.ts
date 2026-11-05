@@ -111,11 +111,8 @@ export function isMygoGatewayResourceUrl(value: string): boolean {
       );
     }
     if (!audio && !resource.pathname.startsWith(prefix)) return false;
-    if (
-      audio &&
-      (!resource.searchParams.get("key") ||
-        !["kuwo", "migu", "soda"].includes(resource.searchParams.get("platform") ?? ""))
-    )
+    const prepared = resource.searchParams.get("audio_params") ?? "";
+    if (audio && (!prepared || prepared.length > 16 * 1024 || !/^[A-Za-z0-9_-]+$/.test(prepared)))
       return false;
     const target = new URL(
       audio

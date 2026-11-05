@@ -2,7 +2,7 @@ import { mygoGatewayOrigin } from "./gateway";
 
 export interface SongAudioSource {
   readonly url: string;
-  readonly key?: string;
+  readonly audio_params?: string;
   readonly format: string;
 }
 
@@ -14,18 +14,26 @@ export function audioOutputFormat(platform: string, format: string): string {
   return normalized;
 }
 
-/** 无注册表：每次媒体或下载请求携带本机解密所需的参数。 */
-export function resolveSongAudioSource(platform: string, source: SongAudioSource): SongAudioSource {
+/** 透传主服务准备的执行参数，解密分支不依赖音乐平台。 */
+export function resolveSongAudioSource(source: SongAudioSource): SongAudioSource {
   const gateway = mygoGatewayOrigin();
-  if (!gateway || !source.key || !source.url) return source;
-  if (!["kuwo", "migu", "soda"].includes(platform)) {
-    throw new Error("Unsupported local audio decryption");
+  if (!gateway || !source.url) return source;
+  if (!source.audio_params) {
+    if ("key" in source && source.key) throw new Error("Audio parameters require a newer server");
+    return source;
+  }
+  if (source.audio_params.length > 16 * 1024 || !/^[A-Za-z0-9_-]+$/.test(source.audio_params)) {
+    throw new Error("Invalid audio parameters");
   }
   const target = new URL(source.url);
   if (!/^https?:$/.test(target.protocol) || target.username || target.password || target.hash) {
     throw new Error("Invalid encrypted audio URL");
   }
-  const format = audioOutputFormat(platform, source.format);
-  const params = new URLSearchParams({ url: target.href, platform, key: source.key, format });
-  return { ...source, url: `${gateway}/__audio?${params}`, format };
+  const format = source.format.toLowerCase();
+  const params = new URLSearchParams({
+    url: target.href,
+    audio_params: source.audio_params,
+    format,
+  });
+  return { url: `${gateway}/__audio?${params}`, format };
 }

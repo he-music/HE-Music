@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/he-music/HE-Music/desktop/internal/httpclient"
 )
 
 func TestNetworkProxyValidation(t *testing.T) {
@@ -39,6 +41,9 @@ func TestNetworkProxyTestIsIsolated(t *testing.T) {
 	p := newNetworkProxy(func(NetworkProxyConfig) error { saved++; return nil }, func(NetworkProxyConfig) (bool, bool, string, error) { applied++; return true, false, "", nil })
 	p.testTransport = func(c NetworkProxyConfig) http.RoundTripper {
 		return proxyRoundTrip(func(r *http.Request) (*http.Response, error) {
+			if r.UserAgent() != httpclient.DefaultUserAgent {
+				t.Errorf("proxy test User-Agent=%q", r.UserAgent())
+			}
 			if r.URL.String() != networkProxyTestURL || c.Server != "test.invalid" {
 				t.Fatal(r.URL, c)
 			}

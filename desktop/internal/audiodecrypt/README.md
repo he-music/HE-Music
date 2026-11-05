@@ -1,40 +1,27 @@
-# 客户端音频解密
+# 客户端音频执行器
 
-本目录复用 `srv-he-music` 的解密实现，来源提交为
-`1dd6ea1743dcfc6a1ba42ccc559a28ceb41ff2b5`（AGPL-3.0）：
+`transform/` 同步后端 `srv-he-music/pkg/audio/transform` 的源码与测试，使桌面构建不依赖整个后端模块或本机目录。当前对应后端音频参数 v1 改造；同步时逐文件核对，不再复制原始密钥派生实现。
 
-- `qmc/`：`pkg/um/qmc/`，用于酷我。
-- `mg/decoder.go`：`pkg/um/mg/decoder.go`，用于咪咕。
-- `soda/`：`pkg/um/soda/{crypto,http}.go`，用于汽水；保留原有来源声明。
-- 汽水合成 MP4 测试来自同一提交的 `pkg/um/soda/crypto_test.go`。
+来源仍为原先固定提交 `1dd6ea1743dcfc6a1ba42ccc559a28ceb41ff2b5`（AGPL-3.0）及后续拆分：
 
-使用固定源码快照，使桌面构建不依赖后端整个服务模块或本机目录。
-同步算法时对照上述源文件，保留版权声明，并运行本目录和网关的回归测试。
-`qmc/decoder.go` 省略了上游未启用的注释代码。
-汽水同步了本次后端优化：新增 `DecryptAudioInPlace`、先验证全部样本边界、
-集中存储 16 字节 IV，并在 HTTP 下载链路复用独占缓冲区。
+- 流变换执行逻辑来自 `pkg/um/mg`、`pkg/um/qmc`。
+- MP4 样本与 HTTP 缓存来自 `pkg/um/soda`，保留 `github.com/guohuiyuan/music-lib/soda/crypto.go` 的来源声明。
+- MP4 合成样本、IV、子样本与并发取消回归测试也随执行器迁移。
 
-播放和下载共用 `desktop/gateway_audio.go`。解密参数随请求传入本机网关，
-不注册音源，也不持久化音频 URL 或密钥。酷我和咪咕按实际响应偏移流式解密；
-汽水先获取完整 MP4，再解密并处理 Range，单文件上限 128 MiB，
-解密缓存上限 128 MiB、有效期最多一分钟，并限制并发。
+## 参数与播放
 
-后端 `/v1/song/url` 需支持 `client_decrypt=true`。mygo 默认传入，
-网页不传，后端默认逻辑保持不变。已有后端如果仍返回解密服务器地址且不带密钥，
-客户端沿用该地址。
+mygo 请求 `/v1/song/url` 时传入 `client_decrypt=true&audio_params_version=1`，后端返回 CDN URL、最终输出格式和 `audio_params`。前端只透传执行材料，本机 URL 为 `__audio?url=...&audio_params=...&format=...`，没有平台选择参数，也不接收原始 key。
 
-汽水目前以合成加密 MP4 验证算法、HEAD、Range 和错误处理，
-尚未验证真实歌曲与各系统 WebView 的实际播放。
+`audio_params` 是 Base64URL 编码的版本化 JSON；包含数值操作类型、已准备的字节序列或初始状态，以及可选的媒体 User-Agent。咪咕固定盐/MD5、酷我 V1/V2/TEA 派生和状态初始化、汽水 PlayAuth 提取均由主服务完成。编码不提供保密或访问授权，客户端仍可读取执行材料。
 
-性能基准使用 Go 1.27.3、Apple M2 Pro、8192 个独立 IV 的 2048 字节样本，
-共约 16 MiB。运行 `go test -run '^$' -bench BenchmarkDecryptAudio -benchmem
--benchtime=200ms -count=3 ./pkg/um/soda`；不包含网络、磁盘和播放耗时。
+桌面端与用户 API 均直接使用新协议，对外响应不再包含 `key`，平台内部 RPC 仍保留原始密钥供主服务预计算。新桌面端需要支持 v1 的后端。后端直接返回无密钥的服务端解密地址时仍沿用该地址；旧后端若返回原始密钥则明确失败，不保留旧派生算法作为回退。
 
-| 指标           | 优化前复制接口 | 优化后原地接口 |
-| -------------- | -------------- | -------------- |
-| 三轮耗时中位数 | 3.83 ms        | 2.42 ms        |
-| 每次额外分配   | 21.7 MB        | 4.6 MB         |
-| 每次分配次数   | 24598          | 8213           |
+播放和下载共用 `desktop/gateway_audio.go`，CDN 音频不经过主服务。参数随请求传入受随机前缀保护的本机网关，不注册或持久化音源。流式操作使用实际上游响应偏移；MP4 样本操作先获取完整文件，原地解密后处理 Range。单文件上限 128 MiB，缓存上限 128 MiB、最多一分钟，并限制并发和响应读取者。
 
-额外分配是基准的 `B/op`，不等同于进程峰值内存。原地接口只用于独占的
-下载缓冲区；已有 `DecryptAudio` 和 WASM 入口仍保留不修改输入的行为。
+桌面端网关（API、媒体和音频）、原生下载及代理连通性测试共用 `desktop/internal/httpclient` 的默认 UA 策略：空缺或空白 User-Agent 使用统一浏览器值，已指定的非空值保持不变。默认值为 `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36`。
+
+## 验证与同步
+
+运行 `go test -race ./desktop/internal/audiodecrypt/... ./desktop`，以及音频地址解析和下载相关 Vitest。后端还包含新旧派生/解密结果对照测试，覆盖 V1/V2、Map、分段与跨边界偏移。同步后比较两边执行源码和测试，避免协议漂移。
+
+合成数据验证不能替代真实歌曲及各系统 WebView/原生播放器的播放验收。本次没有进行真实平台联调，也没有更新历史性能基准。

@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/he-music/HE-Music/desktop/internal/httpclient"
 )
 
 type NetworkProxyConfig struct {
@@ -174,7 +176,7 @@ func (p *NetworkProxy) test(ctx context.Context, c NetworkProxyConfig) (NetworkP
 	if closer, ok := transport.(interface{ CloseIdleConnections() }); ok {
 		defer closer.CloseIdleConnections()
 	}
-	client := &http.Client{Transport: transport, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
+	client := &http.Client{Transport: &httpclient.Transport{Base: transport}, Timeout: 5 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 	req, err := http.NewRequestWithContext(ctx, http.MethodHead, networkProxyTestURL, nil)
 	if err != nil {
 		return result, err

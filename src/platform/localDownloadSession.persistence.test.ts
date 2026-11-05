@@ -205,7 +205,7 @@ describe("LocalDownloadSession candidate persistence seam", () => {
         snapshot("encrypted", { source, quality: "encrypted", filename: `song.${output}` }),
       ]);
       resolveURL.mockResolvedValue({
-        url: "http://127.0.0.1:49234/secret/__audio?key=private",
+        url: "http://127.0.0.1:49234/secret/__audio?audio_params=private",
         format: output,
       });
       await session.restored;
