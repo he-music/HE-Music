@@ -25,7 +25,7 @@ func TestMetadataLinuxAttributes(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer destination.Close()
-	if err := source.Chmod(0640); err != nil {
+	if err := source.Chmod(0o640); err != nil {
 		t.Fatal(err)
 	}
 	if err := metadataCheckAttributes(source); err != nil {
@@ -129,7 +129,7 @@ func TestMetadataLinuxRejectsPrivilegedMode(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer file.Close()
-	if err := file.Chmod(0600 | os.ModeSetuid); err != nil {
+	if err := file.Chmod(0o600 | os.ModeSetuid); err != nil {
 		t.Fatal(err)
 	}
 	if err := metadataCheckAttributes(file); err == nil {

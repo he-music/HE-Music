@@ -73,7 +73,8 @@ func TestLyricsHoverUnlockRegionValidation(t *testing.T) {
 		t.Fatal("actual button rejected")
 	}
 	for _, region := range []LyricsUnlockRegion{
-		{}, {X: -.1, Y: .05, Width: .04, Height: .1},
+		{},
+		{X: -.1, Y: .05, Width: .04, Height: .1},
 		{X: .99, Y: .05, Width: .04, Height: .1},
 		{X: .8, Y: .05, Width: .2, Height: .18},
 		{X: .8, Y: .05, Width: .045, Height: .5},

@@ -14,15 +14,18 @@ import (
 	"sync"
 
 	"github.com/egoist/mygo"
+
 	"github.com/he-music/HE-Music/desktop/metadata"
 	"github.com/he-music/HE-Music/desktop/metadatadigest"
 )
 
-const metadataPrivatePrefix = ".hemusic-metadata-"
-const metadataMaxJobs = 256
-const metadataMaxActive = 2
-const metadataCacheBytes int64 = 64 << 20
-const metadataJobBaseBytes int64 = 16 << 10
+const (
+	metadataPrivatePrefix       = ".hemusic-metadata-"
+	metadataMaxJobs             = 256
+	metadataMaxActive           = 2
+	metadataCacheBytes    int64 = 64 << 20
+	metadataJobBaseBytes  int64 = 16 << 10
+)
 
 // Installed once by stream integration before bridge calls. It gates aliases by
 // SameFile, cancels tickets and joins actual FD/lease readers outside the actor.
@@ -96,6 +99,7 @@ func metadataCoordinatorFor(s *nativeFilesState) *metadataCoordinator {
 	}
 	return c
 }
+
 func (c *metadataCoordinator) lock(ctx context.Context, info os.FileInfo) (func(), error) {
 	for {
 		if err := ctx.Err(); err != nil {
@@ -133,6 +137,7 @@ func (c *metadataCoordinator) lock(ctx context.Context, info os.FileInfo) (func(
 		}
 	}
 }
+
 func metadataCode(err error) string {
 	switch {
 	case err == nil:
@@ -157,6 +162,7 @@ func metadataCode(err error) string {
 		return "io_error"
 	}
 }
+
 func metadataHash(ctx context.Context, f *os.File) (string, error) {
 	info, err := f.Stat()
 	if err != nil {
@@ -192,8 +198,10 @@ func metadataHash(ctx context.Context, f *os.File) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-var errMetadataLimit = errors.New("metadata size limit")
-var errMetadataOperation = errors.New("metadata operation ID belongs to a different reference")
+var (
+	errMetadataLimit     = errors.New("metadata size limit")
+	errMetadataOperation = errors.New("metadata operation ID belongs to a different reference")
+)
 
 func (f *NativeFiles) ReadMetadata(ctx context.Context, epoch uint64, ref LocalFileRef) MetadataResult {
 	lease, err := f.state.acquireDirectory(ctx, epoch, ref.GrantToken)
@@ -344,41 +352,13 @@ func (f *NativeFiles) saveMetadata(ctx context.Context, lease *directoryLease, c
 		}
 		return MetadataResult{Code: metadataCode(err)}
 	}
-	source, err := f.state.resolveLocalFile(lease, req.Ref)
-	if err != nil {
-		return fail(err)
-	}
-	original, err := source.Stat()
-	source.Close()
-	if err != nil {
-		return fail(err)
-	}
-	unlock, err := c.lock(ctx, original)
-	if err != nil {
-		return fail(err)
+	source, original, unlock, code := f.openMetadataSaveSource(ctx, lease, c, req)
+	if code != "" {
+		return MetadataResult{Code: code}
 	}
 	defer unlock()
-	source, err = f.state.resolveLocalFile(lease, req.Ref)
-	if err != nil {
-		return fail(err)
-	}
 	defer source.Close()
-	baseline, err := metadataHash(ctx, source)
-	if err != nil {
-		return fail(err)
-	}
-	if baseline != req.SHA256 {
-		return MetadataResult{Code: "conflict"}
-	}
-	// Resolve again after waiting for the identity lock.
-	check, err := f.state.resolveLocalFile(lease, req.Ref)
-	if err != nil {
-		return fail(err)
-	}
-	check.Close()
-	if err = metadataCheckAttributes(source); err != nil {
-		return MetadataResult{Code: "attributes_unsupported"}
-	}
+	baseline := req.SHA256
 	parent, err := lease.handle.root.OpenRoot(path.Dir(req.Ref.RelativePath))
 	if err != nil {
 		return fail(err)
@@ -394,37 +374,10 @@ func (f *NativeFiles) saveMetadata(ctx context.Context, lease *directoryLease, c
 	}
 	defer work.Close()
 	defer metadataRemoveTemporary(parent, workName, path.Dir(req.Ref.RelativePath), &out)
-	if err = metadataCopy(ctx, work, source, original.Size()); err != nil {
-		return fail(err)
+	parsed, code := prepareMetadataEdit(ctx, source, work, original.Size(), baseline, req.Patch)
+	if code != "" {
+		return MetadataResult{Code: code}
 	}
-	copiedHash, err := metadataHash(ctx, work)
-	if err != nil {
-		return fail(err)
-	}
-	if copiedHash != baseline {
-		return MetadataResult{Code: "conflict"}
-	}
-	if err = metadata.EditWorkingCopy(ctx, work, original.Size(), req.Patch); err != nil {
-		return fail(err)
-	}
-	edited, err := work.Stat()
-	if err != nil {
-		return fail(err)
-	}
-	if edited.Size() <= 0 {
-		return MetadataResult{Code: "limit"}
-	}
-	if err = metadata.CompareAudioPayload(ctx, source, original.Size(), work, edited.Size()); err != nil {
-		return fail(err)
-	}
-	parsed, err := metadata.Parse(work, edited.Size())
-	if err != nil {
-		return fail(err)
-	}
-	if !metadataPatchMatches(parsed, req.Patch) {
-		return MetadataResult{Code: "readback_mismatch"}
-	}
-	parsed = metadataDetachInfo(parsed)
 	if err = c.reserve(&f.state, lease, job, parsed); err != nil {
 		return fail(err)
 	}
@@ -441,69 +394,17 @@ func (f *NativeFiles) saveMetadata(ctx context.Context, lease *directoryLease, c
 			metadataRemoveTemporary(parent, backupName, path.Dir(req.Ref.RelativePath), &out)
 		}
 	}()
-	if err = metadataCopy(ctx, backup, source, original.Size()); err != nil {
-		return fail(err)
+	if code := prepareMetadataBackup(ctx, source, backup, work, original.Size(), baseline, parent); code != "" {
+		return MetadataResult{Code: code}
 	}
-	backupHash, err := metadataHash(ctx, backup)
-	if err != nil {
-		return fail(err)
-	}
-	if backupHash != baseline {
-		return MetadataResult{Code: "conflict"}
-	}
-	if err = metadataCopyAttributes(source, backup); err != nil {
-		return MetadataResult{Code: "attributes_unsupported"}
-	}
-	if err = backup.Sync(); err != nil {
-		return fail(err)
-	}
-	if err = metadataCopyAttributes(source, work); err != nil {
-		return MetadataResult{Code: "attributes_unsupported"}
-	}
-	if err = work.Sync(); err != nil {
-		return fail(err)
-	}
-	if err = metadataPrepareCommitDirectory(parent); err != nil {
-		return fail(err)
-	}
-	if metadataAudioDrain != nil {
-		release, err = metadataAudioDrain(ctx, f, original)
-		if err != nil {
-			return fail(err)
-		}
-		if release == nil {
-			return MetadataResult{Code: "readers_unavailable"}
-		}
-	} else {
-		localAudioServers.Lock()
-		server := localAudioServers.servers[&f.state]
-		if server != nil {
-			localAudioServers.Unlock()
-			return MetadataResult{Code: "readers_unavailable"}
-		}
-		// Prevent creation of the first server between the absence check and
-		// replacement. No actor callback acquires this registry lock.
-		release = localAudioServers.Unlock
+	release, code = f.drainMetadataReaders(ctx, original)
+	if code != "" {
+		return MetadataResult{Code: code}
 	}
 	// Reopen from the authorized route immediately before claim. os.Root pins IO
 	// but cannot supply a cross-process compare-and-swap between check and Rename.
-	current, err := f.state.resolveLocalFile(lease, req.Ref)
-	if err != nil {
-		return fail(err)
-	}
-	currentInfo, err := current.Stat()
-	if err != nil {
-		current.Close()
-		return fail(err)
-	}
-	currentHash, err := metadataHash(ctx, current)
-	current.Close()
-	route, routeErr := lease.handle.root.Stat(path.Dir(req.Ref.RelativePath))
-	if err != nil {
-		return fail(err)
-	}
-	if currentHash != baseline || !sameLocalFileInfo(original, currentInfo) || routeErr != nil || !os.SameFile(route, pinned) {
-		return MetadataResult{Code: "conflict"}
+	if code := f.checkMetadataSaveRoute(ctx, lease, req.Ref, original, pinned, baseline); code != "" {
+		return MetadataResult{Code: code}
 	}
 	if err = ctx.Err(); err != nil {
 		return fail(err)
@@ -529,64 +430,20 @@ func (f *NativeFiles) saveMetadata(ctx context.Context, lease *directoryLease, c
 		return MetadataResult{Code: "replace_failed", RecoveryName: recovery}
 	}
 	invalidateLibraryMetadata(lease.handle.canonical, req.Ref.RelativePath)
-	result := MetadataResult{Code: "ok", Committed: true, RecoveryName: recovery}
-	// Retain recovery material if durability or index publication fails.
-	directoryDurable, err := metadataDirectoryDurability(parent)
-	if err != nil {
-		return MetadataResult{Code: "durability_uncertain", Committed: true, RecoveryName: recovery}
-	}
-	if !directoryDurable {
-		result.Code = "durability_uncertain"
-	}
-	newRef, newFile, err := f.state.registerLocalFile(lease, req.Ref.RelativePath)
-	if err != nil {
-		return MetadataResult{Code: metadataCode(err), Committed: true, RecoveryName: recovery}
-	}
-	newFile.Close()
-	// Invalidate every old alias record; their paths must be rescanned. The new
-	// entry has the replacement inode and is deliberately kept.
-	err = f.state.main(lease.owner, func(parent *mygo.Window) error {
-		if err := f.state.checkLeaseOnMain(lease, parent); err != nil {
-			return err
-		}
-		for id, entry := range f.state.fileEntries {
-			if os.SameFile(entry.info, original) {
-				delete(f.state.fileEntries, id)
-				delete(entry.handle.filePaths, entry.ref.RelativePath)
-			}
-		}
-		return nil
-	})
-	if err != nil {
-		return MetadataResult{Code: metadataCode(err), Committed: true, RecoveryName: recovery}
-	}
-	hash, err := metadataHash(context.Background(), work)
-	if err != nil {
-		return MetadataResult{Code: "io_error", Committed: true, RecoveryName: recovery}
-	}
-	result.Ref = newRef
-	result.Info = &parsed
-	result.SHA256 = hash
-	if !directoryDurable {
-		return result
-	}
-	if err = parent.Remove(backupName); err != nil {
-		result.Code = "saved_cleanup_required"
-		return result
-	}
-	keepBackup = false
-	result.RecoveryName = ""
-	return result
+	out, keepBackup = f.publishMetadataResult(lease, work, parent, backupName, original, parsed, req.Ref.RelativePath)
+	return out
 }
+
 func metadataTemp(root *os.Root, kind string) (*os.File, string, error) {
 	token, err := newDirectoryToken()
 	if err != nil {
 		return nil, "", err
 	}
 	name := metadataPrivatePrefix + kind + "-" + token
-	file, err := root.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	file, err := root.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	return file, name, err
 }
+
 func metadataCopy(ctx context.Context, dst, src *os.File, size int64) error {
 	if size <= 0 {
 		return errMetadataLimit
@@ -715,8 +572,10 @@ func (c *metadataCoordinator) register(s *nativeFilesState, lease *directoryLeas
 			return errMetadataLimit
 		}
 		op, cancel := context.WithCancel(lease.Context())
-		job = &metadataJob{owner: lease.owner, epoch: lease.epoch, ref: req.Ref, context: op,
-			cancel: cancel, done: make(chan struct{}), bytes: metadataJobBaseBytes}
+		job = &metadataJob{
+			owner: lease.owner, epoch: lease.epoch, ref: req.Ref, context: op,
+			cancel: cancel, done: make(chan struct{}), bytes: metadataJobBaseBytes,
+		}
 		c.jobs[req.OperationID] = job
 		c.cachedBytes += job.bytes
 		retire := func() { c.mu.Lock(); defer c.mu.Unlock(); c.retireLocked(id, job) }
@@ -755,6 +614,7 @@ func (c *metadataCoordinator) releaseReservationLocked(job *metadataJob) {
 		job.bytes = metadataJobBaseBytes
 	}
 }
+
 func (c *metadataCoordinator) retireLocked(id string, job *metadataJob) {
 	if job.retired {
 		return
@@ -812,6 +672,7 @@ func (c *metadataCoordinator) reserve(s *nativeFilesState, lease *directoryLease
 		return nil
 	})
 }
+
 func metadataInfoBytes(info metadata.Info) int64 {
 	// Conservative backing-array accounting (including capacity), not just image
 	// lengths. The per-job allowance covers result/ref/string headers and watches.
@@ -833,6 +694,7 @@ func metadataInfoBytes(info metadata.Info) int64 {
 func metadataWithoutContent(result MetadataResult, code string) MetadataResult {
 	return MetadataResult{Code: code, Committed: result.Committed, RecoveryName: result.RecoveryName, ResidualNames: result.ResidualNames}
 }
+
 func (c *metadataCoordinator) finishLocked(id string, job *metadataJob, result MetadataResult) MetadataResult {
 	if job.context != nil && job.context.Err() != nil {
 		result = metadataWithoutContent(result, metadataCode(job.context.Err()))
@@ -858,6 +720,7 @@ func (c *metadataCoordinator) finishLocked(id string, job *metadataJob, result M
 	close(job.done)
 	return result
 }
+
 func (c *metadataCoordinator) finish(s *nativeFilesState, lease *directoryLease, id string, job *metadataJob, result MetadataResult) MetadataResult {
 	err := s.main(lease.owner, func(parent *mygo.Window) error {
 		if err := s.checkLeaseOnMain(lease, parent); err != nil {
@@ -875,6 +738,7 @@ func (c *metadataCoordinator) finish(s *nativeFilesState, lease *directoryLease,
 	}
 	return result
 }
+
 func (c *metadataCoordinator) completed(s *nativeFilesState, lease *directoryLease, id string, job *metadataJob) MetadataResult {
 	var result MetadataResult
 	err := s.main(lease.owner, func(parent *mygo.Window) error {

@@ -69,22 +69,9 @@ func validateDownloadNativeOptions(o *DownloadOptions) error {
 	if !o.WriteMetadata && !o.WriteCover && !o.WriteLyrics && !o.SaveSidecars {
 		return nil
 	}
-	if o.Metadata == nil {
-		return errDownloadOptions
-	}
 	m := o.Metadata
-	if len(m.Title) > downloadOptionStringLimit || len(m.Album) > downloadOptionStringLimit || len(m.Lyrics) > downloadOptionLyricsLimit || len(m.CoverURL) > downloadOptionURLLimit || len(m.Artists) > downloadOptionArtistsLimit {
-		return errDownloadOptions
-	}
-	total := len(m.Title) + len(m.Album) + len(m.Lyrics) + len(m.CoverURL)
-	for _, a := range m.Artists {
-		if len(a) > downloadOptionStringLimit {
-			return errDownloadOptions
-		}
-		total += len(a)
-	}
-	if total > downloadOptionTotalLimit {
-		return errDownloadOptions
+	if err := validateDownloadMetadata(m); err != nil {
+		return err
 	}
 	if o.WriteCover && m.CoverURL != "" && !downloadNativeCoverURL(m.CoverURL) {
 		return errDownloadOptions
@@ -94,15 +81,38 @@ func validateDownloadNativeOptions(o *DownloadOptions) error {
 	}
 	return nil
 }
+
+func validateDownloadMetadata(m *DownloadMetadata) error {
+	if m == nil {
+		return errDownloadOptions
+	}
+	if len(m.Title) > downloadOptionStringLimit || len(m.Album) > downloadOptionStringLimit || len(m.Lyrics) > downloadOptionLyricsLimit || len(m.CoverURL) > downloadOptionURLLimit || len(m.Artists) > downloadOptionArtistsLimit {
+		return errDownloadOptions
+	}
+	total := len(m.Title) + len(m.Album) + len(m.Lyrics) + len(m.CoverURL)
+	for _, artist := range m.Artists {
+		if len(artist) > downloadOptionStringLimit {
+			return errDownloadOptions
+		}
+		total += len(artist)
+	}
+	if total > downloadOptionTotalLimit {
+		return errDownloadOptions
+	}
+	return nil
+}
+
 func downloadNativeCoverURL(raw string) bool {
 	u, err := url.Parse(raw)
 	return len(raw) <= downloadOptionURLLimit && err == nil && u.User == nil && u.Fragment == "" && u.Opaque == "" && (u.Scheme == "http" || u.Scheme == "https") && u.Hostname() != ""
 }
+
 func downloadNativeOptionsFingerprint(o *DownloadOptions) string {
 	b, _ := json.Marshal(o)
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
 }
+
 func downloadNativeTarget(filename string, o *DownloadOptions) (string, error) {
 	if !downloadFilename(filename) {
 		return "", errDownloadOptions
@@ -115,4 +125,3 @@ func downloadNativeTarget(filename string, o *DownloadOptions) (string, error) {
 	}
 	return path.Join(o.RelativeDirectory, filename), nil
 }
-func downloadCoverURL(raw string) bool { return downloadNativeCoverURL(raw) }

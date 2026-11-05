@@ -24,6 +24,7 @@ func (f *fakeTaskbar) close() error { f.closes++; return nil }
 func taskbarFixture() TaskbarState {
 	return TaskbarState{Seq: 1, Enabled: true, Playing: true, PositionMs: 500, DurationMs: 1000, Labels: TaskbarLabels{Previous: "Previous", Play: "Play", Pause: "Pause", Next: "Next"}}
 }
+
 func TestTaskbarOwnerSwitchAndDisabled(t *testing.T) {
 	var clicks []func(TaskbarAction)
 	var events []TaskbarCommand
@@ -35,14 +36,10 @@ func TestTaskbarOwnerSwitchAndDisabled(t *testing.T) {
 		return f, nil
 	}, emit: func(e TaskbarCommand) { events = append(events, e) }}
 	epoch, err := c.begin(100)
-	if err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, err)
 	s := taskbarFixture()
 	s.Epoch = epoch
-	if err = c.sync(s); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, c.sync(s))
 	clicks[0](TaskbarNext)
 	clicks[0]("unsafe")
 	if len(events) != 1 || events[0].Seq != 1 {
@@ -55,14 +52,10 @@ func TestTaskbarOwnerSwitchAndDisabled(t *testing.T) {
 	s.Playing = false
 	s.DurationMs = 0
 	s.PositionMs = 0
-	if err = c.sync(s); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, c.sync(s))
 	s.Seq = 3
 	s.Enabled = false
-	if err = c.sync(s); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, c.sync(s))
 	clicks[0](TaskbarNext)
 	if len(events) != 1 || backends[0].clears != 1 || backends[0].closes != 0 {
 		t.Fatal("disable retained command gate or closed HWND backend")
@@ -75,7 +68,7 @@ func TestTaskbarOwnerSwitchAndDisabled(t *testing.T) {
 	if len(backends) != 1 || len(backends[0].updates) != 3 {
 		t.Fatal("enable reinstalled HWND backend")
 	}
-	c.revoke()
+	requireTestNoError(t, c.revoke())
 	clicks[0](TaskbarToggle)
 	if len(events) != 1 {
 		t.Fatal("retired owner accepted")
@@ -95,8 +88,8 @@ func TestTaskbarOwnerSwitchAndDisabled(t *testing.T) {
 	if len(backends) != 1 {
 		t.Fatal("Ready replacement reinstalled HWND backend")
 	}
-	c.shutdown()
-	c.shutdown()
+	requireTestNoError(t, c.shutdown())
+	requireTestNoError(t, c.shutdown())
 	if backends[0].closes != 1 {
 		t.Fatal("double release")
 	}
@@ -116,6 +109,7 @@ func TestTaskbarOwnerSwitchAndDisabled(t *testing.T) {
 		t.Fatal(events)
 	}
 }
+
 func TestTaskbarNativeFailureAndRebuild(t *testing.T) {
 	var restart func()
 	opens := 0
@@ -153,7 +147,7 @@ func TestTaskbarNativeFailureAndRebuild(t *testing.T) {
 	if c.state.Epoch != 0 || opens != 1 {
 		t.Fatal("failure reported active")
 	}
-	c.shutdown()
+	requireTestNoError(t, c.shutdown())
 	if f.closes != 1 {
 		t.Fatal("failed owner leaked at final shutdown")
 	}
@@ -167,6 +161,7 @@ func TestTaskbarNativeFailureAndRebuild(t *testing.T) {
 		t.Fatal("COM failure reported success")
 	}
 }
+
 func TestTaskbarRanges(t *testing.T) {
 	for _, v := range []float64{-1, 0.5, 9007199254740992, math.NaN(), math.Inf(1)} {
 		s := taskbarFixture()

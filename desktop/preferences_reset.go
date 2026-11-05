@@ -15,9 +15,11 @@ type PreferencesResetReceipt struct {
 	Mode            PreferencesResetMode `json:"mode"`
 }
 
-var preferencesResetStartupDirectory string
-var preferencesResetStartupTransaction string
-var preferencesResetAcknowledgedTransaction string
+var (
+	preferencesResetStartupDirectory        string
+	preferencesResetStartupTransaction      string
+	preferencesResetAcknowledgedTransaction string
+)
 
 func preparePreferencesResetStartup(directory string) error {
 	if os.Getenv("MYGO_GENERATE") != "" {

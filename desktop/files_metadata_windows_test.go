@@ -79,10 +79,10 @@ func TestMetadataWindowsAttributes(t *testing.T) {
 
 func TestMetadataWindowsRejectsAlternateStreams(t *testing.T) {
 	name := filepath.Join(t.TempDir(), "source")
-	if err := os.WriteFile(name, []byte("music"), 0600); err != nil {
+	if err := os.WriteFile(name, []byte("music"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(name+":tags", []byte("preserve me"), 0600); err != nil {
+	if err := os.WriteFile(name+":tags", []byte("preserve me"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	file, err := os.Open(name)

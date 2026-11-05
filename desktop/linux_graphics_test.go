@@ -11,6 +11,28 @@ import (
 func TestLinuxGraphicsPersistsAndPlansEachNextStartup(t *testing.T) {
 	directory := t.TempDir()
 	environment := []string{"PATH=/test/bin", "DISPLAY=:1"}
+	second, next := prepareLinuxGraphicsCompatibility(t, directory, environment)
+	if err := saveLinuxGraphics(directory, false); err != nil {
+		t.Fatal(err)
+	}
+	normal, changed, err := second.prepare(directory, next)
+	if err != nil || !changed || !reflect.DeepEqual(normal, environment) {
+		t.Fatalf("could not turn compatibility off: %v %v", changed, err)
+	}
+	third := &LinuxGraphics{}
+	if _, changed, err := third.prepare(directory, normal); err != nil || changed || third.snapshot().Applied || third.snapshot().Enabled {
+		t.Fatalf("normal startup would loop: %v %v", changed, err)
+	}
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(filepath.Join(directory, linuxGraphicsFile))
+		if err != nil || info.Mode().Perm() != 0o600 {
+			t.Fatal("graphics preference is not private")
+		}
+	}
+}
+
+func prepareLinuxGraphicsCompatibility(t *testing.T, directory string, environment []string) (*LinuxGraphics, []string) {
+	t.Helper()
 	first := &LinuxGraphics{}
 	if next, changed, err := first.prepare(directory, environment); err != nil || changed || !reflect.DeepEqual(next, environment) {
 		t.Fatalf("unsaved startup changed environment: %v %v", changed, err)
@@ -29,23 +51,7 @@ func TestLinuxGraphicsPersistsAndPlansEachNextStartup(t *testing.T) {
 	if _, changed, err := second.prepare(directory, next); err != nil || changed || !second.snapshot().Applied || second.snapshot().RestartRequired {
 		t.Fatalf("startup would loop or report wrong applied mode: %v %v", changed, err)
 	}
-	if err := saveLinuxGraphics(directory, false); err != nil {
-		t.Fatal(err)
-	}
-	normal, changed, err := second.prepare(directory, next)
-	if err != nil || !changed || !reflect.DeepEqual(normal, environment) {
-		t.Fatalf("could not turn compatibility off: %v %v", changed, err)
-	}
-	third := &LinuxGraphics{}
-	if _, changed, err := third.prepare(directory, normal); err != nil || changed || third.snapshot().Applied || third.snapshot().Enabled {
-		t.Fatalf("normal startup would loop: %v %v", changed, err)
-	}
-	if runtime.GOOS != "windows" {
-		info, err := os.Stat(filepath.Join(directory, linuxGraphicsFile))
-		if err != nil || info.Mode().Perm() != 0600 {
-			t.Fatal("graphics preference is not private")
-		}
-	}
+	return second, next
 }
 
 func TestLinuxGraphicsRejectsDamagedFilesWithoutOverwriting(t *testing.T) {
@@ -57,7 +63,7 @@ func TestLinuxGraphicsRejectsDamagedFilesWithoutOverwriting(t *testing.T) {
 		t.Run(data, func(t *testing.T) {
 			directory := t.TempDir()
 			filename := filepath.Join(directory, linuxGraphicsFile)
-			if err := os.WriteFile(filename, []byte(data), 0600); err != nil {
+			if err := os.WriteFile(filename, []byte(data), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			state := &LinuxGraphics{}
@@ -115,7 +121,7 @@ func TestLinuxGraphicsDiagnosticOverrideDoesNotChangeSavedChoice(t *testing.T) {
 
 func TestLinuxGraphicsWriteFailureDoesNotPublishDefault(t *testing.T) {
 	directory := filepath.Join(t.TempDir(), "not-directory")
-	if err := os.WriteFile(directory, []byte("owned"), 0600); err != nil {
+	if err := os.WriteFile(directory, []byte("owned"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := saveLinuxGraphics(directory, true); err == nil {

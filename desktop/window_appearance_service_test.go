@@ -30,7 +30,7 @@ func TestWindowAppearanceServiceUsesSavedSettingsOnlyAtStartup(t *testing.T) {
 
 func TestWindowAppearanceServiceRejectsDuplicateFieldsAndCanRecover(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "appearance.json")
-	if err := os.WriteFile(path, []byte(`{"version":1,"useBorderless":true,"useBorderless":false}`), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(`{"version":1,"useBorderless":true,"useBorderless":false}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	service := &WindowAppearanceService{}

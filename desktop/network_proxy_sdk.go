@@ -12,13 +12,15 @@ import (
 	"github.com/egoist/mygo"
 )
 
-var networkProxyStartupError = errors.New("network proxy storage not configured")
-var desktopNetworkProxy = newNetworkProxy(
-	func(NetworkProxyConfig) error { return errors.New("network proxy storage not configured") },
-	func(NetworkProxyConfig) (bool, bool, string, error) {
-		// Go transports read the committed configuration on each request.
-		return true, false, "", nil
-	},
+var (
+	errNetworkProxyStartup = errors.New("network proxy storage not configured")
+	desktopNetworkProxy    = newNetworkProxy(
+		func(NetworkProxyConfig) error { return errors.New("network proxy storage not configured") },
+		func(NetworkProxyConfig) (bool, bool, string, error) {
+			// Go transports read the committed configuration on each request.
+			return true, false, "", nil
+		},
+	)
 )
 
 func init() { mygo.Bind(desktopNetworkProxy) }
@@ -26,8 +28,8 @@ func init() { mygo.Bind(desktopNetworkProxy) }
 func (p *NetworkProxy) Apply(ctx context.Context, c NetworkProxyConfig) (NetworkProxyReceipt, error) {
 	result := NetworkProxyReceipt{}
 	err := desktopLifecycle.call(ctx, true, func() error {
-		if networkProxyStartupError != nil {
-			return networkProxyStartupError
+		if errNetworkProxyStartup != nil {
+			return errNetworkProxyStartup
 		}
 		var err error
 		result, err = p.apply(c)
@@ -47,8 +49,8 @@ func (p *NetworkProxy) Test(ctx context.Context, c NetworkProxyConfig) (NetworkP
 func (p *NetworkProxy) Current(ctx context.Context) (NetworkProxyConfig, error) {
 	result := NetworkProxyConfig{}
 	err := desktopLifecycle.call(ctx, true, func() error {
-		if networkProxyStartupError != nil {
-			return networkProxyStartupError
+		if errNetworkProxyStartup != nil {
+			return errNetworkProxyStartup
 		}
 		p.mu.RLock()
 		defer p.mu.RUnlock()
@@ -93,7 +95,7 @@ func saveNetworkProxyConfig(path string, c NetworkProxyConfig) error {
 		return err
 	}
 	directory := filepath.Dir(path)
-	if err = os.MkdirAll(directory, 0700); err != nil {
+	if err = os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
 	file, err := os.CreateTemp(directory, ".network-proxy-*")
@@ -101,7 +103,7 @@ func saveNetworkProxyConfig(path string, c NetworkProxyConfig) error {
 		return err
 	}
 	defer os.Remove(file.Name())
-	if err = file.Chmod(0600); err != nil {
+	if err = file.Chmod(0o600); err != nil {
 		file.Close()
 		return err
 	}
@@ -126,7 +128,7 @@ func prepareNetworkProxyStartup(directory string) (err error) {
 	if os.Getenv("MYGO_GENERATE") != "" {
 		return nil
 	}
-	defer func() { networkProxyStartupError = err }()
+	defer func() { errNetworkProxyStartup = err }()
 	if directory == "" || !filepath.IsAbs(directory) {
 		return errors.New("proxy settings directory must be absolute")
 	}
@@ -144,8 +146,8 @@ func prepareNetworkProxyStartup(directory string) (err error) {
 
 // Call on the main thread after attaching the real main window. Does not save.
 func restoreNetworkProxyWebview() (NetworkProxyReceipt, error) {
-	if networkProxyStartupError != nil {
-		return NetworkProxyReceipt{}, networkProxyStartupError
+	if errNetworkProxyStartup != nil {
+		return NetworkProxyReceipt{}, errNetworkProxyStartup
 	}
 	desktopNetworkProxy.mu.RLock()
 	c := desktopNetworkProxy.config

@@ -63,6 +63,7 @@ import {
   normalizePortableFilename,
 } from "@/platform/localDownloadOptions";
 import { validLocalDownloadFormat } from "@/platform/localDownloadPersistence";
+import { audioOutputFormat } from "@/platform/audioSource";
 import { useI18n } from "vue-i18n";
 import type { SongInfo } from "@/types/main.hemusic";
 import type { DirectoryGrant } from "@/platform/mygo.bindings";
@@ -99,13 +100,18 @@ onScopeDispose(() => {
   revision++;
 });
 const supported = computed(() =>
-  props.song.links.filter((link) => validLocalDownloadFormat(link.format)),
+  props.song.links.filter((link) =>
+    validLocalDownloadFormat(audioOutputFormat(props.song.platform, link.format)),
+  ),
 );
 const songSource = computed(() => localDownloadSource(props.song));
 const selected = computed(() => supported.value.find((link) => link.name === quality.value));
 const plan = computed(() => createLocalDownloadPlan(props.song, settingStore));
 const filename = computed(() =>
-  normalizePortableFilename(plan.value.filenameStem, selected.value?.format.toLowerCase() ?? "mp3"),
+  normalizePortableFilename(
+    plan.value.filenameStem,
+    audioOutputFormat(props.song.platform, selected.value?.format ?? "mp3"),
+  ),
 );
 const canStart = computed(
   () =>

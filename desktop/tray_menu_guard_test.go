@@ -12,13 +12,17 @@ func TestTrayMenuCapturedStateAndRecovery(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	playback := TrayPlaybackState{Epoch: epoch, Revision: 1, TrackKey: "A", HasSong: true,
-		CanFavorite: true, CanSetMode: true, Liked: true, PlayMode: TrayModeRepeat}
+	playback := TrayPlaybackState{
+		Epoch: epoch, Revision: 1, TrackKey: "A", HasSong: true,
+		CanFavorite: true, CanSetMode: true, Liked: true, PlayMode: TrayModeRepeat,
+	}
 	if err := session.sync(playback); err != nil {
 		t.Fatal(err)
 	}
-	captured := trayMenuState{playback: playback, ready: true, hasSong: true,
-		lyricsAvailable: true, lyricsVisible: true, lyricsLocked: true, canHide: true}
+	captured := trayMenuState{
+		playback: playback, ready: true, hasSong: true,
+		lyricsAvailable: true, lyricsVisible: true, lyricsLocked: true, canHide: true,
+	}
 	current := captured
 	var requests []TrayRequest
 	var recovery []trayMenuCommand
@@ -88,8 +92,10 @@ func TestTrayMenuCommandMapping(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	state := TrayPlaybackState{Epoch: epoch, Revision: 1, TrackKey: "track", HasSong: true,
-		CanFavorite: true, CanSetMode: true, PlayMode: TrayModeRepeat}
+	state := TrayPlaybackState{
+		Epoch: epoch, Revision: 1, TrackKey: "track", HasSong: true,
+		CanFavorite: true, CanSetMode: true, PlayMode: TrayModeRepeat,
+	}
 	if err := session.sync(state); err != nil {
 		t.Fatal(err)
 	}

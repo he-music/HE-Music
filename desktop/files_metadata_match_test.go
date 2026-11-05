@@ -71,7 +71,7 @@ func TestMetadataMatchReadDigestAndAuthority(t *testing.T) {
 		})
 	}
 	replacement := filepath.Join(dir, "replacement")
-	if err := os.WriteFile(replacement, data, 0600); err != nil {
+	if err := os.WriteFile(replacement, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Rename(replacement, file); err != nil {

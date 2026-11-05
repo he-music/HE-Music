@@ -7,7 +7,7 @@ import (
 )
 
 func TestLifecycleMenuStateAndNativeRecovery(t *testing.T) {
-	for bits := 0; bits < 256; bits++ {
+	for bits := range 256 {
 		s := trayMenuState{
 			ready: bits&1 != 0, hasSong: bits&2 != 0, playing: bits&4 != 0,
 			canHide: bits&8 != 0, lyricsAvailable: bits&16 != 0,
@@ -51,16 +51,17 @@ func TestLifecycleMenuStateAndNativeRecovery(t *testing.T) {
 					found = item
 				}
 			}
-			if found == nil || found.Disabled == want.enabled || found.Click == nil {
-				t.Fatalf("state=%d invalid %q enabled=%v item=%+v", bits, want.label, want.enabled, found)
+			requireTestNotEqual(t, found, nil)
+			requireTestEqual(t, found.Disabled, !want.enabled)
+			if found.Click == nil {
+				t.Fatalf("state=%d missing action for %q", bits, want.label)
 			}
 			if want.enabled {
 				before := len(commands)
 				// Focused child identity must not change the native command mapping.
 				found.Click(found, &mygo.Window{})
-				if len(commands) != before+1 || commands[before] != want.command {
-					t.Fatalf("state=%d wrong dispatch for %q: %v", bits, want.label, commands)
-				}
+				requireTestEqual(t, len(commands), before+1)
+				requireTestEqual(t, commands[before], want.command)
 			}
 		}
 	}

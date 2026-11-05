@@ -23,6 +23,7 @@ func (out *failingSettingsOutput) Write(data []byte) (int, error) {
 	}
 	return out.file.Write(data)
 }
+
 func (out *failingSettingsOutput) Sync() error {
 	out.synced++
 	if out.failure == "sync" {
@@ -30,6 +31,7 @@ func (out *failingSettingsOutput) Sync() error {
 	}
 	return out.file.Sync()
 }
+
 func (out *failingSettingsOutput) Close() error {
 	out.closed++
 	err := out.file.Close()
@@ -51,7 +53,7 @@ func TestSettingsOutputFailurePreservesOriginalAndCleansTemp(t *testing.T) {
 				t.Fatal(err)
 			}
 			save := &preparedSettingsSave{parent: parent, name: "settings.json", temp: ".he-music-settings-failure.tmp"}
-			file, err := parent.root.OpenFile(save.temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			file, err := parent.root.OpenFile(save.temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 			if err != nil {
 				parent.root.Close()
 				t.Fatal(err)

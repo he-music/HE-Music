@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/he-music/HE-Music/desktop/metadata"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -12,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
 func displayJPEG(t *testing.T, red uint8) []byte {
@@ -29,7 +30,7 @@ func displayFixture(t *testing.T, embedded bool) (*NativeFiles, context.Context,
 	t.Helper()
 	dir := t.TempDir()
 	filename := filepath.Join(dir, "song.mp3")
-	if err := os.WriteFile(filename, downloadMP3(), 0600); err != nil {
+	if err := os.WriteFile(filename, downloadMP3(), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	picture := displayJPEG(t, 255)
@@ -52,10 +53,10 @@ func displayFixture(t *testing.T, embedded bool) (*NativeFiles, context.Context,
 
 func TestLocalDisplayEmbeddedArtworkAndSidecarLyricsPriority(t *testing.T) {
 	files, ctx, epoch, ref, dir, embedded := displayFixture(t, true)
-	if err := os.WriteFile(filepath.Join(dir, "song.jpg"), displayJPEG(t, 0), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "song.jpg"), displayJPEG(t, 0), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "song.lrc"), []byte("[00:01.00]sidecar"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "song.lrc"), []byte("[00:01.00]sidecar"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	artwork := files.ReadLocalArtwork(ctx, epoch, ref)
@@ -77,11 +78,11 @@ func TestLocalDisplayEmbeddedArtworkAndSidecarLyricsPriority(t *testing.T) {
 
 func TestLocalDisplayMalformedTagsStillUseSameNameJPG(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "song.mp3"), []byte("malformed tags"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "song.mp3"), []byte("malformed tags"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	picture := displayJPEG(t, 255)
-	if err := os.WriteFile(filepath.Join(dir, "song.jpg"), picture, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "song.jpg"), picture, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	files, ctx, epoch, ref := metadataTestService(t, dir)
@@ -97,7 +98,7 @@ func TestLocalDisplayDetectsPNGInSameNameSidecar(t *testing.T) {
 	if err := png.Encode(&encoded, image.NewRGBA(image.Rect(0, 0, 2, 2))); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "song.jpg"), encoded.Bytes(), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "song.jpg"), encoded.Bytes(), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	result := files.ReadLocalArtwork(ctx, epoch, ref)
@@ -113,7 +114,7 @@ func TestLocalDisplayDetectsPNGInSameNameSidecar(t *testing.T) {
 func TestLocalDisplayRejectsSidecarSymlinkOversizeAndStaleAudio(t *testing.T) {
 	files, ctx, epoch, ref, dir, picture := displayFixture(t, false)
 	outside := filepath.Join(t.TempDir(), "outside.jpg")
-	if err := os.WriteFile(outside, picture, 0600); err != nil {
+	if err := os.WriteFile(outside, picture, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	name := filepath.Join(dir, "song.jpg")
@@ -125,7 +126,7 @@ func TestLocalDisplayRejectsSidecarSymlinkOversizeAndStaleAudio(t *testing.T) {
 		t.Fatal("symlink sidecar escaped grant")
 	}
 	os.Remove(name)
-	if err := os.WriteFile(name, make([]byte, displayImageLimit+1), 0600); err != nil {
+	if err := os.WriteFile(name, make([]byte, displayImageLimit+1), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	result = files.ReadLocalArtwork(ctx, epoch, ref)
@@ -133,8 +134,8 @@ func TestLocalDisplayRejectsSidecarSymlinkOversizeAndStaleAudio(t *testing.T) {
 		t.Fatal("oversize sidecar admitted")
 	}
 	replacement := filepath.Join(dir, "replacement.mp3")
-	os.WriteFile(replacement, downloadMP3(), 0600)
-	os.Rename(replacement, filepath.Join(dir, "song.mp3"))
+	requireTestNoError(t, os.WriteFile(replacement, downloadMP3(), 0o600))
+	requireTestNoError(t, os.Rename(replacement, filepath.Join(dir, "song.mp3")))
 	if got := files.ReadLocalArtwork(ctx, epoch, ref); got.Code == "ok" {
 		t.Fatal("stale ref accepted")
 	}
@@ -175,7 +176,7 @@ func TestLocalDisplayQueuedCancellationAndTextBounds(t *testing.T) {
 		t.Fatal("cancelled queued display request succeeded")
 	}
 	for _, data := range [][]byte{make([]byte, displayLyricsLimit+1), {0xff, 0xfe, 0}} {
-		if err := os.WriteFile(filepath.Join(dir, "song.lrc"), data, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "song.lrc"), data, 0o600); err != nil {
 			t.Fatal(err)
 		}
 		lyrics := files.ReadLocalLyrics(ctx, epoch, ref)
@@ -199,7 +200,7 @@ func TestLocalDisplayDoesNotApplyArtworkByteLimitToSongSize(t *testing.T) {
 	}
 	source.Close()
 	picture := displayJPEG(t, 255)
-	if err := os.WriteFile(filepath.Join(dir, "song.jpg"), picture, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "song.jpg"), picture, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	files, ctx, epoch, ref := metadataTestService(t, dir)

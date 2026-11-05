@@ -62,7 +62,7 @@ func TestNetworkProxyPersistenceTempDirectory(t *testing.T) {
 		t.Fatal(got, err)
 	}
 	for _, data := range []string{"{", `{"protocol":"HTTP","server":"bad/path","port":8080}`, strings.Repeat(" ", 1025)} {
-		if err = os.WriteFile(path, []byte(data), 0600); err != nil {
+		if err = os.WriteFile(path, []byte(data), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if _, err = readNetworkProxyConfig(path); err == nil {

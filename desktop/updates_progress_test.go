@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"testing"
 	"time"
 )
@@ -54,8 +53,7 @@ func TestUpdatesProgressCannotEscapeItsOwnerOrOperation(t *testing.T) {
 	h.u.Install(owner, 3, epoch, 2)
 	h.run(t)
 	call := receiveUpdatesInstall(t, candidate)
-	newOwner, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	newOwner := t.Context()
 	newEpoch := h.begin(t, newOwner)
 	call.progress(99, 100)
 	h.run(t)

@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/egoist/mygo"
+
 	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
@@ -40,6 +41,7 @@ func scanTestGrant(t *testing.T) (*fileTestActor, context.Context, uint64, strin
 	}
 	return actor, ctx, epoch, token, path
 }
+
 func scanTestAwaitRemoved(t *testing.T, job *fileScan) {
 	t.Helper()
 	deadline := time.After(5 * time.Second)
@@ -80,6 +82,7 @@ func scanTestJob(t *testing.T, s *nativeFilesState, ctx context.Context, epoch u
 	})
 	return job
 }
+
 func scanTestDrain(t *testing.T, job *fileScan) ([]ScanEntry, []ScanIssue) {
 	t.Helper()
 	deadline := time.After(5 * time.Second)
@@ -109,6 +112,7 @@ func scanTestDrain(t *testing.T, job *fileScan) ([]ScanEntry, []ScanIssue) {
 		}
 	}
 }
+
 func scanTestWrite(t *testing.T, path string, data []byte) {
 	t.Helper()
 	if err := os.WriteFile(path, data, 0o600); err != nil {
@@ -118,7 +122,7 @@ func scanTestWrite(t *testing.T, path string, data []byte) {
 
 func TestScanPagesEntriesAndCursor(t *testing.T) {
 	actor, ctx, epoch, token, path := scanTestGrant(t)
-	for n := 0; n < scanQueueSize+10; n++ {
+	for n := range scanQueueSize + 10 {
 		scanTestWrite(t, filepath.Join(path, fmt.Sprintf("%03d.mp3", n)), []byte("plain text, not audio"))
 	}
 	job := scanTestJob(t, actor.state, ctx, epoch, token)
@@ -204,22 +208,20 @@ func TestScanReadOnlyEmbeddedTagsWithSupportedSuffix(t *testing.T) {
 			}
 			job := scanTestJob(t, actor.state, ctx, epoch, token)
 			entries, issues := scanTestDrain(t, job)
-			if len(entries) != 1 || len(issues) != 0 {
-				t.Fatalf("entries=%d issues=%v", len(entries), issues)
-			}
+			requireTestEqual(t, len(entries), 1)
+			requireTestEqual(t, len(issues), 0)
 			entry := entries[0]
-			if entry.Metadata.Title != "临时扫描标题" || len(entry.Metadata.Artists) != 1 || entry.Metadata.Artists[0] != "临时艺术家" {
-				t.Fatalf("tags: %+v", entry.Metadata)
-			}
+			requireTestEqual(t, entry.Metadata.Title, "临时扫描标题")
+			requireTestEqual(t, len(entry.Metadata.Artists), 1)
+			requireTestEqual(t, entry.Metadata.Artists[0], "临时艺术家")
 			if entry.Metadata.Lyrics != lyrics {
 				t.Fatal("scan did not preserve embedded lyrics")
 			}
-			if entry.Metadata.PicturesLoaded || len(entry.Metadata.Pictures) != 0 {
-				t.Fatal("scan loaded pictures")
-			}
-			if entry.Ref.RelativePath != "music."+format || entry.Ref.GrantToken != token || entry.Size != int64(len(before)) {
-				t.Fatalf("bad ref: %+v", entry)
-			}
+			requireTestEqual(t, entry.Metadata.PicturesLoaded, false)
+			requireTestEqual(t, len(entry.Metadata.Pictures), 0)
+			requireTestEqual(t, entry.Ref.RelativePath, "music."+format)
+			requireTestEqual(t, entry.Ref.GrantToken, token)
+			requireTestEqual(t, entry.Size, int64(len(before)))
 			lease, err := actor.state.acquireDirectory(ctx, epoch, token)
 			if err != nil {
 				t.Fatal(err)
@@ -263,7 +265,7 @@ func TestScanReadOnlyEmbeddedTagsWithSupportedSuffix(t *testing.T) {
 func TestScanDepthSymlinksAndFileByteLimit(t *testing.T) {
 	actor, ctx, epoch, token, path := scanTestGrant(t)
 	deep := path
-	for n := 0; n < scanMaxDepth+1; n++ {
+	for range scanMaxDepth + 1 {
 		deep = filepath.Join(deep, "d")
 		if err := os.Mkdir(deep, 0o700); err != nil {
 			t.Fatal(err)
@@ -303,7 +305,7 @@ func TestScanCancelRevokeAndOwnerReplacement(t *testing.T) {
 	for _, mode := range []string{"cancel", "revoke", "owner", "parent"} {
 		t.Run(mode, func(t *testing.T) {
 			actor, ctx, epoch, token, path := scanTestGrant(t)
-			for n := 0; n < scanQueueSize+5; n++ {
+			for n := range scanQueueSize + 5 {
 				scanTestWrite(t, filepath.Join(path, fmt.Sprint(n)+".mp3"), []byte("unsupported"))
 			}
 			job := scanTestJob(t, actor.state, ctx, epoch, token)
@@ -359,11 +361,7 @@ func TestScanCancelRevokeAndOwnerReplacement(t *testing.T) {
 			if mode == "parent" {
 				job.cancel()
 			}
-			select {
-			case <-job.finished:
-			case <-time.After(5 * time.Second):
-				t.Fatal("blocked producer did not cancel")
-			}
+			requireTestSignal(t, job.finished, 5*time.Second, "blocked producer did not cancel")
 		})
 	}
 }
@@ -419,7 +417,7 @@ func TestScanWorkerReferenceSurvivesOwnerCancellation(t *testing.T) {
 func TestScanOperationLimitAndCompletedLeaseRelease(t *testing.T) {
 	actor, ctx, epoch, token, _ := scanTestGrant(t)
 	jobs := make([]*fileScan, 0, scanMaxOperations)
-	for n := 0; n < scanMaxOperations; n++ {
+	for range scanMaxOperations {
 		job := scanTestJob(t, actor.state, ctx, epoch, token)
 		select {
 		case <-job.finished:
@@ -446,18 +444,18 @@ func TestScanOperationLimitAndCompletedLeaseRelease(t *testing.T) {
 
 func TestScanConcurrentCursorConsumption(t *testing.T) {
 	actor, ctx, epoch, token, path := scanTestGrant(t)
-	for n := 0; n < scanQueueSize+5; n++ {
+	for n := range scanQueueSize + 5 {
 		scanTestWrite(t, filepath.Join(path, fmt.Sprint(n)+".mp3"), []byte("unsupported"))
 	}
 	job := scanTestJob(t, actor.state, ctx, epoch, token)
 	start := make(chan struct{})
 	results := make(chan error, 2)
-	for n := 0; n < 2; n++ {
+	for range 2 {
 		go func() { <-start; _, err := actor.state.readScanPage(ctx, epoch, job.id, ""); results <- err }()
 	}
 	close(start)
 	successes, rejected := 0, 0
-	for n := 0; n < 2; n++ {
+	for range 2 {
 		select {
 		case err := <-results:
 			if err == nil {

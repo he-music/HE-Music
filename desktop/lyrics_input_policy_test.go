@@ -13,11 +13,12 @@ func TestLyricsInputShapeLockAndRestore(t *testing.T) {
 			if handle != 42 {
 				t.Fatal("changed another window")
 			}
-			if region == 7 {
+			switch region {
+			case 7:
 				calls = append(calls, "empty input")
-			} else if region == 0 {
+			case 0:
 				calls = append(calls, "normal input")
-			} else {
+			default:
 				t.Fatal("unexpected region")
 			}
 		},

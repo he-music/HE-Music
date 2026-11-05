@@ -34,7 +34,7 @@ func TestDownloadForgetReclaimsCapacityAndRejectsReplay(t *testing.T) {
 		return nil, errors.New("fake network failure")
 	})
 	requests := make([]DownloadRequest, 0, downloadMaxJobs)
-	for i := 0; i < downloadMaxJobs; i++ {
+	for i := range downloadMaxJobs {
 		req := downloadReq(t, token, fmt.Sprintf("song-%d.mp3", i))
 		j := downloadStart(t, a, ctx, epoch, c, req)
 		downloadWait(t, j)
@@ -105,8 +105,7 @@ func TestDownloadForgetRejectsForeignOwnerEpochAndRevokedGrant(t *testing.T) {
 	req := downloadReq(t, token, "done.mp3")
 	j := downloadStart(t, a, ctx, epoch, c, req)
 	downloadWait(t, j)
-	foreign, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	foreign := t.Context()
 	for _, candidate := range []struct {
 		ctx   context.Context
 		epoch uint64
@@ -151,7 +150,7 @@ func TestDownloadForgetNeverEvictsConsumedIDsAtLimit(t *testing.T) {
 	downloadWait(t, j)
 	c.mu.Lock()
 	c.forgotten = make(map[string]struct{}, downloadMaxForgotten)
-	for i := 0; i < downloadMaxForgotten; i++ {
+	for i := range downloadMaxForgotten {
 		c.forgotten[fmt.Sprintf("retired-%d", i)] = struct{}{}
 	}
 	c.mu.Unlock()

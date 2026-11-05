@@ -6,6 +6,7 @@ import type {
 } from "./localDownloadSession";
 import { createApplicationDatabase } from "./applicationStorage";
 
+import { audioOutputFormat } from "./audioSource";
 export interface LocalDownloadSnapshotSource {
   readonly id: string;
   readonly platform: string;
@@ -232,6 +233,7 @@ export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
       !Array.isArray(input.links)
     )
       throw invalid();
+    const sourcePlatform = input.platform;
     const links = input.links.map((link: unknown) => {
       if (
         !object(link) ||
@@ -239,7 +241,7 @@ export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
         typeof link.quality !== "number" ||
         !Number.isFinite(link.quality) ||
         !text(link.format) ||
-        !validLocalDownloadFormat(link.format)
+        !validLocalDownloadFormat(audioOutputFormat(sourcePlatform, link.format))
       )
         throw invalid();
       return { name: link.name, quality: link.quality, format: link.format };

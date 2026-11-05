@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  mygo: false,
+  sourceFormat: "",
   callbacks: new Map<string, (event: unknown) => void>(),
   audio: {
     on: vi.fn(),
@@ -35,11 +37,20 @@ vi.mock("./songManager", () => ({
     getPlaySongData: () => mocks.song,
     getPlayerInfoObj: () => ({ name: "A", artist: "Artist" }),
     getCoverColor: mocks.cover,
-    getOnlineUrl: vi.fn().mockResolvedValue("https://audio.example/next.mp3"),
+    getOnlineSource: vi.fn(async (_id: string, _platform: string, link: { format: string }) => ({
+      url: "https://audio.example/next.mp3",
+      format: mocks.sourceFormat || link.format,
+    })),
   },
 }));
 vi.mock("./lyricManager", () => ({ default: { handleLyric: mocks.lyrics } }));
-vi.mock("./env", () => ({ isElectron: false, hasNativeSystemMedia: false }));
+vi.mock("./env", () => ({
+  isElectron: false,
+  get isMygo() {
+    return mocks.mygo;
+  },
+  hasNativeSystemMedia: false,
+}));
 vi.mock("./helper", () => ({ shuffleArray: vi.fn() }));
 vi.mock("./time", () => ({ calculateProgress: vi.fn(), msToS: vi.fn() }));
 vi.mock("./blob", () => ({ default: {} }));
@@ -54,6 +65,8 @@ beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
   mocks.callbacks.clear();
+  mocks.mygo = false;
+  mocks.sourceFormat = "";
   mocks.song.platform = "test";
   mocks.audio.currentTime = 0;
   mocks.audio.src = "";
@@ -111,6 +124,29 @@ describe("online source format admission", () => {
       autoPlay: false,
       ...(typed ? { source: { platform, format } } : {}),
     });
+  });
+  it.each([
+    ["kuwo", "mflac", "flac"],
+    ["soda", "flac", "m4a"],
+    ["soda", "aac", "m4a"],
+  ])("uses the decrypted container hint for mygo %s/%s", async (platform, format, output) => {
+    mocks.mygo = true;
+    mocks.song.platform = platform;
+    mocks.sourceFormat = output;
+    vi.spyOn(player, "selectPlayQuality").mockReturnValue({ name: "test", format });
+    await player.initPlayer(false);
+    expect(mocks.audio.play).toHaveBeenCalledWith(
+      "https://audio.example/next.mp3",
+      expect.objectContaining({ source: { platform, format: output } }),
+    );
+  });
+  it("uses the actual returned format when an encrypted quality falls back to MP3", async () => {
+    mocks.mygo = true;
+    mocks.song.platform = "kuwo";
+    mocks.sourceFormat = "mp3";
+    vi.spyOn(player, "selectPlayQuality").mockReturnValue({ name: "test", format: "mflac" });
+    await player.initPlayer(false);
+    expect(mocks.audio.play.mock.calls[0]?.[1]).not.toHaveProperty("source");
   });
 });
 

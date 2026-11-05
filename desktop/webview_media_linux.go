@@ -96,7 +96,7 @@ func loadLinuxWebViewPolicy() (access nativeWebViewPolicyAccess, err error) {
 	purego.RegisterLibFunc(&draw.restore, gtk, "cairo_restore")
 	// One callback per process; GTK disconnects the signal when its window dies.
 	var firstDraw sync.Once
-	clearBackground := purego.NewCallback(func(_ uintptr, context uintptr, _ uintptr) int32 {
+	clearBackground := purego.NewCallback(func(_, context, _ uintptr) int32 {
 		clearNativeTransparentBackground(context, draw)
 		if context != 0 {
 			firstDraw.Do(func() {

@@ -16,6 +16,7 @@ func (b *protocolReasonBackend) RegisterURLScheme(string) error {
 	b.calls++
 	return protocolReasonFailure{}
 }
+
 func (b *protocolReasonBackend) UnregisterURLScheme(string) error {
 	panic("macOS must not unregister on disable")
 }

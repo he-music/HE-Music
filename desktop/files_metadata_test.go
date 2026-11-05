@@ -25,10 +25,10 @@ func metadataTestService(t *testing.T, dir string) (*NativeFiles, context.Contex
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.state.main(ctx, func(_ *mygo.Window) error {
+	requireTestNoError(t, f.state.main(ctx, func(_ *mygo.Window) error {
 		f.state.grants = map[string]ownedDirectory{token: {grant: DirectoryGrant{Token: token, Epoch: epoch}, handle: handle}}
 		return nil
-	})
+	}))
 	lease, err := f.state.acquireDirectory(ctx, epoch, token)
 	if err != nil {
 		t.Fatal(err)
@@ -51,6 +51,7 @@ func metadataTestService(t *testing.T, dir string) (*NativeFiles, context.Contex
 	})
 	return f, ctx, epoch, *ref
 }
+
 func metadataTestNonce(t *testing.T) string {
 	t.Helper()
 	s, err := newDirectoryToken()
@@ -64,7 +65,7 @@ func TestMetadataIdentityLockCancelAndTimeout(t *testing.T) {
 	dir := t.TempDir()
 	a := filepath.Join(dir, "a")
 	b := filepath.Join(dir, "b")
-	if err := os.WriteFile(a, []byte("a"), 0600); err != nil {
+	if err := os.WriteFile(a, []byte("a"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Link(a, b); err != nil {
@@ -102,6 +103,7 @@ func TestMetadataIdentityLockCancelAndTimeout(t *testing.T) {
 	}
 	release()
 }
+
 func TestMetadataLimitAndRevokedRead(t *testing.T) {
 	dir := t.TempDir()
 	name := filepath.Join(dir, "song.mp3")
@@ -124,18 +126,18 @@ func TestMetadataLimitAndRevokedRead(t *testing.T) {
 		t.Fatalf("%+v", result)
 	}
 }
+
 func TestMetadataForeignCancelAndBoundedJobs(t *testing.T) {
 	dir := t.TempDir()
-	os.WriteFile(filepath.Join(dir, "song.mp3"), []byte("not audio"), 0600)
+	requireTestNoError(t, os.WriteFile(filepath.Join(dir, "song.mp3"), []byte("not audio"), 0o600))
 	f, ctx, epoch, ref := metadataTestService(t, dir)
-	foreign, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	foreign := t.Context()
 	if result := f.CancelMetadata(foreign, epoch, "anything"); result.Code != "revoked" {
 		t.Fatal(result)
 	}
 	c := metadataCoordinatorFor(&f.state)
 	c.owner, c.epoch = ctx, epoch
-	for i := 0; i < 256; i++ {
+	for range 256 {
 		c.jobs[metadataTestNonce(t)] = &metadataJob{owner: ctx, epoch: epoch, bytes: metadataJobBaseBytes}
 	}
 	c.cachedBytes = metadataMaxJobs * metadataJobBaseBytes

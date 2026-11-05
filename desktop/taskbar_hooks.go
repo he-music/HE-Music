@@ -44,6 +44,7 @@ func (h *taskbarHookHandoff) replace(previous, next taskbarHookOwner) error {
 // removal independently. A failed retry admits no new installation, bounding the
 // live native subclasses and Go roots to the two slots above.
 func (h *taskbarHookHandoff) retry() error { return h.retryKeeping(nil) }
+
 func (h *taskbarHookHandoff) retryKeeping(observer taskbarHookOwner) error {
 	if h.busy || h.dead {
 		return errors.New("taskbar hook cleanup unavailable")

@@ -95,6 +95,7 @@ func validateTaskbar(s TaskbarState) error {
 	}
 	return nil
 }
+
 func (c *taskbarController) begin(handle uintptr) (uint64, error) {
 	op := c.advance()
 	backend, previousHandle := c.backend, c.handle
@@ -128,6 +129,7 @@ func (c *taskbarController) begin(handle uintptr) (uint64, error) {
 	c.advance()
 	return c.counter, nil
 }
+
 func (c *taskbarController) sync(s TaskbarState) error {
 	if err := validateTaskbar(s); err != nil {
 		return err
@@ -148,32 +150,7 @@ func (c *taskbarController) sync(s TaskbarState) error {
 	if backend == nil {
 		c.generation++
 		generation, ownerHandle := c.generation, c.handle
-		opened, err := c.open(ownerHandle, func(action TaskbarAction) {
-			if c.generation != generation || c.handle != ownerHandle || !c.state.Enabled || c.backend == nil {
-				return
-			}
-			if action != TaskbarPrevious && action != TaskbarToggle && action != TaskbarNext {
-				return
-			}
-			if c.emit != nil {
-				c.emit(TaskbarCommand{Epoch: c.state.Epoch, Seq: c.state.Seq, Action: action})
-			}
-		}, func() {
-			if c.generation != generation || c.handle != ownerHandle || c.backend == nil {
-				return
-			}
-			backend := c.backend
-			callbackOp := c.advance()
-			state := c.state
-			if c.requested.Epoch == state.Epoch && c.requested.Seq > state.Seq {
-				state = c.requested
-			}
-			if state.Epoch != 0 {
-				_ = c.applyBackend(state, backend, callbackOp, ownerHandle, state.Epoch)
-			} else {
-				_ = backend.clear()
-			}
-		})
+		opened, err := c.open(ownerHandle, c.nativeCommandHandler(generation, ownerHandle), c.nativeRebuildHandler(generation, ownerHandle))
 		if err != nil {
 			if op == c.revision && c.handle == ownerHandle && c.state.Epoch == epoch {
 				_ = c.revoke()
@@ -189,6 +166,48 @@ func (c *taskbarController) sync(s TaskbarState) error {
 	}
 	return c.applyBackend(s, backend, op, handle, epoch)
 }
+
+func (c *taskbarController) nativeCommandHandler(generation uint64, handle uintptr) func(TaskbarAction) {
+	return func(action TaskbarAction) {
+		if c.generation != generation || c.handle != handle || !c.state.Enabled || c.backend == nil {
+			return
+		}
+		if action != TaskbarPrevious && action != TaskbarToggle && action != TaskbarNext {
+			return
+		}
+		if c.emit != nil {
+			c.emit(TaskbarCommand{Epoch: c.state.Epoch, Seq: c.state.Seq, Action: action})
+		}
+	}
+}
+
+func (c *taskbarController) nativeRebuildHandler(generation uint64, handle uintptr) func() {
+	return func() {
+		if c.generation != generation || c.handle != handle || c.backend == nil {
+			return
+		}
+		backend := c.backend
+		op := c.advance()
+		state := c.state
+		if c.requested.Epoch == state.Epoch && c.requested.Seq > state.Seq {
+			state = c.requested
+		}
+		if state.Epoch != 0 {
+			_ = c.applyBackend(state, backend, op, handle, state.Epoch)
+		} else {
+			_ = backend.clear()
+		}
+	}
+}
+
+func (c *taskbarController) canReportNativeFailure(backend taskbarBackend, op uint64, handle uintptr) bool {
+	return c.revision == op+1 && backend == c.backend && handle == c.handle && c.state.Epoch == 0 && c.failure != nil
+}
+
+func (c *taskbarController) canAcknowledgeSuperseded(s TaskbarState, backend taskbarBackend, handle uintptr, epoch uint64) bool {
+	return backend == c.backend && handle == c.handle && epoch == c.state.Epoch && s.Enabled && c.requested.Enabled && c.requested.Epoch == epoch && c.requested.Seq > s.Seq
+}
+
 func (c *taskbarController) applyBackend(s TaskbarState, backend taskbarBackend, op uint64, handle uintptr, epoch uint64) error {
 	current := func() bool {
 		return op == c.revision && backend == c.backend && handle == c.handle && epoch == c.state.Epoch
@@ -204,7 +223,7 @@ func (c *taskbarController) applyBackend(s TaskbarState, backend taskbarBackend,
 			outcome = errors.Join(err, c.revoke())
 			// Native cleanup can itself reenter. Cancellation is not a native failure,
 			// and a stale completion cannot report or revoke another owner's failure.
-			if accepted && !errors.Is(err, errTaskbarSuperseded) && c.revision == op+1 && backend == c.backend && handle == c.handle && c.state.Epoch == 0 && c.failure != nil {
+			if accepted && !errors.Is(err, errTaskbarSuperseded) && c.canReportNativeFailure(backend, op, handle) {
 				c.failure(TaskbarFailure{Epoch: s.Epoch, Seq: s.Seq, Code: "native-failed"})
 			}
 			return
@@ -228,7 +247,7 @@ func (c *taskbarController) applyBackend(s TaskbarState, backend taskbarBackend,
 		// An enabled update replaced by a newer accepted enabled update from the
 		// same owner still has an acceptance ACK. It never commits the old state.
 		// Clear, close, revoke, failed latest work and owner replacement stay errors.
-		if outcome == errTaskbarSuperseded && native.accepting() && backend == c.backend && handle == c.handle && epoch == c.state.Epoch && s.Enabled && c.requested.Enabled && c.requested.Epoch == epoch && c.requested.Seq > s.Seq {
+		if outcome == errTaskbarSuperseded && native.accepting() && c.canAcknowledgeSuperseded(s, backend, handle, epoch) {
 			return errTaskbarQueued
 		}
 		return outcome
@@ -242,6 +261,7 @@ func (c *taskbarController) applyBackend(s TaskbarState, backend taskbarBackend,
 	complete(err)
 	return outcome
 }
+
 func (c *taskbarController) revoke() error {
 	c.advance()
 	c.state = TaskbarState{}
@@ -251,6 +271,7 @@ func (c *taskbarController) revoke() error {
 	}
 	return nil
 }
+
 func (c *taskbarController) shutdown() error {
 	op := c.advance()
 	b, handle := c.backend, c.handle

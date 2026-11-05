@@ -51,8 +51,7 @@ func TestUpdatesCancelRejectsForeignStaleAndCompletedDownload(t *testing.T) {
 	h.u.Install(owner, 3, epoch, 2)
 	h.run(t)
 	call := receiveUpdatesInstall(t, candidate)
-	foreign, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	foreign := t.Context()
 	h.u.Cancel(foreign, 4, epoch, 2)
 	h.run(t)
 	if h.last(t).Code != "session-unavailable" || call.ctx.Err() != nil {

@@ -22,7 +22,7 @@ func TestDeviceModelLabelsAreBoundedAndDoNotNeedShellCommands(t *testing.T) {
 		}
 	}
 	path := filepath.Join(t.TempDir(), "model")
-	if err := os.WriteFile(path, []byte(strings.Repeat("a", 2048)), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(strings.Repeat("a", 2048)), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if got := readDeviceModelFile(path); len(got) != 257 || normalizeDeviceModel(got, "Desktop") != "Desktop" {

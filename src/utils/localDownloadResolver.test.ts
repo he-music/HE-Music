@@ -82,6 +82,24 @@ describe("mygo local download resolver candidate", () => {
     );
     await expect(resolve("320", source)).rejects.toThrow("Download source unavailable");
   });
+  it.each([
+    ["kuwo", "mflac", "flac"],
+    ["soda", "aac", "m4a"],
+    ["soda", "flac", "m4a"],
+  ])("保留 %s 的请求格式并验证解密后格式", async (platform, requested, output) => {
+    const request = vi.fn(async () => ({
+      url: "http://127.0.0.1:49234/secret/__audio?key=private",
+      format: output,
+    }));
+    const resolve = createMygoDownloadResolver(request);
+    const encryptedSource = {
+      ...source,
+      platform,
+      links: [{ name: "encrypted", quality: 2000, format: requested, size: "1" }],
+    };
+    await expect(resolve("encrypted", encryptedSource)).resolves.toMatchObject({ format: output });
+    expect(request).toHaveBeenCalledExactlyOnceWith("song", platform, 2000, requested);
+  });
 });
 
 it("rejects before queueing when a required cover cannot be resolved", async () => {

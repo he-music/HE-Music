@@ -98,12 +98,14 @@ func main() {
 	deadline := time.AfterFunc(45*time.Second, func() { set("timedOut", true); mygo.App.Quit() })
 	defer deadline.Stop()
 	mygo.App.WhenReady(func() {
-		win := mygo.NewWindow(mygo.WindowOptions{Title: "HE-Music System Media Probe", Width: 1000, Height: 740,
+		win := mygo.NewWindow(mygo.WindowOptions{
+			Title: "HE-Music System Media Probe", Width: 1000, Height: 740,
 			Page: mygo.PageOptions{PreloadScript: `localStorage.setItem("shortcut-store", JSON.stringify({globalOpen:false}));
 localStorage.setItem("setting-store", JSON.stringify({smtcOpen:false,preventSleep:false}));
 window.__systemMediaErrors={errors:0,rejections:0};
 addEventListener("error",e=>{if(e.target===window)window.__systemMediaErrors.errors++});
-addEventListener("unhandledrejection",()=>window.__systemMediaErrors.rejections++);`}})
+addEventListener("unhandledrejection",()=>window.__systemMediaErrors.rejections++);`},
+		})
 		desktopLifecycle.attachMainWindow(win, true)
 		var once sync.Once
 		win.Page().OnDidFinishLoad(func() {

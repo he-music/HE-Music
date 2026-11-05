@@ -189,6 +189,38 @@ describe("LocalDownloadSession candidate persistence seam", () => {
     });
   });
 
+  it.each([
+    ["kuwo", "mflac", "flac"],
+    ["soda", "flac", "m4a"],
+  ])(
+    "restores %s download requests with the original format and plaintext filename",
+    async (platform, requested, output) => {
+      const source = {
+        id: "song",
+        platform,
+        name: "Song",
+        links: [{ name: "encrypted", quality: 2000, format: requested }],
+      };
+      const { session, access, resolveURL } = setup([
+        snapshot("encrypted", { source, quality: "encrypted", filename: `song.${output}` }),
+      ]);
+      resolveURL.mockResolvedValue({
+        url: "http://127.0.0.1:49234/secret/__audio?key=private",
+        format: output,
+      });
+      await session.restored;
+      const id = await session.retry("encrypted");
+      expect(id).toBeTruthy();
+      expect(resolveURL).toHaveBeenCalledWith("encrypted", {
+        ...source,
+        links: [{ ...source.links[0], size: "" }],
+      });
+      expect(access.start).toHaveBeenCalledWith(
+        expect.objectContaining({ filename: `song.${output}` }),
+      );
+    },
+  );
+
   it("does not start when a current directory grant disappears during URL resolution", async () => {
     const { session, access, resolveURL, deps } = setup();
     await session.restored;

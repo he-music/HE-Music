@@ -9,13 +9,12 @@ import (
 
 func TestShortcutDesktopLyricEventAndLifecycle(t *testing.T) {
 	s, backend, events := newShortcutTestState()
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	ctx := t.Context()
 	binding := []ShortcutBinding{{ShortcutAction("toggleDesktopLyric"), "CmdOrCtrl+Shift+L"}}
 	status, err := s.replace(ctx, 0, true, binding)
-	if err != nil || len(status.Results) != 1 || status.Results[0].Status != "registered" {
-		t.Fatalf("desktop lyric registration: %+v %v", status, err)
-	}
+	requireTestNoError(t, err)
+	requireTestEqual(t, len(status.Results), 1)
+	requireTestEqual(t, status.Results[0].Status, "registered")
 	first := backend.callbacks["Super+Shift+L"]
 	first()
 	want := []ShortcutEvent{{Generation: status.Generation, Action: ShortcutAction("toggleDesktopLyric")}}
@@ -35,17 +34,17 @@ func TestShortcutDesktopLyricEventAndLifecycle(t *testing.T) {
 	second := backend.callbacks["Super+Shift+L"]
 	backend.onUnregister = second
 	suspended, err := s.setSuspended(ctx, replaced.Generation, true)
-	if err != nil || !suspended.Suspended || suspended.Results[0].Status != "disabled" || len(backend.callbacks) != 0 {
-		t.Fatalf("suspend: %+v %v", suspended, err)
-	}
+	requireTestNoError(t, err)
+	requireTestEqual(t, suspended.Suspended, true)
+	requireTestEqual(t, suspended.Results[0].Status, "disabled")
+	requireTestEqual(t, len(backend.callbacks), 0)
 	second()
 	if !reflect.DeepEqual(*events, want) {
 		t.Fatal("suspended callback emitted an event")
 	}
 	resumed, err := s.setSuspended(ctx, suspended.Generation, false)
-	if err != nil || resumed.Results[0].Status != "registered" {
-		t.Fatalf("resume: %+v %v", resumed, err)
-	}
+	requireTestNoError(t, err)
+	requireTestEqual(t, resumed.Results[0].Status, "registered")
 	third := backend.callbacks["Super+Shift+L"]
 	third()
 	want = append(want, ShortcutEvent{Generation: resumed.Generation, Action: ShortcutAction("toggleDesktopLyric")})

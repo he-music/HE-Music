@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+
 	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
@@ -21,7 +22,7 @@ func fileActionFixture(t *testing.T) (*NativeFiles, context.Context, uint64, Loc
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "song.mp3"), []byte("temporary file action fixture"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "song.mp3"), []byte("temporary file action fixture"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	f, ctx, epoch, ref := metadataTestService(t, dir)
@@ -75,8 +76,7 @@ func TestFileActionsRejectUnauthorizedAndForgedReferences(t *testing.T) {
 	original := fileActionReveal
 	t.Cleanup(func() { fileActionReveal = original })
 	fileActionReveal = func(string) { t.Error("unauthorized reveal reached the backend") }
-	foreign, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	foreign := t.Context()
 	for _, operation := range []struct {
 		name string
 		call func(context.Context, uint64, LocalFileRef) FileActionResult
@@ -135,7 +135,7 @@ func TestFileActionsRejectReplacementAndMovedRevealPath(t *testing.T) {
 				if kind == "symlink" {
 					err = os.Symlink("old", name)
 				} else {
-					err = os.WriteFile(name, []byte("replacement"), 0600)
+					err = os.WriteFile(name, []byte("replacement"), 0o600)
 				}
 				if err != nil {
 					t.Fatal(err)
@@ -159,17 +159,11 @@ func TestFileActionsRejectReplacementAndMovedRevealPath(t *testing.T) {
 func TestFileActionsRemoveOnlyOriginalAndInvalidateAliases(t *testing.T) {
 	f, ctx, epoch, ref, dir := fileActionFixture(t)
 	for _, name := range []string{"song.lrc", "song.jpg", "other.mp3"} {
-		if err := os.WriteFile(filepath.Join(dir, name), []byte("preserve"), 0600); err != nil {
-			t.Fatal(err)
-		}
+		requireTestNoError(t, os.WriteFile(filepath.Join(dir, name), []byte("preserve"), 0o600))
 	}
-	if err := os.Link(filepath.Join(dir, "song.mp3"), filepath.Join(dir, "alias.mp3")); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, os.Link(filepath.Join(dir, "song.mp3"), filepath.Join(dir, "alias.mp3")))
 	lease, err := f.state.acquireDirectory(ctx, epoch, ref.GrantToken)
-	if err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, err)
 	defer lease.Release()
 	alias, file, err := f.state.registerLocalFile(lease, "alias.mp3")
 	if err != nil {
@@ -351,7 +345,7 @@ func TestFileActionsRemoveRechecksAfterDrain(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			f, ctx, epoch, ref, dir := fileActionFixture(t)
 			if kind == "parent" {
-				if err := os.Mkdir(filepath.Join(dir, "album"), 0700); err != nil {
+				if err := os.Mkdir(filepath.Join(dir, "album"), 0o700); err != nil {
 					t.Fatal(err)
 				}
 				if err := os.Rename(filepath.Join(dir, "song.mp3"), filepath.Join(dir, "album", "song.mp3")); err != nil {
@@ -382,14 +376,14 @@ func TestFileActionsRemoveRechecksAfterDrain(t *testing.T) {
 					if err := os.Rename(filepath.Join(dir, "song.mp3"), filepath.Join(dir, "old")); err != nil {
 						t.Fatal(err)
 					}
-					if err := os.WriteFile(filepath.Join(dir, "song.mp3"), []byte("replacement"), 0600); err != nil {
+					if err := os.WriteFile(filepath.Join(dir, "song.mp3"), []byte("replacement"), 0o600); err != nil {
 						t.Fatal(err)
 					}
 				case "parent":
 					if err := os.Rename(filepath.Join(dir, "album"), filepath.Join(dir, "old-album")); err != nil {
 						t.Fatal(err)
 					}
-					if err := os.Mkdir(filepath.Join(dir, "album"), 0700); err != nil {
+					if err := os.Mkdir(filepath.Join(dir, "album"), 0o700); err != nil {
 						t.Fatal(err)
 					}
 					if err := os.Link(filepath.Join(dir, "old-album", "song.mp3"), filepath.Join(dir, "album", "song.mp3")); err != nil {
@@ -457,9 +451,10 @@ func TestFileActionsRemoveWithoutDrainFailsClosed(t *testing.T) {
 			original := metadataAudioDrain
 			t.Cleanup(func() { metadataAudioDrain = original })
 			metadataAudioDrain = nil
-			if kind == "missing_hook_with_server" {
+			switch kind {
+			case "missing_hook_with_server":
 				_ = audioServerFor(&f.state)
-			} else if kind == "missing_release" {
+			case "missing_release":
 				metadataAudioDrain = func(context.Context, *NativeFiles, os.FileInfo) (func(), error) {
 					return nil, nil
 				}
@@ -498,7 +493,7 @@ func TestFileActionsClaimFailureReleasesHolds(t *testing.T) {
 			if err := os.Rename(filepath.Join(dir, "song.mp3"), filepath.Join(dir, "old")); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.WriteFile(filepath.Join(dir, "song.mp3"), []byte("replacement"), 0600); err != nil {
+			if err := os.WriteFile(filepath.Join(dir, "song.mp3"), []byte("replacement"), 0o600); err != nil {
 				t.Fatal(err)
 			}
 		}

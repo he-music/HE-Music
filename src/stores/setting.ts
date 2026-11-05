@@ -153,7 +153,7 @@ export const createSettingState = (): SettingState => ({
   showCloseAppTip: true, // 显示关闭应用提示
   closeAppMethod: "hide", // 关闭方式
   showTaskbarProgress: false, // 显示任务栏进度
-  checkUpdateOnStart: false, // 启动时检查更新
+  checkUpdateOnStart: true, // 启动时检查更新
   preventSleep: false, // 是否禁止休眠
   fullPlayerCache: false, // 全屏播放器缓存
   useKeepAlive: true, // 使用 keep-alive

@@ -9,6 +9,7 @@ import (
 func nativeTaskbarFixture() taskbarNativeExecutor {
 	return taskbarNativeExecutor{taskbarNativeWindow: &taskbarNativeWindow{}}
 }
+
 func TestTaskbarNativeSyncClearDrains(t *testing.T) {
 	e := nativeTaskbarFixture()
 	hidden, none := false, false
@@ -34,6 +35,7 @@ func TestTaskbarNativeSyncClearDrains(t *testing.T) {
 		t.Fatalf("clear not drained: active=%v clear=%v hidden=%v none=%v", e.active, e.deferredClear, hidden, none)
 	}
 }
+
 func TestTaskbarNativeClearSyncDoesNotDrift(t *testing.T) {
 	e := nativeTaskbarFixture()
 	e.added = true
@@ -63,6 +65,7 @@ func TestTaskbarNativeClearSyncDoesNotDrift(t *testing.T) {
 		t.Fatal("old pending drifted across unrelated operation")
 	}
 }
+
 func TestTaskbarNativeCloseDefersRelease(t *testing.T) {
 	for _, boundary := range []int{15, 10, 9} {
 		t.Run(fmt.Sprint(boundary), func(t *testing.T) {
@@ -96,6 +99,7 @@ func TestTaskbarNativeCloseDefersRelease(t *testing.T) {
 		})
 	}
 }
+
 func TestTaskbarNativeSuccessfulAddSurvivesRevokeAndReopen(t *testing.T) {
 	e := nativeTaskbarFixture()
 	adds, updates, hides := 0, 0, 0
@@ -139,6 +143,7 @@ func TestTaskbarNativeSuccessfulAddSurvivesRevokeAndReopen(t *testing.T) {
 		t.Fatal("Explorer recreation did not reset physical Add fact")
 	}
 }
+
 func TestTaskbarNativeLatestCoalescingAndBoundedDrain(t *testing.T) {
 	e := nativeTaskbarFixture()
 	calls, depth, maxDepth, posts := 0, 0, 0, 0
@@ -177,6 +182,7 @@ func TestTaskbarNativeLatestCoalescingAndBoundedDrain(t *testing.T) {
 		t.Fatalf("lost latest state: latest=%d pending=%v active=%v depth=%d", latest, e.pending, e.active, maxDepth)
 	}
 }
+
 func TestTaskbarNativeClearClosePriority(t *testing.T) {
 	e := nativeTaskbarFixture()
 	sequence := []int{}
@@ -204,6 +210,7 @@ func TestTaskbarNativeClearClosePriority(t *testing.T) {
 		}
 	}
 }
+
 func TestTaskbarNativeFailuresAreNotACKs(t *testing.T) {
 	failure := errors.New("injected HRESULT failure")
 	for _, boundary := range []int{15, 16, 10, 9} {
@@ -226,6 +233,7 @@ func TestTaskbarNativeFailuresAreNotACKs(t *testing.T) {
 		t.Fatal("clear failure ACK")
 	}
 }
+
 func TestTaskbarNativePostFailureRetires(t *testing.T) {
 	e := nativeTaskbarFixture()
 	failure := errors.New("post failed")
@@ -250,6 +258,7 @@ func TestTaskbarNativePostFailureRetires(t *testing.T) {
 		t.Fatal("scheduler failure silently dropped native work")
 	}
 }
+
 func TestTaskbarControllerNativeQueuedCommit(t *testing.T) {
 	for _, fail := range []bool{false, true} {
 		t.Run(fmt.Sprint(fail), func(t *testing.T) {
@@ -279,15 +288,17 @@ func TestTaskbarControllerNativeQueuedCommit(t *testing.T) {
 				t.Fatalf("old operation acceptance: %v", err)
 			}
 			if fail {
-				if c.state.Epoch != 0 || e.active || len(failures) != 1 || failures[0] != (TaskbarFailure{Epoch: 1, Seq: 2, Code: "native-failed"}) {
-					t.Fatalf("queued failure not reported once/cleaned: state=%+v failures=%v", c.state, failures)
-				}
+				requireTestEqual(t, c.state.Epoch, uint64(0))
+				requireTestEqual(t, e.active, false)
+				requireTestEqual(t, len(failures), 1)
+				requireTestEqual(t, failures[0], TaskbarFailure{Epoch: 1, Seq: 2, Code: "native-failed"})
 			} else if c.state.Seq != 2 || !e.active || len(failures) != 0 {
 				t.Fatalf("latest completion lost: %+v active=%v", c.state, e.active)
 			}
 		})
 	}
 }
+
 func TestTaskbarControllerNativeClearSyncCommit(t *testing.T) {
 	e := nativeTaskbarFixture()
 	e.added = true
@@ -316,6 +327,7 @@ func TestTaskbarControllerNativeClearSyncCommit(t *testing.T) {
 		t.Fatalf("controller ACK drifted: %+v", c.state)
 	}
 }
+
 func TestTaskbarControllerNativeOldFailureCannotRevokeNewOwner(t *testing.T) {
 	old := nativeTaskbarFixture()
 	next := nativeTaskbarFixture()
@@ -351,6 +363,7 @@ func TestTaskbarControllerNativeOldFailureCannotRevokeNewOwner(t *testing.T) {
 		t.Fatalf("old owner revoked new owner: %+v failures=%d", c.state, failures)
 	}
 }
+
 func TestTaskbarControllerNativeQueuedSequenceMonotonic(t *testing.T) {
 	e := nativeTaskbarFixture()
 	c := taskbarController{backend: &e, handle: 1, state: TaskbarState{Epoch: 1}}
@@ -378,6 +391,7 @@ func TestTaskbarControllerNativeQueuedSequenceMonotonic(t *testing.T) {
 		t.Fatal(c.state)
 	}
 }
+
 func TestTaskbarAcceptanceDoesNotHideFailures(t *testing.T) {
 	failure := errors.New("native failed")
 	if taskbarAcceptance(nil) != nil || taskbarAcceptance(errTaskbarQueued) != nil {

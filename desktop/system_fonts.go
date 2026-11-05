@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"sort"
 	"strings"
 	"sync"
@@ -16,8 +15,6 @@ const (
 	maxSystemFontName  = 512
 	maxSystemFontScan  = maxSystemFontCount * 4
 )
-
-var errSystemFontsUnsupported = errors.New("system font enumeration is unsupported on this platform")
 
 // SystemFonts exposes bounded family names to the renderer. Enumeration runs on
 // the lifecycle main owner so a lyrics child cannot read the system list.

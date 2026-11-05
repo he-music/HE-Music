@@ -9,8 +9,10 @@ import (
 	"github.com/egoist/mygo"
 )
 
-const applicationBackupFormat = "he-music-application-data"
-const applicationBackupLimit = 128 << 20
+const (
+	applicationBackupFormat = "he-music-application-data"
+	applicationBackupLimit  = 128 << 20
+)
 
 type ApplicationStorageRecord struct {
 	Namespace string       `json:"namespace"`
@@ -38,14 +40,36 @@ func (s *applicationStorage) restore(backup ApplicationBackup) error {
 	if err := recoverApplicationStorageImport(s.root); err != nil {
 		return err
 	}
-	if err := os.Mkdir(stage, 0700); err != nil {
+	if err := os.Mkdir(stage, 0o700); err != nil {
 		return err
 	}
 	defer os.RemoveAll(stage)
 	staged := applicationStorage{root: stage}
+	if err := staged.writeBackupRecords(backup.Records); err != nil {
+		return err
+	}
+	if err := rename(s.root, previous); err != nil {
+		return errors.Join(err, recoverApplicationStorageImport(s.root))
+	}
+	if err := rename(stage, s.root); err != nil {
+		// Rename may have succeeded before the directory sync failed. Move the
+		// new tree back out before restoring the previous complete tree.
+		if _, statErr := os.Lstat(stage); errors.Is(statErr, os.ErrNotExist) {
+			if rollbackErr := rename(s.root, stage); rollbackErr != nil {
+				return errors.Join(err, rollbackErr)
+			}
+		}
+		return errors.Join(err, rename(previous, s.root))
+	}
+	// The new root is durable. Cleanup can be completed on the next startup.
+	_ = os.RemoveAll(previous)
+	return nil
+}
+
+func (s *applicationStorage) writeBackupRecords(records []ApplicationStorageRecord) error {
 	seen := map[string]bool{}
 	total := 0
-	for _, record := range backup.Records {
+	for _, record := range records {
 		id := record.Namespace + "\x00" + record.Key
 		total += len(record.Key) + len(record.Data.Value) + len(record.Data.MediaType)
 		if seen[id] || total > applicationBackupLimit ||
@@ -67,25 +91,10 @@ func (s *applicationStorage) restore(backup ApplicationBackup) error {
 				return errors.New("invalid window appearance backup")
 			}
 		}
-		if err := staged.write(record.Namespace, record.Key, record.Data); err != nil {
+		if err := s.write(record.Namespace, record.Key, record.Data); err != nil {
 			return err
 		}
 	}
-	if err := rename(s.root, previous); err != nil {
-		return errors.Join(err, recoverApplicationStorageImport(s.root))
-	}
-	if err := rename(stage, s.root); err != nil {
-		// Rename may have succeeded before the directory sync failed. Move the
-		// new tree back out before restoring the previous complete tree.
-		if _, statErr := os.Lstat(stage); errors.Is(statErr, os.ErrNotExist) {
-			if rollbackErr := rename(s.root, stage); rollbackErr != nil {
-				return errors.Join(err, rollbackErr)
-			}
-		}
-		return errors.Join(err, rename(previous, s.root))
-	}
-	// The new root is durable. Cleanup can be completed on the next startup.
-	_ = os.RemoveAll(previous)
 	return nil
 }
 

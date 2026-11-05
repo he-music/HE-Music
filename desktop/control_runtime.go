@@ -3,11 +3,14 @@ package main
 import (
 	"context"
 	"errors"
+
 	"github.com/egoist/mygo"
 )
 
-var desktopControlCommand = mygo.NewEvent[ControlCommand]("desktop:control-command")
-var desktopControl = &PlaybackControl{}
+var (
+	desktopControlCommand = mygo.NewEvent[ControlCommand]("desktop:control-command")
+	desktopControl        = &PlaybackControl{}
+)
 
 // PlaybackControl acquires its loopback listener only after the shell subscribes.
 // Binding generation neither opens sockets nor touches native resources.
@@ -49,9 +52,11 @@ func (c *PlaybackControl) Start(ctx context.Context, port int) (ControlSession, 
 	}
 	return c.service.start(generation, port)
 }
+
 func (c *PlaybackControl) Receipt(ctx context.Context, generation, requestID uint64, applied bool) error {
 	return desktopLifecycle.call(ctx, true, func() error { return c.service.receipt(ctx, generation, requestID, applied) })
 }
+
 func (c *PlaybackControl) Teardown(ctx context.Context, generation uint64) error {
 	return desktopLifecycle.call(ctx, true, func() error {
 		c.service.mu.Lock()

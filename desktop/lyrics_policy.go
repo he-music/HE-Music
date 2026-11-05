@@ -40,7 +40,7 @@ func (s *lyricsState) begin(owner context.Context) (LyricsSession, error) {
 
 func (s *lyricsState) authorize(ctx context.Context, epoch uint64, main, child, childAllowed bool) error {
 	if s.owner == nil || s.owner.Err() != nil || ctx.Err() != nil ||
-		(!(main && ctx == s.owner) && !(childAllowed && child)) {
+		((!main || ctx != s.owner) && (!childAllowed || !child)) {
 		return errLyricsOwner
 	}
 	if epoch != s.epoch || epoch == 0 {
@@ -130,8 +130,10 @@ func validLyricsLines(lines []LyricsLine) bool {
 }
 
 func (s *lyricsState) publishSnapshot(snapshot LyricsSnapshot) error {
-	clock := LyricsClock{Epoch: snapshot.Epoch, Seq: snapshot.Seq, TrackKey: snapshot.TrackKey,
-		Playing: snapshot.Playing, PositionMs: snapshot.PositionMs, OffsetMs: snapshot.OffsetMs, Rate: snapshot.Rate}
+	clock := LyricsClock{
+		Epoch: snapshot.Epoch, Seq: snapshot.Seq, TrackKey: snapshot.TrackKey,
+		Playing: snapshot.Playing, PositionMs: snapshot.PositionMs, OffsetMs: snapshot.OffsetMs, Rate: snapshot.Rate,
+	}
 	if snapshot.Epoch != s.epoch || snapshot.Seq <= s.seq || !validateLyricsClock(clock) ||
 		!validLyricsLines(snapshot.LrcData) || !validLyricsLines(snapshot.YrcData) {
 		return errLyricsData

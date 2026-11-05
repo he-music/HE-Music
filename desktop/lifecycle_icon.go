@@ -11,8 +11,8 @@ import (
 func desktopTrayTemplateIcon() []byte {
 	icon := image.NewNRGBA(image.Rect(0, 0, 36, 36))
 	ink := color.NRGBA{A: 255}
-	for y := 0; y < 36; y++ {
-		for x := 0; x < 36; x++ {
+	for y := range 36 {
+		for x := range 36 {
 			leftStem := x >= 13 && x < 17 && y >= 9 && y <= 26
 			rightStem := x >= 27 && x < 31 && y >= 5 && y <= 22
 			beam := x >= 13 && x < 31 && y >= 8-(x-13)/4 && y < 13-(x-13)/4

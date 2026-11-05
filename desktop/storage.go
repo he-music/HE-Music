@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -20,8 +21,10 @@ import (
 
 // Browser storage is deliberately not consulted: this owns only mygo business
 // data. Neither persisted file paths nor these records confer file capabilities.
-const applicationStorageDirectory = "business-data-v1"
-const applicationStorageValueLimit = 64 << 20
+const (
+	applicationStorageDirectory  = "business-data-v1"
+	applicationStorageValueLimit = 64 << 20
+)
 
 var applicationStorageNamespaces = []string{
 	"renderer", "music-data/music", "user-data/user", "local-data/local",
@@ -62,7 +65,7 @@ func prepareApplicationStorage(directory string) error {
 	if err := recoverApplicationStorageImport(root); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(root, 0700); err != nil {
+	if err := os.MkdirAll(root, 0o700); err != nil {
 		return err
 	}
 	info, err := os.Lstat(root)
@@ -74,12 +77,7 @@ func prepareApplicationStorage(directory string) error {
 }
 
 func storageNamespace(name string) bool {
-	for _, allowed := range applicationStorageNamespaces {
-		if name == allowed {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(applicationStorageNamespaces, name)
 }
 
 func storageDigest(value string) string {
@@ -186,7 +184,7 @@ func (s *applicationStorage) write(namespace, key string, value StorageValue) er
 	if len(header) > 4096 {
 		return errors.New("storage key header too large")
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
 	file, err := os.CreateTemp(filepath.Dir(path), ".write-*")
@@ -194,7 +192,7 @@ func (s *applicationStorage) write(namespace, key string, value StorageValue) er
 		return err
 	}
 	defer os.Remove(file.Name())
-	if err = file.Chmod(0600); err != nil {
+	if err = file.Chmod(0o600); err != nil {
 		file.Close()
 		return err
 	}

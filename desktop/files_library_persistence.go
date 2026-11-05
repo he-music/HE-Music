@@ -46,10 +46,6 @@ func libraryRememberDirectory(displayPath string) error {
 	return savedLibraryDirectories.update(displayPath, true)
 }
 
-func libraryForgetDirectory(displayPath string) error {
-	return savedLibraryDirectories.update(displayPath, false)
-}
-
 func validLibraryPath(path string) bool {
 	return filepath.IsAbs(path) && filepath.Clean(path) == path
 }

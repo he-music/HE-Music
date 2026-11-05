@@ -16,14 +16,18 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+
+	"github.com/he-music/HE-Music/desktop/internal/audiodecrypt/soda"
 )
 
 const desktopGatewayMaxTarget = 64 << 10
 
-var desktopGatewayListen = net.Listen
-var desktopGateway = &NetworkGateway{}
-var desktopGatewayProcess sync.Mutex
-var desktopGatewayRunning bool
+var (
+	desktopGatewayListen  = net.Listen
+	desktopGateway        = &NetworkGateway{}
+	desktopGatewayProcess sync.Mutex
+	desktopGatewayRunning bool
+)
 
 // Bases include their deployment prefix. Resolve relative bases in the caller.
 type GatewayAPIConfig struct {
@@ -40,6 +44,7 @@ type NetworkGateway struct {
 	config GatewayAPIConfig
 	apis   map[string]gatewayAPI
 	media  *http.Client
+	audio  *soda.AudioServer
 	host   string
 	prefix string
 }
@@ -48,6 +53,7 @@ func init() { mygo.Bind(desktopGateway) }
 func (g *NetworkGateway) Configure(ctx context.Context, config GatewayAPIConfig) error {
 	return desktopLifecycle.call(ctx, false, func() error { return g.configure(config) })
 }
+
 func (g *NetworkGateway) configure(config GatewayAPIConfig) error {
 	bases := map[string]*url.URL{}
 	for name, raw := range map[string]string{"hemusic": config.Hemusic, "netease": config.Netease, "unblock": config.Unblock} {
@@ -80,6 +86,7 @@ func (g *NetworkGateway) configure(config GatewayAPIConfig) error {
 	g.config, g.apis = config, apis
 	return nil
 }
+
 func gatewayURLOrigin(u *url.URL) string {
 	port := u.Port()
 	if port == "" {
@@ -91,6 +98,7 @@ func gatewayURLOrigin(u *url.URL) string {
 	}
 	return strings.ToLower(u.Scheme) + "://" + net.JoinHostPort(strings.ToLower(u.Hostname()), port)
 }
+
 func (g *NetworkGateway) closeIdleLocked() {
 	for _, api := range g.apis {
 		api.client.CloseIdleConnections()
@@ -123,6 +131,7 @@ func startDesktopGateway() (string, func(), error) {
 	desktopGateway.mu.Lock()
 	desktopGateway.host, desktopGateway.prefix = host, prefix
 	desktopGateway.media = newDesktopGatewayClient()
+	desktopGateway.audio = nil
 	desktopGateway.mu.Unlock()
 	ctx, cancel := context.WithCancel(context.Background())
 	server := &http.Server{Handler: http.HandlerFunc(desktopGateway.serveHTTP), ReadHeaderTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 64 << 10, BaseContext: func(net.Listener) context.Context { return ctx }}
@@ -146,9 +155,11 @@ func startDesktopGateway() (string, func(), error) {
 	}
 	return "http://" + host + prefix, stop, nil
 }
+
 func desktopGatewayPreloadScript(origin string) string {
 	return "if (!Object.prototype.hasOwnProperty.call(window, '__HE_MUSIC_GATEWAY_ORIGIN__')) Object.defineProperty(window, '__HE_MUSIC_GATEWAY_ORIGIN__', { value: " + strconv.Quote(origin) + ", configurable: false });"
 }
+
 func newDesktopGatewayClient() *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.Proxy = func(req *http.Request) (*url.URL, error) {
@@ -165,6 +176,7 @@ func newDesktopGatewayClient() *http.Client {
 	transport.MaxIdleConnsPerHost = 10
 	return &http.Client{Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
 }
+
 func (g *NetworkGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	g.mu.RLock()
 	host, prefix, client, apis := g.host, g.prefix, g.media, g.apis
@@ -172,27 +184,20 @@ func (g *NetworkGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	// Require the actual listener authority as well as the unguessable path before
 	// emitting CORS. DNS names, even ones resolving to loopback, aren't accepted.
 	if host == "" || r.Host != host || !strings.HasPrefix(r.URL.Path, prefix+"/") {
-		http.Error(w, "forbidden", 403)
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 	gatewayCORS(w.Header(), r)
 	path := strings.TrimPrefix(r.URL.Path, prefix)
-	if r.Method == "OPTIONS" && r.Header.Get("Origin") != "" && r.Header.Get("Access-Control-Request-Method") != "" {
-		w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, DELETE, OPTIONS, PATCH")
-		w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
-		w.Header().Set("Access-Control-Max-Age", "600")
-		w.WriteHeader(204)
-		return
-	}
-	if path == "/__health" && (r.Method == "GET" || r.Method == "HEAD") {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		if r.Method == "GET" {
-			_, _ = w.Write([]byte("ok\n"))
-		}
+	if serveGatewayProbe(w, r, path) {
 		return
 	}
 	if r.Method == "CONNECT" || r.Method == "TRACE" {
-		http.Error(w, "method not allowed", 405)
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if path == "/__audio" {
+		g.serveAudio(w, r, client)
 		return
 	}
 	var target *url.URL
@@ -200,7 +205,7 @@ func (g *NetworkGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	apiRequest := false
 	if strings.HasPrefix(path, "/__proxy/") {
 		if r.Method != "GET" && r.Method != "HEAD" {
-			http.Error(w, "media requires GET or HEAD", 405)
+			http.Error(w, "media requires GET or HEAD", http.StatusMethodNotAllowed)
 			return
 		}
 		raw := strings.TrimPrefix(r.URL.EscapedPath(), prefix+"/__proxy/")
@@ -208,11 +213,11 @@ func (g *NetworkGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 			raw += "?" + r.URL.RawQuery
 		}
 		target, err = parseDesktopGatewayURL(raw)
-	} else if strings.HasPrefix(path, "/__api/") {
-		name, tail, _ := strings.Cut(strings.TrimPrefix(path, "/__api/"), "/")
+	} else if after, ok := strings.CutPrefix(path, "/__api/"); ok {
+		name, tail, _ := strings.Cut(after, "/")
 		api, found := apis[name]
 		if !found {
-			http.Error(w, "API not configured", 503)
+			http.Error(w, "API not configured", http.StatusServiceUnavailable)
 			return
 		}
 		target = joinGatewayAPI(api.base, tail, r.URL.RawQuery)
@@ -228,11 +233,30 @@ func (g *NetworkGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if client == nil {
-		http.Error(w, "gateway unavailable", 503)
+		http.Error(w, "gateway unavailable", http.StatusServiceUnavailable)
 		return
 	}
 	g.forward(w, r, client, target, apiRequest, prefix)
 }
+
+func serveGatewayProbe(w http.ResponseWriter, r *http.Request, path string) bool {
+	if r.Method == "OPTIONS" && r.Header.Get("Origin") != "" && r.Header.Get("Access-Control-Request-Method") != "" {
+		w.Header().Set("Access-Control-Allow-Methods", "GET, HEAD, POST, PUT, DELETE, OPTIONS, PATCH")
+		w.Header().Set("Access-Control-Allow-Headers", r.Header.Get("Access-Control-Request-Headers"))
+		w.Header().Set("Access-Control-Max-Age", "600")
+		w.WriteHeader(204)
+		return true
+	}
+	if path == "/__health" && (r.Method == "GET" || r.Method == "HEAD") {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		if r.Method == "GET" {
+			_, _ = w.Write([]byte("ok\n"))
+		}
+		return true
+	}
+	return false
+}
+
 func joinGatewayAPI(base *url.URL, tail, query string) *url.URL {
 	target := *base
 	target.Path = strings.TrimRight(base.Path, "/") + "/" + tail
@@ -246,6 +270,7 @@ func joinGatewayAPI(base *url.URL, tail, query string) *url.URL {
 	}
 	return &target
 }
+
 func gatewayCORS(header http.Header, r *http.Request) {
 	if origin := r.Header.Get("Origin"); origin != "" {
 		header.Set("Access-Control-Allow-Origin", origin)
@@ -255,6 +280,7 @@ func gatewayCORS(header http.Header, r *http.Request) {
 	header.Set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges")
 	header.Set("Referrer-Policy", "no-referrer")
 }
+
 func parseDesktopGatewayURL(raw string) (*url.URL, error) {
 	if len(raw) == 0 || len(raw) > desktopGatewayMaxTarget {
 		return nil, errors.New("invalid target length")

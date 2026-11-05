@@ -14,9 +14,10 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
-	"github.com/he-music/HE-Music/desktop/metadata"
 	"github.com/tommyo123/mtag"
 	"github.com/tommyo123/mtag/id3v2"
+
+	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
 func metadataFixture(t *testing.T, format string) string {
@@ -66,6 +67,7 @@ func metadataFixture(t *testing.T, format string) string {
 	t.Logf("generated fixture %s (%s)", name, format)
 	return dir
 }
+
 func metadataPackets(t *testing.T, name string) []byte {
 	t.Helper()
 	out, err := exec.Command("ffprobe", "-v", "error", "-select_streams", "a:0", "-show_packets", "-show_entries", "packet=data_hash", "-show_data_hash", "sha256", "-of", "json", name).Output()
@@ -87,6 +89,7 @@ func metadataPackets(t *testing.T, name string) []byte {
 	}
 	return out
 }
+
 func TestMetadataRealOriginalSaveAndDedup(t *testing.T) {
 	for _, format := range []string{"mp3", "flac"} {
 		t.Run(format, func(t *testing.T) {
@@ -104,9 +107,12 @@ func TestMetadataRealOriginalSaveAndDedup(t *testing.T) {
 			artists := []string{"艺人甲", "艺人乙"}
 			req := MetadataSaveRequest{OperationID: metadataTestNonce(t), Ref: ref, SHA256: read.SHA256, Patch: metadata.Patch{Title: &title, Artists: &artists}}
 			result := f.SaveMetadata(ctx, epoch, req)
-			if result.Code != "ok" || !result.Committed || result.Ref == nil || *result.Ref == ref {
-				t.Fatalf("save %+v", result)
+			requireTestEqual(t, result.Code, "ok")
+			requireTestEqual(t, result.Committed, true)
+			if result.Ref == nil {
+				t.Fatal("save returned no reference")
 			}
+			requireTestNotEqual(t, *result.Ref, ref)
 			after, _ := os.Stat(name)
 			if metadataACL(t, name) != beforeACL {
 				t.Fatal("ACL changed")
@@ -118,9 +124,8 @@ func TestMetadataRealOriginalSaveAndDedup(t *testing.T) {
 				t.Fatal("independent ffprobe packet hashes changed")
 			}
 			out, err := exec.Command("xattr", "-p", "com.hemusic.fixture", name).Output()
-			if err != nil || strings.TrimSpace(string(out)) != "preserved" {
-				t.Fatalf("xattr %q %v", out, err)
-			}
+			requireTestNoError(t, err)
+			requireTestEqual(t, strings.TrimSpace(string(out)), "preserved")
 			tag, err := mtag.Open(name)
 			if err != nil {
 				t.Fatal(err)
@@ -153,9 +158,10 @@ func TestMetadataRealOriginalSaveAndDedup(t *testing.T) {
 			emptyArtists := []string{}
 			emptyPictures := []metadata.Picture{}
 			clear := f.SaveMetadata(ctx, epoch, MetadataSaveRequest{OperationID: metadataTestNonce(t), Ref: *result.Ref, SHA256: result.SHA256, Patch: metadata.Patch{Title: &emptyTitle, Artists: &emptyArtists, Pictures: &emptyPictures}})
-			if clear.Code != "ok" || clear.Info.Title != "" || len(clear.Info.Artists) != 0 || len(clear.Info.Pictures) != 0 {
-				t.Fatalf("clear %+v", clear)
-			}
+			requireTestEqual(t, clear.Code, "ok")
+			requireTestEqual(t, clear.Info.Title, "")
+			requireTestEqual(t, len(clear.Info.Artists), 0)
+			requireTestEqual(t, len(clear.Info.Pictures), 0)
 			entries, _ := os.ReadDir(dir)
 			if len(entries) != 1 {
 				t.Fatalf("temporary files remain: %v", entries)
@@ -163,6 +169,7 @@ func TestMetadataRealOriginalSaveAndDedup(t *testing.T) {
 		})
 	}
 }
+
 func TestMetadataDrainCancelRevokeAndExternalConflict(t *testing.T) {
 	for _, mode := range []string{"cancel", "revoke", "external", "server"} {
 		t.Run(mode, func(t *testing.T) {
@@ -207,14 +214,14 @@ func TestMetadataDrainCancelRevokeAndExternalConflict(t *testing.T) {
 						t.Fatal(err)
 					}
 					file.Close()
-					os.Chtimes(name, info.ModTime(), info.ModTime())
+					requireTestNoError(t, os.Chtimes(name, info.ModTime(), info.ModTime()))
 				}
 				return func() { released = true }, nil
 			}
 			if mode == "server" {
 				metadataAudioDrain = nil
 				audioServerFor(&f.state)
-				t.Cleanup(func() { f.shutdownLocalAudio() })
+				t.Cleanup(func() { requireTestNoError(t, f.shutdownLocalAudio()) })
 			}
 			result := f.SaveMetadata(ctx, epoch, MetadataSaveRequest{OperationID: id, Ref: ref, SHA256: read.SHA256, Patch: metadata.Patch{Title: &title}})
 			want := map[string]string{"cancel": "cancelled", "revoke": "revoked", "external": "conflict", "server": "readers_unavailable"}[mode]
@@ -235,6 +242,7 @@ func TestMetadataDrainCancelRevokeAndExternalConflict(t *testing.T) {
 		})
 	}
 }
+
 func TestMetadataLockWaitCancelReleasesLease(t *testing.T) {
 	dir := metadataFixture(t, "mp3")
 	f, ctx, epoch, ref := metadataTestService(t, dir)
@@ -275,12 +283,12 @@ func TestMetadataLockWaitCancelReleasesLease(t *testing.T) {
 	case <-time.After(time.Second):
 		t.Fatal("lock wait did not cancel")
 	}
-	f.state.main(ctx, func(_ *mygo.Window) error {
+	requireTestNoError(t, f.state.main(ctx, func(_ *mygo.Window) error {
 		if f.state.busy != nil {
 			t.Fatal("picker busy")
 		}
 		return nil
-	})
+	}))
 }
 
 func metadataACL(t *testing.T, name string) string {
@@ -292,6 +300,7 @@ func metadataACL(t *testing.T, name string) string {
 	lines := strings.Split(string(out), "\n")
 	return strings.Join(lines[1:], "\n")
 }
+
 func TestMetadataRenameFailureRetainsRecoveryBackup(t *testing.T) {
 	if os.Geteuid() == 0 {
 		t.Skip("permissions require unprivileged fixture process")
@@ -302,12 +311,12 @@ func TestMetadataRenameFailureRetainsRecoveryBackup(t *testing.T) {
 	f, ctx, epoch, ref := metadataTestService(t, dir)
 	read := f.ReadMetadata(ctx, epoch, ref)
 	hook := metadataAudioDrain
-	t.Cleanup(func() { metadataAudioDrain = hook; os.Chmod(dir, 0700) })
+	t.Cleanup(func() { metadataAudioDrain = hook; requireTestNoError(t, os.Chmod(dir, 0o700)) })
 	metadataAudioDrain = func(context.Context, *NativeFiles, os.FileInfo) (func(), error) {
-		if err := os.Chmod(dir, 0500); err != nil {
+		if err := os.Chmod(dir, 0o500); err != nil {
 			t.Fatal(err)
 		}
-		return func() { os.Chmod(dir, 0700) }, nil
+		return func() { requireTestNoError(t, os.Chmod(dir, 0o700)) }, nil
 	}
 	title := "replacement denied"
 	result := f.SaveMetadata(ctx, epoch, MetadataSaveRequest{OperationID: metadataTestNonce(t), Ref: ref, SHA256: read.SHA256, Patch: metadata.Patch{Title: &title}})
@@ -331,7 +340,7 @@ func TestMetadataRejectsFileFlags(t *testing.T) {
 	if out, err := exec.Command("chflags", "nodump", name).CombinedOutput(); err != nil {
 		t.Fatalf("%v %s", err, out)
 	}
-	t.Cleanup(func() { exec.Command("chflags", "0", name).Run() })
+	t.Cleanup(func() { requireTestNoError(t, exec.Command("chflags", "0", name).Run()) })
 	f, ctx, epoch, ref := metadataTestService(t, dir)
 	read := f.ReadMetadata(ctx, epoch, ref)
 	if read.Code != "ok" {

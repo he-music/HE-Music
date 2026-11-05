@@ -1,16 +1,17 @@
 import request, { API_URL, requestHemusic, type HemusicRequestConfig } from "@/utils/request";
-import { gatewayProxyUrl } from "@/platform/gateway";
+import { gatewayProxyUrl, mygoGatewayOrigin } from "@/platform/gateway";
+import { resolveSongAudioSource, type SongAudioSource } from "@/platform/audioSource";
 import type { GetSongDetailResponse } from "@/types/main.hemusic";
 
 // 获取歌曲 URL
-export const songUrl = (
+export const songUrl = async (
   id: string,
   platform: string,
   quality: number = 320,
   format: string = "mp3",
   options: Pick<HemusicRequestConfig, "skipErrorMessage"> = {},
-) => {
-  return requestHemusic({
+): Promise<SongAudioSource> => {
+  const response: SongAudioSource = await requestHemusic({
     ...options,
     url: "/v1/song/url",
     params: {
@@ -18,8 +19,10 @@ export const songUrl = (
       platform,
       quality,
       format,
+      ...(mygoGatewayOrigin() ? { client_decrypt: true } : {}),
     },
   });
+  return resolveSongAudioSource(platform, response);
 };
 
 // 获取解锁歌曲 URL

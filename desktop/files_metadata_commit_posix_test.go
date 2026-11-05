@@ -14,14 +14,14 @@ func TestMetadataCommitDirectoryStaysPinnedAfterRouteReplacement(t *testing.T) {
 	moved := filepath.Join(base, "moved")
 	outside := filepath.Join(base, "outside")
 	for _, directory := range []string{authorized, outside} {
-		if err := os.Mkdir(directory, 0700); err != nil {
+		if err := os.Mkdir(directory, 0o700); err != nil {
 			t.Fatal(err)
 		}
-		if err := os.WriteFile(filepath.Join(directory, "original"), []byte("old"), 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(directory, "original"), []byte("old"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if err := os.WriteFile(filepath.Join(authorized, "work"), []byte("new"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(authorized, "work"), []byte("new"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	root, err := os.OpenRoot(authorized)

@@ -114,7 +114,7 @@ func metadataCopyAttributes(source, destination *os.File) error {
 			return err
 		}
 	}
-	if err := unix.Fchmod(int(destination.Fd()), stat.Mode&07777); err != nil {
+	if err := unix.Fchmod(int(destination.Fd()), stat.Mode&0o7777); err != nil {
 		return err
 	}
 	for name := range inherited {

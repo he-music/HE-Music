@@ -11,8 +11,10 @@ import (
 	"os"
 )
 
-var ErrEmpty = errors.New("empty metadata source")
-var ErrChanged = errors.New("metadata source changed")
+var (
+	ErrEmpty   = errors.New("empty metadata source")
+	ErrChanged = errors.New("metadata source changed")
+)
 
 type Result struct {
 	SHA256 string

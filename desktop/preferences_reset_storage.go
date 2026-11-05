@@ -27,8 +27,10 @@ func preferencesResetDirectory(directory string) error {
 	return nil
 }
 
-type PreferencesResetMode string
-type PreferencesResetPhase string
+type (
+	PreferencesResetMode  string
+	PreferencesResetPhase string
+)
 
 const (
 	PreferencesResetSettings PreferencesResetMode  = "settings"
@@ -85,7 +87,7 @@ func writePreferencesReset(directory string, tx PreferencesResetTransaction) err
 	if err := preferencesResetDirectory(directory); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
 	data, err := json.Marshal(tx)
@@ -97,7 +99,7 @@ func writePreferencesReset(directory string, tx PreferencesResetTransaction) err
 		return err
 	}
 	defer os.Remove(file.Name())
-	if err = file.Chmod(0600); err != nil {
+	if err = file.Chmod(0o600); err != nil {
 		file.Close()
 		return err
 	}

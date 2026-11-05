@@ -603,7 +603,9 @@ export class AudioProcessingDriver {
     const sourceType =
       sourceInfo?.format === "flac"
         ? "audio/flac"
-        : sourceInfo?.platform === "migu" && sourceInfo.format === "m4a"
+        : sourceInfo &&
+            ["migu", "soda"].includes(sourceInfo.platform) &&
+            ["m4a", "mp4"].includes(sourceInfo.format)
           ? "audio/mp4"
           : undefined;
     if (sourceType) {

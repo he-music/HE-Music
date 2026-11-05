@@ -60,9 +60,11 @@
 - 运行测试：`pnpm test`；针对已有测试文件可运行 `pnpm exec vitest run <测试文件路径>`。
 - 检查指定代码文件：`pnpm exec eslint <文件路径>`。
 - 检查指定文件格式：`pnpm exec prettier --check <文件路径>`。
+- Go 静态检查：`pnpm lint:go`；需安装 mise，统一使用 `golangci-lint@2.15.0` 与根目录 `.golangci.yml`。
+- Go 格式化／自动修复：`pnpm format:go`／`pnpm fix:go`；格式化规则为 gci、gofumpt。
 - 构建：`pnpm build`；桌面打包使用 `pnpm build:win`、`pnpm build:mac` 或 `pnpm build:linux`。
 
-`pnpm lint` 和 `pnpm format` 会修改文件，执行时注意变更范围。根据任务选择必要检查：纯文档改动检查内容与格式；业务逻辑改动运行相关测试与类型检查；构建配置改动验证对应构建。当前 Vitest 使用 Node 环境，组件渲染与交互还需在实际界面中验证。只有实际执行并通过的检查才能报告为通过，未验证的内容需明确说明。
+`pnpm lint`、`pnpm format`、`pnpm format:go` 和 `pnpm fix:go` 会修改文件，执行时注意变更范围。根据任务选择必要检查：纯文档改动检查内容与格式；业务逻辑改动运行相关测试与类型检查；构建配置改动验证对应构建。当前 Vitest 使用 Node 环境，组件渲染与交互还需在实际界面中验证。只有实际执行并通过的检查才能报告为通过，未验证的内容需明确说明。
 
 ## Git 提交约定
 

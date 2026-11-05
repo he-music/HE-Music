@@ -74,6 +74,7 @@ func nativeEncodedFixture(t *testing.T, suffix string) []byte {
 	}
 	return b
 }
+
 func TestNativeElevenFormatsFullTransfer(t *testing.T) {
 	for _, suffix := range []string{"mp3", "flac", "wav", "aac", "webm", "m4a", "mp4", "ogg", "aiff", "aif", "ape"} {
 		t.Run(suffix, func(t *testing.T) {
@@ -120,20 +121,7 @@ func TestNativeElevenFormatsFullTransfer(t *testing.T) {
 						if suffix != "webm" && suffix != "m4a" && suffix != "mp4" && suffix != "ape" {
 							t.Fatalf("previously writable fixture rejected: %+v", st)
 						}
-						if err := os.WriteFile(target, []byte("existing target"), 0600); err != nil {
-							t.Fatal(err)
-						}
-						retry := downloadReq(t, token, req.Filename)
-						retry.Options = req.Options
-						job := downloadStart(t, a, ctx, epoch, c, retry)
-						downloadWait(t, job)
-						rejected, _ := c.access(a.state, ctx, epoch, retry.OperationID, false)
-						if rejected.Committed || rejected.Ref != nil || rejected.Code != "unsupported" {
-							t.Fatalf("rejected rewrite: %+v", rejected)
-						}
-						if got, err := os.ReadFile(target); err != nil || string(got) != "existing target" {
-							t.Fatalf("existing changed: %q %v", got, err)
-						}
+						assertRejectedNativeRewrite(t, a, c, j, req, target)
 						t.Logf("explicit unsupported layout: %s %s; existing target preserved", suffix, st.Code)
 						return
 					}
@@ -144,24 +132,48 @@ func TestNativeElevenFormatsFullTransfer(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					if err := metadata.CompareAudioPayload(ctx, bytes.NewReader(data), int64(len(data)), bytes.NewReader(after), int64(len(after))); err != nil {
-						t.Fatal(err)
-					}
-					if !edit {
-						if !bytes.Equal(data, after) {
-							t.Fatal("unrequested edit")
-						}
-						return
-					}
-					info, err := metadata.Parse(bytes.NewReader(after), int64(len(after)))
-					if err != nil {
-						t.Fatal(err)
-					}
-					if info.Title != "title" || info.Album != "album" || info.Lyrics != "[00:00.00]lyrics" || !reflect.DeepEqual(info.Artists, []string{"first", "second"}) || len(info.Pictures) != 1 || !bytes.Equal(info.Pictures[0].Data, jpg.Bytes()) {
-						t.Fatalf("readback mismatch %+v", info)
-					}
+					assertNativeTransferPayload(t, j, data, after, jpg.Bytes(), edit)
 				})
 			}
 		})
+	}
+}
+
+func assertNativeTransferPayload(t *testing.T, j *downloadJob, data, after, jpg []byte, edit bool) {
+	t.Helper()
+	if err := metadata.CompareAudioPayload(j.lease.owner, bytes.NewReader(data), int64(len(data)), bytes.NewReader(after), int64(len(after))); err != nil {
+		t.Fatal(err)
+	}
+	if !edit {
+		if !bytes.Equal(data, after) {
+			t.Fatal("unrequested edit")
+		}
+		return
+	}
+	info, err := metadata.Parse(bytes.NewReader(after), int64(len(after)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Title != "title" || info.Album != "album" || info.Lyrics != "[00:00.00]lyrics" || !reflect.DeepEqual(info.Artists, []string{"first", "second"}) || len(info.Pictures) != 1 || !bytes.Equal(info.Pictures[0].Data, jpg) {
+		t.Fatalf("readback mismatch %+v", info)
+	}
+}
+
+func assertRejectedNativeRewrite(t *testing.T, a *fileTestActor, c *downloadCoordinator, previous *downloadJob, req DownloadRequest, target string) {
+	t.Helper()
+	ctx, epoch := previous.lease.owner, previous.lease.epoch
+	if err := os.WriteFile(target, []byte("existing target"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	retry := downloadReq(t, req.GrantToken, req.Filename)
+	retry.Options = req.Options
+	job := downloadStart(t, a, ctx, epoch, c, retry)
+	downloadWait(t, job)
+	rejected, _ := c.access(a.state, ctx, epoch, retry.OperationID, false)
+	if rejected.Committed || rejected.Ref != nil || rejected.Code != "unsupported" {
+		t.Fatalf("rejected rewrite: %+v", rejected)
+	}
+	if got, err := os.ReadFile(target); err != nil || string(got) != "existing target" {
+		t.Fatalf("existing changed: %q %v", got, err)
 	}
 }

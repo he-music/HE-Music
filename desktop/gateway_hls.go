@@ -22,7 +22,7 @@ func isGatewayManifest(response *http.Response) bool {
 func (g *NetworkGateway) writeManifest(w http.ResponseWriter, r *http.Request, response *http.Response, prefix string) {
 	// Partial playlists cannot be parsed safely. Ask callers to retry without Range.
 	if response.StatusCode == http.StatusPartialContent || response.Header.Get("Content-Range") != "" {
-		http.Error(w, "partial HLS manifest is unsupported; retry without Range", 502)
+		http.Error(w, "partial HLS manifest is unsupported; retry without Range", http.StatusBadGateway)
 		return
 	}
 	if response.StatusCode != http.StatusOK || r.Method == "HEAD" {
@@ -34,17 +34,17 @@ func (g *NetworkGateway) writeManifest(w http.ResponseWriter, r *http.Request, r
 		return
 	}
 	if encoding := response.Header.Get("Content-Encoding"); encoding != "" && encoding != "identity" {
-		http.Error(w, "encoded HLS manifest is unsupported", 502)
+		http.Error(w, "encoded HLS manifest is unsupported", http.StatusBadGateway)
 		return
 	}
 	data, err := io.ReadAll(io.LimitReader(response.Body, gatewayManifestLimit+1))
 	if err != nil || len(data) > gatewayManifestLimit {
-		http.Error(w, "HLS manifest exceeds limit or is incomplete", 502)
+		http.Error(w, "HLS manifest exceeds limit or is incomplete", http.StatusBadGateway)
 		return
 	}
 	manifest, err := rewriteGatewayManifest(string(data), response.Request.URL, prefix)
 	if err != nil {
-		http.Error(w, "invalid HLS URI", 502)
+		http.Error(w, "invalid HLS URI", http.StatusBadGateway)
 		return
 	}
 	copyDesktopGatewayHeaders(w.Header(), response.Header, true)

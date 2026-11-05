@@ -25,6 +25,7 @@ func validStartupFixture(t *testing.T) map[string]any {
 		"snapshots": []any{}, "events": map[string]any{"run": 0, "end": 0, "cancel": 0, "animationEnd": 0},
 	}
 }
+
 func TestStartupObservationRequiredFields(t *testing.T) {
 	baseline := validStartupFixture(t)
 	if _, err := decodeStartupObservation(baseline); err != nil {
@@ -49,6 +50,7 @@ func TestStartupObservationRequiredFields(t *testing.T) {
 		})
 	}
 }
+
 func TestStartupFinalSafetyAndContinuity(t *testing.T) {
 	observation, err := decodeStartupObservation(validStartupFixture(t))
 	if err != nil {
@@ -87,6 +89,7 @@ func TestStartupFinalSafetyAndContinuity(t *testing.T) {
 		})
 	}
 }
+
 func TestStartupObservationAnonymousPersistence(t *testing.T) {
 	value := validStartupFixture(t)
 	value["message"] = "PRIVATE https://private.invalid/token"

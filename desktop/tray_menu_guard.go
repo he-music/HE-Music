@@ -31,9 +31,10 @@ func trayRequestForCommand(session *traySession, captured TrayPlaybackState, com
 	case trayModeRepeat, trayModeRepeatOnce, trayModeShuffle:
 		action = TraySetPlayMode
 		target := TrayModeRepeat
-		if command == trayModeRepeatOnce {
+		switch command {
+		case trayModeRepeatOnce:
 			target = TrayModeRepeatOnce
-		} else if command == trayModeShuffle {
+		case trayModeShuffle:
 			target = TrayModeShuffle
 		}
 		mode = &target

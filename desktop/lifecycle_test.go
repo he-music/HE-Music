@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/egoist/mygo"
+
 	desktopassets "github.com/he-music/HE-Music"
 )
 
@@ -26,8 +27,10 @@ func TestLifecycleClosePolicy(t *testing.T) {
 		{"explicit system quit bypasses tip", true, true, true, true, CloseAppHide, closeAllow},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			state := lifecycleState{tray: test.tray, quitting: test.quitting,
-				config: LifecycleConfig{ShowCloseAppTip: test.tip, CloseAppMethod: test.method}}
+			state := lifecycleState{
+				tray: test.tray, quitting: test.quitting,
+				config: LifecycleConfig{ShowCloseAppTip: test.tip, CloseAppMethod: test.method},
+			}
 			if test.ready {
 				state.owner = context.Background()
 			}
@@ -53,9 +56,8 @@ func TestLifecycleOwnership(t *testing.T) {
 		sameLifecyclePage(nil, nil) || sameLifecyclePage(mainPage, nil) {
 		t.Fatal("only the explicitly attached top-level page may own lifecycle calls")
 	}
-	owner, cancelOwner := context.WithCancel(context.Background())
-	defer cancelOwner()
-	other, cancelOther := context.WithCancel(context.Background())
+	owner := t.Context()
+	other, cancelOther := context.WithCancel(t.Context())
 	defer cancelOther()
 	state := lifecycleState{owner: owner}
 	if !state.owns(owner) || state.owns(other) {
@@ -68,8 +70,10 @@ func TestLifecycleOwnership(t *testing.T) {
 }
 
 func TestLifecycleCloseDeliveryFallback(t *testing.T) {
-	state := lifecycleState{owner: context.Background(), tray: true,
-		config: LifecycleConfig{ShowCloseAppTip: true}}
+	state := lifecycleState{
+		owner: context.Background(), tray: true,
+		config: LifecycleConfig{ShowCloseAppTip: true},
+	}
 	request := state.requestClose()
 	if state.acknowledge(request+1) || state.expireRequest(request+1) {
 		t.Fatal("stale acknowledgements/timers must not affect the active request")

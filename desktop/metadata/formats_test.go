@@ -78,9 +78,7 @@ func TestFormatsMetadataRoundTrip(t *testing.T) {
 			if !bytes.Equal(originalHash, formatsPacketHash(t, path)) {
 				t.Fatal("encoded packet hashes changed")
 			}
-			if err := CompareFormatAudioPayload(context.Background(), bytes.NewReader(before), int64(len(before)), bytes.NewReader(after), int64(len(after))); err != nil {
-				t.Fatal(err)
-			}
+			requireMetadataNoError(t, CompareFormatAudioPayload(context.Background(), bytes.NewReader(before), int64(len(before)), bytes.NewReader(after), int64(len(after))))
 			// Grow existing tags, then clear fields and pictures; both save paths must
 			// preserve the same encoded packets and remain independently parseable.
 			title = strings.Repeat("长 title ", 2000) + "end"
@@ -99,9 +97,7 @@ func TestFormatsMetadataRoundTrip(t *testing.T) {
 			if !bytes.Equal(originalHash, formatsPacketHash(t, path)) {
 				t.Fatal("encoded packets changed after growth/clear")
 			}
-			if err := CompareFormatAudioPayload(context.Background(), bytes.NewReader(before), int64(len(before)), bytes.NewReader(final), int64(len(final))); err != nil {
-				t.Fatal(err)
-			}
+			requireMetadataNoError(t, CompareFormatAudioPayload(context.Background(), bytes.NewReader(before), int64(len(before)), bytes.NewReader(final), int64(len(final))))
 		})
 	}
 }
@@ -130,10 +126,11 @@ func formatsMACFixture() []byte {
 	}
 	return b
 }
+
 func TestFormatsMACMetadataStructureRoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "synthetic.ape")
 	before := formatsMACFixture()
-	if err := os.WriteFile(path, before, 0600); err != nil {
+	if err := os.WriteFile(path, before, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	title, album, lyrics := "APE title", "APE album", "APE lyrics"
@@ -177,6 +174,7 @@ func (r *formatsSparseReader) ReadAt(p []byte, off int64) (int, error) {
 	}
 	return n, nil
 }
+
 func TestFormatsSparseWAVNoSizeCap(t *testing.T) {
 	const size int64 = 33 << 20
 	head := make([]byte, 44)
@@ -282,6 +280,7 @@ func TestFormatsPayloadChangesRejected(t *testing.T) {
 		})
 	}
 }
+
 func TestFormatsMP4OffsetChangeRejected(t *testing.T) {
 	original := mustRead(t, formatsFixture(t, "m4a"))
 	changed := append([]byte(nil), original...)
@@ -294,6 +293,7 @@ func TestFormatsMP4OffsetChangeRejected(t *testing.T) {
 		t.Fatal("changed sample offset accepted")
 	}
 }
+
 func TestFormatsRF64RoundTrip(t *testing.T) {
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		t.Skip("ffmpeg required for local synthetic fixtures")
@@ -412,14 +412,14 @@ func formatsAtomBytes(kind string, body []byte) []byte {
 func TestFormatsMP4ChunkOffsetReadWork(t *testing.T) {
 	const count = 512
 	b := formatsAtomBytes("ftyp", []byte("M4A \x00\x00\x00\x00"))
-	for i := 0; i < count; i++ {
+	for range count {
 		b = append(b, formatsAtomBytes("free", nil)...)
 	}
 	mediaStart := len(b) + 8
 	b = append(b, formatsAtomBytes("mdat", bytes.Repeat([]byte{7}, count))...)
 	offsets := make([]byte, 8+4*count)
 	binary.BigEndian.PutUint32(offsets[4:], count)
-	for i := 0; i < count; i++ {
+	for i := range count {
 		binary.BigEndian.PutUint32(offsets[8+4*i:], uint32(mediaStart+i))
 	}
 	stbl := append(formatsAtomBytes("stsd", []byte{0, 0, 0, 0}), formatsAtomBytes("stco", offsets)...)

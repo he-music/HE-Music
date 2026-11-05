@@ -81,7 +81,10 @@ func main() {
 			log.Print("设置 macOS 原生窗口按钮悬停失败，保留可见按钮: ", hoverErr)
 		}
 		desktopLifecycle.attachMainWindow(win, true)
-		win.Page().LoadURL("/")
+		if err := win.Page().LoadURL("/"); err != nil {
+			log.Print("加载主窗口失败: ", err)
+			mygo.App.Quit()
+		}
 	})
 	err := mygo.App.Run()
 	stopGateway()

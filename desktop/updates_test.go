@@ -136,8 +136,7 @@ func TestUpdatesOwnerEpochAndAsyncAuthorization(t *testing.T) {
 	}
 	h.run(t)
 	epoch := h.last(t).State.Epoch
-	foreign, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	foreign := t.Context()
 	h.u.Check(foreign, 11, epoch, 1)
 	h.run(t)
 	if h.last(t).Code != "session-unavailable" {
@@ -306,8 +305,7 @@ func TestUpdatesInstallFenceSurvivesEpochRevokeAndLateReturn(t *testing.T) {
 			h.run(t)
 			oldInstall := receiveUpdatesInstall(t, candidate)
 			h.u.revoke()
-			newOwner, cancel := context.WithCancel(context.Background())
-			defer cancel()
+			newOwner := t.Context()
 			newEpoch := h.begin(t, newOwner)
 			if newEpoch <= epoch || !h.u.session.snapshot().InstallBusy || oldInstall.ctx.Err() == nil {
 				t.Fatal("revoke cleared fence or failed to cancel context")

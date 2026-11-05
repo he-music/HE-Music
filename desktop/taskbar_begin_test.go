@@ -26,9 +26,7 @@ func TestTaskbarBeginInsideNativeDrain(t *testing.T) {
 				}
 				once = true
 				epoch, err := c.begin(handle)
-				if err != nil {
-					t.Fatalf("logical Begin rejected accepted cleanup: %v", err)
-				}
+				requireTestNoError(t, err)
 				nextEpoch = epoch
 				if epoch != 2 || c.state.Enabled || old.active {
 					t.Fatalf("Begin opened gate or failed owner switch: %+v active=%v", c.state, old.active)
@@ -41,11 +39,11 @@ func TestTaskbarBeginInsideNativeDrain(t *testing.T) {
 				next.Seq = 1
 				err = c.sync(next)
 				if handle == 1 {
-					if err != errTaskbarQueued || c.state.Enabled || old.active {
-						t.Fatalf("new sync committed before completion: %v %+v", err, c.state)
-					}
-				} else if err != nil {
-					t.Fatal(err)
+					requireTestEqual(t, err, errTaskbarQueued)
+					requireTestEqual(t, c.state.Enabled, false)
+					requireTestEqual(t, old.active, false)
+				} else {
+					requireTestNoError(t, err)
 				}
 				return nil
 			}
@@ -110,6 +108,7 @@ type taskbarBeginCleanupFault struct {
 func (b *taskbarBeginCleanupFault) clear() error {
 	return errors.Join(b.taskbarNativeExecutor.clear(), b.clearFault)
 }
+
 func (b *taskbarBeginCleanupFault) close() error {
 	return errors.Join(b.taskbarNativeExecutor.close(), b.closeFault)
 }

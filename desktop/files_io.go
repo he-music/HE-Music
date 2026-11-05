@@ -13,8 +13,10 @@ import (
 	"syscall"
 )
 
-var errFileIO = errors.New("settings file operation failed")
-var errDirectory = errors.New("directory selection unavailable")
+var (
+	errFileIO    = errors.New("settings file operation failed")
+	errDirectory = errors.New("directory selection unavailable")
+)
 
 type directoryHandle struct {
 	root         *os.Root
@@ -141,7 +143,7 @@ func prepareSettingsSave(path string, data []byte) (*preparedSettingsSave, error
 		return nil, errFileIO
 	}
 	save.temp = ".he-music-settings-" + token + ".tmp"
-	file, err := parent.root.OpenFile(save.temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+	file, err := parent.root.OpenFile(save.temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return nil, errFileIO
 	}

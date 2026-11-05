@@ -75,7 +75,7 @@ func saveLinuxGraphics(directory string, enabled bool) error {
 	if directory == "" || !filepath.IsAbs(directory) {
 		return errors.New("graphics preference directory unavailable")
 	}
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
 	data, err := json.Marshal(struct {
@@ -90,7 +90,7 @@ func saveLinuxGraphics(directory string, enabled bool) error {
 		return err
 	}
 	defer os.Remove(file.Name())
-	if err := file.Chmod(0600); err != nil {
+	if err := file.Chmod(0o600); err != nil {
 		file.Close()
 		return err
 	}
@@ -112,7 +112,7 @@ func (s *LinuxGraphics) Current(ctx context.Context) (LinuxGraphicsState, error)
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.directory == "" {
-		return state, errors.New("Linux graphics settings unavailable")
+		return state, errors.New("linux graphics settings unavailable")
 	}
 	return s.snapshot(), nil
 }
@@ -126,7 +126,7 @@ func (s *LinuxGraphics) Save(ctx context.Context, enabled bool) (LinuxGraphicsSt
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if s.directory == "" {
-			return errors.New("Linux graphics settings unavailable")
+			return errors.New("linux graphics settings unavailable")
 		}
 		if err := saveLinuxGraphics(s.directory, enabled); err != nil {
 			return err

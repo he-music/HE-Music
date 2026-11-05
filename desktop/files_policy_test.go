@@ -20,6 +20,7 @@ type fakeFilePicker struct {
 func (p fakeFilePicker) Open(options mygo.OpenDialogOptions) ([]string, error) {
 	return p.open(options)
 }
+
 func (p fakeFilePicker) Save(options mygo.SaveDialogOptions) (string, error) { return p.save(options) }
 
 type fileTestActor struct {
@@ -72,8 +73,7 @@ func TestNativeFilesRejectUnreadyForeignAndStaleSessions(t *testing.T) {
 		t.Fatal("unready picker accepted")
 	}
 	actor.ready = true
-	foreign, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	foreign := t.Context()
 	if _, err := s.session(foreign); err == nil {
 		t.Fatal("foreign page accepted")
 	}
@@ -165,8 +165,7 @@ func TestNativeFilesLatePanelKeepsBusyAndCannotAffectNewOwner(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { _, err := s.chooseDirectory(ctx, epoch); done <- err }()
 	<-opened
-	newCtx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	newCtx := t.Context()
 	s.dispatch(func() { s.revoke(); actor.owner = newCtx })
 	session, err := s.session(newCtx)
 	if err != nil {
@@ -219,9 +218,11 @@ func TestNativeFilesGrantRelationsRevokeAndDefaultsAreNotAuthority(t *testing.T)
 	for _, test := range []struct{ path, relation string }{{music, "duplicate"}, {child, "child"}, {dir, "parent"}} {
 		selected = test.path
 		overlap, err := s.chooseDirectory(ctx, epoch)
-		if err != nil || overlap.Status != "overlap" || string(overlap.Relation) != test.relation || overlap.ExistingToken != token || overlap.Grant != nil {
-			t.Fatal("incorrect overlap")
-		}
+		requireTestNoError(t, err)
+		requireTestEqual(t, overlap.Status, DirectoryOverlapping)
+		requireTestEqual(t, string(overlap.Relation), test.relation)
+		requireTestEqual(t, overlap.ExistingToken, token)
+		requireTestEqual(t, overlap.Grant, nil)
 	}
 	selected = other
 	if result, err := s.chooseDirectory(ctx, epoch); err != nil || result.Status != "selected" {
@@ -240,10 +241,8 @@ func TestNativeFilesGrantRelationsRevokeAndDefaultsAreNotAuthority(t *testing.T)
 	if _, err := s.defaultDirectory(ctx, epoch, "home"); err == nil {
 		t.Fatal("unbounded default kind accepted")
 	}
-	if err := s.revokeDirectory(ctx, epoch, "../../escape"); !errors.Is(err, errFilesToken) {
-		t.Fatal("invalid token accepted")
-	}
-	for i := 0; i < 2; i++ {
+	requireTestErrorIs(t, s.revokeDirectory(ctx, epoch, "../../escape"), errFilesToken)
+	for range 2 {
 		if err := s.revokeDirectory(ctx, epoch, token); err != nil {
 			t.Fatal(err)
 		}

@@ -613,12 +613,18 @@ class Player {
         try {
           const link = this.selectPlayQuality(playSongData, quality);
           if (!link) throw new Error("Get song link error");
-          if (link.format === "flac" || (platform === "migu" && link.format === "m4a")) {
-            source = { platform, format: link.format };
-          }
           statusStore.playQuality = link.name;
           console.log("Getting online song url...");
-          playerUrl = await songManager.getOnlineUrl(id, platform, link);
+          const resolved = await songManager.getOnlineSource(id, platform, link);
+          playerUrl = resolved?.url ?? null;
+          const format = resolved?.format;
+          if (
+            format === "flac" ||
+            (platform === "migu" && format === "m4a") ||
+            (isMygo && platform === "soda" && (format === "m4a" || format === "mp4"))
+          ) {
+            source = { platform, format };
+          }
         } catch (err) {
           if (currentRequestId !== this.playRequestId) return;
           console.error("❌ 获取歌曲地址出错：");

@@ -22,20 +22,16 @@ func TestLibraryIndexPersistsMetadataWithoutCapabilities(t *testing.T) {
 	directory := t.TempDir()
 	music := t.TempDir()
 	name := filepath.Join(music, "song.wav")
-	if err := os.WriteFile(name, []byte("fixture"), 0600); err != nil {
+	if err := os.WriteFile(name, []byte("fixture"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	info, err := os.Stat(name)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := prepareLibraryIndex(directory); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, prepareLibraryIndex(directory))
 	rememberLibraryMetadata(music, "song.wav", info, metadata.Info{Title: "持久标题", Artists: []string{"歌手"}, PicturesLoaded: true, Pictures: []metadata.Picture{{Data: []byte("not persisted")}}})
-	if err := flushLibraryIndex(); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, flushLibraryIndex())
 	data, err := os.ReadFile(filepath.Join(directory, "local-library-index.json"))
 	if err != nil {
 		t.Fatal(err)
@@ -60,14 +56,14 @@ func TestLibraryIndexPersistsMetadataWithoutCapabilities(t *testing.T) {
 	if !ok || value.Title != "持久标题" || value.PicturesLoaded || len(value.Pictures) != 0 {
 		t.Fatalf("%+v %v", value, ok)
 	}
-	if err := os.WriteFile(name, []byte("changed length"), 0600); err != nil {
+	if err := os.WriteFile(name, []byte("changed length"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	changed, _ := os.Stat(name)
 	if _, ok := cachedLibraryMetadata(music, "song.wav", changed); ok {
 		t.Fatal("changed file reused cached metadata")
 	}
-	if err := os.WriteFile(filepath.Join(directory, "local-library-index.json"), []byte("corrupt"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "local-library-index.json"), []byte("corrupt"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if prepareLibraryIndex(directory) == nil || flushLibraryIndex() == nil {
@@ -118,7 +114,7 @@ func TestLibraryIndexRejectsTrailingValuesWithoutOverwrite(t *testing.T) {
 	for _, suffix := range []string{"BROKEN", "{}"} {
 		raw := `{"version":1,"entries":[]}` + suffix
 		path := filepath.Join(directory, "local-library-index.json")
-		if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
+		if err := os.WriteFile(path, []byte(raw), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		if prepareLibraryIndex(directory) == nil || flushLibraryIndex() == nil {

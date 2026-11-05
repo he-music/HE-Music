@@ -12,7 +12,7 @@ import (
 func TestScanFiltersNonAudioNamesBeforeParsingAndCache(t *testing.T) {
 	actor, ctx, epoch, ref, data, source := audioFixture(t, "mp3")
 	directory := filepath.Dir(source)
-	if err := os.Mkdir(filepath.Join(directory, "album.xml"), 0700); err != nil {
+	if err := os.Mkdir(filepath.Join(directory, "album.xml"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	// Even readable audio bytes must not make an unrelated suffix a music entry.
@@ -69,7 +69,7 @@ func TestScanFiltersNonAudioNamesBeforeParsingAndCache(t *testing.T) {
 func TestScanAudioGlobMatchesSupportedFormatsAtEveryDepth(t *testing.T) {
 	actor, ctx, epoch, token, directory := scanTestGrant(t)
 	nested := "Album [Live]/{Disc}"
-	if err := os.MkdirAll(filepath.Join(directory, filepath.FromSlash(nested)), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(directory, filepath.FromSlash(nested)), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	want := make(map[string]bool)

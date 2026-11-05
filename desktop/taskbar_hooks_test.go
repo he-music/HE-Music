@@ -61,7 +61,7 @@ func TestTaskbarHookRetryKeepingObserverRejectsFailureAndDestroyReentry(t *testi
 			t.Fatal("reentrant cleanup admitted an installation")
 		}
 	}
-	for attempt := 0; attempt < 100; attempt++ {
+	for range 100 {
 		if h.retryKeeping(previous) == nil {
 			t.Fatal("failed replacement cleanup admitted an installation")
 		}
@@ -75,6 +75,7 @@ func TestTaskbarHookRetryKeepingObserverRejectsFailureAndDestroyReentry(t *testi
 		t.Fatal("destroy during cleanup retained a hook or admitted a new installation")
 	}
 }
+
 func TestTaskbarHookHandoffDoubleRemoveFailureBounded(t *testing.T) {
 	failure := errors.New("RemoveWindowSubclass failed")
 	previous := &fakeTaskbarHook{installed: true, failure: failure}
@@ -86,7 +87,7 @@ func TestTaskbarHookHandoffDoubleRemoveFailureBounded(t *testing.T) {
 	if previous.calls != 1 || next.calls != 1 || !previous.installed || !next.installed {
 		t.Fatal("did not independently attempt both removals")
 	}
-	for attempt := 0; attempt < 100; attempt++ {
+	for range 100 {
 		if h.retry() == nil {
 			t.Fatal("failed native removals permit another subclass installation")
 		}
@@ -106,6 +107,7 @@ func TestTaskbarHookHandoffDoubleRemoveFailureBounded(t *testing.T) {
 		t.Fatal("retry did not clear quarantine")
 	}
 }
+
 func TestTaskbarHookHandoffDestroyedRetiresBoth(t *testing.T) {
 	failure := errors.New("RemoveWindowSubclass failed")
 	previous := &fakeTaskbarHook{installed: true, failure: failure}
@@ -118,6 +120,7 @@ func TestTaskbarHookHandoffDestroyedRetiresBoth(t *testing.T) {
 		t.Fatal("HWND destruction did not retire every tracked hook exactly once")
 	}
 }
+
 func TestTaskbarHookHandoffRollbackSuccessStillTracksPrevious(t *testing.T) {
 	failure := errors.New("old subclass remove failed")
 	previous := &fakeTaskbarHook{installed: true, failure: failure}
@@ -134,6 +137,7 @@ func TestTaskbarHookHandoffRollbackSuccessStillTracksPrevious(t *testing.T) {
 		t.Fatal("destroyed an already removed native hook")
 	}
 }
+
 func TestTaskbarHookHandoffRetryReentryIsBounded(t *testing.T) {
 	failure := errors.New("remove failed")
 	previous := &fakeTaskbarHook{installed: true, failure: failure}
@@ -152,6 +156,7 @@ func TestTaskbarHookHandoffRetryReentryIsBounded(t *testing.T) {
 		t.Fatal("cleanup recursed or skipped independent removal")
 	}
 }
+
 func TestTaskbarHookDestroyDoesNotDeleteReusedHWNDRecord(t *testing.T) {
 	type record struct {
 		cookie uintptr

@@ -14,8 +14,10 @@ import (
 	"time"
 )
 
-const controlDefaultPort = 25666
-const controlMaxID uint64 = 9007199254740991
+const (
+	controlDefaultPort        = 25666
+	controlMaxID       uint64 = 9007199254740991
+)
 
 type ControlCommand struct {
 	Generation uint64 `json:"generation"`
@@ -68,6 +70,7 @@ func (s *controlServer) prepare(ctx context.Context, epoch uint64) (uint64, erro
 	s.stopOwner = context.AfterFunc(ctx, func() { s.revokeGeneration(generation) })
 	return generation, nil
 }
+
 func (s *controlServer) start(generation uint64, port int) (ControlSession, error) {
 	if port == 0 {
 		port = controlDefaultPort
@@ -131,11 +134,13 @@ func (s *controlServer) revokeGeneration(g uint64) {
 		s.closeLocked()
 	}
 }
+
 func (s *controlServer) current(ctx context.Context, epoch uint64, command ControlCommand) bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.activeLocked() && s.owner == ctx && s.epoch == epoch && s.generation == command.Generation && s.pending[command.RequestID] == command
 }
+
 func (s *controlServer) receipt(ctx context.Context, generation, requestID uint64, applied bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -159,6 +164,7 @@ func controlHost(raw string) (string, string, bool) {
 	value, err := strconv.Atoi(port)
 	return host, port, err == nil && value > 0 && value <= 65535
 }
+
 func validControlRequest(r *http.Request, port string) bool {
 	_, hostPort, ok := controlHost(r.Host)
 	if !ok || hostPort != port || r.URL.IsAbs() || r.URL.RawQuery != "" || r.URL.RawPath != "" || r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
@@ -176,14 +182,20 @@ func validControlRequest(r *http.Request, port string) bool {
 	if site := r.Header.Get("Sec-Fetch-Site"); site != "" && site != "none" && site != "same-origin" {
 		return false
 	}
-	if origin := r.Header.Get("Origin"); origin != "" {
-		u, err := url.Parse(origin)
-		if err != nil || u.Scheme != "http" || u.User != nil || u.Host != r.Host || u.Path != "" || u.RawQuery != "" || u.Fragment != "" {
-			return false
-		}
+	if !validControlOrigin(r.Header.Get("Origin"), r.Host) {
+		return false
 	}
 	return true
 }
+
+func validControlOrigin(origin, host string) bool {
+	if origin == "" {
+		return true
+	}
+	u, err := url.Parse(origin)
+	return err == nil && u.Scheme == "http" && u.User == nil && u.Host == host && u.Path == "" && u.RawQuery == "" && u.Fragment == ""
+}
+
 func (s *controlServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-store")
@@ -268,26 +280,8 @@ func (s *controlServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	emit := s.emit
 	stopped := s.stopped
 	s.mu.Unlock()
-	result := make(chan error, 1)
 	release = false
-	go func() {
-		var err error
-		if emit == nil {
-			err = errors.New("control dispatch unavailable")
-		} else {
-			err = emit(r.Context(), command)
-		}
-		s.dispatchMu.Unlock()
-		result <- err
-	}()
-	var dispatchErr error
-	select {
-	case dispatchErr = <-result:
-	case <-r.Context().Done():
-		dispatchErr = r.Context().Err()
-	case <-stopped:
-		dispatchErr = errors.New("control owner revoked")
-	}
+	dispatchErr := s.dispatchControl(r.Context(), command, emit, stopped)
 	if dispatchErr != nil {
 		s.mu.Lock()
 		delete(s.pending, command.RequestID)
@@ -296,4 +290,26 @@ func (s *controlServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	reply(200, label+"命令已发送", nil)
+}
+
+func (s *controlServer) dispatchControl(ctx context.Context, command ControlCommand, emit func(context.Context, ControlCommand) error, stopped <-chan struct{}) error {
+	result := make(chan error, 1)
+	go func() {
+		var err error
+		if emit == nil {
+			err = errors.New("control dispatch unavailable")
+		} else {
+			err = emit(ctx, command)
+		}
+		s.dispatchMu.Unlock()
+		result <- err
+	}()
+	select {
+	case err := <-result:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-stopped:
+		return errors.New("control owner revoked")
+	}
 }

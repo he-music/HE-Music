@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"slices"
 
 	"github.com/ebitengine/purego"
 	"github.com/egoist/mygo"
@@ -52,8 +53,8 @@ func loadProtocolBundleBridge() (*protocolBundleBridge, error) {
 	keep := false
 	defer func() {
 		if !keep {
-			for i := len(handles) - 1; i >= 0; i-- {
-				_ = purego.Dlclose(handles[i])
+			for _, handle := range slices.Backward(handles) {
+				_ = purego.Dlclose(handle)
 			}
 		}
 	}()
@@ -95,15 +96,19 @@ func loadProtocolBundleBridge() (*protocolBundleBridge, error) {
 func (b *protocolBundleBridge) send(obj uintptr, selector string) uintptr {
 	return b.msg0(obj, b.selector(selector))
 }
+
 func (b *protocolBundleBridge) string(s string) uintptr {
 	return b.msgCString(b.class("NSString"), b.selector("stringWithUTF8String:"), s)
 }
+
 func (b *protocolBundleBridge) kind(obj uintptr, class string) bool {
 	return obj != 0 && b.bool1(obj, b.selector("isKindOfClass:"), b.class(class))
 }
+
 func (b *protocolBundleBridge) equal(obj uintptr, s string) bool {
 	return b.kind(obj, "NSString") && b.msg1(obj, b.selector("caseInsensitiveCompare:"), b.string(s)) == 0
 }
+
 func (b *protocolBundleBridge) info(bundle uintptr, key string) uintptr {
 	return b.msg1(bundle, b.selector("objectForInfoDictionaryKey:"), b.string(key))
 }

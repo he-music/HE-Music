@@ -2,6 +2,7 @@ import { useDataStore, useMusicStore, useStatusStore } from "@/stores";
 import { getCoverColorData, MONOTONOUS_THEME } from "./color";
 import type { CoverColors } from "@/types/main";
 import type { Link, SongInfo } from "@/types/main.hemusic";
+import type { SongAudioSource } from "@/platform/audioSource";
 import { songUrl } from "@/api/song";
 import { gatewayProxyUrl } from "@/platform/gateway";
 
@@ -71,19 +72,15 @@ class SongManager {
     return `${info.name} - ${info.artist}`;
   };
 
-  public getOnlineUrl = async (
+  public getOnlineSource = async (
     id: string,
     platform: string,
     link?: Link,
-  ): Promise<string | null> => {
+  ): Promise<SongAudioSource | null> => {
     const res = await songUrl(id, platform, link?.quality, link?.format);
     console.log("🌐 music URL resolved");
-    const songData = res;
-    // 是否有播放地址
-    if (!songData || !songData?.url) return null;
-    // 返回歌曲地址
-    // 都返回 原始地址
-    return songData.url;
+    if (!res?.url) return null;
+    return res;
   };
 
   /**

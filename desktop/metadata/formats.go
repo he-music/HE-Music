@@ -63,6 +63,7 @@ func hashFormatRange(s payloadSource, h *formatPayloadHash, start, end int64) er
 	}
 	return nil
 }
+
 func hashFormatSection(s payloadSource, h *formatPayloadHash, kind string, start, end int64) error {
 	h.Write([]byte(kind))
 	var n [8]byte
@@ -90,19 +91,8 @@ func additionalPayloadKind(s payloadSource) (string, error) {
 	if err := s.read(0, b[:min(s.size, int64(len(b)))]); err != nil {
 		return "", err
 	}
-	switch {
-	case (string(b[:4]) == "RIFF" || string(b[:4]) == "RF64" || string(b[:4]) == "BW64") && string(b[8:]) == "WAVE":
-		return "wave", nil
-	case string(b[:4]) == "FORM" && (string(b[8:]) == "AIFF" || string(b[8:]) == "AIFC"):
-		return "aiff", nil
-	case string(b[4:8]) == "ftyp":
-		return "mp4", nil
-	case string(b[:4]) == "OggS":
-		return "ogg", nil
-	case string(b[:4]) == "MAC ":
-		return "mac", nil
-	case binary.BigEndian.Uint32(b[:4]) == 0x1a45dfa3:
-		return "webm", nil
+	if kind := additionalHeaderKind(b); kind != "" {
+		return kind, nil
 	}
 	if string(b[:3]) == "ID3" {
 		if s.size < 10 {
@@ -128,6 +118,25 @@ func additionalPayloadKind(s payloadSource) (string, error) {
 		return "adts", nil
 	}
 	return "", nil
+}
+
+func additionalHeaderKind(b [12]byte) string {
+	switch {
+	case (string(b[:4]) == "RIFF" || string(b[:4]) == "RF64" || string(b[:4]) == "BW64") && string(b[8:]) == "WAVE":
+		return "wave"
+	case string(b[:4]) == "FORM" && (string(b[8:]) == "AIFF" || string(b[8:]) == "AIFC"):
+		return "aiff"
+	case string(b[4:8]) == "ftyp":
+		return "mp4"
+	case string(b[:4]) == "OggS":
+		return "ogg"
+	case string(b[:4]) == "MAC ":
+		return "mac"
+	case binary.BigEndian.Uint32(b[:4]) == 0x1a45dfa3:
+		return "webm"
+	default:
+		return ""
+	}
 }
 
 func hashFormatPayload(s payloadSource, h *formatPayloadHash) error {
@@ -160,33 +169,9 @@ func hashIFFPayload(s payloadSource, h *formatPayloadHash, aiff bool) error {
 	if err := s.read(0, head[:]); err != nil {
 		return err
 	}
-	var order binary.ByteOrder = binary.LittleEndian
-	config, media := "fmt ", "data"
-	if aiff {
-		order = binary.BigEndian
-		config, media = "COMM", "SSND"
-	}
-	extended := !aiff && string(head[:4]) != "RIFF"
-	var dataSize int64
-	if extended {
-		var ds [36]byte
-		if err := s.read(12, ds[:]); err != nil {
-			return err
-		}
-		if string(ds[:4]) != "ds64" || binary.LittleEndian.Uint32(ds[4:8]) < 28 || binary.LittleEndian.Uint32(ds[32:36]) != 0 {
-			return ErrUnsupportedPayload
-		}
-		if binary.LittleEndian.Uint64(ds[8:16]) != uint64(s.size-8) {
-			return ErrInvalidPayload
-		}
-		value := binary.LittleEndian.Uint64(ds[16:24])
-		if value > uint64(s.size) {
-			return ErrInvalidPayload
-		}
-		dataSize = int64(value)
-	}
-	if !extended && int64(order.Uint32(head[4:8]))+8 != s.size {
-		return fmt.Errorf("%w: RIFF/FORM extent", ErrInvalidPayload)
+	layout, err := readIFFLayout(s, head, aiff)
+	if err != nil {
+		return err
 	}
 	h.Write(head[:4])
 	h.Write(head[8:])
@@ -196,33 +181,20 @@ func hashIFFPayload(s payloadSource, h *formatPayloadHash, aiff bool) error {
 		if err := s.read(off, b[:]); err != nil {
 			return err
 		}
-		n := int64(order.Uint32(b[4:]))
-		if extended && string(b[:4]) == "data" && n == 0xffffffff {
-			n = dataSize
+		n := int64(layout.order.Uint32(b[4:]))
+		if layout.extended && string(b[:4]) == "data" && n == 0xffffffff {
+			n = layout.dataSize
 		}
 		start := off + 8
 		if n > s.size-start {
 			return ErrInvalidPayload
 		}
-		kind := string(b[:4])
-		if kind == "fact" && !aiff {
-			if err := hashFormatSection(s, h, kind, start, start+n); err != nil {
-				return err
-			}
+		config, media, err := layout.hashChunk(s, h, string(b[:4]), start, n)
+		if err != nil {
+			return err
 		}
-		if kind == config || kind == media {
-			if (kind == config && ((!aiff && n < 16) || (aiff && n < 18))) || (kind == media && ((!aiff && n == 0) || (aiff && n <= 8))) {
-				return ErrInvalidPayload
-			}
-			if err := hashFormatSection(s, h, kind, start, start+n); err != nil {
-				return err
-			}
-			if kind == config {
-				configs++
-			} else {
-				medias++
-			}
-		}
+		configs += config
+		medias += media
 		off = start + n + (n & 1)
 		if off > s.size {
 			return ErrInvalidPayload
@@ -275,6 +247,7 @@ func formatRawBounds(s payloadSource) (int64, int64, error) {
 	}
 	return start, end, nil
 }
+
 func hashADTSPayload(s payloadSource, h *formatPayloadHash) error {
 	start, end, err := formatRawBounds(s)
 	if err != nil {
@@ -312,6 +285,7 @@ func hashADTSPayload(s payloadSource, h *formatPayloadHash) error {
 	}
 	return nil
 }
+
 func hashMACPayload(s payloadSource, h *formatPayloadHash) error {
 	start, end, err := formatRawBounds(s)
 	if err != nil {
@@ -374,7 +348,8 @@ func formatAtom(s payloadSource, off, end int64) (string, int64, int64, error) {
 	}
 	n := uint64(binary.BigEndian.Uint32(b[:4]))
 	header := int64(8)
-	if n == 1 {
+	switch n {
+	case 1:
 		if end-off < 16 {
 			return "", 0, 0, ErrInvalidPayload
 		}
@@ -383,7 +358,7 @@ func formatAtom(s payloadSource, off, end int64) (string, int64, int64, error) {
 		}
 		n = binary.BigEndian.Uint64(b[8:])
 		header = 16
-	} else if n == 0 {
+	case 0:
 		n = uint64(end - off)
 	}
 	if n < uint64(header) || n > uint64(end-off) {
@@ -391,24 +366,13 @@ func formatAtom(s payloadSource, off, end int64) (string, int64, int64, error) {
 	}
 	return string(b[4:8]), off + header, off + int64(n), nil
 }
+
 func hashMP4Payload(s payloadSource, h *formatPayloadHash) error {
 	h.Write([]byte("mp4"))
 	// Build the ordered media index once, even when moov precedes mdat.
-	var mediaRanges []formatMP4MediaRange
-	base := int64(0)
-	for off := int64(0); off < s.size; {
-		kind, body, next, err := formatAtom(s, off, s.size)
-		if err != nil {
-			return err
-		}
-		if kind == "mdat" {
-			if body == next {
-				return ErrInvalidPayload
-			}
-			mediaRanges = append(mediaRanges, formatMP4MediaRange{body, next, base})
-			base += next - body
-		}
-		off = next
+	mediaRanges, err := formatMP4MediaRanges(s)
+	if err != nil {
+		return err
 	}
 	// mdat is preserved byte-for-byte by mtag. The sample description and
 	// timing/size tables are protected too; chunk offsets may shift on save.
@@ -470,152 +434,22 @@ func hashMP4Payload(s payloadSource, h *formatPayloadHash) error {
 // be silently reduced to one stream by a metadata writer.
 func hashOggPayload(s payloadSource, h *formatPayloadHash) error {
 	h.Write([]byte("ogg"))
-	var serial, seq uint32
-	packets := 0
-	pending := false
-	skip := false
-	packetBytes := int64(0)
-	codec := ""
-	eos := false
+	var stream oggPayloadStream
 	for off := int64(0); off < s.size; {
-		var b [27]byte
-		if err := s.read(off, b[:]); err != nil {
+		page, err := stream.readPage(s, h, off)
+		if err != nil {
 			return err
 		}
-		if string(b[:4]) != "OggS" || b[4] != 0 || b[5]&^byte(7) != 0 {
-			return ErrInvalidPayload
-		}
-		currentSerial := binary.LittleEndian.Uint32(b[14:18])
-		currentSeq := binary.LittleEndian.Uint32(b[18:22])
-		if off == 0 {
-			serial = currentSerial
-			seq = currentSeq
-			if b[5]&2 == 0 {
-				return ErrInvalidPayload
-			}
-		} else if currentSerial != serial || currentSeq != seq+1 || b[5]&2 != 0 || eos {
-			return ErrUnsupportedPayload
-		}
-		seq = currentSeq
-		if (b[5]&1 != 0) != pending {
-			return ErrInvalidPayload
-		}
-		var laces [255]byte
-		count := int(b[26])
-		if err := s.read(off+27, laces[:count]); err != nil {
+		lastAudioPacket, err := stream.hashPackets(s, h, &page)
+		if err != nil {
 			return err
 		}
-		cursor := off + 27 + int64(count)
-		pageEnd := cursor
-		for _, n := range laces[:count] {
-			pageEnd += int64(n)
+		if err := stream.hashGranule(h, &page, lastAudioPacket); err != nil {
+			return err
 		}
-		if pageEnd > s.size {
-			return ErrInvalidPayload
-		}
-		// Validate the page CRC with the checksum field zeroed, using a fixed buffer.
-		expected := binary.LittleEndian.Uint32(b[22:26])
-		clear(b[22:26])
-		crc := formatOggCRC(0, b[:])
-		crc = formatOggCRC(crc, laces[:count])
-		buf := h.buffer[:]
-		for p := cursor; p < pageEnd; {
-			n := min(int64(len(buf)), pageEnd-p)
-			if err := s.read(p, buf[:n]); err != nil {
-				return err
-			}
-			crc = formatOggCRC(crc, buf[:n])
-			p += n
-		}
-		if crc != expected {
-			return fmt.Errorf("%w: Ogg CRC", ErrInvalidPayload)
-		}
-		lastAudioPacket := -1
-		for _, n := range laces[:count] {
-			if !pending {
-				skip = packets == 1
-				packetBytes = 0
-				if packets == 0 {
-					var magic [8]byte
-					if n < 8 {
-						return ErrUnsupportedPayload
-					}
-					if err := s.read(cursor, magic[:]); err != nil {
-						return err
-					}
-					switch {
-					case string(magic[:7]) == "\x01vorbis":
-						codec = "vorbis"
-					case string(magic[:]) == "OpusHead":
-						codec = "opus"
-					case string(magic[:]) == "Speex   ":
-						codec = "speex"
-					default:
-						return ErrUnsupportedPayload
-					}
-					h.Write([]byte(codec))
-				}
-				if skip {
-					if codec != "speex" {
-						want := "OpusTags"
-						if codec == "vorbis" {
-							want = "\x03vorbis"
-						}
-						var magic [8]byte
-						if int(n) < len(want) {
-							return ErrUnsupportedPayload
-						}
-						if err := s.read(cursor, magic[:len(want)]); err != nil {
-							return err
-						}
-						if string(magic[:len(want)]) != want {
-							return ErrInvalidPayload
-						}
-					}
-				} else {
-					h.Write([]byte("packet"))
-				}
-			}
-			if !skip {
-				if err := hashFormatRange(s, h, cursor, cursor+int64(n)); err != nil {
-					return err
-				}
-			}
-			packetBytes += int64(n)
-			cursor += int64(n)
-			pending = n == 255
-			if !pending {
-				if !skip {
-					var length [8]byte
-					binary.BigEndian.PutUint64(length[:], uint64(packetBytes))
-					h.Write(length[:])
-				}
-				audioStart := 2
-				if codec == "vorbis" {
-					audioStart = 3
-				}
-				if packets >= audioStart {
-					lastAudioPacket = packets
-				}
-				packets++
-			}
-		}
-		eos = b[5]&4 != 0
-		granule := binary.LittleEndian.Uint64(b[6:14])
-		if lastAudioPacket >= 0 && granule != ^uint64(0) {
-			h.Write([]byte("granule"))
-			var packet [8]byte
-			binary.BigEndian.PutUint64(packet[:], uint64(lastAudioPacket))
-			h.Write(packet[:])
-			h.Write(b[6:14])
-		} else if eos {
-			// EOS without a completed, positioned audio packet cannot be
-			// normalized reliably across metadata pagination.
-			return ErrUnsupportedPayload
-		}
-		off = pageEnd
+		off = page.end
 	}
-	if pending || !eos || packets < 3 {
+	if stream.pending || !stream.eos || stream.packets < 3 {
 		return ErrInvalidPayload
 	}
 	return nil
@@ -625,7 +459,7 @@ var formatOggCRCTable = func() [256]uint32 {
 	var table [256]uint32
 	for i := range table {
 		crc := uint32(i) << 24
-		for j := 0; j < 8; j++ {
+		for range 8 {
 			if crc&0x80000000 != 0 {
 				crc = crc<<1 ^ 0x04c11db7
 			} else {
@@ -674,6 +508,7 @@ func formatEBMLVint(s payloadSource, off, end int64, id bool) (uint64, int64, bo
 	unknown := !id && v == uint64(1)<<(7*width)-1
 	return v, int64(width), unknown, nil
 }
+
 func formatEBMLElement(s payloadSource, off, end int64) (uint64, int64, int64, bool, error) {
 	id, n, _, err := formatEBMLVint(s, off, end, true)
 	if err != nil {
@@ -692,6 +527,7 @@ func formatEBMLElement(s payloadSource, off, end int64) (uint64, int64, int64, b
 	}
 	return id, start, start + int64(size), false, nil
 }
+
 func hashWebMPayload(s payloadSource, h *formatPayloadHash) error {
 	h.Write([]byte("matroska"))
 	tracks, clusters := 0, 0
@@ -711,50 +547,9 @@ func hashWebMPayload(s payloadSource, h *formatPayloadHash) error {
 				return ErrUnsupportedPayload
 			}
 			segment = true
-			for pos := start; pos < end; {
-				child, body, next, open, err := formatEBMLElement(s, pos, end)
-				if err != nil {
-					return err
-				}
-				// Unknown-sized clusters need a schema-aware EBML parser. Refuse them
-				// rather than guessing where the next top-level element starts.
-				if open {
-					return ErrUnsupportedPayload
-				}
-				switch child {
-				case 0x1654ae6b:
-					tracks++
-					if err := hashFormatSection(s, h, "tracks", body, next); err != nil {
-						return err
-					}
-				case 0x1f43b675:
-					clusters++
-					if next <= body {
-						return ErrInvalidPayload
-					}
-					if err := hashFormatSection(s, h, "cluster", body, next); err != nil {
-						return err
-					}
-				case 0x1549a966:
-					// TimecodeScale changes the meaning of every block timestamp. The
-					// remaining Info fields (title, muxer, duration) may be metadata.
-					for p := body; p < next; {
-						key, value, stop, open, err := formatEBMLElement(s, p, next)
-						if err != nil {
-							return err
-						}
-						if open {
-							return ErrInvalidPayload
-						}
-						if key == 0x2ad7b1 {
-							if err := hashFormatSection(s, h, "scale", value, stop); err != nil {
-								return err
-							}
-						}
-						p = stop
-					}
-				}
-				pos = next
+			tracks, clusters, err = hashWebMSegment(s, h, start, end)
+			if err != nil {
+				return err
 			}
 		default:
 			if unknown {
@@ -769,10 +564,85 @@ func hashWebMPayload(s payloadSource, h *formatPayloadHash) error {
 	return nil
 }
 
+func hashWebMSegment(s payloadSource, h *formatPayloadHash, start, end int64) (int, int, error) {
+	tracks, clusters := 0, 0
+	for pos := start; pos < end; {
+		child, body, next, open, err := formatEBMLElement(s, pos, end)
+		if err != nil {
+			return 0, 0, err
+		}
+		// Unknown-sized clusters require a schema-aware EBML parser.
+		if open {
+			return 0, 0, ErrUnsupportedPayload
+		}
+		switch child {
+		case 0x1654ae6b:
+			tracks++
+			if err := hashFormatSection(s, h, "tracks", body, next); err != nil {
+				return 0, 0, err
+			}
+		case 0x1f43b675:
+			clusters++
+			if next <= body {
+				return 0, 0, ErrInvalidPayload
+			}
+			if err := hashFormatSection(s, h, "cluster", body, next); err != nil {
+				return 0, 0, err
+			}
+		case 0x1549a966:
+			// TimecodeScale gives timestamps their meaning; other Info may be tags.
+			if err := hashWebMTimecodeScale(s, h, body, next); err != nil {
+				return 0, 0, err
+			}
+		}
+		pos = next
+	}
+	return tracks, clusters, nil
+}
+
+func hashWebMTimecodeScale(s payloadSource, h *formatPayloadHash, body, end int64) error {
+	for p := body; p < end; {
+		key, value, next, open, err := formatEBMLElement(s, p, end)
+		if err != nil {
+			return err
+		}
+		if open {
+			return ErrInvalidPayload
+		}
+		if key == 0x2ad7b1 {
+			if err := hashFormatSection(s, h, "scale", value, next); err != nil {
+				return err
+			}
+		}
+		p = next
+	}
+	return nil
+}
+
 // Absolute MP4 chunk offsets legitimately change when moov grows. Normalize each
 // to its position in the concatenation of mdat bodies, and reject pointers that
 // no longer address media. The index grows with mdat count, never chunk count.
 type formatMP4MediaRange struct{ start, end, base int64 }
+
+func formatMP4MediaRanges(s payloadSource) ([]formatMP4MediaRange, error) {
+	var ranges []formatMP4MediaRange
+	base := int64(0)
+	for off := int64(0); off < s.size; {
+		kind, body, next, err := formatAtom(s, off, s.size)
+		if err != nil {
+			return nil, err
+		}
+		if kind == "mdat" {
+			if body == next {
+				return nil, ErrInvalidPayload
+			}
+			ranges = append(ranges, formatMP4MediaRange{body, next, base})
+			base += next - body
+		}
+		off = next
+	}
+	return ranges, nil
+}
 
 func hashMP4ChunkOffsets(s payloadSource, h *formatPayloadHash, kind string, start, end int64, mediaRanges []formatMP4MediaRange) error {
 	var b [8]byte

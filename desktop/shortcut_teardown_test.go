@@ -32,7 +32,7 @@ func TestShortcutTeardownIdempotenceAndLateSession(t *testing.T) {
 	if err := s.teardown(ctx, first.Generation); err == nil || !s.check("Ctrl+P").RegisteredByOwner || len(backend.unregistered) != 1 {
 		t.Fatal("late teardown touched newer session on the same page context")
 	}
-	unknown := context.WithValue(ctx, struct{}{}, "unrelated page")
+	unknown := context.WithValue(ctx, testContextKey{}, "unrelated page")
 	if err := s.teardown(unknown, second.Generation); err == nil || !s.check("Ctrl+P").RegisteredByOwner {
 		t.Fatal("unknown page teardown touched current session")
 	}

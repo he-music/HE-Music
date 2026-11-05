@@ -60,8 +60,10 @@ func TestLyricsOptionsBoundsForFont(t *testing.T) {
 func TestLyricsOptionsBoundsForFontRejectsInvalidInput(t *testing.T) {
 	areas := []LyricsBounds{{Width: 1920, Height: 1080}}
 	for _, bounds := range []LyricsBounds{
-		{Width: 639, Height: 180}, {Width: 1401, Height: 180},
-		{X: 10000001, Width: 800, Height: 180}, {Y: -10000001, Width: 800, Height: 180},
+		{Width: 639, Height: 180},
+		{Width: 1401, Height: 180},
+		{X: 10000001, Width: 800, Height: 180},
+		{Y: -10000001, Width: 800, Height: 180},
 	} {
 		if got, err := lyricsBoundsForFont(bounds, 24, areas); err == nil || got != (LyricsBounds{}) {
 			t.Errorf("invalid bounds %+v: got %+v, %v", bounds, got, err)

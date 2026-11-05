@@ -31,7 +31,7 @@ func TestNormalizeSystemFontFamiliesBounds(t *testing.T) {
 
 func TestSystemFontCollectorStopsAtResultLimit(t *testing.T) {
 	collector := newSystemFontCollector()
-	for i := 0; i < maxSystemFontCount; i++ {
+	for i := range maxSystemFontCount {
 		if !collector.collect("Font") && i != maxSystemFontCount-1 {
 			t.Fatalf("collector stopped at %d", i)
 		}
@@ -46,7 +46,7 @@ func TestSystemFontCollectorStopsAtResultLimit(t *testing.T) {
 
 func TestSystemFontCollectorStopsAtScanBudget(t *testing.T) {
 	collector := newSystemFontCollector()
-	for i := 0; i < maxSystemFontScan; i++ {
+	for i := range maxSystemFontScan {
 		if !collector.collect("") && i != maxSystemFontScan-1 {
 			t.Fatalf("collector stopped at scan %d", i)
 		}

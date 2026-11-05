@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+
 	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
@@ -44,6 +45,7 @@ func metadataRegisterTestGrant(t *testing.T, f *NativeFiles, ctx context.Context
 	file.Close()
 	return *ref
 }
+
 func metadataWaitTest(t *testing.T, predicate func() bool) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
@@ -54,6 +56,7 @@ func metadataWaitTest(t *testing.T, predicate func() bool) {
 		time.Sleep(time.Millisecond)
 	}
 }
+
 func TestMetadataStaleRegistrationCannotRemoveNewSession(t *testing.T) {
 	for _, mode := range []string{"cancel", "dedup"} {
 		t.Run(mode, func(t *testing.T) {
@@ -148,6 +151,7 @@ func metadataRetainedPictureBytes(c *metadataCoordinator) int64 {
 	}
 	return total
 }
+
 func TestMetadataCompletedCacheBudgetBeforeRename(t *testing.T) {
 	dir := metadataFixture(t, "mp3")
 	name := filepath.Join(dir, "song.mp3")
@@ -157,7 +161,7 @@ func TestMetadataCompletedCacheBudgetBeforeRename(t *testing.T) {
 	var firstReq MetadataSaveRequest
 	var firstResult MetadataResult
 	limited := false
-	for i := 0; i < 14; i++ {
+	for i := range 14 {
 		title := "bounded cover history"
 		patch := metadata.Patch{Title: &title}
 		if i == 0 {
@@ -211,6 +215,7 @@ func TestMetadataCompletedCacheBudgetBeforeRename(t *testing.T) {
 		t.Fatalf("historic ID wrote again or lost original result: %+v", repeat)
 	}
 }
+
 func TestMetadataRevokeDropsResultsWithoutDroppingActiveIdentity(t *testing.T) {
 	dir := metadataFixture(t, "mp3")
 	f, ctx, epoch, ref := metadataTestService(t, dir)
@@ -275,11 +280,12 @@ func TestMetadataRevokeDropsResultsWithoutDroppingActiveIdentity(t *testing.T) {
 		t.Fatal("grant revoke retained completed metadata without another Save")
 	}
 }
+
 func TestMetadataActiveSaveLimitAndRelease(t *testing.T) {
 	dir := metadataFixture(t, "mp3")
 	source, _ := os.ReadFile(filepath.Join(dir, "song.mp3"))
 	for _, name := range []string{"two.mp3", "three.mp3"} {
-		if err := os.WriteFile(filepath.Join(dir, name), source, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, name), source, 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -383,6 +389,7 @@ func TestMetadataCancelReleasesReservationBeforeWorkerExit(t *testing.T) {
 		t.Fatal("cancelled worker leaked permit or content")
 	}
 }
+
 func TestMetadataCompletedWatchLifetime(t *testing.T) {
 	for _, mode := range []string{"session", "owner"} {
 		t.Run(mode, func(t *testing.T) {

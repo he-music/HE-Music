@@ -16,14 +16,6 @@ type taskbarNativeRequest struct {
 	err       error
 }
 
-// Physical facts belong to a live HWND, rather than to a COM interface or owner.
-// Windows retains this record and the same button IDs across backend reopen.
-type taskbarNativeWindow struct {
-	added     bool
-	explorer  uint64
-	buttonIDs [3]uint32
-}
-
 // All methods run on the UI thread. running covers the entire drain, including
 // completion callbacks, so neither native calls nor callbacks recursively drain.
 type taskbarNativeExecutor struct {
@@ -91,6 +83,7 @@ func (e *taskbarNativeExecutor) submit(s *TaskbarState, done func(error)) error 
 	}
 	return r.err
 }
+
 func (e *taskbarNativeExecutor) close() error {
 	e.ensureWindow()
 	e.active = false
@@ -118,9 +111,11 @@ func (e *taskbarNativeExecutor) close() error {
 	}
 	return r.err
 }
+
 func (e *taskbarNativeExecutor) current(r *taskbarNativeRequest) bool {
 	return e.revision == r.revision && !e.deferredClose && !e.closed
 }
+
 func (e *taskbarNativeExecutor) apply(r *taskbarNativeRequest) error {
 	method := 16
 	if !e.added {
@@ -156,6 +151,7 @@ func (e *taskbarNativeExecutor) apply(r *taskbarNativeRequest) error {
 	e.active = true
 	return nil
 }
+
 func (e *taskbarNativeExecutor) hide() error {
 	e.active = false
 	err := e.invoke(10, TaskbarState{}, true)
@@ -164,6 +160,7 @@ func (e *taskbarNativeExecutor) hide() error {
 	}
 	return err
 }
+
 func (e *taskbarNativeExecutor) retire() error {
 	err := e.hide()
 	// Release may pump messages as well. deferredClose remains set until it returns.
@@ -178,6 +175,7 @@ func (e *taskbarNativeExecutor) retire() error {
 	e.complete(clear, errTaskbarSuperseded)
 	return err
 }
+
 func (e *taskbarNativeExecutor) drain() {
 	if e.running || e.closed {
 		return

@@ -46,84 +46,100 @@ func parseProtocolURL(raw string) (ProtocolIntent, bool) {
 		return intent, false
 	}
 	var id string
-	if strings.HasPrefix(raw, "orpheus://") {
-		encoded := strings.TrimSuffix(strings.TrimPrefix(raw, "orpheus://"), "/")
-		decoded, err := url.PathUnescape(encoded)
-		if err != nil {
-			return intent, false
-		}
-		payload, ok := decodeProtocolBase64(decoded)
-		if !ok {
-			return intent, false
-		}
-		decoder := json.NewDecoder(strings.NewReader(string(payload)))
-		token, err := decoder.Token()
-		if err != nil || token != json.Delim('{') {
-			return intent, false
-		}
-		fields := map[string]string{}
-		for decoder.More() {
-			token, err = decoder.Token()
-			if err != nil {
-				return intent, false
-			}
-			key, ok := token.(string)
-			if !ok || (key != "type" && key != "id" && key != "cmd") {
-				return intent, false
-			}
-			if _, exists := fields[key]; exists {
-				return intent, false
-			}
-			var value string
-			if decoder.Decode(&value) != nil {
-				return intent, false
-			}
-			fields[key] = value
-		}
-		if token, err = decoder.Token(); err != nil || token != json.Delim('}') {
-			return intent, false
-		}
-		if _, err = decoder.Token(); err != io.EOF {
-			return intent, false
-		}
-		if len(fields) != 3 || fields["type"] != "song" || fields["cmd"] != "play" {
-			return intent, false
-		}
-		id = fields["id"]
+	var ok bool
+	switch {
+	case strings.HasPrefix(raw, "orpheus://"):
+		id, ok = parseOrpheusSongID(strings.TrimPrefix(raw, "orpheus://"))
 		intent.Platform = "netease"
-	} else if strings.HasPrefix(raw, "kuwo://") {
-		parsed, err := url.Parse(raw)
-		if err != nil || parsed.Host != "play" || parsed.User != nil || parsed.Path != "" || parsed.Fragment != "" || parsed.Opaque != "" {
-			return intent, false
-		}
-		query, err := url.ParseQuery(parsed.RawQuery)
-		if err != nil || len(query) != 1 || len(query["musicrid0"]) != 1 {
-			return intent, false
-		}
-		payload, ok := decodeProtocolBase64(query["musicrid0"][0])
-		if !ok || !strings.HasPrefix(string(payload), "MUSIC_") {
-			return intent, false
-		}
-		id = strings.TrimPrefix(string(payload), "MUSIC_")
+	case strings.HasPrefix(raw, "kuwo://"):
+		id, ok = parseKuwoSongID(raw)
 		intent.Platform = "kuwo"
-	} else {
-		return intent, false
 	}
-	if len(id) == 0 || len(id) > 16 || id[0] == '0' {
-		return ProtocolIntent{}, false
-	}
-	for _, char := range id {
-		if char < '0' || char > '9' {
-			return ProtocolIntent{}, false
-		}
-	}
-	numeric, err := strconv.ParseUint(id, 10, 64)
-	if err != nil || numeric > 9007199254740991 {
+	if !ok || !validProtocolSongID(id) {
 		return ProtocolIntent{}, false
 	}
 	intent.SongID = id
 	return intent, true
 }
+
+func parseOrpheusSongID(encoded string) (string, bool) {
+	decoded, err := url.PathUnescape(strings.TrimSuffix(encoded, "/"))
+	if err != nil {
+		return "", false
+	}
+	payload, ok := decodeProtocolBase64(decoded)
+	if !ok {
+		return "", false
+	}
+	return decodeOrpheusSong(payload)
+}
+
+func decodeOrpheusSong(payload []byte) (string, bool) {
+	decoder := json.NewDecoder(strings.NewReader(string(payload)))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return "", false
+	}
+	fields := map[string]string{}
+	for decoder.More() {
+		token, err = decoder.Token()
+		if err != nil {
+			return "", false
+		}
+		key, ok := token.(string)
+		if !ok || (key != "type" && key != "id" && key != "cmd") {
+			return "", false
+		}
+		if _, exists := fields[key]; exists {
+			return "", false
+		}
+		var value string
+		if decoder.Decode(&value) != nil {
+			return "", false
+		}
+		fields[key] = value
+	}
+	if token, err = decoder.Token(); err != nil || token != json.Delim('}') {
+		return "", false
+	}
+	if _, err = decoder.Token(); err != io.EOF {
+		return "", false
+	}
+	if len(fields) != 3 || fields["type"] != "song" || fields["cmd"] != "play" {
+		return "", false
+	}
+	return fields["id"], true
+}
+
+func parseKuwoSongID(raw string) (string, bool) {
+	parsed, err := url.Parse(raw)
+	if err != nil || parsed.Host != "play" || parsed.User != nil || parsed.Path != "" || parsed.Fragment != "" || parsed.Opaque != "" {
+		return "", false
+	}
+	query, err := url.ParseQuery(parsed.RawQuery)
+	if err != nil || len(query) != 1 || len(query["musicrid0"]) != 1 {
+		return "", false
+	}
+	payload, ok := decodeProtocolBase64(query["musicrid0"][0])
+	if !ok || !strings.HasPrefix(string(payload), "MUSIC_") {
+		return "", false
+	}
+	return strings.TrimPrefix(string(payload), "MUSIC_"), true
+}
+
+func validProtocolSongID(id string) bool {
+	if len(id) == 0 || len(id) > 16 || id[0] == '0' {
+		return false
+	}
+	for _, char := range id {
+		if char < '0' || char > '9' {
+			return false
+		}
+	}
+	numeric, err := strconv.ParseUint(id, 10, 64)
+	return err == nil && numeric <= 9007199254740991
+}
+
 func decodeProtocolBase64(encoded string) ([]byte, bool) {
 	if encoded == "" || len(encoded) > 1536 || strings.ContainsAny(encoded, "\r\n\t ") {
 		return nil, false
@@ -158,9 +174,11 @@ func (s *protocolState) begin(ctx context.Context) (uint64, error) {
 	s.configured = false
 	return s.epoch, nil
 }
+
 func (s *protocolState) owns(ctx context.Context, epoch uint64) bool {
 	return s.owner == ctx && ctx.Err() == nil && epoch == s.epoch
 }
+
 func (s *protocolState) receive(raw string) {
 	intent, ok := parseProtocolURL(raw)
 	if !ok {
@@ -188,6 +206,7 @@ func (s *protocolState) receive(raw string) {
 	}
 	s.pending = append(s.pending, intent)
 }
+
 func (s *protocolState) drain() []ProtocolIntent {
 	events := []ProtocolIntent{}
 	if s.owner == nil || s.owner.Err() != nil || !s.configured {
@@ -209,6 +228,7 @@ func (s *protocolState) drain() []ProtocolIntent {
 	s.pending = nil
 	return events
 }
+
 func (s *protocolState) sync(ctx context.Context, epoch uint64, schemes []string) (ProtocolStatus, []ProtocolIntent, error) {
 	status := ProtocolStatus{Epoch: s.epoch, Results: []ProtocolResult{}}
 	if !s.owns(ctx, epoch) {
@@ -267,6 +287,7 @@ func (s *protocolState) sync(ctx context.Context, epoch uint64, schemes []string
 	s.configured = true
 	return status, s.drain(), nil
 }
+
 func (s *protocolState) revoke() {
 	if !s.started {
 		return

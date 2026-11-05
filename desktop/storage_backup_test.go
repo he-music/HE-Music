@@ -49,7 +49,7 @@ func TestApplicationBackupRecoveryRollsBackIncompleteAndKeepsCommittedTree(t *te
 			if err := os.Rename(store.root, store.root+".previous"); err != nil {
 				t.Fatal(err)
 			}
-			if err := os.Mkdir(store.root+".import", 0700); err != nil {
+			if err := os.Mkdir(store.root+".import", 0o700); err != nil {
 				t.Fatal(err)
 			}
 			if committed {
@@ -88,8 +88,7 @@ func TestApplicationBackupFailedRollbackFencesOldWritesUntilRecovery(t *testing.
 		}
 		return commitPreferencesResetRename(from, to)
 	}
-	owner, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	owner := t.Context()
 	backup := ApplicationBackup{Format: applicationBackupFormat, Version: 1, Records: []ApplicationStorageRecord{}}
 	if err := store.withContext(owner, func() error { return store.restoreForContext(owner, backup) }); err == nil {
 		t.Fatal("fault was ignored")
@@ -102,8 +101,8 @@ func TestApplicationBackupFailedRollbackFencesOldWritesUntilRecovery(t *testing.
 	}); err == nil {
 		t.Fatal("old page overwrote recovery")
 	}
-	fresh, stop := context.WithCancel(context.Background())
-	defer stop()
+	fresh, cancelFresh := context.WithCancel(t.Context())
+	defer cancelFresh()
 	if err := store.withContext(fresh, func() error {
 		value, err := store.read("renderer", "setting-store")
 		if err != nil || value == nil || value.Value != "old" {

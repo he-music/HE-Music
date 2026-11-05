@@ -8,10 +8,12 @@ import (
 	"unicode/utf8"
 )
 
-const settingsMaxBytes = 1 << 20
-const settingsMaxDepth = 32
-const settingsMaxKeys = 4096
-const settingsFormat = "he-music-renderer-settings"
+const (
+	settingsMaxBytes = 1 << 20
+	settingsMaxDepth = 32
+	settingsMaxKeys  = 4096
+	settingsFormat   = "he-music-renderer-settings"
+)
 
 var errSettingsDocument = errors.New("invalid renderer settings document")
 
@@ -49,63 +51,68 @@ func validateSettingsJSON(data []byte, object bool) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.UseNumber()
 	keys := 0
-	var readValue func(int) error
-	readValue = func(depth int) error {
-		if depth > settingsMaxDepth {
-			return errSettingsDocument
+	if err := readSettingsValue(decoder, 0, object, &keys); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return errSettingsDocument
+	}
+	return nil
+}
+
+func readSettingsValue(decoder *json.Decoder, depth int, object bool, keys *int) error {
+	if depth > settingsMaxDepth {
+		return errSettingsDocument
+	}
+	token, err := decoder.Token()
+	if err != nil {
+		return errSettingsDocument
+	}
+	delim, container := token.(json.Delim)
+	if depth == 0 && object && (!container || delim != '{') {
+		return errSettingsDocument
+	}
+	if !container {
+		return nil
+	}
+	switch delim {
+	case '{':
+		return readSettingsObject(decoder, depth, keys)
+	case '[':
+		for decoder.More() {
+			if err := readSettingsValue(decoder, depth+1, false, keys); err != nil {
+				return err
+			}
 		}
+		return readSettingsEnd(decoder, ']')
+	default:
+		return errSettingsDocument
+	}
+}
+
+func readSettingsObject(decoder *json.Decoder, depth int, keys *int) error {
+	seen := make(map[string]bool)
+	for decoder.More() {
 		token, err := decoder.Token()
 		if err != nil {
 			return errSettingsDocument
 		}
-		delim, container := token.(json.Delim)
-		if depth == 0 && object && (!container || delim != '{') {
+		key, ok := token.(string)
+		*keys += 1
+		if !ok || *keys > settingsMaxKeys || len(key) > 256 || seen[key] || key == "__proto__" || key == "constructor" || key == "prototype" {
 			return errSettingsDocument
 		}
-		if !container {
-			return nil
+		seen[key] = true
+		if err := readSettingsValue(decoder, depth+1, false, keys); err != nil {
+			return err
 		}
-		switch delim {
-		case '{':
-			seen := make(map[string]bool)
-			for decoder.More() {
-				token, err := decoder.Token()
-				if err != nil {
-					return errSettingsDocument
-				}
-				key, ok := token.(string)
-				keys++
-				if !ok || keys > settingsMaxKeys || len(key) > 256 || seen[key] || key == "__proto__" || key == "constructor" || key == "prototype" {
-					return errSettingsDocument
-				}
-				seen[key] = true
-				if err := readValue(depth + 1); err != nil {
-					return err
-				}
-			}
-			end, err := decoder.Token()
-			if err != nil || end != json.Delim('}') {
-				return errSettingsDocument
-			}
-		case '[':
-			for decoder.More() {
-				if err := readValue(depth + 1); err != nil {
-					return err
-				}
-			}
-			end, err := decoder.Token()
-			if err != nil || end != json.Delim(']') {
-				return errSettingsDocument
-			}
-		default:
-			return errSettingsDocument
-		}
-		return nil
 	}
-	if err := readValue(0); err != nil {
-		return err
-	}
-	if _, err := decoder.Token(); err != io.EOF {
+	return readSettingsEnd(decoder, '}')
+}
+
+func readSettingsEnd(decoder *json.Decoder, delim json.Delim) error {
+	end, err := decoder.Token()
+	if err != nil || end != delim {
 		return errSettingsDocument
 	}
 	return nil
@@ -122,15 +129,8 @@ func encodeRendererSettings(settings RendererSettings) ([]byte, error) {
 	return data, nil
 }
 
-func decodeRendererSettings(data []byte) (RendererSettingsDocument, error) {
+func decodeSettingsEnvelope(data []byte, envelope map[string]json.RawMessage) (RendererSettingsDocument, error) {
 	var result RendererSettingsDocument
-	if err := validateSettingsJSON(data, true); err != nil {
-		return result, err
-	}
-	var envelope map[string]json.RawMessage
-	if json.Unmarshal(data, &envelope) != nil {
-		return result, errSettingsDocument
-	}
 	if _, modern := envelope["format"]; modern {
 		if len(envelope) != 3 || json.Unmarshal(data, &result) != nil || result.Format != settingsFormat || result.Version != 1 {
 			return RendererSettingsDocument{}, errSettingsDocument
@@ -140,20 +140,37 @@ func decodeRendererSettings(data []byte) (RendererSettingsDocument, error) {
 				return RendererSettingsDocument{}, errSettingsDocument
 			}
 		}
-	} else {
-		// Known Electron export envelope: discard electron completely, never apply it.
-		for key := range envelope {
-			if key != "version" && key != "timestamp" && key != "renderer" && key != "electron" {
-				return result, errSettingsDocument
-			}
-		}
-		var version string
-		var timestamp json.Number
-		if json.Unmarshal(envelope["version"], &version) != nil || version == "" || json.Unmarshal(envelope["timestamp"], &timestamp) != nil || timestamp == "" {
+		return result, nil
+	}
+	// Known Electron export envelope: discard electron completely, never apply it.
+	for key := range envelope {
+		if key != "version" && key != "timestamp" && key != "renderer" && key != "electron" {
 			return result, errSettingsDocument
 		}
-		result.Format, result.Version = settingsFormat, 1
 	}
+	var version string
+	var timestamp json.Number
+	if json.Unmarshal(envelope["version"], &version) != nil || version == "" || json.Unmarshal(envelope["timestamp"], &timestamp) != nil || timestamp == "" {
+		return result, errSettingsDocument
+	}
+	result.Format, result.Version = settingsFormat, 1
+	return result, nil
+}
+
+func decodeRendererSettings(data []byte) (RendererSettingsDocument, error) {
+	var result RendererSettingsDocument
+	if err := validateSettingsJSON(data, true); err != nil {
+		return result, err
+	}
+	var envelope map[string]json.RawMessage
+	if json.Unmarshal(data, &envelope) != nil {
+		return result, errSettingsDocument
+	}
+	decoded, err := decodeSettingsEnvelope(data, envelope)
+	if err != nil {
+		return result, err
+	}
+	result = decoded
 	var stores map[string]json.RawMessage
 	if json.Unmarshal(envelope["renderer"], &stores) != nil || len(stores) != 2 {
 		return RendererSettingsDocument{}, errSettingsDocument

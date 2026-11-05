@@ -15,6 +15,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/egoist/mygo"
+
 	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
@@ -28,8 +29,10 @@ const (
 	scanLifetime         = 5 * time.Minute
 )
 
-var errFilesScan = errors.New("invalid or expired file operation")
-var errFilesScanCursor = errors.New("invalid scan cursor")
+var (
+	errFilesScan       = errors.New("invalid or expired file operation")
+	errFilesScanCursor = errors.New("invalid scan cursor")
+)
 
 type ScanOperation struct {
 	OperationID string `json:"operationId"`
@@ -185,6 +188,7 @@ func (s *nativeFilesState) scanJob(ctx context.Context, epoch uint64, id string)
 func (f *NativeFiles) ReadScanPage(ctx context.Context, epoch uint64, operationID, cursor string) (ScanPage, error) {
 	return f.state.readScanPage(ctx, epoch, operationID, cursor)
 }
+
 func (s *nativeFilesState) readScanPage(ctx context.Context, epoch uint64, id, cursor string) (ScanPage, error) {
 	job, err := s.scanJob(ctx, epoch, id)
 	if err != nil {
@@ -201,7 +205,7 @@ func (s *nativeFilesState) readScanPage(ctx context.Context, epoch uint64, id, c
 	}
 	page := ScanPage{OperationID: id, Entries: []ScanEntry{}, Issues: []ScanIssue{}}
 drain:
-	for n := 0; n < scanPageSize; n++ {
+	for range scanPageSize {
 		select {
 		case event, ok := <-job.queue:
 			if !ok {
@@ -239,6 +243,7 @@ drain:
 func (f *NativeFiles) CancelFileOperation(ctx context.Context, epoch uint64, operationID string) error {
 	return f.state.cancelScan(ctx, epoch, operationID)
 }
+
 func (s *nativeFilesState) cancelScan(ctx context.Context, epoch uint64, id string) error {
 	job, err := s.scanJob(ctx, epoch, id)
 	if err != nil {
@@ -259,6 +264,7 @@ func (j *fileScan) emit(event scanEvent) bool {
 		return false
 	}
 }
+
 func (j *fileScan) issue(path, code string) bool {
 	if j.loggedIssues < 200 {
 		log.Printf("本地音乐扫描提示：文件=%q 原因=%s", path, code)
@@ -266,6 +272,7 @@ func (j *fileScan) issue(path, code string) bool {
 	}
 	return j.emit(scanEvent{issue: &ScanIssue{RelativePath: path, Code: code}})
 }
+
 func (j *fileScan) run() {
 	defer close(j.finished)
 	defer j.releaseWorker()
@@ -323,59 +330,7 @@ func (j *fileScan) walk(relative string, depth int, items *int, bytes *int64) bo
 		}
 		entries, readErr := file.ReadDir(scanPageSize)
 		for _, entry := range entries {
-			if strings.HasPrefix(entry.Name(), metadataPrivatePrefix) || strings.HasPrefix(entry.Name(), downloadPrivatePrefix) {
-				continue
-			}
-			if j.ctx.Err() != nil {
-				return false
-			}
-			if *items >= scanMaxItems {
-				j.issue(relative, "item-limit")
-				return false
-			}
-			*items++
-			rel := entry.Name()
-			if relative != "" {
-				rel = relative + "/" + rel
-			}
-			if validateLocalRelativePath(rel) != nil {
-				if !j.issue(rel, "path") {
-					return false
-				}
-				continue
-			}
-			info, err := root.Lstat(rel)
-			if err != nil {
-				if !j.issue(rel, "stat") {
-					return false
-				}
-				continue
-			}
-			if info.Mode()&os.ModeSymlink != 0 {
-				if !j.issue(rel, "symlink") {
-					return false
-				}
-				continue
-			}
-			if info.IsDir() {
-				if depth >= scanMaxDepth {
-					if !j.issue(rel, "depth-limit") {
-						return false
-					}
-					continue
-				}
-				if !j.walk(rel, depth+1, items, bytes) {
-					return false
-				}
-				continue
-			}
-			if !info.Mode().IsRegular() {
-				if !j.issue(rel, "special-file") {
-					return false
-				}
-				continue
-			}
-			if !j.scanFile(rel, entry.Name(), bytes) {
+			if !j.scanEntry(relative, depth, entry, items, bytes) {
 				return false
 			}
 		}
@@ -386,6 +341,44 @@ func (j *fileScan) walk(relative string, depth int, items *int, bytes *int64) bo
 			return true
 		}
 	}
+}
+
+func (j *fileScan) scanEntry(relative string, depth int, entry os.DirEntry, items *int, bytes *int64) bool {
+	if strings.HasPrefix(entry.Name(), metadataPrivatePrefix) || strings.HasPrefix(entry.Name(), downloadPrivatePrefix) {
+		return true
+	}
+	if j.ctx.Err() != nil {
+		return false
+	}
+	if *items >= scanMaxItems {
+		j.issue(relative, "item-limit")
+		return false
+	}
+	*items++
+	rel := entry.Name()
+	if relative != "" {
+		rel = relative + "/" + rel
+	}
+	if validateLocalRelativePath(rel) != nil {
+		return j.issue(rel, "path")
+	}
+	info, err := j.lease.handle.root.Lstat(rel)
+	if err != nil {
+		return j.issue(rel, "stat")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return j.issue(rel, "symlink")
+	}
+	if info.IsDir() {
+		if depth >= scanMaxDepth {
+			return j.issue(rel, "depth-limit")
+		}
+		return j.walk(rel, depth+1, items, bytes)
+	}
+	if !info.Mode().IsRegular() {
+		return j.issue(rel, "special-file")
+	}
+	return j.scanFile(rel, entry.Name(), bytes)
 }
 
 type scanReaderAt struct {
@@ -452,10 +445,7 @@ func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 	}
 	info = boundedScanInfo(info)
 	rememberLibraryMetadata(j.lease.handle.canonical, relative, before, info)
-	if !j.emit(scanEvent{entry: &ScanEntry{Ref: *ref, RelativePath: relative, Filename: filename, Size: before.Size(), Metadata: info}}) {
-		return false
-	}
-	return true
+	return j.emit(scanEvent{entry: &ScanEntry{Ref: *ref, RelativePath: relative, Filename: filename, Size: before.Size(), Metadata: info}})
 }
 
 // Scan metadata is a bounded display view, never an editable full-tag snapshot.

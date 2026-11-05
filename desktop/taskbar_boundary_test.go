@@ -23,6 +23,7 @@ func (b *boundaryTaskbar) sync(TaskbarState) error {
 	}
 	return nil
 }
+
 func (b *boundaryTaskbar) clear() error {
 	b.clears++
 	if b.clearEnter != nil {
@@ -45,6 +46,7 @@ func TestTaskbarShutdownFenceReentrantBeginDuringClear(t *testing.T) {
 		t.Fatalf("old shutdown took new owner: backend=%p handle=%d state=%+v closes=%d", c.backend, c.handle, c.state, backend.closes)
 	}
 }
+
 func TestTaskbarRebuildFenceReentrantBeginOnError(t *testing.T) {
 	backend := &boundaryTaskbar{}
 	var rebuild func()

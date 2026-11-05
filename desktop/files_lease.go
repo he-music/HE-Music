@@ -201,7 +201,7 @@ func validateLocalRelativePath(path string) error {
 	if strings.HasPrefix(path, "/") || strings.HasSuffix(path, "/") || filepathVolumeName(path) != "" {
 		return errFilesPath
 	}
-	for _, part := range strings.Split(path, "/") {
+	for part := range strings.SplitSeq(path, "/") {
 		if part == "" || part == "." || part == ".." {
 			return errFilesPath
 		}
@@ -318,38 +318,18 @@ func openGrantedRegularInfo(lease *directoryLease, relativePath string) (*os.Fil
 	if err := validateLocalRelativePath(relativePath); err != nil {
 		return nil, nil, nil, err
 	}
-	if lease == nil || lease.released.Load() || lease.Context().Err() != nil || lease.handle == nil || lease.handle.root == nil || lease.handle.retired.Load() {
+	if !validGrantedLease(lease) {
 		return nil, nil, nil, errFilesLease
 	}
-	parent := lease.handle.root
-	var pinned []*os.Root
+	parts := strings.Split(relativePath, "/")
+	parent, pinned, ancestors, err := pinGrantedParents(lease.handle.root, parts)
 	defer func() {
 		for _, root := range pinned {
 			_ = root.Close()
 		}
 	}()
-	type ancestor struct {
-		path string
-		info os.FileInfo
-	}
-	var ancestors []ancestor
-	parts := strings.Split(relativePath, "/")
-	for index, part := range parts[:len(parts)-1] {
-		before, err := parent.Lstat(part)
-		if err != nil || !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
-			return nil, nil, nil, errFilesPath
-		}
-		next, err := parent.OpenRoot(part)
-		if err != nil {
-			return nil, nil, nil, errFilesPath
-		}
-		pinned = append(pinned, next)
-		after, err := next.Stat(".")
-		if err != nil || !os.SameFile(before, after) {
-			return nil, nil, nil, errFilesChanged
-		}
-		ancestors = append(ancestors, ancestor{path: strings.Join(parts[:index+1], "/"), info: after})
-		parent = next
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	parentInfo, err := parent.Stat(".")
 	if err != nil {
@@ -375,20 +355,60 @@ func openGrantedRegularInfo(lease *directoryLease, relativePath string) (*os.Fil
 	// Recheck the route from the granted Root to each pinned ancestor and leaf.
 	// This detects substitutions around open; it cannot exclude external changes
 	// after this check and makes no filesystem-wide compare-and-swap promise.
-	for _, item := range ancestors {
-		current, err := lease.handle.root.Lstat(item.path)
-		if err != nil || current.Mode()&os.ModeSymlink != 0 || !os.SameFile(current, item.info) {
-			return reject(errFilesChanged)
-		}
-	}
-	current, err := lease.handle.root.Lstat(relativePath)
-	if err != nil || !current.Mode().IsRegular() || !sameLocalFileInfo(current, after) {
-		return reject(errFilesChanged)
+	if err := checkGrantedRoute(lease.handle.root, relativePath, ancestors, after); err != nil {
+		return reject(err)
 	}
 	if lease.released.Load() || lease.Context().Err() != nil || lease.handle.retired.Load() {
 		return reject(errFilesLease)
 	}
 	return file, after, parentInfo, nil
+}
+
+func validGrantedLease(lease *directoryLease) bool {
+	return lease != nil && !lease.released.Load() && lease.Context().Err() == nil && lease.handle != nil && lease.handle.root != nil && !lease.handle.retired.Load()
+}
+
+type grantedAncestor struct {
+	path string
+	info os.FileInfo
+}
+
+// Return every opened Root even on failure so the caller always closes it.
+func pinGrantedParents(parent *os.Root, parts []string) (*os.Root, []*os.Root, []grantedAncestor, error) {
+	var pinned []*os.Root
+	var ancestors []grantedAncestor
+	for index, part := range parts[:len(parts)-1] {
+		before, err := parent.Lstat(part)
+		if err != nil || !before.IsDir() || before.Mode()&os.ModeSymlink != 0 {
+			return parent, pinned, ancestors, errFilesPath
+		}
+		next, err := parent.OpenRoot(part)
+		if err != nil {
+			return parent, pinned, ancestors, errFilesPath
+		}
+		pinned = append(pinned, next)
+		after, err := next.Stat(".")
+		if err != nil || !os.SameFile(before, after) {
+			return parent, pinned, ancestors, errFilesChanged
+		}
+		ancestors = append(ancestors, grantedAncestor{path: strings.Join(parts[:index+1], "/"), info: after})
+		parent = next
+	}
+	return parent, pinned, ancestors, nil
+}
+
+func checkGrantedRoute(root *os.Root, relativePath string, ancestors []grantedAncestor, expected os.FileInfo) error {
+	for _, item := range ancestors {
+		current, err := root.Lstat(item.path)
+		if err != nil || current.Mode()&os.ModeSymlink != 0 || !os.SameFile(current, item.info) {
+			return errFilesChanged
+		}
+	}
+	current, err := root.Lstat(relativePath)
+	if err != nil || !current.Mode().IsRegular() || !sameLocalFileInfo(current, expected) {
+		return errFilesChanged
+	}
+	return nil
 }
 
 func sameLocalFileInfo(left, right os.FileInfo) bool {
@@ -447,9 +467,7 @@ func (h *directoryHandle) closeWhenIdle(s *nativeFilesState) {
 	if h.leaseCount.Load() != 0 || !h.closed.CompareAndSwap(false, true) {
 		return
 	}
-	s.cleanup.Add(1)
-	go func() {
-		defer s.cleanup.Done()
+	s.cleanup.Go(func() {
 		_ = h.root.Close()
-	}()
+	})
 }

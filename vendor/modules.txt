@@ -50,6 +50,9 @@ github.com/tommyo123/mtag/flac
 github.com/tommyo123/mtag/id3v1
 github.com/tommyo123/mtag/id3v2
 github.com/tommyo123/mtag/mp4
+# golang.org/x/crypto v0.57.0
+## explicit; go 1.26.0
+golang.org/x/crypto/tea
 # golang.org/x/net v0.59.0
 ## explicit; go 1.26.0
 golang.org/x/net/publicsuffix

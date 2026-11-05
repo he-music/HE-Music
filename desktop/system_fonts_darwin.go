@@ -63,7 +63,7 @@ func enumerateSystemFontFamilies() ([]string, error) {
 		return nil, errors.New("CoreText returned an invalid font family count")
 	}
 	fonts := make([]string, 0, boundedMin(int(count), maxSystemFontCount))
-	for i := int64(0); i < count; i++ {
+	for i := range count {
 		value := cachedCoreText.arrayValue(array, i)
 		if value == 0 {
 			continue

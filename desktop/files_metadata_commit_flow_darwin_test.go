@@ -19,9 +19,7 @@ func TestMetadataSavePublishesReferenceWhenDirectoryDurabilityIsUnsupported(t *t
 		t.Run(map[bool]string{false: "unsupported", true: "io-failure"}[ioFailure], func(t *testing.T) {
 			dir := metadataFixture(t, "mp3")
 			original, err := os.ReadFile(filepath.Join(dir, "song.mp3"))
-			if err != nil {
-				t.Fatal(err)
-			}
+			requireTestNoError(t, err)
 			f, ctx, epoch, ref := metadataTestService(t, dir)
 			read := f.ReadMetadata(ctx, epoch, ref)
 			if read.Code != "ok" {

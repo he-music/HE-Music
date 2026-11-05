@@ -178,57 +178,7 @@ func TestSystemMediaArtworkRejectsInactiveTargetsBeforeValidation(t *testing.T) 
 	for _, name := range cases {
 		t.Run(name, func(t *testing.T) {
 			s, media, power, ctx, gen := newSystemMediaArtworkTest(t)
-			trackID, revision := s.trackID, uint64(1)
-			switch name {
-			case "owner":
-				ctx = context.WithValue(ctx, struct{}{}, 1)
-			case "generation":
-				gen++
-			case "revision":
-				revision++
-			case "zero-revision":
-				revision = 0
-			case "track":
-				trackID = "different-track"
-			case "empty-track":
-				trackID = ""
-			case "not-ready":
-				s.valid = func(context.Context) bool { return false }
-			case "cancelled":
-				cancelled, cancel := context.WithCancel(ctx)
-				s.owner, ctx = cancelled, cancelled
-				cancel()
-			case "clear":
-				if err := s.clear(ctx, gen, 2); err != nil {
-					t.Fatal(err)
-				}
-			case "disabled":
-				if _, err := s.configure(ctx, gen, false, true); err != nil {
-					t.Fatal(err)
-				}
-			case "teardown":
-				if err := s.teardown(ctx, gen); err != nil {
-					t.Fatal(err)
-				}
-			case "revoke":
-				s.revoke()
-			case "new-song":
-				track := systemMediaTestTrack()
-				track.ID, track.Title = "new-song", "New synthetic song"
-				if err := s.set(ctx, gen, 2, track); err != nil {
-					t.Fatal(err)
-				}
-			case "new-owner":
-				s.revoke()
-				newOwner := context.WithValue(ctx, struct{}{}, 1)
-				status, err := s.configure(newOwner, 0, true, true)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if err := s.set(newOwner, status.Generation, 1, systemMediaTestTrack()); err != nil {
-					t.Fatal(err)
-				}
-			}
+			ctx, gen, revision, trackID := inactiveSystemMediaArtworkTarget(t, s, name, ctx, gen)
 			before := media.info
 			sets, reads, subscriptions, offs, clears := len(media.sets), media.infoReads, len(media.callbacks), media.offs, media.clears
 			acquires, releases := power.next, power.releases
@@ -246,6 +196,58 @@ func TestSystemMediaArtworkRejectsInactiveTargetsBeforeValidation(t *testing.T) 
 			}
 		})
 	}
+}
+
+func inactiveSystemMediaArtworkTarget(t *testing.T, s *systemMediaState, name string, ctx context.Context, gen uint64) (context.Context, uint64, uint64, string) {
+	t.Helper()
+	trackID, revision := s.trackID, uint64(1)
+	switch name {
+	case "owner":
+		ctx = context.WithValue(ctx, testContextKey{}, 1)
+	case "generation":
+		gen++
+	case "revision":
+		revision++
+	case "zero-revision":
+		revision = 0
+	case "track":
+		trackID = "different-track"
+	case "empty-track":
+		trackID = ""
+	case "not-ready":
+		s.valid = func(context.Context) bool { return false }
+	case "cancelled":
+		cancelled, cancel := context.WithCancel(ctx)
+		s.owner, ctx = cancelled, cancelled
+		cancel()
+	case "clear":
+		requireTestNoError(t, s.clear(ctx, gen, 2))
+	case "disabled":
+		if _, err := s.configure(ctx, gen, false, true); err != nil {
+			t.Fatal(err)
+		}
+	case "teardown":
+		requireTestNoError(t, s.teardown(ctx, gen))
+	case "revoke":
+		s.revoke()
+	case "new-song":
+		track := systemMediaTestTrack()
+		track.ID, track.Title = "new-song", "New synthetic song"
+		if err := s.set(ctx, gen, 2, track); err != nil {
+			t.Fatal(err)
+		}
+	case "new-owner":
+		s.revoke()
+		newOwner := context.WithValue(ctx, testContextKey{}, 1)
+		status, err := s.configure(newOwner, 0, true, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.set(newOwner, status.Generation, 1, systemMediaTestTrack()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return ctx, gen, revision, trackID
 }
 
 func TestSystemMediaArtworkBackendNotShowingCannotResurrect(t *testing.T) {

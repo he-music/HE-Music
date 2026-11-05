@@ -14,10 +14,9 @@ func TestNetworkProxyOwnerChecksBeforeAndAfterRequest(t *testing.T) {
 		t.Fatal("test applied settings")
 		return false, false, "", nil
 	})
-	owner, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	foreign, stop := context.WithCancel(context.Background())
-	defer stop()
+	owner := t.Context()
+	foreign, cancelForeign := context.WithCancel(t.Context())
+	defer cancelForeign()
 	ready := true
 	calls := 0
 	denied := errors.New("owner replaced")

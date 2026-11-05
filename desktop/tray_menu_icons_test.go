@@ -61,24 +61,16 @@ func TestTrayMenuIconsFollowPlaybackAndRecovery(t *testing.T) {
 	for _, playing := range []bool{false, true} {
 		for _, liked := range []bool{false, true} {
 			for _, mode := range []TrayPlayMode{TrayModeRepeat, TrayModeRepeatOnce, TrayModeShuffle} {
-				state := trayMenuState{ready: true, hasSong: true, playing: playing, canHide: true,
+				state := trayMenuState{
+					ready: true, hasSong: true, playing: playing, canHide: true,
 					lyricsAvailable: true, lyricsVisible: true, icons: icons,
-					playback: TrayPlaybackState{HasSong: true, Playing: playing, Liked: liked,
-						CanFavorite: true, CanSetMode: true, PlayMode: mode}}
-				items := buildTrayMenuItems(state, nil)
-				for _, item := range items {
-					if item.Type != mygo.MenuItemSeparator && item.Icon == nil {
-						t.Fatalf("missing icon on %q", item.Label)
-					}
-					for _, child := range item.Submenu {
-						if child.Icon == nil || child.Icon != icons.get(string(trayModeForMenuLabel(child.Label)), false) {
-							t.Fatalf("wrong playback mode icon on %q", child.Label)
-						}
-						if child.Checked && item.Icon != child.Icon {
-							t.Fatal("playback mode menu icon does not match its selection")
-						}
-					}
+					playback: TrayPlaybackState{
+						HasSong: true, Playing: playing, Liked: liked,
+						CanFavorite: true, CanSetMode: true, PlayMode: mode,
+					},
 				}
+				items := buildTrayMenuItems(state, nil)
+				assertTrayMenuItemIcons(t, items, icons)
 				playLabel, playIcon := "播放", "play"
 				if playing {
 					playLabel, playIcon = "暂停", "pause"
@@ -123,10 +115,29 @@ func TestTrayMenuIconsFollowPlaybackAndRecovery(t *testing.T) {
 	}
 }
 
+func assertTrayMenuItemIcons(t *testing.T, items []*mygo.MenuItem, icons *trayMenuIcons) {
+	t.Helper()
+	for _, item := range items {
+		if item.Type != mygo.MenuItemSeparator && item.Icon == nil {
+			t.Fatalf("missing icon on %q", item.Label)
+		}
+		for _, child := range item.Submenu {
+			if child.Icon == nil || child.Icon != icons.get(string(trayModeForMenuLabel(child.Label)), false) {
+				t.Fatalf("wrong playback mode icon on %q", child.Label)
+			}
+			if child.Checked && item.Icon != child.Icon {
+				t.Fatal("playback mode menu icon does not match its selection")
+			}
+		}
+	}
+}
+
 func TestTrayMenuThemeChangeKeepsCommandOwner(t *testing.T) {
 	light, dark := trayMenuIcons{}, trayMenuIcons{}
-	captured := trayMenuState{ready: true, icons: &light,
-		playback: TrayPlaybackState{Epoch: 1, Revision: 1, TrackKey: "song"}}
+	captured := trayMenuState{
+		ready: true, icons: &light,
+		playback: TrayPlaybackState{Epoch: 1, Revision: 1, TrackKey: "song"},
+	}
 	current := captured
 	current.icons = &dark
 	if captured == current {

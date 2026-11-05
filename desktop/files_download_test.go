@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/egoist/mygo"
+
 	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
@@ -29,11 +30,12 @@ func downloadMP3() []byte {
 	copy(frame, []byte{255, 251, 144, 0})
 	return bytes.Repeat(frame, 2)
 }
+
 func downloadCRC(data []byte, width uint, poly uint32) uint32 {
 	var crc uint32
 	for _, b := range data {
 		crc ^= uint32(b) << (width - 8)
-		for i := 0; i < 8; i++ {
+		for range 8 {
 			if crc&(1<<(width-1)) != 0 {
 				crc = crc<<1 ^ poly
 			} else {
@@ -43,6 +45,7 @@ func downloadCRC(data []byte, width uint, poly uint32) uint32 {
 	}
 	return crc & ((1 << width) - 1)
 }
+
 func downloadFLAC() []byte {
 	info := make([]byte, 34)
 	binary.BigEndian.PutUint16(info[:2], 16)
@@ -55,6 +58,7 @@ func downloadFLAC() []byte {
 	frame = append(frame, byte(crc>>8), byte(crc))
 	return append(append([]byte("fLaC\x80\x00\x00\x22"), info...), frame...)
 }
+
 func downloadFixture(t *testing.T) (*fileTestActor, context.Context, uint64, *downloadCoordinator, string, string) {
 	t.Helper()
 	a, ctx, epoch, lease, dir := grantedLeaseFixture(t)
@@ -82,6 +86,7 @@ func downloadFixture(t *testing.T) (*fileTestActor, context.Context, uint64, *do
 	})
 	return a, ctx, epoch, c, token, dir
 }
+
 func downloadReq(t *testing.T, token, filename string) DownloadRequest {
 	t.Helper()
 	id, err := newDirectoryToken()
@@ -90,6 +95,7 @@ func downloadReq(t *testing.T, token, filename string) DownloadRequest {
 	}
 	return DownloadRequest{OperationID: id, GrantToken: token, URL: "https://audio.invalid/audio?secret=never-return", Filename: filename}
 }
+
 func downloadStart(t *testing.T, a *fileTestActor, ctx context.Context, epoch uint64, c *downloadCoordinator, req DownloadRequest) *downloadJob {
 	t.Helper()
 	if _, err := a.state.startDownload(ctx, epoch, req); err != nil {
@@ -100,6 +106,7 @@ func downloadStart(t *testing.T, a *fileTestActor, ctx context.Context, epoch ui
 	c.mu.Unlock()
 	return j
 }
+
 func downloadWait(t *testing.T, j *downloadJob) {
 	t.Helper()
 	select {
@@ -108,9 +115,11 @@ func downloadWait(t *testing.T, j *downloadJob) {
 		t.Fatal("download did not clean up")
 	}
 }
+
 func downloadResponse(data []byte, total int64) *http.Response {
 	return &http.Response{StatusCode: 200, Header: make(http.Header), Body: io.NopCloser(bytes.NewReader(data)), ContentLength: total}
 }
+
 func assertDownloadClean(t *testing.T, dir string) {
 	t.Helper()
 	entries, err := os.ReadDir(dir)
@@ -123,6 +132,7 @@ func assertDownloadClean(t *testing.T, dir string) {
 		}
 	}
 }
+
 func TestDownloadSuccessPayloadAndIdempotency(t *testing.T) {
 	for _, format := range []string{"mp3", "flac"} {
 		t.Run(format, func(t *testing.T) {
@@ -179,6 +189,7 @@ func TestDownloadSuccessPayloadAndIdempotency(t *testing.T) {
 		})
 	}
 }
+
 func TestDownloadConflictAndSameNameCompetition(t *testing.T) {
 	for _, existing := range []bool{false, true} {
 		t.Run(map[bool]string{false: "competition", true: "existing"}[existing], func(t *testing.T) {
@@ -186,7 +197,7 @@ func TestDownloadConflictAndSameNameCompetition(t *testing.T) {
 			data := downloadMP3()
 			old := []byte("do not overwrite")
 			if existing {
-				if err := os.WriteFile(filepath.Join(dir, "same.mp3"), old, 0600); err != nil {
+				if err := os.WriteFile(filepath.Join(dir, "same.mp3"), old, 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -238,17 +249,6 @@ func TestDownloadConflictAndSameNameCompetition(t *testing.T) {
 	}
 }
 
-type downloadZeros struct{ remaining int64 }
-
-func (z *downloadZeros) Read(p []byte) (int, error) {
-	if z.remaining == 0 {
-		return 0, io.EOF
-	}
-	n := min(int64(len(p)), z.remaining)
-	clear(p[:n])
-	z.remaining -= n
-	return int(n), nil
-}
 func TestDownloadHTTPAndPayloadHardGates(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -296,16 +296,19 @@ type downloadBlockedBody struct {
 func newDownloadBlockedBody() *downloadBlockedBody {
 	return &downloadBlockedBody{read: make(chan struct{}), closed: make(chan struct{}), releaseClose: make(chan struct{})}
 }
+
 func (b *downloadBlockedBody) Read([]byte) (int, error) {
 	b.readOnce.Do(func() { close(b.read) })
 	<-b.closed
 	return 0, context.Canceled
 }
+
 func (b *downloadBlockedBody) Close() error {
 	b.closeOnce.Do(func() { close(b.closed) })
 	<-b.releaseClose
 	return nil
 }
+
 func TestDownloadCancelRevokeHoldPermitUntilCleanup(t *testing.T) {
 	for _, revoke := range []bool{false, true} {
 		t.Run(map[bool]string{false: "cancel", true: "revoke"}[revoke], func(t *testing.T) {
@@ -378,6 +381,7 @@ func TestDownloadCancelRevokeHoldPermitUntilCleanup(t *testing.T) {
 		})
 	}
 }
+
 func TestDownloadValidationAndRedirect(t *testing.T) {
 	for _, name := range []string{"../a.mp3", "a/b.mp3", "a\\b.mp3", "a:1.mp3", "CON.mp3", "CON .mp3", "COM¹.mp3", "LPT².flac", "NUL.flac", ".hidden.mp3", "x\x00.mp3", "x?.mp3", "a.mp3 ", "a\n.mp3"} {
 		if downloadFilename(name) {
@@ -594,11 +598,11 @@ func TestDownloadNeverReplacesDirectoryOrSymlink(t *testing.T) {
 			target := filepath.Join(dir, "special.mp3")
 			protected := filepath.Join(t.TempDir(), "protected.mp3")
 			original := []byte("private fixture must remain intact")
-			if err := os.WriteFile(protected, original, 0600); err != nil {
+			if err := os.WriteFile(protected, original, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			if kind == "directory" {
-				if err := os.Mkdir(target, 0700); err != nil {
+				if err := os.Mkdir(target, 0o700); err != nil {
 					t.Fatal(err)
 				}
 			} else {

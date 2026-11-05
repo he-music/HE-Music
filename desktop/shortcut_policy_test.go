@@ -104,9 +104,9 @@ func TestShortcutReplaceFeedbackAndOwnership(t *testing.T) {
 	if !reflect.DeepEqual(got, want) || status.Results[5].Error != "system denied registration" {
 		t.Fatalf("unexpected feedback: %+v", status)
 	}
-	if !s.check("Command+KeyP").RegisteredByOwner || s.check("Alt+Z").RegisteredByOwner || s.check("Bogus").Error == "" {
-		t.Fatal("check must normalize and report service ownership only")
-	}
+	requireTestEqual(t, s.check("Command+KeyP").RegisteredByOwner, true)
+	requireTestEqual(t, s.check("Alt+Z").RegisteredByOwner, false)
+	requireTestNotEqual(t, s.check("Bogus").Error, "")
 	old := backend.callbacks["Super+P"]
 	old()
 	if len(*events) != 1 || (*events)[0].Generation != status.Generation {
@@ -177,7 +177,7 @@ func TestShortcutRejectsUnknownAndCanceledOwners(t *testing.T) {
 	s, backend, events := newShortcutTestState()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	unknown := context.WithValue(ctx, struct{}{}, "unknown page")
+	unknown := context.WithValue(ctx, testContextKey{}, "unknown page")
 	eligible := ctx
 	s.valid = func(caller context.Context) bool { return caller == eligible }
 	bindings := []ShortcutBinding{{ShortcutPlayOrPause, "Ctrl+P"}}
@@ -226,8 +226,10 @@ func TestShortcutDuplicatePolicyReservesFirstOccurrence(t *testing.T) {
 	s, backend, _ := newShortcutTestState()
 	backend.fail["Ctrl+P"] = errors.New("occupied")
 	status, err := s.replace(context.Background(), 0, true, []ShortcutBinding{
-		{ShortcutPlayOrPause, ""}, {ShortcutPlayOrPause, "Ctrl+Q"},
-		{ShortcutPlayNext, "Ctrl+P"}, {ShortcutPlayPrev, "Control+KeyP"},
+		{ShortcutPlayOrPause, ""},
+		{ShortcutPlayOrPause, "Ctrl+Q"},
+		{ShortcutPlayNext, "Ctrl+P"},
+		{ShortcutPlayPrev, "Control+KeyP"},
 	})
 	if err != nil || status.Results[1].Status != "duplicate-action" || status.Results[3].Status != "duplicate-accelerator" || len(backend.callbacks) != 0 {
 		t.Fatalf("first occurrence must win even if empty/registration failed: %+v %v", status, err)

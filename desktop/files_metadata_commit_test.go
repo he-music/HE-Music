@@ -46,7 +46,7 @@ func TestMetadataCommitReplacementKeepsIndependentBackup(t *testing.T) {
 	for name, content := range map[string]string{
 		"original": "old audio", "backup": "old audio", "work": "new tags and audio",
 	} {
-		file, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0600)
+		file, err := root.OpenFile(name, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +96,7 @@ func TestMetadataCommitReplacementKeepsIndependentBackup(t *testing.T) {
 
 func TestMetadataCommitRenameRemainsRootConfined(t *testing.T) {
 	directory := t.TempDir()
-	if err := os.Mkdir(filepath.Join(directory, "grant"), 0700); err != nil {
+	if err := os.Mkdir(filepath.Join(directory, "grant"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	root, err := os.OpenRoot(filepath.Join(directory, "grant"))
@@ -104,10 +104,10 @@ func TestMetadataCommitRenameRemainsRootConfined(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer root.Close()
-	if err := os.WriteFile(filepath.Join(directory, "outside"), []byte("untouched"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "outside"), []byte("untouched"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(directory, "grant", "work"), []byte("staged"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "grant", "work"), []byte("staged"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := metadataPrepareCommitDirectory(root); err != nil {

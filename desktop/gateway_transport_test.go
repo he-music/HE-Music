@@ -38,7 +38,7 @@ func TestGatewayActualProxyRoutesAPIAndMediaDynamically(t *testing.T) {
 				t.Errorf("unexpected target %s", r.Host)
 			}
 			if r.Host == "api.invalid" && r.URL.Path == "/base/cover" {
-				http.Redirect(w, r, "http://media.invalid/art", 302)
+				http.Redirect(w, r, "http://media.invalid/art", http.StatusFound)
 				return
 			}
 			if r.Host == "media.invalid" && r.Header.Get("Authorization") != "" {

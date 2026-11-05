@@ -1,4 +1,5 @@
 import { computed, shallowRef } from "vue";
+import { audioOutputFormat } from "./audioSource";
 import type {
   DownloadMetadata,
   DownloadOperation,
@@ -48,7 +49,7 @@ export function localDownloadSource(source: LocalDownloadSource): LocalDownloadS
     name: source.name,
     links: Object.freeze(
       source.links
-        .filter((link) => validLocalDownloadFormat(link.format))
+        .filter((link) => validLocalDownloadFormat(audioOutputFormat(source.platform, link.format)))
         .map(({ name, quality, format, size }) => Object.freeze({ name, quality, format, size })),
     ),
   });
@@ -609,7 +610,7 @@ export class LocalDownloadSession {
     return (
       !!link &&
       validLocalDownloadFormat(format) &&
-      format === link.format.toLowerCase() &&
+      format === audioOutputFormat(source.platform, link.format) &&
       filename.toLowerCase().endsWith(`.${format}`)
     );
   }

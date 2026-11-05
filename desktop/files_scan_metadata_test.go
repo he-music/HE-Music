@@ -19,7 +19,7 @@ func TestScanExcludesPrivateFileArtifactsAtEveryLevel(t *testing.T) {
 			prefix + "recovery/song.mp3",
 		} {
 			name := filepath.Join(dir, filepath.FromSlash(relative))
-			if err := os.MkdirAll(filepath.Dir(name), 0700); err != nil {
+			if err := os.MkdirAll(filepath.Dir(name), 0o700); err != nil {
 				t.Fatal(err)
 			}
 			scanTestWrite(t, name, data)

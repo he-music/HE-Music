@@ -17,10 +17,12 @@ func (f *protocolBackendSDKFake) RegisterURLScheme(s string) error {
 	*f.calls = append(*f.calls, "sdk-set:"+s)
 	return f.setErr
 }
+
 func (f *protocolBackendSDKFake) UnregisterURLScheme(s string) error {
 	*f.calls = append(*f.calls, "sdk-unset:"+s)
 	return f.unsetErr
 }
+
 func (f *protocolBackendSDKFake) IsURLSchemeRegistered(s string) bool {
 	*f.calls = append(*f.calls, "sdk-read:"+s)
 	return f.registered

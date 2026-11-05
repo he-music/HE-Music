@@ -60,7 +60,10 @@ vi.mock("./songManager", () => ({
         ? mocks.music.radio.list[mocks.music.radio.playIndex]
         : mocks.data.playList[mocks.status.playIndex],
     getPlayerInfoObj: () => ({ name: mocks.music.playSong.name, artist: "Artist" }),
-    getOnlineUrl: mocks.url,
+    getOnlineSource: async (_id: string, _platform: string, link?: { format: string }) => ({
+      url: await mocks.url(),
+      format: link?.format ?? "mp3",
+    }),
     getCoverColor: mocks.cover,
   },
 }));

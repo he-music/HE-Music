@@ -74,6 +74,7 @@ func audioFixture(t *testing.T, format string) (*localAudioServer, context.Conte
 	})
 	return a, ctx, epoch, *ref, data, path
 }
+
 func audioOpen(t *testing.T, a *localAudioServer, ctx context.Context, epoch uint64, ref LocalFileRef) LocalAudioTicket {
 	t.Helper()
 	ticket, err := a.open(ctx, epoch, ref)
@@ -85,6 +86,7 @@ func audioOpen(t *testing.T, a *localAudioServer, ctx context.Context, epoch uin
 	}
 	return ticket
 }
+
 func audioRequest(a *localAudioServer, ticket LocalAudioTicket, method, rangeHeader string) *httptest.ResponseRecorder {
 	r := httptest.NewRequest(method, ticket.URL, nil)
 	if rangeHeader != "" {
@@ -113,8 +115,11 @@ func TestLocalAudioHTTP(t *testing.T) {
 				status      int
 				want        []byte
 			}{
-				{"GET", "", 200, data}, {"HEAD", "", 200, nil}, {"GET", "bytes=2-9", 206, data[2:10]},
-				{"GET", "bytes=-7", 206, data[len(data)-7:]}, {"GET", "bytes=999999-", 416, nil},
+				{"GET", "", 200, data},
+				{"HEAD", "", 200, nil},
+				{"GET", "bytes=2-9", 206, data[2:10]},
+				{"GET", "bytes=-7", 206, data[len(data)-7:]},
+				{"GET", "bytes=999999-", 416, nil},
 			} {
 				w := audioRequest(a, ticket, test.method, test.rng)
 				if w.Code != test.status {
@@ -145,8 +150,11 @@ func TestLocalAudioHTTP(t *testing.T) {
 				method, url, host string
 				status            int
 			}{
-				{"GET", ticket.URL + "?x=1", "", 404}, {"GET", ticket.URL + "?", "", 404}, {"GET", ticket.URL + "/extra", "", 404},
-				{"GET", ticket.URL, "evil.example", 404}, {"POST", ticket.URL, "", 405},
+				{"GET", ticket.URL + "?x=1", "", 404},
+				{"GET", ticket.URL + "?", "", 404},
+				{"GET", ticket.URL + "/extra", "", 404},
+				{"GET", ticket.URL, "evil.example", 404},
+				{"POST", ticket.URL, "", 405},
 				{"GET", "http://" + a.host + "/" + strings.Repeat("0", 64), "", 404},
 			} {
 				r := httptest.NewRequest(test.method, test.url, nil)
@@ -165,8 +173,7 @@ func TestLocalAudioHTTP(t *testing.T) {
 
 func TestLocalAudioAuthorizationVersionAndFormat(t *testing.T) {
 	a, ctx, epoch, ref, _, path := audioFixture(t, "mp3")
-	foreign, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	foreign := t.Context()
 	for _, test := range []struct {
 		ctx   context.Context
 		epoch uint64
@@ -213,7 +220,7 @@ func TestLocalAudioAuthorizationVersionAndFormat(t *testing.T) {
 func TestLocalAudioLimitExpiryAndClose(t *testing.T) {
 	a, ctx, epoch, ref, _, _ := audioFixture(t, "flac")
 	var first LocalAudioTicket
-	for n := 0; n < localAudioMaxTickets; n++ {
+	for n := range localAudioMaxTickets {
 		ticket := audioOpen(t, a, ctx, epoch, ref)
 		if n == 0 {
 			first = ticket
@@ -258,6 +265,7 @@ func (w *audioBlockedWriter) Write([]byte) (int, error) {
 	<-w.released
 	return 0, context.Canceled
 }
+
 func (w *audioBlockedWriter) SetWriteDeadline(deadline time.Time) error {
 	if !deadline.After(time.Now()) {
 		w.deadlineOnce.Do(func() { close(w.released) })
@@ -333,6 +341,7 @@ type audioFakeListener struct {
 
 func (l *audioFakeListener) Accept() (net.Conn, error) { <-l.closed; return nil, net.ErrClosed }
 func (l *audioFakeListener) Close() error              { l.once.Do(func() { close(l.closed) }); return nil }
+
 func (l *audioFakeListener) Addr() net.Addr {
 	return &net.TCPAddr{IP: net.IPv4(127, 0, 0, 1), Port: 34567}
 }

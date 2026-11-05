@@ -21,6 +21,7 @@ func gatewayTarget(t *testing.T, raw string) string {
 	}
 	return raw
 }
+
 func gatewayTestServer(t *testing.T, config GatewayAPIConfig) (*NetworkGateway, string) {
 	t.Helper()
 	g := &NetworkGateway{prefix: "/test-secret", media: newDesktopGatewayClient()}
@@ -34,6 +35,7 @@ func gatewayTestServer(t *testing.T, config GatewayAPIConfig) (*NetworkGateway, 
 	t.Cleanup(func() { server.Close(); g.mu.Lock(); g.closeIdleLocked(); g.mu.Unlock() })
 	return g, server.URL + g.prefix
 }
+
 func gatewayRequest(t *testing.T, method, target, body string, headers map[string]string) (*http.Response, string) {
 	t.Helper()
 	req, err := http.NewRequest(method, target, strings.NewReader(body))
@@ -132,11 +134,11 @@ func TestGatewayRedirectMethodsAndCredentialBoundary(t *testing.T) {
 			http.SetCookie(w, &http.Cookie{Name: "session", Value: "fixture", Path: "/"})
 			http.Redirect(w, r, "/end", status)
 		case "/cross":
-			http.Redirect(w, r, cdn.URL, 307)
+			http.Redirect(w, r, cdn.URL, http.StatusTemporaryRedirect)
 		case "/loop":
-			http.Redirect(w, r, "/loop", 302)
+			http.Redirect(w, r, "/loop", http.StatusFound)
 		case "/invalid":
-			http.Redirect(w, r, "file:///private", 302)
+			http.Redirect(w, r, "file:///private", http.StatusFound)
 		default:
 			if r.Header.Get("Authorization") != "Bearer fixture" || r.Header.Get("Cookie") != "session=fixture" {
 				t.Errorf("same origin credentials %v", r.Header)
@@ -171,7 +173,7 @@ func TestGatewayMediaRangeRedirectAndHeaders(t *testing.T) {
 			t.Errorf("media credentials %v", r.Header)
 		}
 		if r.URL.Path == "/redirect" {
-			http.Redirect(w, r, "/audio", 302)
+			http.Redirect(w, r, "/audio", http.StatusFound)
 			return
 		}
 		w.Header().Set("Access-Control-Allow-Origin", "https://evil.example")
@@ -212,7 +214,7 @@ func TestGatewayMediaRangeRedirectAndHeaders(t *testing.T) {
 func TestGatewayHLSFinalBaseAndResources(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/start" {
-			http.Redirect(w, r, "/hls/main.m3u8?token=fixture", 302)
+			http.Redirect(w, r, "/hls/main.m3u8?token=fixture", http.StatusFound)
 			return
 		}
 		if r.URL.Path == "/audio.m3u8" {

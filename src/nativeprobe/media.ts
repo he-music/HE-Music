@@ -138,7 +138,7 @@ export async function prepareAndCheckAudio(base: string) {
     song: cloneDeep(music().playSong),
     lyrics: cloneDeep(music().songLyric),
     list: cloneDeep(data().playList),
-    url: songManager.getOnlineUrl,
+    url: songManager.getOnlineSource,
     lyric: lyricManager.handleLyric,
     cover: songManager.getCoverColor,
     history: data().setHistory,
@@ -152,7 +152,7 @@ export async function prepareAndCheckAudio(base: string) {
       await until(() => !document.querySelector(".full-player"), "full-player-unmount");
       await wait(80);
     } finally {
-      songManager.getOnlineUrl = previous.url;
+      songManager.getOnlineSource = previous.url;
       lyricManager.handleLyric = previous.lyric;
       songManager.getCoverColor = previous.cover;
       data().setHistory = previous.history;
@@ -174,10 +174,10 @@ export async function prepareAndCheckAudio(base: string) {
     result.surface = surface;
     if (!surface.passed) throw new Error("probe-surface");
     // Only fixed synthetic input boundaries are replaced. Player and AudioManager stay real.
-    songManager.getOnlineUrl = async (id) => {
+    songManager.getOnlineSource = async (id) => {
       if (id === "slow") await wait(300);
       if (!["a", "b", "slow"].includes(id)) throw new Error("unexpected synthetic id");
-      return `${base}/${id === "b" ? "b" : "a"}.wav`;
+      return { url: `${base}/${id === "b" ? "b" : "a"}.wav`, format: "wav" };
     };
     lyricManager.handleLyric = async (id, platform) => {
       if (music().playSong.id !== id || platform !== "nativeprobe") return;

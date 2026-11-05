@@ -28,6 +28,7 @@ func controlFixture(t *testing.T) (*controlServer, context.Context, *httptest.Se
 	t.Cleanup(func() { cancel(); s.revoke(); server.Close() })
 	return s, ctx, server
 }
+
 func controlRequest(s *controlServer, method, path string, change func(*http.Request)) *httptest.ResponseRecorder {
 	request := httptest.NewRequest(method, path, nil)
 	request.Host = s.listener.Addr().String()
@@ -39,6 +40,7 @@ func controlRequest(s *controlServer, method, path string, change func(*http.Req
 	s.ServeHTTP(reply, request)
 	return reply
 }
+
 func TestControlLegacyRoutesAndReceipts(t *testing.T) {
 	s, ctx, _ := controlFixture(t)
 	var events []ControlCommand
@@ -80,6 +82,7 @@ func TestControlLegacyRoutesAndReceipts(t *testing.T) {
 		}
 	}
 }
+
 func TestControlRejectsInvalidRequests(t *testing.T) {
 	s, _, _ := controlFixture(t)
 	cases := []struct {
@@ -120,6 +123,7 @@ func TestControlRejectsInvalidRequests(t *testing.T) {
 		t.Fatal(r.Code)
 	}
 }
+
 func TestControlLimitsAndDispatchFailure(t *testing.T) {
 	s, _, _ := controlFixture(t)
 	s.emit = func(context.Context, ControlCommand) error { return errors.New("/private/secret") }
@@ -129,7 +133,7 @@ func TestControlLimitsAndDispatchFailure(t *testing.T) {
 	}
 	s.emit = func(context.Context, ControlCommand) error { return nil }
 	s.count = 0
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		if r := controlRequest(s, "GET", "/api/control/play", nil); r.Code != 200 {
 			t.Fatal(i, r.Code)
 		}
@@ -139,7 +143,7 @@ func TestControlLimitsAndDispatchFailure(t *testing.T) {
 	}
 	s.count = 0
 	s.window = time.Now().Add(-2 * time.Second)
-	for i := 0; i < 32; i++ {
+	for i := range 32 {
 		if r := controlRequest(s, "GET", "/api/control/play", nil); r.Code != 200 {
 			t.Fatal(i, r.Code)
 		}
@@ -149,12 +153,12 @@ func TestControlLimitsAndDispatchFailure(t *testing.T) {
 		t.Fatal("pending limit", r.Code)
 	}
 }
+
 func TestControlOwnerReplacementAndLateReceipt(t *testing.T) {
 	s, ctx, _ := controlFixture(t)
 	controlRequest(s, "GET", "/api/control/play", nil)
 	old := s.pending[1]
-	newer, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	newer := t.Context()
 	generation, err := s.prepare(newer, 2)
 	if err != nil {
 		t.Fatal(err)
@@ -171,6 +175,7 @@ func TestControlOwnerReplacementAndLateReceipt(t *testing.T) {
 		t.Fatal("revoked startup")
 	}
 }
+
 func TestControlListenerCloseAndCancellation(t *testing.T) {
 	probe, err := net.Listen("tcp4", "127.0.0.1:0")
 	if err != nil {
@@ -222,7 +227,7 @@ func TestControlConcurrentDispatchIsOrdered(t *testing.T) {
 	var events []ControlCommand
 	s.emit = func(_ context.Context, command ControlCommand) error { events = append(events, command); return nil }
 	var workers sync.WaitGroup
-	for i := 0; i < 16; i++ {
+	for range 16 {
 		workers.Go(func() {
 			response := controlRequest(s, "GET", "/api/control/toggle", nil)
 			if response.Code != 200 && response.Code != 429 {
@@ -240,6 +245,7 @@ func TestControlConcurrentDispatchIsOrdered(t *testing.T) {
 		}
 	}
 }
+
 func TestControlRealHTTPStatusAndUnavailableOwner(t *testing.T) {
 	s, _, server := controlFixture(t)
 	response, err := server.Client().Get(server.URL + "/api/control/status")
@@ -257,6 +263,7 @@ func TestControlRealHTTPStatusAndUnavailableOwner(t *testing.T) {
 		t.Fatal(r.Body.String())
 	}
 }
+
 func TestControlRevokeWhileDispatchWaitsRejectsOldCommand(t *testing.T) {
 	s, ctx, _ := controlFixture(t)
 	entered, release := make(chan struct{}), make(chan struct{})
@@ -289,8 +296,7 @@ func TestControlRevokeWhileDispatchWaitsRejectsOldCommand(t *testing.T) {
 func TestControlBusyAdmissionDisconnectAndRevoke(t *testing.T) {
 	for _, reason := range []string{"disconnect", "revoke"} {
 		t.Run(reason, func(t *testing.T) {
-			owner, cancelOwner := context.WithCancel(context.Background())
-			defer cancelOwner()
+			owner := t.Context()
 			entered, release := make(chan struct{}), make(chan struct{})
 			var releaseOnce sync.Once
 			unblock := func() { releaseOnce.Do(func() { close(release) }) }
@@ -326,9 +332,7 @@ func TestControlBusyAdmissionDisconnectAndRevoke(t *testing.T) {
 			requestCtx, cancelRequest := context.WithCancel(context.Background())
 			defer cancelRequest()
 			request, err := http.NewRequestWithContext(requestCtx, "GET", server.URL+"/api/control/play", nil)
-			if err != nil {
-				t.Fatal(err)
-			}
+			requireTestNoError(t, err)
 			firstDone := make(chan struct{}, 1)
 			go func() {
 				response, _ := client.Do(request)
@@ -337,13 +341,9 @@ func TestControlBusyAdmissionDisconnectAndRevoke(t *testing.T) {
 				}
 				firstDone <- struct{}{}
 			}()
-			select {
-			case <-entered:
-			case <-time.After(time.Second):
-				t.Fatal("first emit did not start")
-			}
+			requireTestSignal(t, entered, time.Second, "first emit did not start")
 			var burst sync.WaitGroup
-			for i := 0; i < 64; i++ {
+			for range 64 {
 				burst.Go(func() {
 					response, err := client.Get(server.URL + "/api/control/pause")
 					if err != nil {
@@ -358,37 +358,21 @@ func TestControlBusyAdmissionDisconnectAndRevoke(t *testing.T) {
 			}
 			burstDone := make(chan struct{})
 			go func() { burst.Wait(); close(burstDone) }()
-			select {
-			case <-burstDone:
-			case <-time.After(2 * time.Second):
-				t.Fatal("burst handlers waited behind emit")
-			}
+			requireTestSignal(t, burstDone, 2*time.Second, "burst handlers waited behind emit")
 			if emits.Load() != 1 {
 				t.Fatal("unbounded emit admission", emits.Load())
 			}
 			// Drain every completed busy response, leaving only the first handler.
-			for i := 0; i < 64; i++ {
-				select {
-				case <-handlerDone:
-				case <-time.After(time.Second):
-					t.Fatal("busy handler retained")
-				}
+			for range 64 {
+				requireTestSignal(t, handlerDone, time.Second, "busy handler retained")
 			}
 			if reason == "disconnect" {
 				cancelRequest()
 			} else {
 				s.revoke()
 			}
-			select {
-			case <-handlerDone:
-			case <-time.After(time.Second):
-				t.Fatal("cancel/revoke did not release handler")
-			}
-			select {
-			case <-firstDone:
-			case <-time.After(time.Second):
-				t.Fatal("first HTTP client retained")
-			}
+			requireTestSignal(t, handlerDone, time.Second, "cancel/revoke did not release handler")
+			requireTestSignal(t, firstDone, time.Second, "first HTTP client retained")
 			s.mu.Lock()
 			pending := len(s.pending)
 			s.mu.Unlock()

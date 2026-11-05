@@ -11,10 +11,10 @@ import (
 
 func TestDownloadNativeCandidateConflictDoesNotPublishSidecars(t *testing.T) {
 	a, ctx, epoch, c, token, dir := downloadFixture(t)
-	if err := os.MkdirAll(filepath.Join(dir, "Artist", "Album"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "Artist", "Album"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "Artist", "Album", "song.mp3"), []byte("existing"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "Artist", "Album", "song.mp3"), []byte("existing"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	data := downloadMP3()
@@ -36,10 +36,10 @@ func TestDownloadNativeCandidateConflictDoesNotPublishSidecars(t *testing.T) {
 
 func TestDownloadNativeCandidateSidecarConflictKeepsAudioRef(t *testing.T) {
 	a, ctx, epoch, c, token, dir := downloadFixture(t)
-	if err := os.MkdirAll(filepath.Join(dir, "Artist", "Album"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "Artist", "Album"), 0o700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "Artist", "Album", "song.lrc"), []byte("old"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "Artist", "Album", "song.lrc"), []byte("old"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	data := downloadMP3()

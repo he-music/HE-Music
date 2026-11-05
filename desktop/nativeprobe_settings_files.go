@@ -36,6 +36,7 @@ func (p *settingsProbePicker) Save(mygo.SaveDialogOptions) (string, error) {
 	<-gate
 	return filepath.Join(p.root, "export.json"), nil
 }
+
 func (p *settingsProbePicker) Open(options mygo.OpenDialogOptions) ([]string, error) {
 	p.mu.Lock()
 	p.opens++
@@ -54,6 +55,7 @@ func (p *settingsProbePicker) Open(options mygo.OpenDialogOptions) ([]string, er
 	}
 	return nil, fmt.Errorf("unexpected probe picker invocation")
 }
+
 func (p *settingsProbePicker) counts() (int, int) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
@@ -81,7 +83,7 @@ func main() {
 	if os.Getenv("HE_MUSIC_NATIVE_PROBE") != "1" || !filepath.IsAbs(output) || !mygo.IsDev() {
 		log.Fatal("fileprobe requires opt-in absolute output and development")
 	}
-	if err := os.MkdirAll(output, 0700); err != nil {
+	if err := os.MkdirAll(output, 0o700); err != nil {
 		log.Fatal(err)
 	}
 	profile, err := os.MkdirTemp("/tmp", "hemusic-settings-native-profile-")
@@ -95,7 +97,7 @@ func main() {
 	mygo.App.SetName("HE-Music Settings File Probe")
 	mygo.App.SetPath(mygo.PathUserData, profile)
 	for _, name := range []string{"Music", "Downloads"} {
-		if err = os.Mkdir(filepath.Join(fixture, name), 0700); err != nil {
+		if err = os.Mkdir(filepath.Join(fixture, name), 0o700); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -104,7 +106,7 @@ func main() {
 		"legacy.json": `{"renderer":{"setting-store":"{\"lyricsScrollOffset\":-0.25,\"smtcOpen\":false,\"preventSleep\":false,\"autoPlay\":false}","shortcut-store":"{\"globalOpen\":false}"},"electron":{"syntheticNative":true}}`,
 	}
 	for name, data := range documents {
-		if err = os.WriteFile(filepath.Join(fixture, name), []byte(data), 0600); err != nil {
+		if err = os.WriteFile(filepath.Join(fixture, name), []byte(data), 0o600); err != nil {
 			log.Fatal(err)
 		}
 	}
@@ -298,7 +300,7 @@ addEventListener("unhandledrejection",()=>window.__settingsFileRuntime.rejection
 	result["passed"] = result["checksComplete"] == true && result["runtimeClean"] == true && result["nativeResourcesCleaned"] == true && result["profileRemoved"] == true && result["fixtureRemoved"] == true && result["timedOut"] != true && result["runError"] == nil
 	encoded, _ := json.MarshalIndent(result, "", "  ")
 	mu.Unlock()
-	if err = os.WriteFile(filepath.Join(output, "result.json"), encoded, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(output, "result.json"), encoded, 0o600); err != nil {
 		log.Fatal(err)
 	}
 	fmt.Println(string(encoded))

@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "sdkVersion": "v0.6.5-0.20261026063203-07ebe19ac0dc",
   "patchId": "windows-transparent-shadowless-frame-v3",
-  "goModSHA256": "85a628665024c9d34e12bc36081350bc98593ff01bcf09fa2512d5edc9893303",
-  "goSumSHA256": "beb9f2b1468ca65c5f89f899d6c5739b21460caa6c87dc7f94f4b844a881bd7b",
-  "fileCount": 1006,
-  "treeSHA256": "0b9411825e84a3b4946865c20bbb8ed95fc0b7cf3b0b5a046f33e782ed55dc73"
+  "goModSHA256": "3be063078008bbc808e8c49b9c00f005570e5820e798f4564bb7081928f96cfa",
+  "goSumSHA256": "23a91a170a8c79e58b9c26a98ad15d144c21e424cfbccfdf79ff379eeaf5f103",
+  "fileCount": 1009,
+  "treeSHA256": "b60ddd8e0bf751c14b62042184b759de3b8e79b3ae2450b5d5404be5bf27a7a4"
 }

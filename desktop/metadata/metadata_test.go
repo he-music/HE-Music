@@ -20,7 +20,7 @@ import (
 	"github.com/tommyo123/mtag/id3v2"
 )
 
-func fixture(t *testing.T, format string, version string) string {
+func fixture(t *testing.T, format, version string) string {
 	t.Helper()
 	if _, err := exec.LookPath("ffmpeg"); err != nil {
 		t.Skip("ffmpeg is required only to generate test audio")
@@ -151,7 +151,7 @@ func seedUnknown(t *testing.T, path, format string) []byte {
 	end := 8 + int(b[5])<<16 + int(b[6])<<8 + int(b[7])
 	block := append([]byte{2, 0, 0, 19}, []byte("HEMuunknown-payload")...)
 	updated := append(append(append([]byte(nil), b[:end]...), block...), b[end:]...)
-	if err := os.WriteFile(path, updated, 0600); err != nil {
+	if err := os.WriteFile(path, updated, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	return block
@@ -165,7 +165,7 @@ func TestMetadataRoundTrip(t *testing.T) {
 			before := mustRead(t, original)
 			packets := packetHash(t, original)
 			work := filepath.Join(filepath.Dir(original), "working."+tc.format)
-			if err := os.WriteFile(work, before, 0600); err != nil {
+			if err := os.WriteFile(work, before, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			title, album, comment, lyrics := "中文标题", "专辑", "别名备注", "[00:01.00]第一行\n[00:02.00]second line"
@@ -174,23 +174,8 @@ func TestMetadataRoundTrip(t *testing.T) {
 			pictures := []Picture{{"image/png", 3, "front", cover(t)}, {"image/png", 4, "back", cover(t)}}
 			edit(t, work, Patch{&title, &artists, &album, &albumArtists, &comment, &lyrics, &pictures})
 			got := readInfo(t, work, false)
-			if got.Title != title || got.Album != album || got.Comment != comment || got.Lyrics != lyrics || !reflect.DeepEqual(got.Artists, artists) || !reflect.DeepEqual(got.AlbumArtists, albumArtists) || !reflect.DeepEqual(got.Pictures, pictures) {
-				t.Fatalf("field round trip mismatch: %+v", got)
-			}
-			if got.DurationSeconds < 0.2 || got.DurationSeconds > 0.4 || got.SampleRateHz != 44100 || got.Channels != 1 || got.BitrateKbps <= 0 || got.BitrateKbps > 1000 {
-				t.Fatalf("audio property units: %+v", got)
-			}
-			if tc.format == "mp3" && (got.BitrateKbps < 120 || got.BitrateKbps > 150 || got.BitsPerSample != 0) {
-				t.Fatalf("MP3 properties: %+v", got)
-			}
-			if tc.format == "flac" && got.BitsPerSample != 16 {
-				t.Fatalf("FLAC bit depth: %+v", got)
-			}
-			priorScan := sha256.Sum256(mustRead(t, work))
-			scan := readInfo(t, work, true)
-			if scan.PicturesLoaded || len(scan.Pictures) != 0 || !reflect.DeepEqual(scan.Artists, artists) || sha256.Sum256(mustRead(t, work)) != priorScan {
-				t.Fatalf("scan must be read-only and omit pictures: %+v", scan)
-			}
+			assertMetadataRoundTripInfo(t, got, tc.format, Info{Title: title, Album: album, Comment: comment, Lyrics: lyrics, Artists: artists, AlbumArtists: albumArtists, Pictures: pictures})
+			assertMetadataScan(t, work, artists)
 			// Editing a scalar after a scan must preserve all loaded pictures and arrays.
 			title = strings.Repeat("增长标题", 1000)
 			edit(t, work, Patch{Title: &title})
@@ -198,23 +183,7 @@ func TestMetadataRoundTrip(t *testing.T) {
 			if got.Title != title || !reflect.DeepEqual(got.Pictures, pictures) || !reflect.DeepEqual(got.Artists, artists) || !reflect.DeepEqual(got.AlbumArtists, albumArtists) {
 				t.Fatal("scalar edit lost untouched metadata")
 			}
-			f, err := mtag.Open(work, mtag.WithReadOnly())
-			if err != nil {
-				t.Fatal(err)
-			}
-			if !reflect.DeepEqual(f.CustomValues("HEMUSIC_UNKNOWN"), []string{"keep one", "keep two"}) {
-				t.Fatal("unknown text field lost")
-			}
-			if tc.format == "mp3" {
-				raw, ok := f.ID3v2().Find("XHEM").(*id3v2.RawFrame)
-				if !ok || !bytes.Equal(raw.Data, []byte{0, 1, 255, 42, 19}) {
-					t.Fatal("unknown ID3 frame lost")
-				}
-			}
-			f.Close()
-			if len(unknownBlock) > 0 && !bytes.Contains(mustRead(t, work), unknownBlock) {
-				t.Fatal("unknown FLAC APPLICATION block lost")
-			}
+			assertUnknownMetadata(t, work, tc.format, unknownBlock)
 			if !bytes.Equal(packets, packetHash(t, work)) || !bytes.Equal(before, mustRead(t, original)) {
 				t.Fatal("audio packet payload or original fixture changed")
 			}
@@ -228,6 +197,52 @@ func TestMetadataRoundTrip(t *testing.T) {
 				t.Fatal("clear changed audio packets")
 			}
 		})
+	}
+}
+
+func assertMetadataRoundTripInfo(t *testing.T, got Info, format string, want Info) {
+	t.Helper()
+	if got.Title != want.Title || got.Album != want.Album || got.Comment != want.Comment || got.Lyrics != want.Lyrics || !reflect.DeepEqual(got.Artists, want.Artists) || !reflect.DeepEqual(got.AlbumArtists, want.AlbumArtists) || !reflect.DeepEqual(got.Pictures, want.Pictures) {
+		t.Fatalf("field round trip mismatch: %+v", got)
+	}
+	if got.DurationSeconds < 0.2 || got.DurationSeconds > 0.4 || got.SampleRateHz != 44100 || got.Channels != 1 || got.BitrateKbps <= 0 || got.BitrateKbps > 1000 {
+		t.Fatalf("audio property units: %+v", got)
+	}
+	if format == "mp3" && (got.BitrateKbps < 120 || got.BitrateKbps > 150 || got.BitsPerSample != 0) {
+		t.Fatalf("MP3 properties: %+v", got)
+	}
+	if format == "flac" && got.BitsPerSample != 16 {
+		t.Fatalf("FLAC bit depth: %+v", got)
+	}
+}
+
+func assertMetadataScan(t *testing.T, work string, artists []string) {
+	t.Helper()
+	prior := sha256.Sum256(mustRead(t, work))
+	scan := readInfo(t, work, true)
+	if scan.PicturesLoaded || len(scan.Pictures) != 0 || !reflect.DeepEqual(scan.Artists, artists) || sha256.Sum256(mustRead(t, work)) != prior {
+		t.Fatalf("scan must be read-only and omit pictures: %+v", scan)
+	}
+}
+
+func assertUnknownMetadata(t *testing.T, work, format string, unknownBlock []byte) {
+	t.Helper()
+	f, err := mtag.Open(work, mtag.WithReadOnly())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(f.CustomValues("HEMUSIC_UNKNOWN"), []string{"keep one", "keep two"}) {
+		t.Fatal("unknown text field lost")
+	}
+	if format == "mp3" {
+		raw, ok := f.ID3v2().Find("XHEM").(*id3v2.RawFrame)
+		if !ok || !bytes.Equal(raw.Data, []byte{0, 1, 255, 42, 19}) {
+			t.Fatal("unknown ID3 frame lost")
+		}
+	}
+	f.Close()
+	if len(unknownBlock) > 0 && !bytes.Contains(mustRead(t, work), unknownBlock) {
+		t.Fatal("unknown FLAC APPLICATION block lost")
 	}
 }
 

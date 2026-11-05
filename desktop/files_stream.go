@@ -235,6 +235,7 @@ func (f *NativeFiles) shutdownLocalAudio() error {
 	}
 	return a.shutdown()
 }
+
 func (a *localAudioServer) shutdown() error {
 	a.mu.Lock()
 	a.closed = true
@@ -338,6 +339,7 @@ func (r *localAudioReader) Read(p []byte) (int, error) {
 	}
 	return r.file.Read(p)
 }
+
 func (r *localAudioReader) Seek(offset int64, whence int) (int64, error) {
 	if err := r.ctx.Err(); err != nil {
 		return 0, err
@@ -382,17 +384,6 @@ func cancelLocalAudioIO(ctx context.Context, file *os.File, controller *http.Res
 	}
 }
 
-// invalidateLocalAudio is an outside-actor integration hook for a future file
-// replacement consumer. Cancel the old revision before draining readers/commit.
-func (f *NativeFiles) invalidateLocalAudio(ref LocalFileRef) {
-	localAudioServers.Lock()
-	a := localAudioServers.servers[&f.state]
-	localAudioServers.Unlock()
-	if a == nil {
-		return
-	}
-	a.invalidate(ref)
-}
 func (a *localAudioServer) invalidate(ref LocalFileRef) {
 	a.mu.Lock()
 	var tickets []*localAudioTicket

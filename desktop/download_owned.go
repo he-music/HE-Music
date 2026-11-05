@@ -43,7 +43,7 @@ func downloadNewPrivate(root *os.Root, kind string, d downloadIO) (*downloadOwne
 		return nil, err
 	}
 	name := downloadPrivatePrefix + kind + "-" + nonce
-	f, err := root.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
+	f, err := root.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +59,7 @@ func downloadNewPrivate(root *os.Root, kind string, d downloadIO) (*downloadOwne
 	}
 	return p, nil
 }
+
 func (p *downloadOwnedPrivate) write(b []byte) error {
 	if err := p.io.before(p.kind, "write"); err != nil {
 		return err
@@ -69,16 +70,19 @@ func (p *downloadOwnedPrivate) write(b []byte) error {
 	}
 	return err
 }
+
 func (p *downloadOwnedPrivate) sync() error {
 	if err := p.io.before(p.kind, "sync"); err != nil {
 		return err
 	}
 	return p.file.Sync()
 }
+
 func (p *downloadOwnedPrivate) close() error {
 	p.closeOnce.Do(func() { injected := p.io.before(p.kind, "close"); p.closeErr = errors.Join(injected, p.file.Close()) })
 	return p.closeErr
 }
+
 func (p *downloadOwnedPrivate) cleanup() error {
 	if p == nil {
 		return nil

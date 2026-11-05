@@ -23,10 +23,12 @@ func (f *fakeSystemMedia) Set(info mygo.NowPlayingInfo) {
 	f.sets = append(f.sets, info)
 	f.info, f.showing = info, true
 }
+
 func (f *fakeSystemMedia) Info() (mygo.NowPlayingInfo, bool) {
 	f.infoReads++
 	return f.info, f.showing
 }
+
 func (f *fakeSystemMedia) SetPlayback(state mygo.PlaybackState, position time.Duration) {
 	f.playback = append(f.playback, position)
 	f.info.State, f.info.Position = state, position
@@ -50,6 +52,7 @@ func (f *fakeSystemPower) KeepAwake(_ string, display bool) func() {
 	f.display = display
 	return func() { delete(f.leases, id); f.releases++ }
 }
+
 func newSystemMediaTest() (*systemMediaState, *fakeSystemMedia, *fakeSystemPower, *[]SystemMediaCommand) {
 	media := &fakeSystemMedia{}
 	power := &fakeSystemPower{leases: map[int]bool{}}
@@ -57,9 +60,11 @@ func newSystemMediaTest() (*systemMediaState, *fakeSystemMedia, *fakeSystemPower
 	state := &systemMediaState{media: media, power: power, valid: func(context.Context) bool { return true }, emit: func(event SystemMediaCommand) { *events = append(*events, event) }}
 	return state, media, power, events
 }
+
 func systemMediaTestTrack() SystemMediaTrack {
 	return SystemMediaTrack{ID: "online-song", Source: "online", Title: "Synthetic title", Artist: "Artist", Album: "Album", DurationMS: 10000, State: "paused", Rate: 1, CanNext: true, CanPrevious: true}
 }
+
 func TestSystemMediaInitialDisabledAndOwnership(t *testing.T) {
 	s, media, power, _ := newSystemMediaTest()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -79,7 +84,7 @@ func TestSystemMediaInitialDisabledAndOwnership(t *testing.T) {
 	if err := s.set(ctx, status.Generation, 1, systemMediaTestTrack()); err == nil {
 		t.Fatal("disabled set accepted")
 	}
-	other := context.WithValue(ctx, struct{}{}, 1)
+	other := context.WithValue(ctx, testContextKey{}, 1)
 	if _, err := s.configure(other, status.Generation, true, true); err == nil {
 		t.Fatal("other owner accepted")
 	}
@@ -93,15 +98,14 @@ func TestSystemMediaInitialDisabledAndOwnership(t *testing.T) {
 		t.Fatal("disabled acquired resources")
 	}
 }
+
 func TestSystemMediaTrackCommandsAndStaleSnapshots(t *testing.T) {
 	s, media, _, events := newSystemMediaTest()
 	ctx := context.Background()
 	status, _ := s.configure(ctx, 0, true, false)
 	gen := status.Generation
 	track := systemMediaTestTrack()
-	if err := s.set(ctx, gen, 1, track); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, s.set(ctx, gen, 1, track))
 	info := media.sets[0]
 	if info.State != mygo.PlaybackPaused || info.Duration != 10*time.Second || info.Artist != track.Artist || info.Album != track.Album || info.Commands&mygo.MediaStop != 0 {
 		t.Fatal(info)
@@ -149,6 +153,7 @@ func TestSystemMediaTrackCommandsAndStaleSnapshots(t *testing.T) {
 		t.Fatal("stale clear accepted")
 	}
 }
+
 func TestSystemMediaMetadataCleanupAndUnknownDuration(t *testing.T) {
 	s, media, _, events := newSystemMediaTest()
 	ctx := context.Background()
@@ -191,6 +196,7 @@ func TestSystemMediaMetadataCleanupAndUnknownDuration(t *testing.T) {
 		t.Fatal("late metadata resurrected")
 	}
 }
+
 func TestSystemMediaNumericBoundaries(t *testing.T) {
 	s, media, _, _ := newSystemMediaTest()
 	ctx := context.Background()
@@ -218,6 +224,7 @@ func TestSystemMediaNumericBoundaries(t *testing.T) {
 		t.Fatal(media.playback)
 	}
 }
+
 func TestSystemMediaIndependentPowerLeaseAndRepeatedCleanup(t *testing.T) {
 	s, media, power, events := newSystemMediaTest()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -261,6 +268,7 @@ func TestSystemMediaIndependentPowerLeaseAndRepeatedCleanup(t *testing.T) {
 	}
 	releaseOther()
 }
+
 func TestSystemMediaTeardownCannotReleaseNewOwner(t *testing.T) {
 	s, _, power, _ := newSystemMediaTest()
 	ctx := context.Background()

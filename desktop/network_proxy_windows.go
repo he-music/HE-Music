@@ -8,8 +8,10 @@ import (
 	"syscall"
 )
 
-var startupNetworkProxy = NetworkProxyConfig{Protocol: "off"}
-var startupNetworkProxyPrepared bool
+var (
+	startupNetworkProxy         = NetworkProxyConfig{Protocol: "off"}
+	startupNetworkProxyPrepared bool
+)
 
 // The fixed SDK can bypass the official loader and invoke a runtime-internal
 // export. Do not assume that route consumes loader environment overrides.
@@ -43,6 +45,7 @@ func prepareNativeNetworkProxy(c NetworkProxyConfig) error {
 	startupNetworkProxyPrepared = true
 	return nil
 }
+
 func applyNativeNetworkProxy(handle uintptr, c NetworkProxyConfig) (bool, bool, string, error) {
 	if _, err := networkProxyURL(c); err != nil {
 		return false, false, "", err

@@ -43,8 +43,10 @@ type taskbarGUID struct {
 	Data4        [8]byte
 }
 
-var taskbarCLSID = taskbarGUID{0x56fdf344, 0xfd6d, 0x11d0, [8]byte{0x95, 0x8a, 0, 0x60, 0x97, 0xc9, 0xa0, 0x90}}
-var taskbarIID = taskbarGUID{0xea1afb91, 0x9e28, 0x4b86, [8]byte{0x90, 0xe9, 0x9e, 0x9f, 0x8a, 0x5e, 0xef, 0xaf}}
+var (
+	taskbarCLSID = taskbarGUID{0x56fdf344, 0xfd6d, 0x11d0, [8]byte{0x95, 0x8a, 0, 0x60, 0x97, 0xc9, 0xa0, 0x90}}
+	taskbarIID   = taskbarGUID{0xea1afb91, 0x9e28, 0x4b86, [8]byte{0x90, 0xe9, 0x9e, 0x9f, 0x8a, 0x5e, 0xef, 0xaf}}
+)
 
 type taskbarButton struct {
 	Mask   uint32
@@ -78,6 +80,7 @@ func taskbarHRESULT(op string, v uintptr) error {
 	}
 	return nil
 }
+
 func (b *windowsTaskbar) invokeCOM(index int, args ...uintptr) error {
 	if b.object == nil {
 		return errors.New("taskbar COM object unavailable")
@@ -87,6 +90,7 @@ func (b *windowsTaskbar) invokeCOM(index int, args ...uintptr) error {
 	hr, _, _ := syscall.SyscallN(method, append([]uintptr{uintptr(b.object)}, args...)...)
 	return taskbarHRESULT("ITaskbarList3", hr)
 }
+
 func (b *windowsTaskbar) invokeNative(method int, s TaskbarState, hidden bool) error {
 	if b.object == nil && hidden {
 		return nil
@@ -134,6 +138,7 @@ func (b *windowsTaskbar) invokeNative(method int, s TaskbarState, hidden bool) e
 	runtime.KeepAlive(b)
 	return err
 }
+
 func openTaskbar(hwnd uintptr, click func(TaskbarAction), rebuild func()) (taskbarBackend, error) {
 	valid, _, _ := taskbarIsWindow.Call(hwnd)
 	if valid == 0 {
@@ -244,6 +249,7 @@ func openTaskbar(hwnd uintptr, click func(TaskbarAction), rebuild func()) (taskb
 	}
 	return b, nil
 }
+
 func taskbarSubclassProc(hwnd, msg, wparam, lparam, id, ref uintptr) uintptr {
 	b := taskbarHooks[id]
 	if b != nil && b.hwnd == hwnd {
@@ -282,6 +288,7 @@ func taskbarSubclassProc(hwnd, msg, wparam, lparam, id, ref uintptr) uintptr {
 	result, _, _ := taskbarDefSubclass.Call(hwnd, msg, wparam, lparam)
 	return result
 }
+
 func (b *windowsTaskbar) removeHook() error {
 	if b.hooked {
 		ok, _, _ := taskbarRemoveSubclass.Call(b.hwnd, taskbarSubclassCallback, b.id)
@@ -293,10 +300,12 @@ func (b *windowsTaskbar) removeHook() error {
 	delete(taskbarHooks, b.id)
 	return nil
 }
+
 func (b *windowsTaskbar) hookDestroyed() {
 	b.hooked = false
 	delete(taskbarHooks, b.id)
 }
+
 func (b *windowsTaskbar) releaseNative() error {
 	var errs []error
 	// Keep only the HWND observer after close. It tracks Explorer recreation and
@@ -320,6 +329,7 @@ func (b *windowsTaskbar) releaseNative() error {
 	}
 	return errors.Join(errs...)
 }
+
 func newTaskbarIcon(kind int) (uintptr, error) {
 	var and, xor [32]byte
 	for i := range and {

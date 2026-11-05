@@ -4,6 +4,7 @@ import {
   type DownloadMetadata,
 } from "../platform/localDownloadSession";
 import { validLocalDownloadFormat } from "@/platform/localDownloadPersistence";
+import { audioOutputFormat } from "@/platform/audioSource";
 import { toLineDownloadLyrics } from "./downloadLyrics";
 
 export interface MygoDownloadResolution {
@@ -46,7 +47,7 @@ export function createMygoDownloadResolver(
   return async (quality, source, options): Promise<MygoDownloadResolution> => {
     try {
       const link = source.links.find((item) => item.name === quality);
-      const format = link?.format.toLowerCase();
+      const format = link ? audioOutputFormat(source.platform, link.format) : undefined;
       if (!link || !format || !validLocalDownloadFormat(format)) throw new Error();
       const response = await request(source.id, source.platform, link.quality, link.format);
       if (!response || typeof response !== "object") throw new Error();

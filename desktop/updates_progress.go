@@ -28,7 +28,7 @@ func (p *updatesProgressReporter) report(downloaded, total int64) {
 	}
 	p.downloaded, p.total = downloaded, total
 	now := p.now()
-	if !p.last.IsZero() && now.Sub(p.last) < 100*time.Millisecond && !(total > 0 && downloaded == total) {
+	if !p.last.IsZero() && now.Sub(p.last) < 100*time.Millisecond && (total <= 0 || downloaded != total) {
 		return
 	}
 	p.publish(now)

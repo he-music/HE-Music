@@ -9,8 +9,10 @@ import (
 	"github.com/egoist/mygo"
 )
 
-var desktopProtocolIntent = mygo.NewEvent[ProtocolIntent]("desktop:protocol-intent")
-var desktopProtocols = &Protocols{state: protocolState{backend: newNativeProtocolBackend(), goos: runtime.GOOS}}
+var (
+	desktopProtocolIntent = mygo.NewEvent[ProtocolIntent]("desktop:protocol-intent")
+	desktopProtocols      = &Protocols{state: protocolState{backend: newNativeProtocolBackend(), goos: runtime.GOOS}}
+)
 
 type Protocols struct{ state protocolState }
 
@@ -31,6 +33,7 @@ func installProtocolHooks() (bool, func()) {
 	})
 	return true, off
 }
+
 func (p *Protocols) Begin(ctx context.Context) (ProtocolSession, error) {
 	result := ProtocolSession{}
 	err := desktopLifecycle.call(ctx, true, func() error {
@@ -40,6 +43,7 @@ func (p *Protocols) Begin(ctx context.Context) (ProtocolSession, error) {
 	})
 	return result, err
 }
+
 func (p *Protocols) Sync(ctx context.Context, epoch uint64, schemes []string) (ProtocolStatus, error) {
 	result := ProtocolStatus{}
 	err := desktopLifecycle.call(ctx, true, func() error {
@@ -53,6 +57,7 @@ func (p *Protocols) Sync(ctx context.Context, epoch uint64, schemes []string) (P
 	})
 	return result, err
 }
+
 func (p *Protocols) Teardown(ctx context.Context, epoch uint64) error {
 	return desktopLifecycle.call(ctx, true, func() error {
 		if !p.state.owns(ctx, epoch) {
@@ -62,6 +67,7 @@ func (p *Protocols) Teardown(ctx context.Context, epoch uint64) error {
 		return nil
 	})
 }
+
 func (p *Protocols) deliver(events []ProtocolIntent) {
 	for _, event := range events {
 		l := desktopLifecycle

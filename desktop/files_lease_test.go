@@ -43,12 +43,12 @@ func TestDirectoryLeaseFileRefAndCommitGate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	actor.state.main(ctx, func(parent *mygo.Window) error {
+	requireTestNoError(t, actor.state.main(ctx, func(parent *mygo.Window) error {
 		actor.state.grants = map[string]ownedDirectory{
 			token: {grant: DirectoryGrant{Token: token, Epoch: epoch}, handle: handle},
 		}
 		return nil
-	})
+	}))
 
 	lease, err := actor.state.acquireDirectory(ctx, epoch, token)
 	if err != nil {
@@ -108,12 +108,12 @@ func TestDirectoryLeaseReleaseIsIdempotentAndRevocationWinsBeforeClaim(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	actor.state.main(ctx, func(parent *mygo.Window) error {
+	requireTestNoError(t, actor.state.main(ctx, func(parent *mygo.Window) error {
 		actor.state.grants = map[string]ownedDirectory{
 			token: {grant: DirectoryGrant{Token: token, Epoch: epoch}, handle: handle},
 		}
 		return nil
-	})
+	}))
 	lease, err := actor.state.acquireDirectory(ctx, epoch, token)
 	if err != nil {
 		t.Fatal(err)

@@ -180,51 +180,25 @@ func TestTraySessionCapturedSnapshot(t *testing.T) {
 		t.Fatal(err)
 	}
 	s.revoke()
-	s.begin()
+	if _, err := s.begin(); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := s.request(again, TrayToggle, nil); err == nil {
 		t.Fatal("old epoch accepted")
 	}
 }
 
 func TestTraySessionRequestsAndParameters(t *testing.T) {
-	for bits := 0; bits < 8; bits++ {
+	for bits := range 8 {
 		var s traySession
 		epoch, _ := s.begin()
 		p := trayTestSong(epoch, 1)
 		p.Liked = bits&1 != 0
 		p.CanFavorite = bits&2 != 0
 		p.CanSetMode = bits&4 != 0
-		if err := s.sync(p); err != nil {
-			t.Fatal(err)
-		}
+		requireTestNoError(t, s.sync(p))
 		for _, action := range []TrayAction{TrayPrevious, TrayToggle, TrayNext, TrayOpenSettings, TrayFavorite} {
-			req, err := s.request(p, action, nil)
-			if action == TrayFavorite && !p.CanFavorite {
-				if err == nil {
-					t.Fatal("favorite capability bypass")
-				}
-				continue
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			if req.Epoch != epoch || req.Revision != 1 || req.TrackKey != p.TrackKey || req.Action != action || req.Mode != nil {
-				t.Fatal(req)
-			}
-			if action == TrayFavorite {
-				if req.Favorite == nil || *req.Favorite == p.Liked {
-					t.Fatal("wrong desired favorite")
-				}
-				encoded, err := json.Marshal(req)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if p.Liked && !strings.Contains(string(encoded), `"favorite":false`) {
-					t.Fatal("false omitted", string(encoded))
-				}
-			} else if req.Favorite != nil {
-				t.Fatal("unrelated favorite")
-			}
+			assertTrayActionRequest(t, &s, p, action)
 		}
 		for _, mode := range []TrayPlayMode{TrayModeRepeat, TrayModeRepeatOnce, TrayModeShuffle} {
 			req, err := s.request(p, TraySetPlayMode, &mode)
@@ -239,12 +213,10 @@ func TestTraySessionRequestsAndParameters(t *testing.T) {
 	var s traySession
 	epoch, _ := s.begin()
 	p := trayTestSong(epoch, 1)
-	s.sync(p)
+	requireTestNoError(t, s.sync(p))
 	mode := TrayModeShuffle
 	req, err := s.request(p, TraySetPlayMode, &mode)
-	if err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, err)
 	mode = TrayModeRepeatOnce
 	if *req.Mode != TrayModeShuffle {
 		t.Fatal("request retains caller pointer")
@@ -285,5 +257,32 @@ func TestTraySessionRequestsAndParameters(t *testing.T) {
 		if s.validateRequest(p, r) == nil {
 			t.Fatal("invalid request accepted", r)
 		}
+	}
+}
+
+func assertTrayActionRequest(t *testing.T, s *traySession, p TrayPlaybackState, action TrayAction) {
+	t.Helper()
+	req, err := s.request(p, action, nil)
+	if action == TrayFavorite && !p.CanFavorite {
+		if err == nil {
+			t.Fatal("favorite capability bypass")
+		}
+		return
+	}
+	requireTestNoError(t, err)
+	if req.Epoch != p.Epoch || req.Revision != 1 || req.TrackKey != p.TrackKey || req.Action != action || req.Mode != nil {
+		t.Fatal(req)
+	}
+	if action == TrayFavorite {
+		if req.Favorite == nil || *req.Favorite == p.Liked {
+			t.Fatal("wrong desired favorite")
+		}
+		encoded, err := json.Marshal(req)
+		requireTestNoError(t, err)
+		if p.Liked && !strings.Contains(string(encoded), `"favorite":false`) {
+			t.Fatal("false omitted", string(encoded))
+		}
+	} else if req.Favorite != nil {
+		t.Fatal("unrelated favorite")
 	}
 }

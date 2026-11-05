@@ -160,7 +160,7 @@ func (s *systemMediaState) set(ctx context.Context, generation, revision uint64,
 	if !s.owns(ctx, generation) || !s.enabled || revision == 0 || revision <= s.revision {
 		return errors.New("system media snapshot is no longer active")
 	}
-	if track.Source == "online" && strings.TrimSpace(track.ID) != "" && strings.TrimSpace(track.Title) != "" &&
+	if isOnlineMediaTrack(track) &&
 		(math.IsNaN(track.Rate) || math.IsInf(track.Rate, 0) || track.Rate <= 0 || track.Rate > 16) {
 		return errors.New("explicit finite media rate must be greater than zero and at most 16")
 	}
@@ -168,7 +168,7 @@ func (s *systemMediaState) set(ctx context.Context, generation, revision uint64,
 	// consume their revision and clear unsupported or malformed metadata.
 	s.revision = revision
 	s.clearMedia()
-	if track.Source != "online" || strings.TrimSpace(track.ID) == "" || strings.TrimSpace(track.Title) == "" {
+	if !isOnlineMediaTrack(track) {
 		return nil
 	}
 	duration, err := mediaMilliseconds(track.DurationMS)
@@ -190,8 +190,19 @@ func (s *systemMediaState) set(ctx context.Context, generation, revision uint64,
 		commands |= mygo.MediaSeek
 	}
 	s.trackID, s.duration, s.commands = track.ID, duration, commands
-	s.off = s.media.OnCommand(func(command mygo.MediaCommand, pos time.Duration) {
-		if !s.owns(ctx, generation) || !s.enabled || !s.showing || s.revision != revision || s.trackID != track.ID || s.commands&command == 0 {
+	s.off = s.media.OnCommand(s.commandHandler(ctx, generation, revision, track.ID, duration))
+	s.showing = true
+	s.media.Set(mygo.NowPlayingInfo{Title: track.Title, Artist: track.Artist, Album: track.Album, Duration: duration, Position: position, State: state, Rate: track.Rate, Commands: commands})
+	return nil
+}
+
+func isOnlineMediaTrack(track SystemMediaTrack) bool {
+	return track.Source == "online" && strings.TrimSpace(track.ID) != "" && strings.TrimSpace(track.Title) != ""
+}
+
+func (s *systemMediaState) commandHandler(ctx context.Context, generation, revision uint64, trackID string, duration time.Duration) func(mygo.MediaCommand, time.Duration) {
+	return func(command mygo.MediaCommand, pos time.Duration) {
+		if !s.owns(ctx, generation) || !s.enabled || !s.showing || s.revision != revision || s.trackID != trackID || s.commands&command == 0 {
 			return
 		}
 		var action string
@@ -212,11 +223,8 @@ func (s *systemMediaState) set(ctx context.Context, generation, revision uint64,
 		default:
 			return
 		}
-		s.emit(SystemMediaCommand{generation, revision, track.ID, action, float64(pos) / float64(time.Millisecond)})
-	})
-	s.showing = true
-	s.media.Set(mygo.NowPlayingInfo{Title: track.Title, Artist: track.Artist, Album: track.Album, Duration: duration, Position: position, State: state, Rate: track.Rate, Commands: commands})
-	return nil
+		s.emit(SystemMediaCommand{generation, revision, trackID, action, float64(pos) / float64(time.Millisecond)})
+	}
 }
 
 func (s *systemMediaState) playback(ctx context.Context, generation, revision uint64, trackID, state string, positionMS float64) error {

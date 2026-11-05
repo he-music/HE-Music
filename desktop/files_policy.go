@@ -10,14 +10,18 @@ import (
 	"github.com/egoist/mygo"
 )
 
-var errFilesOwner = errors.New("file session is no longer active")
-var errFilesBusy = errors.New("native file operation is busy")
-var errFilesPicker = errors.New("native file selection failed")
-var errFilesToken = errors.New("invalid directory grant")
+var (
+	errFilesOwner  = errors.New("file session is no longer active")
+	errFilesBusy   = errors.New("native file operation is busy")
+	errFilesPicker = errors.New("native file selection failed")
+	errFilesToken  = errors.New("invalid directory grant")
+)
 
-const fileOpActive uint32 = 0
-const fileOpInvalid uint32 = 1
-const fileOpCommitting uint32 = 2
+const (
+	fileOpActive     uint32 = 0
+	fileOpInvalid    uint32 = 1
+	fileOpCommitting uint32 = 2
+)
 
 type FileSession struct {
 	Epoch uint64 `json:"epoch"`
@@ -247,8 +251,19 @@ func (s *nativeFilesState) chooseDirectory(ctx context.Context, epoch uint64) (D
 	if err != nil {
 		return result, err
 	}
-	err = s.main(ctx, func(parent *mygo.Window) error {
-		if !s.owns(ctx, epoch) || s.busy != op || parent != op.parent || op.phase.Load() != fileOpActive {
+	result, accepted, err = s.acceptChosenDirectory(op, handle, token, overlaps)
+	if err == nil && result.Status == DirectorySelected && result.Grant != nil && savedLibraryDirectories.path != "" {
+		if claimErr := s.claimCommit(op); claimErr != nil {
+			return DirectorySelection{}, claimErr
+		}
+		result.StorageError = libraryRememberDirectory(result.Grant.DisplayPath) != nil
+	}
+	return result, err
+}
+
+func (s *nativeFilesState) acceptChosenDirectory(op *fileOperation, handle *directoryHandle, token string, overlaps []directoryOverlap) (result DirectorySelection, accepted bool, err error) {
+	err = s.main(op.owner, func(parent *mygo.Window) error {
+		if !s.owns(op.owner, op.epoch) || s.busy != op || parent != op.parent || op.phase.Load() != fileOpActive {
 			return errFilesOwner
 		}
 		for _, overlap := range overlaps {
@@ -260,22 +275,16 @@ func (s *nativeFilesState) chooseDirectory(ctx context.Context, epoch uint64) (D
 		if len(s.grants) >= 32 {
 			return errDirectory
 		}
-		grant := DirectoryGrant{Token: token, DisplayPath: handle.canonical, Epoch: epoch}
+		grant := DirectoryGrant{Token: token, DisplayPath: handle.canonical, Epoch: op.epoch}
 		if s.grants == nil {
 			s.grants = make(map[string]ownedDirectory)
 		}
 		s.grants[token] = ownedDirectory{grant: grant, handle: handle}
 		accepted = true
-		result = DirectorySelection{Status: "selected", Grant: &grant}
+		result = DirectorySelection{Status: DirectorySelected, Grant: &grant}
 		return nil
 	})
-	if err == nil && result.Status == DirectorySelected && result.Grant != nil && savedLibraryDirectories.path != "" {
-		if claimErr := s.claimCommit(op); claimErr != nil {
-			return DirectorySelection{}, claimErr
-		}
-		result.StorageError = libraryRememberDirectory(result.Grant.DisplayPath) != nil
-	}
-	return result, err
+	return result, accepted, err
 }
 
 func (s *nativeFilesState) revokeDirectory(ctx context.Context, epoch uint64, token string) error {

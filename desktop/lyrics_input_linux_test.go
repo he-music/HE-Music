@@ -85,7 +85,7 @@ func TestLinuxLyricsInputShapePointerDelivery(t *testing.T) {
 	}
 	defer closeDisplay(display)
 	var clicks [3]int
-	press := purego.NewCallback(func(_ uintptr, _ uintptr, target uintptr) int32 {
+	press := purego.NewCallback(func(_, _, target uintptr) int32 {
 		if target > 0 && target < 3 {
 			clicks[target]++
 		}

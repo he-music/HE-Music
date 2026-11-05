@@ -11,6 +11,7 @@ import (
 func orpheusFixture(json string) string {
 	return "orpheus://" + base64.StdEncoding.EncodeToString([]byte(json))
 }
+
 func TestProtocolParse(t *testing.T) {
 	for _, raw := range []string{orpheusFixture(`{"type":"song","id":"123","cmd":"play"}`), "kuwo://play?musicrid0=TVVTSUNfMTIz"} {
 		intent, ok := parseProtocolURL(raw)
@@ -66,6 +67,7 @@ func (f *protocolFake) RegisterURLScheme(s string) error {
 	f.registered[s] = true
 	return nil
 }
+
 func (f *protocolFake) UnregisterURLScheme(s string) error {
 	if f.fail {
 		return context.Canceled
@@ -93,7 +95,7 @@ func TestProtocolSessionPolicy(t *testing.T) {
 	if _, _, err := s.sync(ctx, epoch, nil); err == nil {
 		t.Fatal("old epoch accepted")
 	}
-	if _, _, err := s.sync(context.WithValue(ctx, struct{}{}, true), status.Epoch, nil); err == nil {
+	if _, _, err := s.sync(context.WithValue(ctx, testContextKey{}, true), status.Epoch, nil); err == nil {
 		t.Fatal("foreign owner accepted")
 	}
 	s.receive(raw)
@@ -118,6 +120,7 @@ func TestProtocolSessionPolicy(t *testing.T) {
 		t.Fatal("revoked input cached")
 	}
 }
+
 func TestProtocolFailureAndBounds(t *testing.T) {
 	f := &protocolFake{fail: true, registered: map[string]bool{"orpheus": true}}
 	s := protocolState{backend: f, goos: "darwin"}

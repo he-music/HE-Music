@@ -20,6 +20,7 @@ func nativeTestRequest(t *testing.T, c *downloadCoordinator, token string) Downl
 	r.Options = &DownloadOptions{RelativeDirectory: "Artist/Album", SaveSidecars: true, WriteLyrics: true, Metadata: &DownloadMetadata{Lyrics: "text"}}
 	return r
 }
+
 func TestNativeOwnedTransferFailures(t *testing.T) {
 	for _, kind := range []string{"source", "sidecar", "work"} {
 		for _, op := range []string{"write", "copy", "sync", "stat", "close", "remove", "lstat"} {
@@ -38,12 +39,9 @@ func TestNativeOwnedTransferFailures(t *testing.T) {
 				j := downloadStart(t, a, ctx, epoch, c, req)
 				downloadWait(t, j)
 				st, err := c.access(a.state, ctx, epoch, req.OperationID, false)
-				if err != nil {
-					t.Fatal(err)
-				}
-				if st.Code == "ok" || st.Code == "durability_uncertain" {
-					t.Fatalf("fault ignored: %+v", st)
-				}
+				requireTestNoError(t, err)
+				requireTestNotEqual(t, st.Code, "ok")
+				requireTestNotEqual(t, st.Code, "durability_uncertain")
 				cleanupFault := op == "close" || op == "remove" || op == "lstat"
 				if cleanupFault && st.Code != "cleanup_failed" {
 					t.Fatalf("cleanup code: %+v", st)
@@ -63,6 +61,7 @@ func TestNativeOwnedTransferFailures(t *testing.T) {
 		}
 	}
 }
+
 func TestNativePreparationAndCleanupFailure(t *testing.T) {
 	for _, kind := range []string{"source", "sidecar"} {
 		for _, op := range []string{"write", "sync", "stat"} {
@@ -85,6 +84,7 @@ func TestNativePreparationAndCleanupFailure(t *testing.T) {
 		}
 	}
 }
+
 func TestNativeDirectoryOnlyAndHugeUnusedMetadata(t *testing.T) {
 	a, ctx, epoch, c, token, dir := downloadFixture(t)
 	req := nativeTestRequest(t, c, token)
@@ -99,6 +99,7 @@ func TestNativeDirectoryOnlyAndHugeUnusedMetadata(t *testing.T) {
 		t.Fatal("wrong root output")
 	}
 }
+
 func TestNativeParentReplacementAndSameInodeRoute(t *testing.T) {
 	a, ctx, epoch, c, token, dir := downloadFixture(t)
 	req := nativeTestRequest(t, c, token)
@@ -112,7 +113,7 @@ func TestNativeParentReplacementAndSameInodeRoute(t *testing.T) {
 			if err = os.Rename(parent, parent+"-old"); err != nil {
 				return err
 			}
-			if err = os.Mkdir(parent, 0700); err != nil {
+			if err = os.Mkdir(parent, 0o700); err != nil {
 				return err
 			}
 			for _, e := range entries {
@@ -130,6 +131,7 @@ func TestNativeParentReplacementAndSameInodeRoute(t *testing.T) {
 		t.Fatalf("wrong route accepted: %+v", st)
 	}
 }
+
 func TestNativeCancelAndRevokeClaimBoundary(t *testing.T) {
 	for _, stage := range []string{"before_claim", "after_claim", "after_audio", "after_sidecars"} {
 		for _, revoke := range []bool{false, true} {
@@ -171,6 +173,7 @@ func TestNativeCancelAndRevokeClaimBoundary(t *testing.T) {
 		}
 	}
 }
+
 func TestNativeChunkedCoverTransfer(t *testing.T) {
 	for _, large := range []bool{false, true} {
 		t.Run(map[bool]string{false: "small", true: "over_limit"}[large], func(t *testing.T) {
@@ -224,7 +227,7 @@ func TestNativePinnedSourceSurvivesPathReplacement(t *testing.T) {
 					if err = os.Rename(replacement, replacement+"-original"); err != nil {
 						return err
 					}
-					return os.WriteFile(replacement, []byte("replacement"), 0600)
+					return os.WriteFile(replacement, []byte("replacement"), 0o600)
 				}
 			}
 		}
@@ -316,7 +319,7 @@ func TestNativeParentReplacementDuringCoverFetch(t *testing.T) {
 			if err = os.Rename(parent, parent+"-old"); err != nil {
 				return nil, err
 			}
-			if err = os.Mkdir(parent, 0700); err != nil {
+			if err = os.Mkdir(parent, 0o700); err != nil {
 				return nil, err
 			}
 			for _, e := range entries {
@@ -339,7 +342,7 @@ func TestNativeParentReplacementDuringCoverFetch(t *testing.T) {
 
 func TestNativeOpenTargetClosesPartialAncestors(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(dir, "a"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "a"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Symlink(dir, filepath.Join(dir, "a/b")); err != nil {
@@ -354,7 +357,7 @@ func TestNativeOpenTargetClosesPartialAncestors(t *testing.T) {
 	if err != nil {
 		t.Skip("fd inventory unavailable")
 	}
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if child, _, err := downloadNativeOpenTarget(root, "a/b/song.mp3"); err == nil {
 			if child != root {
 				_ = child.Close()
@@ -400,7 +403,7 @@ func TestNativeSidecarReplacementIsNeverDeleted(t *testing.T) {
 					if err = os.Rename(replacement, replacement+"-original"); err != nil {
 						return err
 					}
-					return os.WriteFile(replacement, []byte("external replacement"), 0600)
+					return os.WriteFile(replacement, []byte("external replacement"), 0o600)
 				}
 			}
 		}

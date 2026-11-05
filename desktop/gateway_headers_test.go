@@ -19,7 +19,7 @@ func TestGatewayNonRedirectLocationAndCookieDeletionAtRedirect(t *testing.T) {
 			http.SetCookie(w, &http.Cookie{Name: "session", Value: "fixture", Path: "/"})
 		case "/logout":
 			http.SetCookie(w, &http.Cookie{Name: "session", Value: "", Path: "/", MaxAge: -1})
-			http.Redirect(w, r, "/check", 302)
+			http.Redirect(w, r, "/check", http.StatusFound)
 		default:
 			_, _ = io.WriteString(w, r.Header.Get("Cookie"))
 		}
@@ -42,7 +42,7 @@ func TestGatewayRedirectHopBoundary(t *testing.T) {
 		var remaining int
 		_, _ = fmt.Sscanf(r.URL.Path, "/%d", &remaining)
 		if remaining > 0 {
-			http.Redirect(w, r, fmt.Sprintf("/%d", remaining-1), 302)
+			http.Redirect(w, r, fmt.Sprintf("/%d", remaining-1), http.StatusFound)
 			return
 		}
 		fmt.Fprint(w, "complete")

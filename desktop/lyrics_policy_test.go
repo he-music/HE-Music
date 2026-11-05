@@ -10,7 +10,7 @@ import (
 func lyricsTestState(t *testing.T) (*lyricsState, context.Context) {
 	t.Helper()
 	s := &lyricsState{}
-	ctx := context.WithValue(context.Background(), struct{}{}, "main")
+	ctx := context.WithValue(context.Background(), testContextKey{}, "main")
 	if _, err := s.begin(ctx); err != nil {
 		t.Fatal(err)
 	}
@@ -19,16 +19,20 @@ func lyricsTestState(t *testing.T) (*lyricsState, context.Context) {
 
 func lyricsTestSnapshot(epoch, seq uint64, track string) LyricsSnapshot {
 	roman := "koe"
-	return LyricsSnapshot{Epoch: epoch, Seq: seq, TrackKey: track, PlayName: "Synthetic song",
+	return LyricsSnapshot{
+		Epoch: epoch, Seq: seq, TrackKey: track, PlayName: "Synthetic song",
 		ArtistName: "Synthetic artist", PositionMs: 1250.5, OffsetMs: -175, Rate: 1,
-		LrcData: []LyricsLine{{StartTime: 900, EndTime: 2100, TranslatedLyric: "声音", RomanLyric: "koe",
-			IsBG: true, IsDuet: true, Words: []LyricsWord{{StartTime: 1000, EndTime: 2000, Word: "声", RomanWord: &roman}}}},
-		YrcData: []LyricsLine{}}
+		LrcData: []LyricsLine{{
+			StartTime: 900, EndTime: 2100, TranslatedLyric: "声音", RomanLyric: "koe",
+			IsBG: true, IsDuet: true, Words: []LyricsWord{{StartTime: 1000, EndTime: 2000, Word: "声", RomanWord: &roman}},
+		}},
+		YrcData: []LyricsLine{},
+	}
 }
 
 func TestLyricsPolicyOwnershipAndEpoch(t *testing.T) {
 	s, ctx := lyricsTestState(t)
-	other := context.WithValue(context.Background(), struct{}{}, "other")
+	other := context.WithValue(context.Background(), testContextKey{}, "other")
 	for _, test := range []struct {
 		name                    string
 		ctx                     context.Context
@@ -75,9 +79,11 @@ func TestLyricsPolicyReadyAttachGenerationAndReopen(t *testing.T) {
 	for _, readyFirst := range []bool{true, false} {
 		s, _ := lyricsTestState(t)
 		first := s.open()
-		if s.showable(first) || s.window.Visible || !s.window.Pending || s.window.Locked || s.window.HoverUnlock {
-			t.Fatal("open claimed visible or locked before handshake")
-		}
+		requireTestEqual(t, s.showable(first), false)
+		requireTestEqual(t, s.window.Visible, false)
+		requireTestEqual(t, s.window.Pending, true)
+		requireTestEqual(t, s.window.Locked, false)
+		requireTestEqual(t, s.window.HoverUnlock, false)
 		if readyFirst {
 			s.ready = true
 		} else {

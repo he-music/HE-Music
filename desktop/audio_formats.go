@@ -50,34 +50,67 @@ func localAudioMIME(file *os.File) (string, error) {
 	if readErr != nil && readErr != io.EOF {
 		return "", readErr
 	}
-	header := data[:n]
-	switch {
-	case bytes.HasPrefix(header, []byte("fLaC")):
-		return "audio/flac", nil
-	case bytes.HasPrefix(header, []byte("ID3")):
-		if strings.EqualFold(filepath.Ext(file.Name()), ".aac") {
-			return "audio/aac", nil
-		}
-		return "audio/mpeg", nil
-	case n >= 12 && (string(header[:4]) == "RIFF" || string(header[:4]) == "RF64") && string(header[8:12]) == "WAVE":
-		return "audio/wav", nil
-	case n >= 12 && string(header[:4]) == "FORM" && (string(header[8:12]) == "AIFF" || string(header[8:12]) == "AIFC"):
-		return "audio/aiff", nil
-	case bytes.HasPrefix(header, []byte("OggS")):
-		return "audio/ogg", nil
-	case n >= 8 && string(header[4:8]) == "ftyp":
-		return "audio/mp4", nil
-	case bytes.HasPrefix(header, []byte{0x1a, 0x45, 0xdf, 0xa3}):
-		return "audio/webm", nil
-	case bytes.HasPrefix(header, []byte("MAC ")):
-		return "audio/ape", nil
-	case n >= 2 && header[0] == 0xff && header[1]&0xf6 == 0xf0:
-		return "audio/aac", nil
-	case n >= 2 && header[0] == 0xff && header[1]&0xe0 == 0xe0:
-		return "audio/mpeg", nil
+	ext := strings.ToLower(filepath.Ext(file.Name()))
+	if mime := sniffLocalAudioMIME(data[:n], ext); mime != "" {
+		return mime, nil
 	}
-	if mime, supported := localAudioExtensions[strings.ToLower(filepath.Ext(file.Name()))]; supported {
+	if mime, supported := localAudioExtensions[ext]; supported {
 		return mime, nil
 	}
 	return "", errLocalAudio
+}
+
+func sniffLocalAudioMIME(header []byte, ext string) string {
+	if mime := localAudioIFFMIME(header); mime != "" {
+		return mime
+	}
+	switch {
+	case bytes.HasPrefix(header, []byte("fLaC")):
+		return "audio/flac"
+	case bytes.HasPrefix(header, []byte("ID3")):
+		if ext == ".aac" {
+			return "audio/aac"
+		}
+		return "audio/mpeg"
+	case bytes.HasPrefix(header, []byte("OggS")):
+		return "audio/ogg"
+	case len(header) >= 8 && string(header[4:8]) == "ftyp":
+		return "audio/mp4"
+	case bytes.HasPrefix(header, []byte{0x1a, 0x45, 0xdf, 0xa3}):
+		return "audio/webm"
+	case bytes.HasPrefix(header, []byte("MAC ")):
+		return "audio/ape"
+	default:
+		return localAudioFrameMIME(header)
+	}
+}
+
+func localAudioIFFMIME(header []byte) string {
+	if len(header) < 12 {
+		return ""
+	}
+	switch string(header[:4]) {
+	case "RIFF", "RF64":
+		if string(header[8:12]) == "WAVE" {
+			return "audio/wav"
+		}
+	case "FORM":
+		if kind := string(header[8:12]); kind == "AIFF" || kind == "AIFC" {
+			return "audio/aiff"
+		}
+	}
+	return ""
+}
+
+func localAudioFrameMIME(header []byte) string {
+	if len(header) < 2 || header[0] != 0xff {
+		return ""
+	}
+	if header[1]&0xf6 == 0xf0 {
+		return "audio/aac"
+	}
+	if header[1]&0xe0 == 0xe0 {
+		return "audio/mpeg"
+	}
+	return ""
 }

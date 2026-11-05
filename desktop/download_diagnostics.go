@@ -9,8 +9,9 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/he-music/HE-Music/desktop/metadata"
 	"github.com/tommyo123/mtag"
+
+	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
 // Never log the request URL, selected path, operation token or raw error text.
@@ -25,7 +26,7 @@ func downloadFailureMessage(stage string, status int, cause error, state Downloa
 	kind := "none"
 	if cause != nil {
 		leaf := cause
-		for depth := 0; depth < 8; depth++ {
+		for range 8 {
 			next := errors.Unwrap(leaf)
 			if next == nil {
 				break

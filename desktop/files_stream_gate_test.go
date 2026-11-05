@@ -27,7 +27,7 @@ func TestLocalAudioIdentityGateDrainsHTTPAndAliases(t *testing.T) {
 		t.Fatal(err)
 	}
 	fd.Close()
-	if err = os.WriteFile(filepath.Join(filepath.Dir(path), "other.data"), data, 0600); err != nil {
+	if err = os.WriteFile(filepath.Join(filepath.Dir(path), "other.data"), data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	other, fd, err := a.state.registerLocalFile(lease, "other.data")
@@ -120,9 +120,7 @@ func TestLocalAudioIdentityGatePendingOpen(t *testing.T) {
 				t.Fatal("pending open was not registered as a reader")
 			}
 			info, err := os.Stat(path)
-			if err != nil {
-				t.Fatal(err)
-			}
+			requireTestNoError(t, err)
 			gateCtx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			type result struct {
@@ -157,9 +155,7 @@ func TestLocalAudioIdentityGatePendingOpen(t *testing.T) {
 			releaseListen()
 			select {
 			case err := <-opened:
-				if err == nil {
-					t.Fatal("pending open succeeded")
-				}
+				requireTestError(t, err)
 			case <-time.After(5 * time.Second):
 				t.Fatal("pending open did not finish")
 			}
@@ -178,9 +174,7 @@ func TestLocalAudioIdentityGatePendingOpen(t *testing.T) {
 			a.mu.Lock()
 			count := len(a.readers) + len(a.writeGates) + len(a.tickets)
 			a.mu.Unlock()
-			if count != 0 {
-				t.Fatal("reader, gate or ticket leaked")
-			}
+			requireTestEqual(t, count, 0)
 		})
 	}
 }

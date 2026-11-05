@@ -17,6 +17,7 @@ import (
 func payloadCompare(a, b []byte) error {
 	return CompareAudioPayload(context.Background(), bytes.NewReader(a), int64(len(a)), bytes.NewReader(b), int64(len(b)))
 }
+
 func payloadMP3() []byte {
 	// MPEG-1 Layer III, 128 kbps, 44100 Hz, stereo, no CRC; two
 	// complete frames with zero side information and zero-length granules.
@@ -24,6 +25,7 @@ func payloadMP3() []byte {
 	copy(frame, []byte{0xff, 0xfb, 0x90, 0})
 	return bytes.Repeat(frame, 2)
 }
+
 func payloadID3(version, flags byte, body []byte) []byte {
 	n := len(body)
 	h := []byte{'I', 'D', '3', version, 0, flags, byte(n>>21) & 127, byte(n>>14) & 127, byte(n>>7) & 127, byte(n) & 127}
@@ -34,11 +36,12 @@ func payloadID3(version, flags byte, body []byte) []byte {
 	}
 	return out
 }
+
 func payloadCRC(data []byte, width uint, poly uint32) uint32 {
 	var crc uint32
 	for _, v := range data {
 		crc ^= uint32(v) << (width - 8)
-		for i := 0; i < 8; i++ {
+		for range 8 {
 			if crc&(1<<(width-1)) != 0 {
 				crc = crc<<1 ^ poly
 			} else {
@@ -48,6 +51,7 @@ func payloadCRC(data []byte, width uint, poly uint32) uint32 {
 	}
 	return crc & ((1 << width) - 1)
 }
+
 func payloadFLAC() []byte {
 	// A complete native mono 16-bit FLAC constant subframe, 16 samples.
 	info := make([]byte, 34)
@@ -62,6 +66,7 @@ func payloadFLAC() []byte {
 	out := append([]byte("fLaC\x80\x00\x00\x22"), info...)
 	return append(out, frame...)
 }
+
 func TestPayloadPureLayouts(t *testing.T) {
 	mp3, flac := payloadMP3(), payloadFLAC()
 	for name, data := range map[string][]byte{"mpeg": mp3, "flac": flac, "id3v23": append(payloadID3(3, 0, []byte("tags")), mp3...), "id3v24footer": append(payloadID3(4, 16, []byte("tags")), mp3...)} {
@@ -161,7 +166,7 @@ func TestPayloadRejectedLayouts(t *testing.T) {
 	}
 	// Every truncation is rejected, including cuts precisely at metadata/frame boundaries.
 	for name, b := range map[string][]byte{"mp3": mp3, "flac": flac} {
-		for n := 0; n < len(b); n++ {
+		for n := range b {
 			if err := payloadCompare(b[:n], b[:n]); err == nil {
 				t.Fatalf("%s truncation at %d accepted", name, n)
 			}
@@ -192,6 +197,7 @@ func (r *payloadGuardReader) ReadAt(p []byte, off int64) (int, error) {
 	}
 	return bytes.NewReader(r.data).ReadAt(p, off)
 }
+
 func TestPayloadBoundsAndCancellation(t *testing.T) {
 	b := payloadMP3()
 	r := &payloadGuardReader{data: b}
@@ -262,7 +268,7 @@ func TestPayloadEditedWorkingCopy(t *testing.T) {
 				v1 := make([]byte, 128)
 				copy(v1, "TAGlegacy title")
 				before = append(bytes.Clone(before[10+n:]), v1...)
-				if err := os.WriteFile(path, before, 0600); err != nil {
+				if err := os.WriteFile(path, before, 0o600); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -271,7 +277,7 @@ func TestPayloadEditedWorkingCopy(t *testing.T) {
 				t.Fatalf("generated fixture rejected: %v", err)
 			}
 			work := filepath.Join(filepath.Dir(path), "payload-working."+tc.format)
-			if err := os.WriteFile(work, before, 0600); err != nil {
+			if err := os.WriteFile(work, before, 0o600); err != nil {
 				t.Fatal(err)
 			}
 			title := "独立音频负载校验"
@@ -331,6 +337,7 @@ func payloadEncode(t *testing.T, format, source string, options []string) string
 	}
 	return path
 }
+
 func TestPayloadGeneratedEncodingVariants(t *testing.T) {
 	for _, tc := range []struct {
 		name, format, source string
@@ -422,9 +429,14 @@ func TestPayloadFLACStreamInfoAndStructure(t *testing.T) {
 		off   int
 		value byte
 	}{
-		{"frame-number", 46, 1}, {"reserved-sync", 43, 0xfa}, {"block-code", 44, 0x09},
-		{"reserved-rate", 44, 0x6f}, {"wrong-channels", 45, 0x18}, {"reserved-depth", 45, 0x06},
-		{"wrong-depth", 45, 0x02}, {"block-exceeds-total", 47, 16},
+		{"frame-number", 46, 1},
+		{"reserved-sync", 43, 0xfa},
+		{"block-code", 44, 0x09},
+		{"reserved-rate", 44, 0x6f},
+		{"wrong-channels", 45, 0x18},
+		{"reserved-depth", 45, 0x06},
+		{"wrong-depth", 45, 0x02},
+		{"block-exceeds-total", 47, 16},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			b := bytes.Clone(good)
@@ -441,9 +453,12 @@ func TestPayloadFLACStreamInfoAndStructure(t *testing.T) {
 		name  string
 		block []byte
 	}{
-		{"short-application", []byte{0x82, 0, 0, 0}}, {"bad-seektable-size", []byte{0x83, 0, 0, 1, 0}},
-		{"short-comment", []byte{0x84, 0, 0, 0}}, {"short-cuesheet", []byte{0x85, 0, 0, 0}},
-		{"short-picture", []byte{0x86, 0, 0, 0}}, {"duplicate-streaminfo", append([]byte{0x80, 0, 0, 34}, good[8:42]...)},
+		{"short-application", []byte{0x82, 0, 0, 0}},
+		{"bad-seektable-size", []byte{0x83, 0, 0, 1, 0}},
+		{"short-comment", []byte{0x84, 0, 0, 0}},
+		{"short-cuesheet", []byte{0x85, 0, 0, 0}},
+		{"short-picture", []byte{0x86, 0, 0, 0}},
+		{"duplicate-streaminfo", append([]byte{0x80, 0, 0, 34}, good[8:42]...)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			b := bytes.Clone(good[:42])

@@ -34,7 +34,7 @@ const mocks = vi.hoisted(() => ({
     name: "A",
     artists: [],
     album: "Album",
-    links: [{ name: "128mp3" }],
+    links: [{ name: "128mp3", format: "mp3", quality: 128 }],
   },
   settings: { smtcOpen: true, showSpectrums: true, songLevel: "128mp3" },
   data: { setHistory: vi.fn(), playList: [{ id: "a" }, { id: "b" }] },
@@ -59,7 +59,9 @@ vi.mock("./songManager", () => ({
     getPlaySongData: () => mocks.song,
     getPlayerInfoObj: () => ({ name: "A", artist: "Artist" }),
     getCoverColor: mocks.cover,
-    getOnlineUrl: vi.fn().mockResolvedValue("https://audio.example/track.mp3"),
+    getOnlineSource: vi
+      .fn()
+      .mockResolvedValue({ url: "https://audio.example/track.mp3", format: "mp3" }),
   },
 }));
 vi.mock("./lyricManager", () => ({

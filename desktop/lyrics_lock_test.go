@@ -38,12 +38,10 @@ func TestLyricsLockPolicyUnlockCloseReopenAndStaleGeneration(t *testing.T) {
 	s.ready, s.attached = true, true
 	s.shown()
 	revision := s.window.Revision
-	if err := s.setLocked(true, true); err != nil {
-		t.Fatal(err)
-	}
-	if !s.window.Locked || s.window.HoverUnlock || s.window.Revision != revision+1 {
-		t.Fatal("lock state/revision invalid", s.window)
-	}
+	requireTestNoError(t, s.setLocked(true, true))
+	requireTestEqual(t, s.window.Locked, true)
+	requireTestEqual(t, s.window.HoverUnlock, false)
+	requireTestEqual(t, s.window.Revision, revision+1)
 	if err := s.setLocked(true, true); err != nil || s.window.Revision != revision+1 {
 		t.Fatal("duplicate lock must not advance revision", err)
 	}
@@ -56,9 +54,11 @@ func TestLyricsLockPolicyUnlockCloseReopenAndStaleGeneration(t *testing.T) {
 	if err := s.setLocked(true, true); err != nil {
 		t.Fatal(err)
 	}
-	if !s.close(first, "synthetic-failure") || s.window.Locked || s.window.Visible || s.window.Pending || s.window.Failure != "synthetic-failure" {
-		t.Fatal("failure did not reset lock", s.window)
-	}
+	requireTestEqual(t, s.close(first, "synthetic-failure"), true)
+	requireTestEqual(t, s.window.Locked, false)
+	requireTestEqual(t, s.window.Visible, false)
+	requireTestEqual(t, s.window.Pending, false)
+	requireTestEqual(t, s.window.Failure, "synthetic-failure")
 	second := s.open()
 	if s.window.Locked || s.window.Failure != "" || !s.window.Pending {
 		t.Fatal("reopen inherited failed or locked state", s.window)
@@ -85,7 +85,7 @@ func TestLyricsLockPolicyUnlockCloseReopenAndStaleGeneration(t *testing.T) {
 	if err := s.authorize(owner, 1, true, false, true); err == nil {
 		t.Fatal("old epoch authorized lock request")
 	}
-	child := context.WithValue(owner, struct{}{}, "current child")
+	child := context.WithValue(owner, testContextKey{}, "current child")
 	if err := s.authorize(child, s.epoch, false, true, true); err != nil {
 		t.Fatal("exact current child must be allowed to request lock", err)
 	}

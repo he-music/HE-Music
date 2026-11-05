@@ -34,6 +34,7 @@ func TestTaskbarControllerSameOwnerSupersededAcceptance(t *testing.T) {
 		}
 	}
 }
+
 func TestTaskbarControllerClearCannotBecomeSyncAcceptance(t *testing.T) {
 	e := nativeTaskbarFixture()
 	c := taskbarController{backend: &e, handle: 1, state: TaskbarState{Epoch: 1}}
@@ -55,6 +56,7 @@ func TestTaskbarControllerClearCannotBecomeSyncAcceptance(t *testing.T) {
 		t.Fatalf("clear incorrectly classified as sync acceptance: err=%v state=%+v", err, c.state)
 	}
 }
+
 func TestTaskbarControllerCloseCannotBecomeSyncAcceptance(t *testing.T) {
 	e := nativeTaskbarFixture()
 	c := taskbarController{backend: &e, handle: 1, state: TaskbarState{Epoch: 1}}

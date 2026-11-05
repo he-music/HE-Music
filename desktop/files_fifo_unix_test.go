@@ -9,4 +9,4 @@ import (
 
 var errFileTestFIFOUnsupported = errors.New("FIFO fixture unavailable on this platform")
 
-func makeFileTestFIFO(path string) error { return syscall.Mkfifo(path, 0600) }
+func makeFileTestFIFO(path string) error { return syscall.Mkfifo(path, 0o600) }

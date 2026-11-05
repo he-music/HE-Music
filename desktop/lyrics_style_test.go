@@ -14,6 +14,7 @@ var lyricsStyleValidColors = []string{
 	"rgba(0,0,0,0.123456)", "rgba(0,0,0,.000001)",
 	"rgb(" + strings.Repeat(" ", 54) + "0,0,0)",
 }
+
 var lyricsStyleInvalidColors = []string{
 	"", "#ab", "#abcde", "#abcdefg", "#123456789", "#ggg", "red", "transparent",
 	"url(x)", "var(--color)", "#abc; color:red", "rgb(0,0,0);background:url(x)",
@@ -47,8 +48,10 @@ func TestLyricsStyleColorGoldens(t *testing.T) {
 }
 
 func TestLyricsStyleDefaultsAndFields(t *testing.T) {
-	want := LyricsStyle{PlayedColor: "#fe7971", UnplayedColor: "#ccc",
-		ShadowColor: "rgba(0, 0, 0, 0.5)", TextBackgroundMask: false}
+	want := LyricsStyle{
+		PlayedColor: "#fe7971", UnplayedColor: "#ccc",
+		ShadowColor: "rgba(0, 0, 0, 0.5)", TextBackgroundMask: false,
+	}
 	if got := defaultLyricsStyle(); got != want || !validLyricsStyle(got) {
 		t.Fatalf("defaultLyricsStyle() = %+v, want valid %+v", got, want)
 	}
@@ -90,8 +93,10 @@ func TestCloneLyricsStyleDetached(t *testing.T) {
 	if second.PlayedColor != "#fe7971" || defaultLyricsStyle().PlayedColor != "#fe7971" {
 		t.Fatal("default clones share mutable state")
 	}
-	original := LyricsStyle{PlayedColor: "#abcd", UnplayedColor: "#aabbcc00",
-		ShadowColor: "rgba(0,0,0,0)", TextBackgroundMask: true}
+	original := LyricsStyle{
+		PlayedColor: "#abcd", UnplayedColor: "#aabbcc00",
+		ShadowColor: "rgba(0,0,0,0)", TextBackgroundMask: true,
+	}
 	clone := cloneLyricsStyle(&original)
 	if clone == &original || *clone != original || !validLyricsStyle(*clone) {
 		t.Fatal("non-nil clone must preserve all values including alpha and mask")

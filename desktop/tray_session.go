@@ -115,6 +115,10 @@ func (s *traySession) validateRequest(captured TrayPlaybackState, request TrayRe
 	if !validTrayNumber(captured.Revision) || !captured.HasSong {
 		return errors.New("tray song unavailable")
 	}
+	return validateTrayPlaybackAction(captured, request)
+}
+
+func validateTrayPlaybackAction(captured TrayPlaybackState, request TrayRequest) error {
 	switch request.Action {
 	case TrayPrevious, TrayToggle, TrayNext:
 		if request.Favorite != nil || request.Mode != nil {

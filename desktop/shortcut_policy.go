@@ -87,50 +87,15 @@ func normalizeShortcut(input, goos string) (string, error) {
 	parts := strings.Split(input, "+")
 	mods := map[string]bool{}
 	for _, part := range parts[:len(parts)-1] {
-		var modifier string
-		switch strings.ToLower(strings.TrimSpace(part)) {
-		case "cmdorctrl", "commandorcontrol":
-			modifier = "Ctrl"
-			if goos == "darwin" {
-				modifier = "Super"
-			}
-		case "cmd", "command", "super", "meta", "win":
-			modifier = "Super"
-		case "ctrl", "control":
-			modifier = "Ctrl"
-		case "alt", "option":
-			modifier = "Alt"
-		case "shift":
-			modifier = "Shift"
-		default:
-			return "", errors.New("invalid modifier")
+		modifier, err := shortcutModifier(part, goos)
+		if err != nil {
+			return "", err
 		}
 		mods[modifier] = true
 	}
-	key := strings.ToLower(strings.TrimSpace(parts[len(parts)-1]))
-	if len(key) == 4 && strings.HasPrefix(key, "key") && key[3] >= 'a' && key[3] <= 'z' {
-		key = key[3:]
-	} else if len(key) == 6 && strings.HasPrefix(key, "digit") && key[5] >= '0' && key[5] <= '9' {
-		key = key[5:]
-	}
-	if len(key) == 1 && ((key[0] >= 'a' && key[0] <= 'z') || (key[0] >= '0' && key[0] <= '9')) {
-		key = strings.ToUpper(key)
-	} else if named := map[string]string{
-		"space": "Space", "left": "Left", "arrowleft": "Left", "right": "Right", "arrowright": "Right",
-		"up": "Up", "arrowup": "Up", "down": "Down", "arrowdown": "Down", "escape": "Escape", "esc": "Escape",
-	}[key]; named != "" {
-		key = named
-	} else if strings.HasPrefix(key, "f") {
-		n, err := strconv.Atoi(key[1:])
-		if err != nil || n < 1 || n > 24 || strconv.Itoa(n) != key[1:] {
-			return "", errors.New("unsupported key")
-		}
-		if goos == "darwin" && n > 20 {
-			return "", errors.New("F21-F24 are unsupported by the macOS global shortcut backend")
-		}
-		key = fmt.Sprintf("F%d", n)
-	} else {
-		return "", errors.New("unsupported key")
+	key, err := normalizeShortcutKey(parts[len(parts)-1], goos)
+	if err != nil {
+		return "", err
 	}
 	canonical := []string{}
 	for _, modifier := range []string{"Super", "Ctrl", "Alt", "Shift"} {
@@ -139,6 +104,61 @@ func normalizeShortcut(input, goos string) (string, error) {
 		}
 	}
 	return strings.Join(append(canonical, key), "+"), nil
+}
+
+func shortcutModifier(part, goos string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(part)) {
+	case "cmdorctrl", "commandorcontrol":
+		if goos == "darwin" {
+			return "Super", nil
+		}
+		return "Ctrl", nil
+	case "cmd", "command", "super", "meta", "win":
+		return "Super", nil
+	case "ctrl", "control":
+		return "Ctrl", nil
+	case "alt", "option":
+		return "Alt", nil
+	case "shift":
+		return "Shift", nil
+	default:
+		return "", errors.New("invalid modifier")
+	}
+}
+
+func shortcutKeyToken(input string) string {
+	key := strings.ToLower(strings.TrimSpace(input))
+	if len(key) == 4 && strings.HasPrefix(key, "key") && key[3] >= 'a' && key[3] <= 'z' {
+		return key[3:]
+	}
+	if len(key) == 6 && strings.HasPrefix(key, "digit") && key[5] >= '0' && key[5] <= '9' {
+		return key[5:]
+	}
+	return key
+}
+
+func normalizeShortcutKey(input, goos string) (string, error) {
+	key := shortcutKeyToken(input)
+	if len(key) == 1 && ((key[0] >= 'a' && key[0] <= 'z') || (key[0] >= '0' && key[0] <= '9')) {
+		return strings.ToUpper(key), nil
+	}
+	if named := map[string]string{
+		"space": "Space", "left": "Left", "arrowleft": "Left", "right": "Right", "arrowright": "Right",
+		"up": "Up", "arrowup": "Up", "down": "Down", "arrowdown": "Down", "escape": "Escape", "esc": "Escape",
+	}[key]; named != "" {
+		return named, nil
+	}
+	if !strings.HasPrefix(key, "f") {
+		return "", errors.New("unsupported key")
+	}
+	n, err := strconv.Atoi(key[1:])
+	if err != nil || n < 1 || n > 24 || strconv.Itoa(n) != key[1:] {
+		return "", errors.New("unsupported key")
+	}
+	if goos == "darwin" && n > 20 {
+		return "", errors.New("F21-F24 are unsupported by the macOS global shortcut backend")
+	}
+	return fmt.Sprintf("F%d", n), nil
 }
 
 func (s *shortcutState) owns(ctx context.Context, generation uint64) bool {

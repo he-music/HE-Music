@@ -129,6 +129,7 @@ func (n *windowButtonsDarwin) containsPointer(rect windowButtonsRect) bool {
 	return rect.Width > 0 && rect.Height > 0 && point.X >= rect.X && point.X < rect.X+rect.Width &&
 		point.Y >= rect.Y && point.Y < rect.Y+rect.Height
 }
+
 func (n *windowButtonsDarwin) newArea(rect windowButtonsRect) (uintptr, error) {
 	// entered/exited + activeAlways. No mouse polling or moved events.
 	options := uint(0x01 | 0x80)

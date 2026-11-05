@@ -17,9 +17,11 @@ import (
 	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
-const displayImageLimit = 4 << 20
-const displayLyricsLimit = 1 << 20
-const displayReadBudget = 16 << 20
+const (
+	displayImageLimit  = 4 << 20
+	displayLyricsLimit = 1 << 20
+	displayReadBudget  = 16 << 20
+)
 
 // Display reads are transient. They never compute or expose an editor SHA baseline.
 // The process-wide bound also covers overlapping windows and cancelled callers
@@ -122,40 +124,9 @@ func (f *NativeFiles) readLocalDisplay(ctx context.Context, epoch uint64, ref Lo
 		return metadata.ParseScan(reader, before.Size())
 	}
 	if artwork {
-		parsed, _ := parse()
-		for _, front := range []bool{true, false} {
-			for i, picture := range parsed.Pictures {
-				if i >= 32 {
-					break
-				}
-				if (picture.Type == 3) == front && displayPicture(picture) {
-					info.Pictures = []metadata.Picture{{MIME: picture.MIME, Type: picture.Type, Data: picture.Data}}
-					break
-				}
-			}
-			if len(info.Pictures) != 0 {
-				break
-			}
-		}
-		if len(info.Pictures) == 0 && op.Err() == nil {
-			data, sideErr := sidecar(".jpg", displayImageLimit)
-			_, format, _ := image.DecodeConfig(bytes.NewReader(data))
-			picture := metadata.Picture{MIME: "image/" + format, Type: 3, Data: data}
-			if sideErr == nil && displayPicture(picture) {
-				info.Pictures = []metadata.Picture{{MIME: picture.MIME, Type: picture.Type, Data: picture.Data}}
-			}
-		}
+		info.Pictures = readDisplayArtwork(op, parse, sidecar)
 	} else {
-		data, sideErr := sidecar(".lrc", displayLyricsLimit)
-		if sideErr == nil && len(data) != 0 && utf8.Valid(data) {
-			info.Lyrics = string(data)
-		}
-		if info.Lyrics == "" && op.Err() == nil {
-			parsed, parseErr := parse()
-			if parseErr == nil && len(parsed.Lyrics) <= displayLyricsLimit && utf8.ValidString(parsed.Lyrics) {
-				info.Lyrics = parsed.Lyrics
-			}
-		}
+		info.Lyrics = readDisplayLyrics(op, parse, sidecar)
 	}
 	after, statErr := source.Stat()
 	if statErr != nil || !sameLocalFileInfo(before, after) {
@@ -165,6 +136,42 @@ func (f *NativeFiles) readLocalDisplay(ctx context.Context, epoch uint64, ref Lo
 		return MetadataResult{Code: metadataCode(err)}
 	}
 	return MetadataResult{Code: "ok", Ref: &ref, Info: &info}
+}
+
+func readDisplayArtwork(ctx context.Context, parse func() (metadata.Info, error), sidecar func(string, int64) ([]byte, error)) []metadata.Picture {
+	parsed, _ := parse()
+	for _, front := range []bool{true, false} {
+		for _, picture := range parsed.Pictures[:min(len(parsed.Pictures), 32)] {
+			if (picture.Type == 3) == front && displayPicture(picture) {
+				return []metadata.Picture{{MIME: picture.MIME, Type: picture.Type, Data: picture.Data}}
+			}
+		}
+	}
+	if ctx.Err() != nil {
+		return nil
+	}
+	data, err := sidecar(".jpg", displayImageLimit)
+	_, format, _ := image.DecodeConfig(bytes.NewReader(data))
+	picture := metadata.Picture{MIME: "image/" + format, Type: 3, Data: data}
+	if err != nil || !displayPicture(picture) {
+		return nil
+	}
+	return []metadata.Picture{{MIME: picture.MIME, Type: picture.Type, Data: picture.Data}}
+}
+
+func readDisplayLyrics(ctx context.Context, parse func() (metadata.Info, error), sidecar func(string, int64) ([]byte, error)) string {
+	data, err := sidecar(".lrc", displayLyricsLimit)
+	if err == nil && len(data) != 0 && utf8.Valid(data) {
+		return string(data)
+	}
+	if ctx.Err() != nil {
+		return ""
+	}
+	parsed, err := parse()
+	if err != nil || len(parsed.Lyrics) > displayLyricsLimit || !utf8.ValidString(parsed.Lyrics) {
+		return ""
+	}
+	return parsed.Lyrics
 }
 
 func displayPicture(picture metadata.Picture) bool {

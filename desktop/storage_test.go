@@ -39,7 +39,7 @@ func TestApplicationStorageRoundTripAndBinaryOnDisk(t *testing.T) {
 		t.Fatalf("binary was not persisted raw: %v", err)
 	}
 	info, _ := os.Stat(path)
-	if info.Mode().Perm() != 0600 {
+	if info.Mode().Perm() != 0o600 {
 		t.Fatalf("private mode: %v", info.Mode())
 	}
 	// A second process/instance uses only the files, not browser storage.
@@ -52,11 +52,11 @@ func TestApplicationStorageRoundTripAndBinaryOnDisk(t *testing.T) {
 func TestApplicationStorageRejectsCorruptionWithoutOverwriting(t *testing.T) {
 	store := &applicationStorage{root: t.TempDir()}
 	path, _ := store.path("renderer", "setting-store")
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	original := []byte("damaged\noriginal")
-	if err := os.WriteFile(path, original, 0600); err != nil {
+	if err := os.WriteFile(path, original, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.read("renderer", "setting-store"); err == nil {

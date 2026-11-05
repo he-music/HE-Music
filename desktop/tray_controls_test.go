@@ -24,21 +24,21 @@ func trayAssertChecked(t *testing.T, items []*mygo.MenuItem, want int) {
 
 func TestTrayControlsCapabilityMatrix(t *testing.T) {
 	modes := []TrayPlayMode{TrayModeRepeat, TrayModeRepeatOnce, TrayModeShuffle}
-	for bits := 0; bits < 32; bits++ {
+	for bits := range 32 {
 		ready := bits&1 != 0
 		p := TrayPlaybackState{HasSong: bits&2 != 0, CanFavorite: bits&4 != 0, CanSetMode: bits&8 != 0, Liked: bits&16 != 0}
 		for selected, mode := range modes {
 			p.PlayMode = mode
 			commands := []trayMenuCommand{}
 			items := buildTrayPlaybackControls(p, ready, LifecycleLabels{}, nil, func(command trayMenuCommand) { commands = append(commands, command) })
-			if len(items) != 2 || items[0].Type != mygo.MenuItemNormal || items[1].Type != mygo.MenuItemSubmenu || len(items[1].Submenu) != 3 {
-				t.Fatal("invalid controls")
-			}
+			requireTestEqual(t, len(items), 2)
+			requireTestEqual(t, items[0].Type, mygo.MenuItemNormal)
+			requireTestEqual(t, items[1].Type, mygo.MenuItemSubmenu)
+			requireTestEqual(t, len(items[1].Submenu), 3)
 			favoriteEnabled := ready && p.HasSong && p.CanFavorite
 			modeEnabled := ready && p.HasSong && p.CanSetMode
-			if items[0].Disabled == favoriteEnabled || items[1].Disabled == modeEnabled {
-				t.Fatalf("bits=%d capability mismatch", bits)
-			}
+			requireTestEqual(t, items[0].Disabled, !favoriteEnabled)
+			requireTestEqual(t, items[1].Disabled, !modeEnabled)
 			favoriteLabel := "添加到收藏"
 			if p.Liked {
 				favoriteLabel = "取消收藏"
@@ -56,9 +56,8 @@ func TestTrayControlsCapabilityMatrix(t *testing.T) {
 			}
 			commands = nil
 			for index, child := range items[1].Submenu {
-				if child.Type != mygo.MenuItemRadio || child.Disabled == modeEnabled {
-					t.Fatalf("child %d capability", index)
-				}
+				requireTestEqual(t, child.Type, mygo.MenuItemRadio)
+				requireTestEqual(t, child.Disabled, !modeEnabled)
 				// Model the SDK's optimistic sibling change before Click, without a Menu.
 				for i, sibling := range items[1].Submenu {
 					sibling.Checked = i == index

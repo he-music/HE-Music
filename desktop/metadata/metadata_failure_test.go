@@ -24,7 +24,7 @@ func TestMetadataV1OnlyArtists(t *testing.T) {
 	copy(footer[63:93], "legacy album")
 	legacy := append(append([]byte(nil), b[10+size:]...), footer...)
 	work := filepath.Join(filepath.Dir(path), "v1-only.mp3")
-	if err := os.WriteFile(work, legacy, 0600); err != nil {
+	if err := os.WriteFile(work, legacy, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	packets := packetHash(t, work)
@@ -55,7 +55,7 @@ func TestMetadataWriteFailure(t *testing.T) {
 	original := fixture(t, "mp3", "4")
 	before := mustRead(t, original)
 	work := filepath.Join(filepath.Dir(original), "failed-copy.mp3")
-	if err := os.WriteFile(work, before, 0600); err != nil {
+	if err := os.WriteFile(work, before, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	f, err := os.OpenFile(work, os.O_RDWR, 0)

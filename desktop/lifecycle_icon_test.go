@@ -16,8 +16,8 @@ func TestLifecycleTemplateIconVisibleBlackAndTransparent(t *testing.T) {
 		t.Fatalf("unexpected template dimensions: %v", icon.Bounds())
 	}
 	visible, transparent := 0, 0
-	for y := 0; y < 36; y++ {
-		for x := 0; x < 36; x++ {
+	for y := range 36 {
+		for x := range 36 {
 			r, g, b, a := icon.At(x, y).RGBA()
 			if a == 0 {
 				transparent++

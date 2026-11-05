@@ -11,6 +11,7 @@ var lyricsOptionsValidNames = []string{
 	"system-ui", "Arial", "Noto Sans SC", "思源黑体", "字体_Font-2.0", "Ａ１２", "Ⅳ²",
 	strings.Repeat("A", 256), strings.Repeat("中", 85) + "A", strings.Repeat("𠮷", 64),
 }
+
 var lyricsOptionsInvalidNames = []string{
 	"", " Arial", "Arial ", " ", "Arial, sans-serif", "url(x)", "var(--font)",
 	"Arial; color:red", "Font(x)", "Font/x", "Font\\x", `"Arial"`, "'Arial'",
@@ -143,9 +144,7 @@ func TestLyricsOptionsDefaultsCloneAndJSON(t *testing.T) {
 		t.Fatal("clone changed original font")
 	}
 	data, err := json.Marshal(defaults)
-	if err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, err)
 	wantJSON := `{"font":{"family":"system-ui","size":24,"weight":700,"postScriptName":"system-ui","style":"normal"},"isDoubleLine":true,"position":"both","limitBounds":false,"showYrc":true,"showTran":true,"animation":true,"alwaysShowPlayInfo":false}`
 	if string(data) != wantJSON {
 		t.Fatalf("JSON = %s, want %s", data, wantJSON)

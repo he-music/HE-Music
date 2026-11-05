@@ -17,14 +17,18 @@ import (
 	"github.com/egoist/mygo"
 )
 
-const desktopLogMaxSize int64 = 2 << 20
-const desktopLogRetentionDays = 14
+const (
+	desktopLogMaxSize       int64 = 2 << 20
+	desktopLogRetentionDays       = 14
+)
 
-var logURLs = regexp.MustCompile(`(?i)\b(?:https?|file|mygo)://[^\s<>"']+`)
-var logHeaders = regexp.MustCompile(`(?i)\b(?:authorization|set-cookie|cookie)\s*[:=].*`)
-var logSecrets = regexp.MustCompile(`(?i)\b(token|refresh_?token|password|secret|api[_-]?key)["']?\s*[:=]\s*["']?[^\s,;"'}]+`)
-var logJWT = regexp.MustCompile(`[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`)
-var ownedLogName = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}(?:\.previous)?\.log$`)
+var (
+	logURLs      = regexp.MustCompile(`(?i)\b(?:https?|file|mygo)://[^\s<>"']+`)
+	logHeaders   = regexp.MustCompile(`(?i)\b(?:authorization|set-cookie|cookie)\s*[:=].*`)
+	logSecrets   = regexp.MustCompile(`(?i)\b(token|refresh_?token|password|secret|api[_-]?key)["']?\s*[:=]\s*["']?[^\s,;"'}]+`)
+	logJWT       = regexp.MustCompile(`[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}`)
+	ownedLogName = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}(?:\.previous)?\.log$`)
+)
 
 func safeLogMessage(message string) string {
 	message = strings.ToValidUTF8(message, "\uFFFD")
@@ -58,7 +62,7 @@ type dailyLogWriter struct {
 }
 
 func newDailyLogWriter(directory string) (*dailyLogWriter, error) {
-	if err := os.MkdirAll(directory, 0700); err != nil {
+	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return nil, err
 	}
 	info, err := os.Lstat(directory)
@@ -73,11 +77,11 @@ func (w *dailyLogWriter) open(day string) error {
 	if info, err := os.Lstat(path); err == nil && !info.Mode().IsRegular() {
 		return errors.New("invalid log file")
 	}
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
 	if err != nil {
 		return err
 	}
-	if err := file.Chmod(0600); err != nil {
+	if err := file.Chmod(0o600); err != nil {
 		file.Close()
 		return err
 	}

@@ -46,19 +46,24 @@ func networkProxyURL(c NetworkProxyConfig) (*url.URL, error) {
 	if (c.Protocol != "HTTP" && c.Protocol != "HTTPS") || c.Port < 1 || c.Port > 65535 || len(c.Server) == 0 || len(c.Server) > 253 {
 		return nil, errNetworkProxyConfig
 	}
-	if net.ParseIP(c.Server) == nil {
-		for _, label := range strings.Split(c.Server, ".") {
-			if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
-				return nil, errNetworkProxyConfig
-			}
-			for _, ch := range label {
-				if !(ch >= 'a' && ch <= 'z' || ch >= 'A' && ch <= 'Z' || ch >= '0' && ch <= '9' || ch == '-') {
-					return nil, errNetworkProxyConfig
-				}
+	if net.ParseIP(c.Server) == nil && !validNetworkProxyDNS(c.Server) {
+		return nil, errNetworkProxyConfig
+	}
+	return &url.URL{Scheme: strings.ToLower(c.Protocol), Host: net.JoinHostPort(c.Server, strconv.Itoa(c.Port))}, nil
+}
+
+func validNetworkProxyDNS(server string) bool {
+	for label := range strings.SplitSeq(server, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, ch := range label {
+			if (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') && (ch < '0' || ch > '9') && ch != '-' {
+				return false
 			}
 		}
 	}
-	return &url.URL{Scheme: strings.ToLower(c.Protocol), Host: net.JoinHostPort(c.Server, strconv.Itoa(c.Port))}, nil
+	return true
 }
 
 func normalizedNetworkProxy(c NetworkProxyConfig) NetworkProxyConfig {
@@ -69,15 +74,17 @@ func normalizedNetworkProxy(c NetworkProxyConfig) NetworkProxyConfig {
 	return c
 }
 
-type networkProxyApply func(NetworkProxyConfig) (gatewayApplied bool, restartRequired bool, errorCode string, err error)
-type NetworkProxy struct {
-	mu            sync.RWMutex
-	config        NetworkProxyConfig
-	downloads     bool
-	save          func(NetworkProxyConfig) error
-	applyRoute    networkProxyApply
-	testTransport func(NetworkProxyConfig) http.RoundTripper
-}
+type (
+	networkProxyApply func(NetworkProxyConfig) (gatewayApplied, restartRequired bool, errorCode string, err error)
+	NetworkProxy      struct {
+		mu            sync.RWMutex
+		config        NetworkProxyConfig
+		downloads     bool
+		save          func(NetworkProxyConfig) error
+		applyRoute    networkProxyApply
+		testTransport func(NetworkProxyConfig) http.RoundTripper
+	}
+)
 
 func newNetworkProxy(save func(NetworkProxyConfig) error, apply networkProxyApply) *NetworkProxy {
 	return &NetworkProxy{config: NetworkProxyConfig{Protocol: "off"}, save: save, applyRoute: apply, testTransport: func(c NetworkProxyConfig) http.RoundTripper {

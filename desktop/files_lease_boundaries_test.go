@@ -98,8 +98,7 @@ func TestLocalFileReferencesRejectForgeryAndReplacement(t *testing.T) {
 
 func TestDirectoryLeaseRejectsForeignStaleAndUnknownGrant(t *testing.T) {
 	actor, ctx, epoch, lease, _ := grantedLeaseFixture(t)
-	foreign, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	foreign := t.Context()
 	for _, request := range []struct {
 		caller context.Context
 		epoch  uint64

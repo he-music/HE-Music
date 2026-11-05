@@ -13,7 +13,7 @@ import (
 
 func resetTestWrite(t *testing.T, path, value string) {
 	t.Helper()
-	if err := os.WriteFile(path, []byte(value), 0600); err != nil {
+	if err := os.WriteFile(path, []byte(value), 0o600); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -39,13 +39,9 @@ func TestPreferencesResetOldWritersThenFreshStores(t *testing.T) {
 	}
 	proxyPath := filepath.Join(directory, "network-proxy.json")
 	proxy := NetworkProxyConfig{Protocol: "HTTP", Server: "localhost", Port: 8888}
-	if err := saveNetworkProxyConfig(proxyPath, proxy); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, saveNetworkProxyConfig(proxyPath, proxy))
 	dirs := &libraryDirectoryStore{path: filepath.Join(directory, "local-library-directories.json")}
-	if err := dirs.update(music, true); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, dirs.update(music, true))
 	savedLibraryIndex.Lock()
 	oldPath, oldEntries, oldErr := savedLibraryIndex.path, savedLibraryIndex.entries, savedLibraryIndex.err
 	savedLibraryIndex.Unlock()
@@ -78,15 +74,9 @@ func TestPreferencesResetOldWritersThenFreshStores(t *testing.T) {
 	if _, err := appearance.save(true); err != nil {
 		t.Fatal(err)
 	}
-	if err := saveNetworkProxyConfig(proxyPath, proxy); err != nil {
-		t.Fatal(err)
-	}
-	if err := dirs.update(music, false); err != nil {
-		t.Fatal(err)
-	}
-	if err := dirs.update(music, true); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, saveNetworkProxyConfig(proxyPath, proxy))
+	requireTestNoError(t, dirs.update(music, false))
+	requireTestNoError(t, dirs.update(music, true))
 	if err := flushLibraryIndex(); err != nil {
 		t.Fatal(err)
 	}
@@ -105,6 +95,22 @@ func TestPreferencesResetOldWritersThenFreshStores(t *testing.T) {
 		t.Fatal(err)
 	}
 	resetTestMissing(t, filepath.Join(directory, preferencesResetMarker))
+	freshAppearance := assertFreshResetStores(t, directory, music, proxyPath, appearance, dirs, info)
+	// Without another explicit reset, a later launch must preserve new settings.
+	if _, err := freshAppearance.save(true); err != nil {
+		t.Fatal(err)
+	}
+	if err := completePreferencesReset(directory); err != nil {
+		t.Fatal(err)
+	}
+	if value, _, err := freshAppearance.store.Load(); err != nil || !value.UseBorderless {
+		t.Fatal(value, err)
+	}
+}
+
+func assertFreshResetStores(t *testing.T, directory, music, proxyPath string, appearance *WindowAppearanceService, dirs *libraryDirectoryStore, info os.FileInfo) *WindowAppearanceService {
+	t.Helper()
+	song := filepath.Join(music, "song.mp3")
 	freshAppearance := &WindowAppearanceService{}
 	if value, err := freshAppearance.initialize(appearance.store.path); err != nil || value.UseBorderless || freshAppearance.failed {
 		t.Fatal(value, err)
@@ -128,16 +134,7 @@ func TestPreferencesResetOldWritersThenFreshStores(t *testing.T) {
 	if value, err := os.ReadFile(filepath.Join(directory, "download-history.json")); err != nil || string(value) != "history remains" {
 		t.Fatal(string(value), err)
 	}
-	// Without another explicit reset, a later launch must preserve new settings.
-	if _, err := freshAppearance.save(true); err != nil {
-		t.Fatal(err)
-	}
-	if err := completePreferencesReset(directory); err != nil {
-		t.Fatal(err)
-	}
-	if value, _, err := freshAppearance.store.Load(); err != nil || !value.UseBorderless {
-		t.Fatal(value, err)
-	}
+	return freshAppearance
 }
 
 func TestPreferencesResetPartialCleanupRetainsIntentAndRetries(t *testing.T) {
@@ -152,7 +149,7 @@ func TestPreferencesResetPartialCleanupRetainsIntentAndRetries(t *testing.T) {
 	if err := os.Remove(blocker); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Mkdir(blocker, 0700); err != nil {
+	if err := os.Mkdir(blocker, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := completePreferencesReset(directory); err == nil {
@@ -189,7 +186,7 @@ func TestPreferencesResetMarkerFailureKeepsPreferencesAndOwner(t *testing.T) {
 	pref := filepath.Join(directory, "window-appearance.json")
 	resetTestWrite(t, pref, "original")
 	marker := filepath.Join(directory, preferencesResetMarker)
-	if err := os.Mkdir(marker, 0700); err != nil {
+	if err := os.Mkdir(marker, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	revoked := false
@@ -214,8 +211,7 @@ func TestPreferencesResetMarkerFailureKeepsPreferencesAndOwner(t *testing.T) {
 
 func TestPreferencesResetRejectsCanceledReplacedAndForeignOwners(t *testing.T) {
 	directory := t.TempDir()
-	owner, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	owner := t.Context()
 	state := lifecycleState{owner: owner}
 	gate := func(ctx context.Context, fn func() error) error {
 		if !state.owns(ctx) {
@@ -274,7 +270,7 @@ func TestPreferencesResetStartupAndAcknowledgementFailureCanRetry(t *testing.T) 
 		t.Fatal("lost startup transaction")
 	}
 	blocker := filepath.Join(directory, preferencesResetMarker+".reset-discard")
-	if err := os.Mkdir(blocker, 0700); err != nil {
+	if err := os.Mkdir(blocker, 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := acknowledgePreferencesReset(directory, tx.TransactionID); err == nil {
@@ -325,7 +321,7 @@ func TestPreferencesResetReceiptLostCrashAndPartialRendererRecovery(t *testing.T
 			if retry != original {
 				t.Fatal("lost receipt retry replaced transaction", retry, original)
 			}
-			for attempt := 0; attempt < 3; attempt++ {
+			for range 3 {
 				resetTestWrite(t, filepath.Join(directory, "window-state.json"), "late SDK save")
 				if err := completePreferencesReset(directory); err != nil {
 					t.Fatal(err)
@@ -351,15 +347,11 @@ func TestPreferencesResetRecoveryAcrossProcessCrash(t *testing.T) {
 		directory := os.Getenv("HE_MUSIC_RESET_TEST_DIRECTORY")
 		switch phase {
 		case "commit-crash":
-			if err := schedulePreferencesReset(directory, PreferencesResetAll); err != nil {
-				t.Fatal(err)
-			}
+			requireTestNoError(t, schedulePreferencesReset(directory, PreferencesResetAll))
 			resetTestWrite(t, filepath.Join(directory, "window-state.json"), "SDK save after reset commit")
 			os.Exit(23) // No renderer receipt, no cleanup defer, no acknowledgement.
 		case "startup":
-			if err := preparePreferencesResetStartup(directory); err != nil {
-				t.Fatal(err)
-			}
+			requireTestNoError(t, preparePreferencesResetStartup(directory))
 			pending, err := readPreferencesReset(directory)
 			if err != nil || pending.Mode != PreferencesResetAll || pending.Phase != "renderer" {
 				t.Fatal(pending, err)

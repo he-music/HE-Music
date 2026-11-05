@@ -12,11 +12,9 @@ func TestUpdatesConcurrentCheckRevisions(t *testing.T) {
 	epoch := h.begin(t, owner)
 	var group sync.WaitGroup
 	for revision := uint64(1); revision <= 32; revision++ {
-		group.Add(1)
-		go func() {
-			defer group.Done()
+		group.Go(func() {
 			h.u.Check(owner, revision+100, epoch, revision)
-		}()
+		})
 	}
 	group.Wait()
 	accepted := 0

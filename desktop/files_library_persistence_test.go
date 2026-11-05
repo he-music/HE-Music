@@ -31,7 +31,7 @@ func TestLibraryPersistenceRestartFreshGrantLeaseAndRef(t *testing.T) {
 	store := libraryTestStore(t)
 	actor, ctx, epoch := newFileTestActor(t)
 	directory := libraryTestCanonical(t, t.TempDir())
-	if err := os.WriteFile(filepath.Join(directory, "song.mp3"), []byte("fixture"), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(directory, "song.mp3"), []byte("fixture"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	actor.state.picker = fakeFilePicker{open: func(mygo.OpenDialogOptions) ([]string, error) {
@@ -45,9 +45,7 @@ func TestLibraryPersistenceRestartFreshGrantLeaseAndRef(t *testing.T) {
 		t.Fatal(err)
 	}
 	oldLease, err := actor.state.acquireDirectory(ctx, epoch, selected.Grant.Token)
-	if err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, err)
 	oldRef, oldFile, err := actor.state.registerLocalFile(oldLease, "song.mp3")
 	if err != nil {
 		t.Fatal(err)
@@ -73,13 +71,14 @@ func TestLibraryPersistenceRestartFreshGrantLeaseAndRef(t *testing.T) {
 	}
 	freshEpoch = freshSession.Epoch
 	result, err := freshActor.state.restoreDirectories(freshContext, freshEpoch, restarted)
-	if err != nil || len(result.Grants) != 1 || len(result.Unavailable) != 0 {
-		t.Fatalf("restore: %+v %v", result, err)
-	}
+	requireTestNoError(t, err)
+	requireTestEqual(t, len(result.Grants), 1)
+	requireTestEqual(t, len(result.Unavailable), 0)
 	grant := result.Grants[0]
-	if grant.Token == selected.Grant.Token || grant.Epoch != freshEpoch || grant.Epoch == epoch || grant.DisplayPath != directory {
-		t.Fatalf("grant not fresh: %+v", grant)
-	}
+	requireTestNotEqual(t, grant.Token, selected.Grant.Token)
+	requireTestEqual(t, grant.Epoch, freshEpoch)
+	requireTestNotEqual(t, grant.Epoch, epoch)
+	requireTestEqual(t, grant.DisplayPath, directory)
 	if _, err := freshActor.state.acquireDirectory(freshContext, freshEpoch, selected.Grant.Token); !errors.Is(err, errFilesToken) {
 		t.Fatal("old token survived restart")
 	}
@@ -93,9 +92,9 @@ func TestLibraryPersistenceRestartFreshGrantLeaseAndRef(t *testing.T) {
 		t.Fatal(err)
 	}
 	file.Close()
-	if *ref == *oldRef || ref.GrantToken != grant.Token || freshActor.state.checkLease(lease) != nil {
-		t.Fatal("fresh lease/ref unavailable")
-	}
+	requireTestNotEqual(t, *ref, *oldRef)
+	requireTestEqual(t, ref.GrantToken, grant.Token)
+	requireTestNoError(t, freshActor.state.checkLease(lease))
 	data, err := os.ReadFile(store.path)
 	if err != nil {
 		t.Fatal(err)
@@ -106,13 +105,14 @@ func TestLibraryPersistenceRestartFreshGrantLeaseAndRef(t *testing.T) {
 		}
 	}
 	info, err := os.Stat(store.path)
-	if err != nil || info.Mode().Perm() != 0600 {
+	if err != nil || info.Mode().Perm() != 0o600 {
 		t.Fatalf("private mode: %v %v", info, err)
 	}
 	repeated, err := freshActor.state.restoreDirectories(freshContext, freshEpoch, restarted)
-	if err != nil || len(repeated.Grants) != 1 || repeated.Grants[0] != grant || len(freshActor.state.grants) != 1 {
-		t.Fatalf("restore not idempotent: %+v %v", repeated, err)
-	}
+	requireTestNoError(t, err)
+	requireTestEqual(t, len(repeated.Grants), 1)
+	requireTestEqual(t, repeated.Grants[0], grant)
+	requireTestEqual(t, len(freshActor.state.grants), 1)
 	encoded, err := json.Marshal(result)
 	if err != nil || !strings.Contains(string(encoded), `"grants":`) || !strings.Contains(string(encoded), `"unavailable":[]`) {
 		t.Fatalf("typed JSON contract: %s %v", encoded, err)
@@ -123,22 +123,16 @@ func TestLibraryPersistenceMissingForgetAndCanonicalOverlap(t *testing.T) {
 	store := libraryTestStore(t)
 	parent := libraryTestCanonical(t, t.TempDir())
 	child := filepath.Join(parent, "child")
-	if err := os.Mkdir(child, 0700); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, os.Mkdir(child, 0o700))
 	for _, path := range []string{child, child, parent, child} {
-		if err := store.update(path, true); err != nil {
-			t.Fatal(err)
-		}
+		requireTestNoError(t, store.update(path, true))
 	}
 	paths, err := store.snapshot()
 	if err != nil || len(paths) != 1 || paths[0] != parent {
 		t.Fatalf("canonical overlap: %v %v", paths, err)
 	}
 	missing := filepath.Join(libraryTestCanonical(t, t.TempDir()), "removed")
-	if err := os.Mkdir(missing, 0700); err != nil {
-		t.Fatal(err)
-	}
+	requireTestNoError(t, os.Mkdir(missing, 0o700))
 	if err := store.update(missing, true); err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +174,7 @@ func TestLibraryPersistenceCorruptionNeverOverwritten(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			store := libraryTestStore(t)
-			if err := os.WriteFile(store.path, []byte(data), 0600); err != nil {
+			if err := os.WriteFile(store.path, []byte(data), 0o600); err != nil {
 				t.Fatal(err)
 			}
 			actor, ctx, epoch := newFileTestActor(t)
@@ -254,7 +248,7 @@ func TestLibraryPersistenceRestoreRejectsBusyStaleCancelledRevokedAndForeign(t *
 
 func TestLibraryPersistenceGenerateNoIOAndUnconfigured(t *testing.T) {
 	store := libraryTestStore(t)
-	if err := os.WriteFile(store.path, []byte("untouched"), 0600); err != nil {
+	if err := os.WriteFile(store.path, []byte("untouched"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("MYGO_GENERATE", "1")

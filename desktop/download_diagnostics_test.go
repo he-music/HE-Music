@@ -12,13 +12,16 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/he-music/HE-Music/desktop/metadata"
 	"github.com/tommyo123/mtag"
+
+	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
 func TestDownloadFailureDiagnosticsOmitPrivateInputs(t *testing.T) {
-	cause := &url.Error{Op: "Get", URL: "https://private.invalid/audio?token=SIGNED_SECRET",
-		Err: &os.PathError{Op: "open", Path: "PRIVATE_DIRECTORY/PRIVATE_SONG", Err: syscall.Errno(5)}}
+	cause := &url.Error{
+		Op: "Get", URL: "https://private.invalid/audio?token=SIGNED_SECRET",
+		Err: &os.PathError{Op: "open", Path: "PRIVATE_DIRECTORY/PRIVATE_SONG", Err: syscall.Errno(5)},
+	}
 	state := DownloadState{OperationID: "PRIVATE_OPERATION", Code: "io_error", Filename: "PRIVATE_SONG", Received: 7, Total: 10}
 	message := downloadFailureMessage("create_work_file", 0, cause, state)
 	for _, private := range []string{"PRIVATE_", "SIGNED_SECRET", "https://", "token="} {

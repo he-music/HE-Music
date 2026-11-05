@@ -33,12 +33,14 @@ func (n *fakeWindowButtons) newArea(r windowButtonsRect) (uintptr, error) {
 	n.areas[n.next] = r
 	return n.next, nil
 }
+
 func (n *fakeWindowButtons) addArea(area uintptr) error {
 	if n.onAdd != nil {
 		n.onAdd(area)
 	}
 	return n.addErr
 }
+
 func (n *fakeWindowButtons) removeArea(area uintptr) {
 	n.operations = append(n.operations, fmt.Sprintf("remove:%d", area))
 	if n.onRemove != nil {
@@ -46,6 +48,7 @@ func (n *fakeWindowButtons) removeArea(area uintptr) {
 	}
 	delete(n.areas, area)
 }
+
 func (n *fakeWindowButtons) showButtons(show bool) {
 	if n.released {
 		panic("access after release")
@@ -53,6 +56,7 @@ func (n *fakeWindowButtons) showButtons(show bool) {
 	n.visible = show
 	n.operations = append(n.operations, fmt.Sprintf("visible:%t", show))
 }
+
 func (n *fakeWindowButtons) release() {
 	if n.released || len(n.areas) != 0 {
 		panic("unbalanced release")
@@ -79,6 +83,7 @@ func TestWindowButtonsAlreadyInsideWithoutEnteredEvent(t *testing.T) {
 	}
 	h.dispose()
 }
+
 func TestWindowButtonsHoverRect(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
