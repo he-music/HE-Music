@@ -10,8 +10,8 @@ import (
 )
 
 func TestScanFiltersNonAudioNamesBeforeParsingAndCache(t *testing.T) {
-	actor, ctx, epoch, ref, data, source := audioFixture(t, "mp3")
-	directory := filepath.Dir(source)
+	actor, ctx, epoch, token, directory := scanTestGrant(t)
+	data := downloadMP3()
 	if err := os.Mkdir(filepath.Join(directory, "album.xml"), 0o700); err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +50,7 @@ func TestScanFiltersNonAudioNamesBeforeParsingAndCache(t *testing.T) {
 		}
 	}
 
-	entries, issues := scanTestDrain(t, scanTestJob(t, actor.state, ctx, epoch, ref.GrantToken))
+	entries, issues := scanTestDrain(t, scanTestJob(t, actor.state, ctx, epoch, token))
 	if len(issues) != 0 {
 		t.Errorf("non-audio files should be skipped without scan warnings: %+v", issues)
 	}

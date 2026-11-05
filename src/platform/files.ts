@@ -14,12 +14,8 @@ export interface PlatformFiles {
   startScan?: typeof NativeFiles.startScan;
   readScanPage?: typeof NativeFiles.readScanPage;
   cancelFileOperation?: typeof NativeFiles.cancelFileOperation;
-  openLocalAudio?: typeof NativeFiles.openLocalAudio;
-  closeLocalAudio?: typeof NativeFiles.closeLocalAudio;
   readMetadata?: typeof NativeFiles.readMetadata;
   saveMetadata?: typeof NativeFiles.saveMetadata;
-  readLocalArtwork?: typeof NativeFiles.readLocalArtwork;
-  readLocalLyrics?: typeof NativeFiles.readLocalLyrics;
   revealLocalFile?: typeof NativeFiles.revealLocalFile;
   removeLocalFile?: typeof NativeFiles.removeLocalFile;
   cancelMetadata?: typeof NativeFiles.cancelMetadata;

@@ -193,13 +193,6 @@ export interface LinuxGraphicsState {
   loadFailed: boolean;
 }
 
-/** LocalAudioTicket contains only transient bearer credentials, never filesystem paths. */
-export interface LocalAudioTicket {
-  ticketId: string;
-  url: string;
-  version: string;
-}
-
 /**
  * LocalFileRef is an opaque, session-scoped reference to a regular file below a
  * granted directory. RelativePath is descriptive; authorization remains the
@@ -472,6 +465,7 @@ export interface RestoredDirectories {
 
 export interface ScanEntry {
   ref: LocalFileRef;
+  path?: string;
   relativePath: string;
   filename: string;
   size: number;
@@ -721,9 +715,6 @@ export const NativeFiles = {
   chooseDirectory(epoch: number): Promise<DirectorySelection> {
     return call("NativeFiles.ChooseDirectory", epoch);
   },
-  closeLocalAudio(epoch: number, ticketID: string): Promise<void> {
-    return call("NativeFiles.CloseLocalAudio", epoch, ticketID);
-  },
   defaultDirectory(epoch: number, kind: DefaultDirectoryKind): Promise<DefaultDirectoryResult> {
     return call("NativeFiles.DefaultDirectory", epoch, kind);
   },
@@ -743,23 +734,8 @@ export const NativeFiles = {
   importSettings(epoch: number): Promise<SettingsImportResult> {
     return call("NativeFiles.ImportSettings", epoch);
   },
-  openLocalAudio(epoch: number, ref: LocalFileRef): Promise<LocalAudioTicket> {
-    return call("NativeFiles.OpenLocalAudio", epoch, ref);
-  },
   readDownloadState(epoch: number, id: string): Promise<DownloadState> {
     return call("NativeFiles.ReadDownloadState", epoch, id);
-  },
-  /**
-   * ReadLocalArtwork accepts only a registered audio capability. The .jpg name is
-   * derived below its granted Root; the renderer cannot supply a sidecar pathname.
-   * Embedded JPEG/PNG wins; malformed tags still permit a valid same-name .jpg.
-   */
-  readLocalArtwork(epoch: number, ref: LocalFileRef): Promise<MetadataResult> {
-    return call("NativeFiles.ReadLocalArtwork", epoch, ref);
-  },
-  /** ReadLocalLyrics prefers same-name UTF-8 .lrc, then bounded embedded lyrics. */
-  readLocalLyrics(epoch: number, ref: LocalFileRef): Promise<MetadataResult> {
-    return call("NativeFiles.ReadLocalLyrics", epoch, ref);
   },
   readMetadata(epoch: number, ref: LocalFileRef): Promise<MetadataResult> {
     return call("NativeFiles.ReadMetadata", epoch, ref);

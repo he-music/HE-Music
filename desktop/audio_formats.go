@@ -1,9 +1,6 @@
 package main
 
 import (
-	"bytes"
-	"io"
-	"os"
 	"path/filepath"
 	"strings"
 )
@@ -36,81 +33,4 @@ func localAudioContainerMatches(container, name string) bool {
 	default:
 		return "."+container == ext
 	}
-}
-
-// Playback is independent of tag parsing. Only a small header is inspected;
-// the authorized file is served with Range without reading it into memory.
-func localAudioMIME(file *os.File) (string, error) {
-	info, err := file.Stat()
-	if err != nil || !info.Mode().IsRegular() || info.Size() <= 0 {
-		return "", errLocalAudio
-	}
-	var data [16]byte
-	n, readErr := file.ReadAt(data[:], 0)
-	if readErr != nil && readErr != io.EOF {
-		return "", readErr
-	}
-	ext := strings.ToLower(filepath.Ext(file.Name()))
-	if mime := sniffLocalAudioMIME(data[:n], ext); mime != "" {
-		return mime, nil
-	}
-	if mime, supported := localAudioExtensions[ext]; supported {
-		return mime, nil
-	}
-	return "", errLocalAudio
-}
-
-func sniffLocalAudioMIME(header []byte, ext string) string {
-	if mime := localAudioIFFMIME(header); mime != "" {
-		return mime
-	}
-	switch {
-	case bytes.HasPrefix(header, []byte("fLaC")):
-		return "audio/flac"
-	case bytes.HasPrefix(header, []byte("ID3")):
-		if ext == ".aac" {
-			return "audio/aac"
-		}
-		return "audio/mpeg"
-	case bytes.HasPrefix(header, []byte("OggS")):
-		return "audio/ogg"
-	case len(header) >= 8 && string(header[4:8]) == "ftyp":
-		return "audio/mp4"
-	case bytes.HasPrefix(header, []byte{0x1a, 0x45, 0xdf, 0xa3}):
-		return "audio/webm"
-	case bytes.HasPrefix(header, []byte("MAC ")):
-		return "audio/ape"
-	default:
-		return localAudioFrameMIME(header)
-	}
-}
-
-func localAudioIFFMIME(header []byte) string {
-	if len(header) < 12 {
-		return ""
-	}
-	switch string(header[:4]) {
-	case "RIFF", "RF64":
-		if string(header[8:12]) == "WAVE" {
-			return "audio/wav"
-		}
-	case "FORM":
-		if kind := string(header[8:12]); kind == "AIFF" || kind == "AIFC" {
-			return "audio/aiff"
-		}
-	}
-	return ""
-}
-
-func localAudioFrameMIME(header []byte) string {
-	if len(header) < 2 || header[0] != 0xff {
-		return ""
-	}
-	if header[1]&0xf6 == 0xf0 {
-		return "audio/aac"
-	}
-	if header[1]&0xe0 == 0xe0 {
-		return "audio/mpeg"
-	}
-	return ""
 }

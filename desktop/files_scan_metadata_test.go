@@ -7,11 +7,9 @@ import (
 )
 
 func TestScanExcludesPrivateFileArtifactsAtEveryLevel(t *testing.T) {
-	a, ctx, epoch, ref, data, source := audioFixture(t, "mp3")
-	dir := filepath.Dir(source)
-	if err := os.Rename(source, filepath.Join(dir, "fixture.mp3")); err != nil {
-		t.Fatal(err)
-	}
+	a, ctx, epoch, token, dir := scanTestGrant(t)
+	data := downloadMP3()
+	scanTestWrite(t, filepath.Join(dir, "fixture.mp3"), data)
 	for _, prefix := range []string{metadataPrivatePrefix, downloadPrivatePrefix} {
 		for _, relative := range []string{
 			prefix + "backup.mp3",
@@ -25,7 +23,7 @@ func TestScanExcludesPrivateFileArtifactsAtEveryLevel(t *testing.T) {
 			scanTestWrite(t, name, data)
 		}
 	}
-	job := scanTestJob(t, a.state, ctx, epoch, ref.GrantToken)
+	job := scanTestJob(t, a.state, ctx, epoch, token)
 	entries, issues := scanTestDrain(t, job)
 	if len(issues) != 0 || len(entries) != 1 || entries[0].RelativePath != "fixture.mp3" {
 		t.Fatalf("private artifact was scanned: %d entries, %d issues", len(entries), len(issues))

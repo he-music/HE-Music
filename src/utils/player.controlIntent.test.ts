@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { reactive } from "vue";
 import type { SongInfo } from "@/types/main.hemusic";
-import type { LocalAudioTicket } from "@/platform/mygo.bindings";
+
 import type { ControlCommand, ControlProvider } from "@/platform/controlSession";
 
 const mocks = vi.hoisted(() => ({
@@ -29,8 +29,6 @@ const mocks = vi.hoisted(() => ({
   },
   data: { playList: [] as SongInfo[], setHistory: vi.fn(), playListOriginal: [] as SongInfo[] },
   url: vi.fn<() => Promise<string>>(),
-  open: vi.fn<() => Promise<LocalAudioTicket>>(),
-  close: vi.fn(async () => {}),
   sink: vi.fn<(device: string) => Promise<void>>(async () => {}),
   device: vi.fn<() => string | undefined>(() => undefined),
   lyrics: vi.fn(),
@@ -77,18 +75,11 @@ vi.mock("@/platform/gateway", () => ({
   gatewayProxyUrl: (url: string) => url,
   isMygoGatewayResourceUrl: () => false,
 }));
-// Real LocalAudioSession with an inert authorized ticket provider.
-vi.mock("@/platform/filesSession", () => ({
-  filesSession: {
-    value: {
-      ready: { value: true },
-      directories: { value: [] },
-      audioAccess: () => ({ current: () => true, open: mocks.open, close: mocks.close }),
-    },
-  },
+vi.mock("@/platform/localResource", () => ({
+  localResourceURL: () => "http://127.0.0.1:1234/session/__local/audio?path=B.mp3",
 }));
 vi.mock("@/platform/localFilesSession", () => ({
-  nativeLocalEntry: () => ({ ref: mocks.ref }),
+  nativeLocalEntry: () => ({ path: `/fixture/${mocks.ref.fileId}.mp3`, ref: mocks.ref }),
   localFilesSession: { value: { entries: { value: [{ ref: mocks.ref }] } } },
 }));
 
@@ -171,11 +162,7 @@ beforeEach(async () => {
   mocks.sink.mockReset().mockResolvedValue(undefined);
   mocks.device.mockReset().mockReturnValue(undefined);
   mocks.url.mockReset().mockResolvedValue("https://synthetic.invalid/current");
-  mocks.open.mockReset().mockResolvedValue({
-    ticketId: "ticket",
-    url: "http://127.0.0.1:12345/ticket",
-    version: "one",
-  });
+
   mocks.warning.mockImplementation((options) => {
     retry = options.onNegativeClick;
     return { destroy() {} };
@@ -277,30 +264,6 @@ describe("real Player HTTP control autoplay intent", () => {
     },
   );
 
-  it.each(["pause", "owner"])(
-    "preserves preload when %s cancels autoplay during a real local ticket open",
-    async (reason) => {
-      mocks.data.playList[1] = song("B", "B.mp3");
-      const ticket = deferred<LocalAudioTicket>();
-      mocks.open.mockReturnValueOnce(ticket.promise);
-      let owner = true;
-      const loading = player.nextOrPrev("next", true, false, () => owner);
-      await flush();
-      expect(mocks.music.playSong.id).toBe("B");
-      expect(mocks.open).toHaveBeenCalledOnce();
-      if (reason === "pause") await player.pause();
-      else owner = false;
-      expectPaused();
-      ticket.resolve({ ticketId: "late", url: "http://127.0.0.1:12345/late", version: "one" });
-      await loading;
-      expect(manager.src).toBe("http://127.0.0.1:12345/late");
-      expectPaused();
-      expect(mocks.lyrics).toHaveBeenCalledWith("B", "test", "B.mp3");
-      await player.play();
-      expect(manager.paused).toBe(false);
-    },
-  );
-
   it("rejects stale A/B/A URL results while retaining the final A preload", async () => {
     const oldA = deferred<string>(),
       b = deferred<string>(),
@@ -376,7 +339,7 @@ describe("real Player HTTP control autoplay intent", () => {
     url.resolve("https://synthetic.invalid/B");
     await loading;
     expect(manager.paused).toBe(false);
-    // Existing metadata blocking revokes the ticket and clears the source;
+    // Metadata blocking clears the local source and its pending autoplay;
     // release alone must not resurrect the revoked source or pending autoplay.
     mocks.data.playList[0] = song("A", "A.mp3");
     mocks.ref.fileId = "A";

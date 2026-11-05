@@ -200,6 +200,10 @@ func (g *NetworkGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 		g.serveAudio(w, r, client)
 		return
 	}
+	if kind, ok := strings.CutPrefix(path, "/__local/"); ok {
+		serveLocalResource(w, r, kind)
+		return
+	}
 	var target *url.URL
 	var err error
 	apiRequest := false

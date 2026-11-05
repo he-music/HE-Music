@@ -27,10 +27,9 @@ const (
 	metadataJobBaseBytes  int64 = 16 << 10
 )
 
-// Installed once by stream integration before bridge calls. It gates aliases by
-// SameFile, cancels tickets and joins actual FD/lease readers outside the actor.
-// The gate remains installed until release, including ref registration/cleanup.
-var metadataAudioDrain func(context.Context, *NativeFiles, os.FileInfo) (release func(), err error)
+// Optional file-mutation preparation hook. Browser file playback is stopped by
+// the frontend before saving; there is no native audio server to drain.
+var beforeLocalFileMutation func(context.Context, *NativeFiles, os.FileInfo) (release func(), err error)
 
 // MetadataResult never transports OS errors or machine paths. SHA256 is the
 // complete source baseline required by SaveMetadata, not a stat fingerprint.
@@ -397,7 +396,7 @@ func (f *NativeFiles) saveMetadata(ctx context.Context, lease *directoryLease, c
 	if code := prepareMetadataBackup(ctx, source, backup, work, original.Size(), baseline, parent); code != "" {
 		return MetadataResult{Code: code}
 	}
-	release, code = f.drainMetadataReaders(ctx, original)
+	release, code = f.prepareLocalFileMutation(ctx, original)
 	if code != "" {
 		return MetadataResult{Code: code}
 	}

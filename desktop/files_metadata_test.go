@@ -40,9 +40,6 @@ func metadataTestService(t *testing.T, dir string) (*NativeFiles, context.Contex
 	file.Close()
 	lease.Release()
 	t.Cleanup(func() {
-		if err := f.shutdownLocalAudio(); err != nil {
-			t.Error(err)
-		}
 		f.state.dispatch(f.state.revoke)
 		f.state.cleanup.Wait()
 		metadataCoordinators.Lock()

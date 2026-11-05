@@ -6,7 +6,7 @@ import { isWordLyric, parseLineLyric, parseWordLyric, splitLocalLyrics } from "@
 import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
 import { filesSession } from "@/platform/filesSession";
-import { readLocalDisplay } from "@/platform/localDisplayRead";
+import { readLocalLyrics } from "@/platform/localResource";
 
 class LyricManager {
   private lyricRequest = 0;
@@ -59,8 +59,8 @@ class LyricManager {
         return { lrcData: [], yrcData: [] };
       }
       const ref = { ...entry.ref };
-      // 扫描字段是最多1024字节的展示预览，歌词必须从当前授权读取完整标签。
-      const result = await readLocalDisplay(owner, ref, "lyrics");
+      // 扫描字段是最多1024字节的展示预览，播放时通过 HTTP 读取完整歌词。
+      const lyric = await readLocalLyrics(entry);
       const current = nativeLocalEntry(songID);
       if (
         filesSession.value !== owner ||
@@ -73,7 +73,6 @@ class LyricManager {
         current.ref.version !== ref.version
       )
         return { lrcData: [], yrcData: [] };
-      const lyric = result?.info?.Lyrics ?? "";
       if (!lyric) return { lrcData: [], yrcData: [] };
 
       const splitLyric = splitLocalLyrics(lyric);

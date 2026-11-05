@@ -94,8 +94,8 @@ func (f *NativeFiles) RemoveLocalFile(ctx context.Context, epoch uint64, ref Loc
 	if err != nil {
 		return FileActionResult{Code: metadataCode(err)}
 	}
-	if metadataAudioDrain != nil {
-		release, err := metadataAudioDrain(lease.Context(), f, info)
+	if beforeLocalFileMutation != nil {
+		release, err := beforeLocalFileMutation(lease.Context(), f, info)
 		if release != nil {
 			defer release()
 		}
@@ -105,17 +105,8 @@ func (f *NativeFiles) RemoveLocalFile(ctx context.Context, epoch uint64, ref Loc
 		if release == nil {
 			return FileActionResult{Code: "readers_unavailable"}
 		}
-	} else {
-		localAudioServers.Lock()
-		if localAudioServers.servers[&f.state] != nil {
-			localAudioServers.Unlock()
-			return FileActionResult{Code: "readers_unavailable"}
-		}
-		// Exclude creation of the first server until ref cleanup completes.
-		defer localAudioServers.Unlock()
 	}
-	// Re-resolve after waiting for actual reader closure, then verify both the
-	// pinned parent and leaf immediately before the actor grants the commit.
+	// Recheck the pinned parent and leaf after preparing the mutation.
 	if _, err = f.localFileActionInfo(lease, ref); err != nil {
 		return FileActionResult{Code: metadataCode(err)}
 	}
@@ -140,7 +131,7 @@ func (f *NativeFiles) RemoveLocalFile(ctx context.Context, epoch uint64, ref Loc
 	}
 	invalidateLibraryMetadata(lease.handle.canonical, ref.RelativePath)
 	// Cleanup is actor-owned but independent of the old owner. Invalidate every
-	// registered identity alias while the audio gate and identity lock are held;
+	// registered identity alias while the identity lock is held;
 	// hardlink directory entries themselves remain untouched.
 	f.state.dispatch(func() {
 		for id, entry := range f.state.fileEntries {

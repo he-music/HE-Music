@@ -2,7 +2,6 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { effectScope, reactive, ref, shallowRef } from "vue";
 import type { GlobalShortcutStatus, PlatformShortcuts } from "@/platform/shortcuts";
 import type { LocalFileRef, ShortcutEvent } from "@/platform/mygo.bindings";
-import type { LocalAudioAccess } from "@/platform/filesSession";
 
 const mocks = vi.hoisted(() => ({
   platform: { kind: "mygo", os: "darwin", shortcuts: undefined as PlatformShortcuts | undefined },
@@ -33,7 +32,6 @@ const localRef = (): LocalFileRef => ({
 const files = shallowRef<{
   ready: ReturnType<typeof ref<boolean>>;
   directories: ReturnType<typeof ref<Array<{ token: string }>>>;
-  audioAccess(file: LocalFileRef): LocalAudioAccess | undefined;
 }>();
 const entry = shallowRef<{ relativePath: string; ref: LocalFileRef }>();
 const lyrics = shallowRef<{
@@ -74,17 +72,6 @@ beforeEach(() => {
   files.value = {
     ready: ref(true),
     directories: ref([{ token: "grant" }]),
-    audioAccess(file) {
-      const currentOwner = files.value;
-      return {
-        current: () =>
-          files.value === currentOwner &&
-          currentOwner?.ready.value === true &&
-          currentOwner.directories.value?.some((grant) => grant.token === file.grantToken) === true,
-        open: vi.fn(),
-        close: vi.fn(),
-      };
-    },
   };
   entry.value = { relativePath: "A.mp3", ref: localRef() };
   lyrics.value = {

@@ -74,8 +74,6 @@ async function filesFixture() {
       done: true,
     })),
     cancelFileOperation: vi.fn(async () => {}),
-    openLocalAudio: vi.fn(),
-    closeLocalAudio: vi.fn(async () => {}),
   };
   const session = new FilesSession(provider);
   cleanups.push(() => session.dispose());
@@ -176,14 +174,13 @@ describe("shellShortcutActions", () => {
     expect(f.player.setVolume.mock.calls).toEqual([["up"], ["down"]]);
   });
   it("allows all five actions for registered, authorized native songs without opening audio itself", async () => {
-    const files = await filesFixture();
+    await filesFixture();
     const f = fixture();
     f.data.song = { id: "mygo-local:file", path: "song.mp3" };
     for (const action of [...playback, "volumeUp", "volumeDown"] as const)
       await f.actions.handle(action);
     expectPlayback(f.player);
     expect(f.player.setVolume.mock.calls).toEqual([["up"], ["down"]]);
-    expect(files.provider.openLocalAudio).not.toHaveBeenCalled();
   });
   it.each([
     undefined,

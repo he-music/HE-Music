@@ -5,6 +5,7 @@ import { LocalFilesSession } from "./localFilesSession";
 import { LocalMetadataSession } from "./localMetadataSession";
 import { LocalDownloadSession } from "./localDownloadSession";
 import { createLocalDownloadPersistence } from "./localDownloadPersistence";
+import { joinLocalFilePath } from "./localAudioURL";
 import type { LocalDownloadResolver } from "./localDownloadSession";
 import type {
   DefaultDirectoryKind,
@@ -17,7 +18,6 @@ import type {
   ScanEntry,
   ScanOperation,
   ScanPage,
-  LocalAudioTicket,
   LocalFileRef,
   FileActionResult,
   MetadataResult,
@@ -38,12 +38,6 @@ export interface LocalFileActionAccess {
   current(): boolean;
   reveal(): Promise<FileActionResult>;
   remove(): Promise<FileActionResult>;
-}
-
-export interface LocalAudioAccess {
-  current(): boolean;
-  open(): Promise<LocalAudioTicket>;
-  close(ticketID: string): Promise<void>;
 }
 
 export interface FileMetadataAccess {
@@ -134,7 +128,15 @@ export class FilesSession {
         onCommitted: async (token, file) => {
           const local = this.local;
           if (this.disposed || !this.ready.value || !local) throw new Error("Files unavailable");
-          if (file) local.publishDownloadedFile(file);
+          if (file) {
+            const directory = this.directoryGrants.value.find((grant) => grant.token === token);
+            local.publishDownloadedFile({
+              ...file,
+              path: directory
+                ? joinLocalFilePath(directory.displayPath, file.relativePath)
+                : file.path,
+            });
+          }
           await local.refreshAfterDownload(token);
           if (
             this.disposed ||
@@ -281,31 +283,6 @@ export class FilesSession {
       }
     });
   }
-  audioAccess(ref: LocalFileRef): LocalAudioAccess | undefined {
-    const { openLocalAudio, closeLocalAudio } = this.provider;
-    const epoch = this.epoch;
-    const current = () =>
-      !this.disposed &&
-      this.ready.value &&
-      this.epoch === epoch &&
-      this.directoryGrants.value.some(
-        (grant) => grant.token === ref.grantToken && grant.epoch === epoch,
-      );
-    if (!current() || epoch === undefined || !openLocalAudio || !closeLocalAudio) return undefined;
-    return {
-      current,
-      open: async () => {
-        if (!current()) throw new Error("Local audio authorization expired");
-        const ticket = await openLocalAudio(epoch, ref);
-        if (!current()) {
-          await closeLocalAudio(epoch, ticket.ticketId).catch(() => {});
-          throw new Error("Local audio authorization expired");
-        }
-        return ticket;
-      },
-      close: (ticketID) => closeLocalAudio(epoch, ticketID),
-    };
-  }
 
   private captureGrant(token: string) {
     const epoch = this.epoch;
@@ -334,23 +311,6 @@ export class FilesSession {
         if (!current()) return Promise.reject(new Error("File authorization expired"));
         // A late revocation cannot undo a deletion that already committed.
         return removeLocalFile(epoch, captured);
-      },
-    };
-  }
-
-  displayAccess(ref: LocalFileRef, kind: "artwork" | "lyrics") {
-    const captured = { ...ref };
-    const grant = this.captureGrant(captured.grantToken);
-    const read =
-      kind === "artwork" ? this.provider.readLocalArtwork : this.provider.readLocalLyrics;
-    if (!grant || !read) return;
-    const { epoch, current } = grant;
-    return {
-      current,
-      read: async (): Promise<MetadataResult> => {
-        if (!current()) return { code: "revoked", committed: false };
-        const result = await read(epoch, captured);
-        return current() ? result : { code: "revoked", committed: false };
       },
     };
   }

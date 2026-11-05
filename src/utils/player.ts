@@ -8,7 +8,8 @@ import { shuffleArray } from "./helper";
 import songManager from "./songManager";
 import { hasNativeSystemMedia, isMygo } from "./env";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
-import { LocalAudioSession } from "@/platform/localAudioSession";
+import { localResourceURL } from "@/platform/localResource";
+import { localAudioBlocked, registerLocalAudioStopper } from "@/platform/localAudioSession";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
 import lyricManager from "./lyricManager";
 import audioManager, { AudioEventType } from "./audioManager";
@@ -67,10 +68,20 @@ class Player {
   };
   private httpPlaybackDialog?: DialogReactive;
   private lastHttpRetrySrc = "";
-  private localAudio?: LocalAudioSession;
+
   private nativeModes?: ReturnType<typeof createNativePlayModeCoordinator>;
 
   constructor() {
+    registerLocalAudioStopper(() => {
+      if (!useMusicStore().playSong.path) return;
+      ++this.playRequestId;
+      this.playbackAttempt = undefined;
+      this.pendingAutoPlay = undefined;
+      audioManager.clearSource();
+      const status = useStatusStore();
+      status.playStatus = false;
+      status.playLoading = false;
+    });
     // 初始化媒体会话
     this.initMediaSession();
     // 绑定音频事件
@@ -578,7 +589,7 @@ class Player {
     this.radioOperation = undefined;
     this.autoPlayIntent = autoPlay;
     this.autoPlayOwner = canAutoPlay;
-    this.localAudio?.clear();
+    if (useMusicStore().playSong.path) audioManager.clearSource();
     const currentRequestId = ++this.playRequestId;
     this.pendingAutoPlay = canAutoPlay
       ? { owner: canAutoPlay, requestId: currentRequestId }
@@ -604,22 +615,23 @@ class Player {
       // 本地歌曲
       if (path) {
         const nativeEntry = nativeLocalEntry(id);
-        if (!nativeEntry) {
+        if (!nativeEntry?.path) {
           statusStore.playLoading = false;
           statusStore.playStatus = false;
           return;
         }
         try {
-          this.localAudio ??= new LocalAudioSession(() => {
-            ++this.playRequestId;
-            this.playbackAttempt = undefined;
-            audioManager.clearSource();
-            statusStore.playStatus = false;
+          if (localAudioBlocked()) {
             statusStore.playLoading = false;
-          });
-          const url = await this.localAudio.open(nativeEntry.ref);
+            statusStore.playStatus = false;
+            return;
+          }
+          const url = localResourceURL("audio", nativeEntry);
           if (!url || currentRequestId !== this.playRequestId) return;
-          await this.createPlayer(url, autoPlay, seek);
+          const source = /\.flac$/i.test(nativeEntry.path)
+            ? { platform: "local", format: "flac" }
+            : undefined;
+          await this.createPlayer(url, autoPlay, seek, this.autoPlayOwner, source);
         } catch (error) {
           if (currentRequestId !== this.playRequestId) return;
           this.logPlaybackError("播放器初始化错误（本地）：", error);
@@ -704,7 +716,12 @@ class Player {
     this.radioOperation = undefined;
     const statusStore = useStatusStore();
     if (pendingRadio) statusStore.playLoading = false;
-    if (useMusicStore().playSong?.path && !this.localAudio?.active) {
+    if (
+      useMusicStore().playSong?.path &&
+      (localAudioBlocked() ||
+        audioManager.src !==
+          localResourceURL("audio", nativeLocalEntry(useMusicStore().playSong.id)))
+    ) {
       statusStore.playStatus = false;
       return;
     }
@@ -1239,7 +1256,7 @@ class Player {
   public async cleanPlayList() {
     this.radioOperation = undefined;
     ++this.playRequestId;
-    this.localAudio?.clear();
+    audioManager.clearSource();
     this.httpPlaybackDialog?.destroy();
     this.httpPlaybackDialog = undefined;
     this.playbackAttempt = undefined;

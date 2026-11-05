@@ -1,5 +1,6 @@
 # 原文件标签写回后端补充
 
+当前资源传输已改为：本地音频通过应用网关的 `/__local/audio` 流式读取绝对路径，封面和歌词通过应用网关的 `/__local/artwork`、`/__local/lyrics` 读取绝对路径。下文是历史后端切片记录；其中音频票据、HTTP 读者排空和 `metadataAudioDrain` 接线已删除。标签保存前由播放器清空本地音源并阻止未决播放，原文件事务及身份锁继续保留。
 本切片只新增 `desktop/files_metadata*.go`，使用既有 files actor、grant lease、ref、commit claim；未改 SDK、bindings、前端或设置，不会启用 localMusic。实际桥接 `bridge.go` 的 `go handleCall(...)` 在 Go goroutine 中调用绑定方法，方法内仅权限/索引检查进入 `state.main`，文件 IO、锁等待、读者排空均在其外。
 
 ## API
@@ -44,7 +45,6 @@ os.Root 固定 IO 范围，逐级现有路径校验拒绝 symlink、特殊文件
 测试只用临时生成音频、fake actor/provider 和系统 FFmpeg/ffprobe/xattr/chmod；产品代码不执行这些命令。MP3 ID3v2.3 与 FLAC 原件真实替换通过，中文标题、多艺人、清空、未知 RawFrame/comment、xattr 和 ACL 保留；独立 ffprobe 逐包 SHA256 前后一致。覆盖同操作去重不双写、旧 ref 失效、大小与操作数限制、可取消身份锁/超时、外来 owner 取消拒绝、grant 撤销、drain cancel、存在 server 的拒绝、同 size+mtime 外部改字节冲突、目录只读导致 Rename 失败与完整 backup 保留。
 
 首次新增 fixture 编译使用了不存在的 mtag AddFrame/SetCustom/Custom，实际编译失败；按固定版本已有 Set/SetCustomValues/CustomValues 修正。随后取消结果收尾覆盖 revoked 为 cancelled 的测试失败已修复，最终以 lease 撤销检查优先。把 drain gate 生命周期延长至实际 FD 关闭与清理结束后，目录只读故障测试发现 work 无法删除；实现已通过 residualNames 记录，测试修正为确认 backup 与 work 均保留并分别标明角色，不再错误断言只剩 backup。最终检查见任务交付报告。不将 parser/readback 或 ffprobe packet hash 外推为所有 MP3/FLAC 变体、PCM 解码、真实 App/本机播放/用户音乐库验收。
-
 
 ## 独立审查修复：会话注册、缓存预算及清理
 

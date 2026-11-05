@@ -1,4 +1,3 @@
-import type { LocalAudioAccess } from "@/platform/filesSession";
 import type { LocalFileRef, ScanEntry } from "@/platform/mygo.bindings";
 import type { GlobalShortcutAction } from "@/platform/shortcuts";
 import type { DesktopLyricsSession } from "@/platform/desktopLyricsSession";
@@ -10,7 +9,7 @@ interface ShortcutSong {
 }
 interface ShortcutFiles {
   readonly ready: { readonly value: boolean };
-  audioAccess(ref: LocalFileRef): LocalAudioAccess | undefined;
+  readonly directories: { readonly value: readonly { token: string }[] };
 }
 type ShortcutLyrics = Pick<DesktopLyricsSession, "ready" | "window" | "requestVisible">;
 
@@ -68,7 +67,6 @@ export function createShellShortcutActions(deps: ShellShortcutActionDependencies
         // A native ID is local even if a malformed persisted song omitted its path.
         const local = Boolean(path || id.startsWith("mygo-local:"));
         const ref = entry ? { ...entry.ref } : undefined;
-        const access = local && ref ? files?.audioAccess(ref) : undefined;
         if (
           local &&
           (!path ||
@@ -76,7 +74,7 @@ export function createShellShortcutActions(deps: ShellShortcutActionDependencies
             ref?.relativePath !== path ||
             (platform !== undefined && platform !== "local") ||
             !files?.ready.value ||
-            !access?.current())
+            !files.directories.value.some((grant) => grant.token === ref?.grantToken))
         )
           return Promise.resolve();
         valid = () => {
@@ -90,8 +88,8 @@ export function createShellShortcutActions(deps: ShellShortcutActionDependencies
             (!local ||
               (deps.files() === files &&
                 files?.ready.value === true &&
-                access?.current() === true &&
                 ref !== undefined &&
+                files.directories.value.some((grant) => grant.token === ref.grantToken) &&
                 deps.localEntry(id)?.relativePath === path &&
                 sameRef(deps.localEntry(id)?.ref, ref)))
           );

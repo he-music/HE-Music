@@ -279,67 +279,6 @@ func TestFileActionsWaitForIdentityLockAndCancel(t *testing.T) {
 	}
 }
 
-func TestFileActionsRemoveDrainsActualReaderBeforeUnlink(t *testing.T) {
-	f, ctx, epoch, ref, dir := fileActionFixture(t)
-	audio := audioServerFor(&f.state)
-	lease, err := f.state.acquireDirectory(ctx, epoch, ref.GrantToken)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.Link(filepath.Join(dir, "song.mp3"), filepath.Join(dir, "reader-alias.mp3")); err != nil {
-		lease.Release()
-		t.Fatal(err)
-	}
-	alias, aliasFile, err := f.state.registerLocalFile(lease, "reader-alias.mp3")
-	if err != nil {
-		lease.Release()
-		t.Fatal(err)
-	}
-	aliasFile.Close()
-	hold, err := audio.beginRead(lease, *alias, lease.Context())
-	if err != nil {
-		lease.Release()
-		t.Fatal(err)
-	}
-	file, err := f.state.resolveLocalFile(lease, *alias)
-	if err != nil {
-		lease.Release()
-		hold.finish()
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { file.Close(); lease.Release(); hold.finish() })
-	done := make(chan FileActionResult, 1)
-	go func() { done <- f.RemoveLocalFile(ctx, epoch, ref) }()
-	fileActionAwait(t, hold.ctx.Done())
-	select {
-	case result := <-done:
-		t.Fatalf("returned before reader FD/lease drained: %+v", result)
-	default:
-	}
-	if _, err = os.Stat(filepath.Join(dir, "song.mp3")); err != nil {
-		t.Fatal("unlinked before actual reader drained", err)
-	}
-	if _, err = audio.beginRead(lease, ref, ctx); err == nil {
-		t.Fatal("new reader bypassed removal gate")
-	}
-	info, err := file.Stat()
-	if err != nil {
-		t.Fatal(err)
-	}
-	file.Close()
-	lease.Release()
-	hold.finish()
-	if result := fileActionResult(t, done); result.Code != "ok" || !result.Removed {
-		t.Fatalf("drained remove failed: %+v", result)
-	}
-	audio.mu.Lock()
-	gated := audio.gated(info)
-	audio.mu.Unlock()
-	if gated {
-		t.Fatal("removal leaked audio gate")
-	}
-}
-
 func TestFileActionsRemoveRechecksAfterDrain(t *testing.T) {
 	for _, kind := range []string{"revoke", "leaf", "parent", "drain_error"} {
 		t.Run(kind, func(t *testing.T) {
@@ -364,10 +303,10 @@ func TestFileActionsRemoveRechecksAfterDrain(t *testing.T) {
 				lease.Release()
 				ref = *registered
 			}
-			original := metadataAudioDrain
-			t.Cleanup(func() { metadataAudioDrain = original })
+			original := beforeLocalFileMutation
+			t.Cleanup(func() { beforeLocalFileMutation = original })
 			released := false
-			metadataAudioDrain = func(context.Context, *NativeFiles, os.FileInfo) (func(), error) {
+			beforeLocalFileMutation = func(context.Context, *NativeFiles, os.FileInfo) (func(), error) {
 				release := func() { released = true }
 				switch kind {
 				case "revoke":
@@ -444,38 +383,6 @@ func TestFileActionsClaimSurvivesRevocationAndReportsRemoved(t *testing.T) {
 	}
 }
 
-func TestFileActionsRemoveWithoutDrainFailsClosed(t *testing.T) {
-	for _, kind := range []string{"missing_hook_with_server", "missing_release", "no_server"} {
-		t.Run(kind, func(t *testing.T) {
-			f, ctx, epoch, ref, dir := fileActionFixture(t)
-			original := metadataAudioDrain
-			t.Cleanup(func() { metadataAudioDrain = original })
-			metadataAudioDrain = nil
-			switch kind {
-			case "missing_hook_with_server":
-				_ = audioServerFor(&f.state)
-			case "missing_release":
-				metadataAudioDrain = func(context.Context, *NativeFiles, os.FileInfo) (func(), error) {
-					return nil, nil
-				}
-			}
-			result := f.RemoveLocalFile(ctx, epoch, ref)
-			if kind == "no_server" {
-				if result.Code != "ok" || !result.Removed {
-					t.Fatalf("no-server removal failed: %+v", result)
-				}
-			} else {
-				if result.Code != "readers_unavailable" || result.Removed {
-					t.Fatalf("removed without reader gate: %+v", result)
-				}
-				if _, err := os.Stat(filepath.Join(dir, "song.mp3")); err != nil {
-					t.Fatal("reader failure removed original", err)
-				}
-			}
-		})
-	}
-}
-
 func TestFileActionsClaimFailureReleasesHolds(t *testing.T) {
 	f, ctx, epoch, ref, dir := fileActionFixture(t)
 	lease, err := f.state.acquireDirectory(ctx, epoch, ref.GrantToken)
@@ -509,12 +416,5 @@ func TestFileActionsClaimFailureReleasesHolds(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join(dir, "song.mp3"))
 	if err != nil || string(data) != "replacement" {
 		t.Fatalf("replacement modified: %q %v", data, err)
-	}
-	audio := audioServerFor(&f.state)
-	audio.mu.Lock()
-	gates := len(audio.writeGates)
-	audio.mu.Unlock()
-	if gates != 0 {
-		t.Fatal("failed commit leaked audio gate")
 	}
 }

@@ -21,6 +21,7 @@
           <n-image
             :src="gatewayProxyUrl(musicStore.songCover)"
             :alt="musicStore.songCover"
+            fallback-src="/images/song.jpg?asset"
             class="cover-img"
             preview-disabled
             @load="coverLoaded"

@@ -39,6 +39,7 @@ type ScanOperation struct {
 }
 type ScanEntry struct {
 	Ref          LocalFileRef  `json:"ref"`
+	Path         string        `json:"path,omitempty"`
 	RelativePath string        `json:"relativePath"`
 	Filename     string        `json:"filename"`
 	Size         int64         `json:"size"`
@@ -445,7 +446,14 @@ func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 	}
 	info = boundedScanInfo(info)
 	rememberLibraryMetadata(j.lease.handle.canonical, relative, before, info)
-	return j.emit(scanEvent{entry: &ScanEntry{Ref: *ref, RelativePath: relative, Filename: filename, Size: before.Size(), Metadata: info}})
+	return j.emit(scanEvent{entry: &ScanEntry{
+		Ref:          *ref,
+		Path:         filepath.Join(j.lease.handle.canonical, filepath.FromSlash(relative)),
+		RelativePath: relative,
+		Filename:     filename,
+		Size:         before.Size(),
+		Metadata:     info,
+	}})
 }
 
 // Scan metadata is a bounded display view, never an editable full-tag snapshot.

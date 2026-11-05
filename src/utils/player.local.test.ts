@@ -24,25 +24,15 @@ const mocks = vi.hoisted(() => ({
     getErrorCode: vi.fn(() => 0),
   },
   lookup: vi.fn(),
-  open: vi.fn<() => Promise<string | null>>(),
-  clear: vi.fn(),
-  active: true,
-  invalidation: vi.fn<() => void>(),
   history: vi.fn(),
   lyrics: vi.fn(),
 }));
+
 vi.mock("@/platform/localFilesSession", () => ({ nativeLocalEntry: mocks.lookup }));
 vi.mock("@/platform/localAudioSession", () => ({
-  LocalAudioSession: class {
-    constructor(invalidate: () => void) {
-      mocks.invalidation.mockImplementation(invalidate);
-    }
-    open = mocks.open;
-    clear = mocks.clear;
-    get active() {
-      return mocks.active;
-    }
-  },
+  localAudioBlocked: () => false,
+  registerLocalAudioStopper: () => {},
+  blockLocalAudio: () => () => {},
 }));
 vi.mock("@/stores", () => ({
   useMusicStore: () => mocks.music,
@@ -53,7 +43,7 @@ vi.mock("@/stores", () => ({
 vi.mock("./audioManager", () => ({ default: mocks.audio }));
 vi.mock("./songManager", () => ({ default: { getPlaySongData: () => mocks.song } }));
 vi.mock("./lyricManager", () => ({ default: { handleLyric: mocks.lyrics } }));
-vi.mock("./env", () => ({ isElectron: false, hasNativeSystemMedia: true }));
+vi.mock("./env", () => ({ isElectron: false, isMygo: true, hasNativeSystemMedia: true }));
 vi.mock("./helper", () => ({ shuffleArray: vi.fn() }));
 vi.mock("./blob", () => ({ default: {} }));
 vi.mock("@/api/radio", () => ({ listRadioSongs: vi.fn() }));
@@ -66,62 +56,44 @@ beforeEach(() => {
   mocks.song.path = "song.mp3";
   mocks.status.playLoading = false;
   mocks.status.playStatus = false;
-  mocks.active = true;
-  mocks.open.mockResolvedValue("http://127.0.0.1:12345/ticket");
   mocks.lookup.mockReturnValue({
+    path: "/fixture/song.mp3",
     ref: { grantToken: "grant", fileId: "file", relativePath: "song.mp3", version: "one" },
   });
   vi.stubGlobal("navigator", {});
-  vi.stubGlobal("window", { $message: { error: vi.fn() } });
+  vi.stubGlobal("window", {
+    $message: { error: vi.fn() },
+    __HE_MUSIC_GATEWAY_ORIGIN__: "http://127.0.0.1:1234/session",
+  });
 });
 afterEach(() => vi.unstubAllGlobals());
 
-describe("Player authorized local audio", () => {
-  it("loads the granted loopback source and preserves the normal seek path", async () => {
+describe("Player local file audio", () => {
+  it("loads the local HTTP URL and preserves the normal seek path", async () => {
     const player = (await import("./player")).usePlayer();
     await player.initPlayer(false, 5000);
-    expect(mocks.open).toHaveBeenCalledOnce();
-    expect(mocks.audio.play).toHaveBeenCalledExactlyOnceWith("http://127.0.0.1:12345/ticket", {
-      fadeIn: false,
-      autoPlay: false,
-    });
+    const url = "http://127.0.0.1:1234/session/__local/audio?path=%2Ffixture%2Fsong.mp3";
+    expect(mocks.audio.play).toHaveBeenCalledOnce();
+    expect(mocks.audio.play.mock.calls[0][0]).toContain(url + "&v=");
+    expect(mocks.audio.play.mock.calls[0][1]).toEqual({ fadeIn: false, autoPlay: false });
     expect(mocks.audio.seek).toHaveBeenCalledWith(5);
     expect(mocks.history).toHaveBeenCalledOnce();
-    mocks.active = false;
-    mocks.invalidation();
-    expect(mocks.audio.clearSource).toHaveBeenCalledOnce();
-    await player.play();
-    expect(mocks.audio.play).toHaveBeenCalledTimes(1);
-    expect(mocks.status.playStatus).toBe(false);
   });
 
   it("keeps a cached local path unavailable when no current backend ref exists", async () => {
     mocks.lookup.mockReturnValue(undefined);
     const player = (await import("./player")).usePlayer();
     await player.initPlayer();
-    expect(mocks.open).not.toHaveBeenCalled();
     expect(mocks.audio.play).not.toHaveBeenCalled();
     expect(mocks.status.playLoading).toBe(false);
   });
-
-  it("ignores an older granted URL after a newer local selection", async () => {
-    let finish!: (url: string | null) => void;
-    mocks.open.mockImplementationOnce(
-      () =>
-        new Promise((resolve) => {
-          finish = resolve;
-        }),
-    );
+  it("passes the FLAC container hint to the browser driver", async () => {
+    mocks.song.path = "我怀念的-孙燕姿.flac";
+    mocks.lookup.mockReturnValue({ path: "/Music/我怀念的-孙燕姿.flac" });
     const player = (await import("./player")).usePlayer();
-    const old = player.initPlayer();
-    mocks.song.id = "mygo-local:new";
-    await player.initPlayer();
-    finish("http://127.0.0.1:12345/old");
-    await old;
-    expect(mocks.audio.play).toHaveBeenCalledTimes(1);
-    expect(mocks.audio.play).not.toHaveBeenCalledWith(
-      "http://127.0.0.1:12345/old",
-      expect.anything(),
-    );
+    await player.initPlayer(false);
+    const [url, options] = mocks.audio.play.mock.calls[0];
+    expect(new URL(url).searchParams.get("path")).toBe("/Music/我怀念的-孙燕姿.flac");
+    expect(options).toMatchObject({ source: { platform: "local", format: "flac" } });
   });
 });

@@ -97,6 +97,19 @@ export function isMygoGatewayResourceUrl(value: string): boolean {
     const resource = new URL(value);
     const prefix = `${base.pathname.replace(/\/+$/, "")}/__proxy/`;
     const audio = resource.pathname === `${base.pathname.replace(/\/+$/, "")}/__audio`;
+    const localAudio = resource.pathname === `${base.pathname.replace(/\/+$/, "")}/__local/audio`;
+    if (localAudio) {
+      return (
+        base.protocol === "http:" &&
+        localHost(base.hostname) &&
+        !base.username &&
+        !base.password &&
+        !resource.username &&
+        !resource.password &&
+        resource.origin === base.origin &&
+        Boolean(resource.searchParams.get("path"))
+      );
+    }
     if (!audio && !resource.pathname.startsWith(prefix)) return false;
     if (
       audio &&

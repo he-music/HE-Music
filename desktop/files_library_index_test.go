@@ -92,23 +92,6 @@ func TestAllLocalFormatsAreCollectedWithoutTagParsingPrerequisite(t *testing.T) 
 	}
 }
 
-func TestLocalAudioHeaderProbeHasNoWholeFileSizeGate(t *testing.T) {
-	for ext, want := range localAudioExtensions {
-		file, err := os.Create(filepath.Join(t.TempDir(), "song"+ext))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err := file.Truncate((3 << 30) + 1); err != nil {
-			t.Fatal(err)
-		}
-		mime, err := localAudioMIME(file)
-		file.Close()
-		if err != nil || mime != want {
-			t.Fatalf("%s: mime=%s err=%v", ext, mime, err)
-		}
-	}
-}
-
 func TestLibraryIndexRejectsTrailingValuesWithoutOverwrite(t *testing.T) {
 	directory := t.TempDir()
 	for _, suffix := range []string{"BROKEN", "{}"} {

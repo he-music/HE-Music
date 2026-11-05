@@ -90,8 +90,8 @@ func TestMetadataStaleRegistrationCannotRemoveNewSession(t *testing.T) {
 			newRef := metadataRegisterTestGrant(t, f, ctx, session.Epoch, dir, "song.mp3")
 			newRead := f.ReadMetadata(ctx, session.Epoch, newRef)
 			newReq := MetadataSaveRequest{OperationID: metadataTestNonce(t), Ref: newRef, SHA256: newRead.SHA256}
-			hook := metadataAudioDrain
-			defer func() { metadataAudioDrain = hook }()
+			hook := beforeLocalFileMutation
+			defer func() { beforeLocalFileMutation = hook }()
 			var saved MetadataResult
 			if mode == "dedup" {
 				saved = f.SaveMetadata(ctx, session.Epoch, newReq)
@@ -100,7 +100,7 @@ func TestMetadataStaleRegistrationCannotRemoveNewSession(t *testing.T) {
 				}
 			} else {
 				entered := make(chan struct{})
-				metadataAudioDrain = func(op context.Context, _ *NativeFiles, _ os.FileInfo) (func(), error) {
+				beforeLocalFileMutation = func(op context.Context, _ *NativeFiles, _ os.FileInfo) (func(), error) {
 					close(entered)
 					<-op.Done()
 					return nil, op.Err()
@@ -225,13 +225,13 @@ func TestMetadataRevokeDropsResultsWithoutDroppingActiveIdentity(t *testing.T) {
 		t.Fatal(result)
 	}
 	c := metadataCoordinatorFor(&f.state)
-	hook := metadataAudioDrain
-	defer func() { metadataAudioDrain = hook }()
+	hook := beforeLocalFileMutation
+	defer func() { beforeLocalFileMutation = hook }()
 	entered := make(chan struct{})
 	leave := make(chan struct{})
 	var once sync.Once
 	defer once.Do(func() { close(leave) })
-	metadataAudioDrain = func(op context.Context, _ *NativeFiles, _ os.FileInfo) (func(), error) {
+	beforeLocalFileMutation = func(op context.Context, _ *NativeFiles, _ os.FileInfo) (func(), error) {
 		close(entered)
 		<-op.Done()
 		<-leave
@@ -294,13 +294,13 @@ func TestMetadataActiveSaveLimitAndRelease(t *testing.T) {
 	three := metadataRegisterTestGrant(t, f, ctx, epoch, dir, "three.mp3")
 	firstInfo, _ := os.Stat(filepath.Join(dir, "song.mp3"))
 	secondInfo, _ := os.Stat(filepath.Join(dir, "two.mp3"))
-	hook := metadataAudioDrain
-	defer func() { metadataAudioDrain = hook }()
+	hook := beforeLocalFileMutation
+	defer func() { beforeLocalFileMutation = hook }()
 	entered := make(chan struct{}, 2)
 	leave := make(chan struct{})
 	var once sync.Once
 	defer once.Do(func() { close(leave) })
-	metadataAudioDrain = func(op context.Context, _ *NativeFiles, info os.FileInfo) (func(), error) {
+	beforeLocalFileMutation = func(op context.Context, _ *NativeFiles, info os.FileInfo) (func(), error) {
 		if os.SameFile(info, firstInfo) || os.SameFile(info, secondInfo) {
 			entered <- struct{}{}
 			select {
@@ -344,13 +344,13 @@ func TestMetadataCancelReleasesReservationBeforeWorkerExit(t *testing.T) {
 	f, ctx, epoch, ref := metadataTestService(t, dir)
 	read := f.ReadMetadata(ctx, epoch, ref)
 	c := metadataCoordinatorFor(&f.state)
-	hook := metadataAudioDrain
-	defer func() { metadataAudioDrain = hook }()
+	hook := beforeLocalFileMutation
+	defer func() { beforeLocalFileMutation = hook }()
 	entered := make(chan struct{})
 	leave := make(chan struct{})
 	var once sync.Once
 	defer once.Do(func() { close(leave) })
-	metadataAudioDrain = func(op context.Context, _ *NativeFiles, _ os.FileInfo) (func(), error) {
+	beforeLocalFileMutation = func(op context.Context, _ *NativeFiles, _ os.FileInfo) (func(), error) {
 		close(entered)
 		<-op.Done()
 		<-leave

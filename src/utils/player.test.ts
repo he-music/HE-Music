@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
     off: vi.fn(),
     play: vi.fn(),
     pause: vi.fn(),
+    clearSource: vi.fn(),
     setVolume: vi.fn(),
     setRate: vi.fn(),
     seek: vi.fn(),
@@ -75,6 +76,9 @@ beforeEach(async () => {
   mocks.status.playLoading = false;
   mocks.status.playStatus = false;
   mocks.audio.play.mockReset().mockResolvedValue(undefined);
+  mocks.audio.clearSource.mockImplementation(() => {
+    mocks.audio.src = "";
+  });
   mocks.audio.getErrorCode.mockReturnValue(4);
   mocks.audio.on.mockImplementation((name, callback) => mocks.callbacks.set(name, callback));
   destroy = vi.fn();

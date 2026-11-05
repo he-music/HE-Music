@@ -171,7 +171,7 @@ func TestMetadataRealOriginalSaveAndDedup(t *testing.T) {
 }
 
 func TestMetadataDrainCancelRevokeAndExternalConflict(t *testing.T) {
-	for _, mode := range []string{"cancel", "revoke", "external", "server"} {
+	for _, mode := range []string{"cancel", "revoke", "external"} {
 		t.Run(mode, func(t *testing.T) {
 			dir := metadataFixture(t, "mp3")
 			name := filepath.Join(dir, "song.mp3")
@@ -183,10 +183,10 @@ func TestMetadataDrainCancelRevokeAndExternalConflict(t *testing.T) {
 			}
 			id := metadataTestNonce(t)
 			title := "should not save"
-			oldHook := metadataAudioDrain
-			t.Cleanup(func() { metadataAudioDrain = oldHook })
+			oldHook := beforeLocalFileMutation
+			t.Cleanup(func() { beforeLocalFileMutation = oldHook })
 			released := false
-			metadataAudioDrain = func(op context.Context, service *NativeFiles, info os.FileInfo) (func(), error) {
+			beforeLocalFileMutation = func(op context.Context, service *NativeFiles, info os.FileInfo) (func(), error) {
 				if f.state.busy != nil {
 					t.Fatal("metadata occupied picker busy")
 				}
@@ -218,13 +218,9 @@ func TestMetadataDrainCancelRevokeAndExternalConflict(t *testing.T) {
 				}
 				return func() { released = true }, nil
 			}
-			if mode == "server" {
-				metadataAudioDrain = nil
-				audioServerFor(&f.state)
-				t.Cleanup(func() { requireTestNoError(t, f.shutdownLocalAudio()) })
-			}
+
 			result := f.SaveMetadata(ctx, epoch, MetadataSaveRequest{OperationID: id, Ref: ref, SHA256: read.SHA256, Patch: metadata.Patch{Title: &title}})
-			want := map[string]string{"cancel": "cancelled", "revoke": "revoked", "external": "conflict", "server": "readers_unavailable"}[mode]
+			want := map[string]string{"cancel": "cancelled", "revoke": "revoked", "external": "conflict"}[mode]
 			if result.Code != want || result.Committed {
 				t.Fatalf("want %s got %+v", want, result)
 			}
@@ -310,9 +306,9 @@ func TestMetadataRenameFailureRetainsRecoveryBackup(t *testing.T) {
 	before, _ := os.ReadFile(name)
 	f, ctx, epoch, ref := metadataTestService(t, dir)
 	read := f.ReadMetadata(ctx, epoch, ref)
-	hook := metadataAudioDrain
-	t.Cleanup(func() { metadataAudioDrain = hook; requireTestNoError(t, os.Chmod(dir, 0o700)) })
-	metadataAudioDrain = func(context.Context, *NativeFiles, os.FileInfo) (func(), error) {
+	hook := beforeLocalFileMutation
+	t.Cleanup(func() { beforeLocalFileMutation = hook; requireTestNoError(t, os.Chmod(dir, 0o700)) })
+	beforeLocalFileMutation = func(context.Context, *NativeFiles, os.FileInfo) (func(), error) {
 		if err := os.Chmod(dir, 0o500); err != nil {
 			t.Fatal(err)
 		}

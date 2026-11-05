@@ -122,9 +122,9 @@ func prepareMetadataBackup(ctx context.Context, source, backup, work *os.File, s
 	return ""
 }
 
-func (f *NativeFiles) drainMetadataReaders(ctx context.Context, original os.FileInfo) (func(), string) {
-	if metadataAudioDrain != nil {
-		release, err := metadataAudioDrain(ctx, f, original)
+func (f *NativeFiles) prepareLocalFileMutation(ctx context.Context, original os.FileInfo) (func(), string) {
+	if beforeLocalFileMutation != nil {
+		release, err := beforeLocalFileMutation(ctx, f, original)
 		if err != nil {
 			return release, metadataCode(err)
 		}
@@ -133,14 +133,7 @@ func (f *NativeFiles) drainMetadataReaders(ctx context.Context, original os.File
 		}
 		return release, ""
 	}
-	localAudioServers.Lock()
-	if localAudioServers.servers[&f.state] != nil {
-		localAudioServers.Unlock()
-		return nil, "readers_unavailable"
-	}
-	// Prevent creation of the first server between this check and replacement.
-	// No actor callback acquires this registry lock.
-	return localAudioServers.Unlock, ""
+	return func() {}, ""
 }
 
 func (f *NativeFiles) checkMetadataSaveRoute(ctx context.Context, lease *directoryLease, ref LocalFileRef, original, pinned os.FileInfo, baseline string) string {
