@@ -9,7 +9,6 @@
         v-if="item.type === 'custom' && item.component"
         :is="resolve(item.component)"
         v-bind="item.componentProps"
-        :item="item"
       />
     </template>
     <n-card v-else class="set-item">
@@ -146,7 +145,6 @@
           v-else-if="item.type === 'custom' && item.component"
           :is="item.component"
           v-bind="item.componentProps"
-          :item="item"
         />
       </div>
     </n-card>
