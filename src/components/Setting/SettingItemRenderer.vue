@@ -61,6 +61,7 @@
           v-else-if="item.type === 'select'"
           v-model:value="modelValue"
           :options="normalizedOptions"
+          :to="true"
           class="set"
           :disabled="isDisabled"
           :title="title"
