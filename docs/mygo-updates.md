@@ -2,7 +2,7 @@
 
 README 保留发布入口和最短操作步骤，本文维护一次性准备、更新测试、正式发布与故障排查。以下使用仓库 `he-music/HE-Music`；在 fork 中发布时必须替换为自己的公开仓库。
 
-当前 `mygo.json` 已配置 `v2.0.0` 的正式公钥、GitHub 更新源、`v` 前缀和完整更新包模式；公开配置校验不代表真实签名发布或在线升级已经验收。必须先手动安装一次带正确更新源和公钥的 mygo 版本，后续才能自动升级；已发布的 Electron 包也不能通过其旧 updater 自动切换到 mygo。旧数据迁移见 [数据说明](mygo-data.md)。
+当前 `mygo.json` 已配置正式频道的公钥、GitHub 更新源、`v` 前缀和完整更新包模式；公开配置校验不代表真实签名发布或在线升级已经验收。必须先手动安装一次带正确更新源和公钥的 mygo 版本，后续才能自动升级；已发布的 Electron 包也不能通过其旧 updater 自动切换到 mygo。旧数据迁移见 [数据说明](mygo-data.md)。
 
 ## 一次性准备
 
@@ -18,7 +18,7 @@ README 保留发布入口和最短操作步骤，本文维护一次性准备、�
 
 正式发布准备只要求上述后端地址和更新私钥两个 Secrets。`VITE_NETEASE_API_URL`／`/api/netease` 是历史网易 API 的兼容入口，不作为发布必备配置；已经停用该服务时，不要求重新部署或填写这个 Secret。当前本地歌曲标签编辑器的「在线自动匹配」仍调用旧 `/search/match` 和 `/lyric/new`，没有该服务时这项功能不可用，需另行迁移或清理；日常登录、播放、在线歌词、评论与视频走 HE-Music 的 `/v1` 接口。
 
-`VITE_*` 地址会编译进客户端，必须是可公开的服务地址，不能在其中放服务端密钥。GitHub 创建草稿 Release 使用工作流自动提供的 `GITHUB_TOKEN`，发布 job 已声明 `contents: write`；同仓库发布通常不需要另配 PAT。组织策略若拒绝写入，需由仓库管理员检查 Actions 权限。
+`VITE_*` 地址会编译进客户端，必须是可公开的服务地址，不能在其中放服务端密钥。GitHub 创建 Release 使用工作流自动提供的 `GITHUB_TOKEN`，发布 job 已声明 `contents: write`；同仓库发布通常不需要另配 PAT。组织策略若拒绝写入，需由仓库管理员检查 Actions 权限。
 
 先将发布工作流合入默认分支，Actions 页面才能使用 **Run workflow** 手动入口。tag 发布则使用该 tag 所指提交中的工作流，务必让 tag 指向已经包含本发布流程的提交。
 
@@ -65,7 +65,7 @@ go tool mygo keygen
 | 正式发布 | `v` | `v2.0.0` | 公开普通 Release，设置为仓库 latest |
 | 更新演练 | `mygo-test-v` | `mygo-test-v2.0.0` | 公开普通 Release，不设为仓库 latest |
 
-工作流支持上述两种 tag，并统一先生成草稿、`make_latest: false`、`prerelease: false`。正式 `v2.0.0` 公开时手动勾选 **Set as the latest release**；`v` 频道客户端从 latest release 获取更新。自定义测试前缀按 GitHub API 的发布顺序寻找匹配频道，保持非 latest。草稿和 GitHub prerelease 默认都不会被客户端检测到。
+工作流支持上述两种 tag。正式 `v*` tag 在所有平台构建和签名校验通过后直接创建公开普通 Release，设置 `draft: false`、`prerelease: false` 和 `make_latest: true`；`v` 频道客户端从 latest release 获取更新。测试 `mygo-test-v*` tag 继续先生成草稿，保持非 latest、非 prerelease，再手动公开。自定义测试前缀按 GitHub API 的发布顺序寻找匹配频道。两类 Release 均使用 `CHANGELOG.md` 中对应版本的说明；草稿和 GitHub prerelease 默认都不会被客户端检测到。
 
 公钥、feed 和目标平台会编译进安装包。旧包不会读取 GitHub 上最新的 `mygo.json`，修改频道、公钥或仓库后需要重新构建并安装基线包。测试和正式包可以使用同一长期密钥，但各自的前缀应保持稳定；正式密钥只提供给可信构建。
 
@@ -75,16 +75,16 @@ go tool mygo keygen
 
 1. 将准备好的代码合入正式发布分支，把 `updates.tagPrefix` 设为 `v`，确认长期公钥与 `updates.github` 正确。首次正式版本为 `v2.0.0`；若此前使用测试前缀，正式包需单独安装为正式频道的基线。
 2. 同时修改 `package.json.version` 和 `mygo.json.version`，例如首次正式 mygo 使用 `2.0.0`；二者都不带 `v`。存在 `CHANGELOG.md` 或配置了 `updates.changelog` 时，加入 `## 2.0.0` 或 `## [2.0.0] - 日期` 段落。更新说明在构建时写进 manifest，仅编辑 GitHub Release 正文不会更新客户端中的说明。
-3. 运行 `pnpm typecheck`、`pnpm test`、`pnpm vendor:check` 和 `pnpm release:desktop:check` 等检查，提交并推送代码，再创建版本 tag。下面的命令由发布负责人执行，本次文档工作没有执行推送：
+3. 运行 `pnpm typecheck`、`pnpm test`、`pnpm vendor:check` 和 `pnpm release:desktop:check` 等检查，提交并推送代码，再创建版本 tag。推送正式 tag 即授权工作流在构建和校验通过后公开发布，例如：
 
    ```sh
    git tag v2.0.0
    git push origin v2.0.0
    ```
 
-4. Actions 先验证 Web／Go，再构建 macOS universal、Windows amd64/arm64、Linux amd64/arm64。tag 构建必须通过公开配置、私钥匹配、当前仓库、tag 与两个版本一致性检查，然后校验真实 archive／delta 签名；失败时不会进入草稿创建步骤。
-5. 打开草稿 Release，核对所有平台附件与合并后的 `SHA256SUMS`，从本次安装包完成平台安装与启动验收。macOS 当前使用 ad hoc 签名，未公证；Windows 安装包依赖 NSIS，不能把编译出 EXE 等同于安装器已验证。
-6. 安装验收后公开草稿，勾选 **Set as the latest release**，保持非 prerelease。**公开并设为 latest，就是向正式频道已有客户端提供更新的时点**。首个启用更新的 mygo `v2.0.0` 需要用户手动安装；下一个更高版本才验证正式频道升级。
+4. Actions 先验证 Web／Go，再准备固定 libmpv 资源，构建 macOS universal、Windows amd64/arm64、Linux amd64/arm64。tag 构建必须通过公开配置、私钥匹配、当前仓库、tag 与两个版本一致性检查，然后校验真实 archive／delta 签名；任一步失败都不会进入 Release 创建步骤。
+5. 所有平台构建与签名检查通过后，工作流从 `CHANGELOG.md` 提取当前版本说明，上传平台附件和合并后的 `SHA256SUMS`，直接公开 Release 并设为 latest，保持非 prerelease。**公开并设为 latest，就是向正式频道已有客户端提供更新的时点**。
+6. 核对已发布的平台附件与摘要，从本次安装包完成平台安装与启动检查。macOS 当前使用 ad hoc 签名，未公证；Windows 安装包依赖 NSIS，不能把编译出 EXE 等同于安装器已验证。首个启用更新的 mygo `v2.0.0` 需要用户手动安装；下一个更高版本才验证正式频道升级。
 7. 从一个已安装的旧正式 mygo 版本复查检测、下载、安装、重启和数据保留，再记录发布结果。保留旧安装包用于恢复；发现问题时停止发布后续更新，修复后用更高版本发布，不覆盖旧 tag 或已签名文件。恢复旧程序版本也不保证新数据格式可向后兼容。
 
 `.github/workflows/release.yml` 的手动 **Run workflow** 只生成 Actions 测试产物，不创建 Release、不公开更新。没有更新私钥的普通构建可以编入 feed／公钥，但不会生成可供发布的签名更新文件，因此不能把普通测试产物直接当作正式更新 Release。
@@ -136,7 +136,7 @@ go tool mygo keygen
 | `install.sh`／`install.ps1` | SDK 安装脚本，工作流选取对应平台的一份 |
 | `SHA256SUMS` | 工作流合并各平台文件摘要，便于下载核对；不能替代 Ed25519 验签 |
 
-GitHub 自动附带的源码 zip／tar.gz 不是应用更新包。工作流将附件上传到与 tag 同名的草稿，保持平台文件名不变；不上传原始 Windows EXE 作为安装器的替代物。NSIS 在 Windows 构建机上可由 SDK 自动下载，需允许该下载；在 macOS／Linux 交叉打 Windows 包时必须自行安装 `makensis`，否则可能只有便携 EXE。当前本机未安装 NSIS，尚无本机安装器验收结果。
+GitHub 自动附带的源码 zip／tar.gz 不是应用更新包。工作流将附件上传到与 tag 同名的 Release，保持平台文件名不变；不上传原始 Windows EXE 作为安装器的替代物。NSIS 在 Windows 构建机上可由 SDK 自动下载，需允许该下载；在 macOS／Linux 交叉打 Windows 包时必须自行安装 `makensis`，否则可能只有便携 EXE。当前本机未安装 NSIS，尚无本机安装器验收结果。
 
 ## 本地发布命令与校验边界
 
@@ -151,7 +151,7 @@ pnpm test:desktop:release
 
 - `check`：只读检查公开配置和目标，不需要私钥，不访问 feed，不检查已有包。
 - `verify`：离线检查本次 manifest 和真实 archive／delta 的大小与签名，只需公钥，不调用 Go 或下载。
-- `build`：需要进程环境中的 `MYGO_UPDATER_PRIVATE_KEY`；使用固定官方 CLI 构建后再完成同样验签。该脚本自身不上传、不发布、不安装应用。只有 GitHub tag 工作流另外创建草稿。
+- `build`：需要进程环境中的 `MYGO_UPDATER_PRIVATE_KEY`；使用固定官方 CLI 构建后再完成同样验签。该脚本自身不上传、不发布、不安装应用。只有 GitHub tag 工作流另外创建 Release；正式 tag 直接公开，测试 tag 保持草稿。
 
 工具链固定为 `github.com/egoist/mygo v0.6.5-0.20261026063203-07ebe19ac0dc`，并校验 vendor 全树及 Windows 透明补丁；构建设置 `GOTOOLCHAIN=local`、`GOWORK=off`、`GOFLAGS=-mod=vendor`。不使用模块缓存里的私改 SDK，不接受 `--config`、`--upload` 或任意参数透传，也拒绝并行 `mygo.config.ts`。维护方式见 [固定 SDK 说明](../patches/mygo/README.md)。
 

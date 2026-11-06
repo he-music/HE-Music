@@ -188,6 +188,27 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+      - name: Prepare release notes from changelog
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          tag = os.environ["RELEASE_TAG"]
+          version = tag.removeprefix("mygo-test-v").removeprefix("v")
+          lines = Path("CHANGELOG.md").read_text(encoding="utf-8").splitlines()
+          heading = "## " + version
+          if heading not in lines:
+              raise SystemExit("Missing changelog section: " + version)
+          start = lines.index(heading) + 1
+          end = next((i for i in range(start, len(lines)) if lines[i].startswith("## ")), len(lines))
+          notes = "\n".join(lines[start:end]).strip()
+          if not notes:
+              raise SystemExit("Empty release notes: " + version)
+          (Path(os.environ["RUNNER_TEMP"]) / "release-notes.md").write_text(notes + "\n", encoding="utf-8")
+          PY
       - uses: actions/download-artifact@v4
         with:
           pattern: HE-Music-*
@@ -214,15 +235,16 @@ jobs:
           (root / "SHA256SUMS").write_text("".join(
               f"{rows[name]}  {name}\n" for name in sorted(rows)), encoding="utf-8")
           PY
-      # A tag build must pass the configured feed/key/signature checks first.
-      # Keep the release as a draft for the platform installation review.
+      # Publish stable tags after all platform builds and signature checks pass.
+      # Test-channel tags remain drafts and never replace the stable latest release.
       - uses: softprops/action-gh-release@v2
         with:
-          draft: true
-          generate_release_notes: true
+          name: ${{ github.ref_name }}
+          body_path: ${{ runner.temp }}/release-notes.md
+          draft: ${{ startsWith(github.ref, 'refs/tags/mygo-test-v') }}
+          generate_release_notes: false
           prerelease: false
-          # 草稿不设 latest；v* 正式版公开时选择 latest，测试频道保持非 latest。
-          make_latest: false
+          make_latest: ${{ startsWith(github.ref, 'refs/tags/v') && 'true' || 'false' }}
           files: |
             release-artifacts/**/*.tar.gz
             release-artifacts/**/*.dmg

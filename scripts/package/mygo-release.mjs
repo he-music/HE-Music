@@ -114,7 +114,7 @@ export function validateConfig(config) {
   return config;
 }
 
-/** GitHub 工作流只向当前仓库发草稿，tag、原生版本和界面版本必须一致。 */
+/** GitHub 工作流只向当前仓库发布，tag、原生版本和界面版本必须一致。 */
 export function validateGitHubRelease(config, packageVersion, env) {
   if (!config.updates.github || config.updates.github !== env.GITHUB_REPOSITORY) {
     fail("GitHub 发布的 updates.github 必须与当前工作流仓库一致");
