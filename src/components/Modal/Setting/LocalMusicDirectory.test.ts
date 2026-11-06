@@ -235,6 +235,7 @@ describe("LocalMusicDirectory真实SFC", () => {
       "downloadCover",
       "downloadLyric",
       "saveMetaFile",
+      "downloadKeepAudioOnMetadataFailure",
       "fileNameFormat",
       "folderStrategy",
     ]);
