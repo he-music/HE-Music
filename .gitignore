@@ -37,6 +37,9 @@ components.d.ts
 !/docs/plans/mygo-migration.md
 !/docs/plans/mygo-migration-log.md
 !/docs/plans/mygo-windows-checklist.md
+!/docs/plans/mygo-mpv-engine.md
+!/docs/plans/mygo-mpv-runtime-checkpoint.md
+!/docs/plans/mygo-mpv-ui-checkpoint.md
 /.agents/
 /.claude/
 /.codex/
@@ -44,3 +47,6 @@ components.d.ts
 # mygo 迁移构建产物
 /.mygo/
 /build/mygo/
+/build/mpv-cache/
+/build/mpv-bundles/
+/*.tsbuildinfo

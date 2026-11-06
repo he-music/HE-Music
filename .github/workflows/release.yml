@@ -32,7 +32,7 @@ jobs:
       - run: pnpm vendor:check
       - run: pnpm typecheck
       - run: pnpm test
-      - run: pnpm test:desktop:vendor && pnpm test:desktop:release
+      - run: pnpm test:desktop:vendor && pnpm test:desktop:release && pnpm test:desktop:mpv
       - run: go test ./...
       - run: pnpm build:web
       - uses: actions/upload-artifact@v4
@@ -41,7 +41,7 @@ jobs:
           path: dist/web/
           if-no-files-found: error
 
-  desktop:
+  mpv-resources:
     needs: validate
     strategy:
       fail-fast: false
@@ -50,12 +50,82 @@ jobs:
           - os: macos-latest
             target: darwin/universal
             id: macos-universal
+          - os: windows-2025
+            target: windows/amd64
+            id: windows-amd64
+          - os: windows-11-arm
+            target: windows/arm64
+            id: windows-arm64
+          - os: ubuntu-24.04
+            target: linux/amd64
+            id: linux-amd64
+          - os: ubuntu-24.04-arm
+            target: linux/arm64
+            id: linux-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/setup-go@v6
+        if: runner.os == 'Windows'
+        with:
+          go-version-file: go.mod
+      - uses: actions/cache@v4
+        with:
+          path: build/mpv-bundles/
+          key: mpv-bundles-${{ matrix.id }}-${{ hashFiles('scripts/mpv/bundles.lock.json') }}
+      - name: Download and verify pinned libmpv bundle
+        run: python scripts/mpv/download.py --target ${{ matrix.target }}
+      - name: Verify staged resources offline
+        run: python scripts/mpv/download.py --check --offline --target ${{ matrix.target }}
+      - name: Install Windows audio fixture generator
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          ffmpeg -version
+      - name: Exercise Windows production gateway
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          export MPV_INTEGRATION_LIBRARY="$(cygpath -m "$PWD/resources/${{ matrix.id }}/mpv/libmpv-2.dll")"
+          go test ./desktop -run 'TestMpvBundled' -count=1 -v
+      - name: Archive resources with permissions
+        shell: bash
+        run: |
+          mkdir -p build
+          shopt -s nullglob
+          resource_paths=(resources/*/mpv resources/*/licenses/mpv)
+          tar -czf build/mpv-resources-${{ matrix.id }}.tar.gz "${resource_paths[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mpv-resources-${{ matrix.id }}
+          path: build/mpv-resources-${{ matrix.id }}.tar.gz
+          if-no-files-found: error
+
+  desktop:
+    needs: [validate, mpv-resources]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: darwin/universal
+            id: macos-universal
+            resources: mpv-resources-macos-universal
           - os: windows-latest
             target: windows/amd64,windows/arm64
             id: windows
-          - os: ubuntu-latest
+            resources: mpv-resources-windows-*
+          - os: ubuntu-24.04
             target: linux/amd64,linux/arm64
             id: linux
+            resources: mpv-resources-linux-*
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +137,21 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ matrix.resources }}
+          path: build/mpv-incoming
+          merge-multiple: true
+      - name: Restore verified libmpv resources
+        shell: bash
+        run: |
+          for archive in build/mpv-incoming/*.tar.gz; do
+            tar -xzf "$archive" -C .
+          done
+          python scripts/mpv/download.py --check --offline --target ${{ matrix.target }}
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:runtime
       - run: pnpm vendor:check
@@ -78,6 +163,9 @@ jobs:
         env:
           MYGO_UPDATER_PRIVATE_KEY: ${{ secrets.MYGO_UPDATER_PRIVATE_KEY }}
         run: node scripts/package/mygo-release.mjs --build --platform ${{ matrix.target }}
+      - name: Audit final Linux ELF requirements
+        if: runner.os == 'Linux'
+        run: python scripts/mpv/audit_linux.py --target ${{ matrix.target }} --output build/mygo/libmpv-linux-abi.json
       - name: Check Windows SDK window messages
         if: runner.os == 'Windows'
         run: pnpm test:desktop:windows-sdk

@@ -72,8 +72,10 @@ func serveLocalResource(w http.ResponseWriter, r *http.Request, kind string) {
 	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(data))
 }
 
-const localResourceImageLimit = 8 << 20
-const localResourceLyricsLimit = 1 << 20
+const (
+	localResourceImageLimit  = 8 << 20
+	localResourceLyricsLimit = 1 << 20
+)
 
 func localResourceArtwork(ctx context.Context, source io.ReaderAt, size int64, base string) ([]byte, string) {
 	parsed, _ := metadata.Parse(&displayReader{ctx: ctx, source: source, remaining: 16 << 20}, size)

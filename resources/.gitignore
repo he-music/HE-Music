@@ -1,0 +1,6 @@
+# libmpv 运行库及许可证由固定 Release 准备，不提交下载生成文件。
+/*/mpv/
+/*/mpv.next/
+/*/mpv.previous/
+/*/licenses/mpv/
+/*/licenses/mpv.previous/

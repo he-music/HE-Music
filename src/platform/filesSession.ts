@@ -58,12 +58,13 @@ export interface FileDownloadAccess {
 export type FileOperationResult<T> =
   { status: "completed"; value: T } | { status: "busy" | "unavailable" | "stale" | "failed" };
 
+import type { LocalAudioRelease } from "./localAudioSession";
 const activeSession = shallowRef<FilesSession>();
 let filesOwnerGeneration = 0;
 export const filesSession = computed(() => activeSession.value);
 
 export interface FilesSessionDependencies {
-  blockAudio(): () => void;
+  blockAudio(grantToken?: string): LocalAudioRelease;
   resolveURL?: LocalDownloadResolver;
 }
 
@@ -94,7 +95,7 @@ export class FilesSession {
 
   constructor(
     private readonly provider: PlatformFiles,
-    deps?: FilesSessionDependencies,
+    private readonly deps?: FilesSessionDependencies,
   ) {
     if (deps && provider.readMetadata && provider.saveMetadata && provider.cancelMetadata) {
       this.metadata = new LocalMetadataSession({
@@ -261,13 +262,19 @@ export class FilesSession {
 
   revokeDirectory(token: string): Promise<FileOperationResult<void>> {
     return this.run(async (epoch) => {
-      await this.provider.revokeDirectory(epoch, token);
-      if (!this.disposed && this.epoch === epoch) {
-        this.directoryGrants.value = this.directoryGrants.value.filter(
-          (item) => item.token !== token,
-        );
-        if (this.metadata?.operation?.ref.grantToken === token) this.metadata.invalidate();
-        this.downloads?.invalidate(token);
+      const release = this.deps?.blockAudio(token);
+      try {
+        if (release?.ready) await release.ready;
+        await this.provider.revokeDirectory(epoch, token);
+        if (!this.disposed && this.epoch === epoch) {
+          this.directoryGrants.value = this.directoryGrants.value.filter(
+            (item) => item.token !== token,
+          );
+          if (this.metadata?.operation?.ref.grantToken === token) this.metadata.invalidate();
+          this.downloads?.invalidate(token);
+        }
+      } finally {
+        release?.();
       }
     });
   }

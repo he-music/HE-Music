@@ -1,9 +1,13 @@
 {
   "audio": {
-    "effects_unavailable": "当前音源不支持音效处理，已保持普通播放。",
+    "effects_unavailable": "当前播放引擎或音源不支持音效处理。",
     "read_output_devices": "读取设备",
     "output_access_denied": "未获得麦克风权限，无法读取输出设备。",
     "output_devices_failed": "读取输出设备失败。",
+    "playback_engine": "播放引擎",
+    "engine_change_failed": "切换播放引擎失败，已停止播放。",
+    "device_unavailable": "所选输出设备不可用，请重新选择。",
+    "unavailable": "不可用",
     "output_devices_empty": "未读取到输出设备。"
   }
 }

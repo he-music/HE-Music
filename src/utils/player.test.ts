@@ -225,6 +225,7 @@ describe("HTTP playback recovery", () => {
     expect(mocks.audio.play).toHaveBeenLastCalledWith("https://audio.example/a.mp3", {
       fadeIn: false,
       autoPlay: true,
+      seek: 12,
     });
     expect(mocks.audio.seek).toHaveBeenCalledWith(12);
     expect(mocks.lyrics).toHaveBeenCalledWith("a", "test", undefined);
@@ -295,6 +296,7 @@ describe("HTTP playback recovery", () => {
         }),
     );
     const pending = player.createPlayer("https://audio.example/old.mp3", true, 1000);
+    await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
     player.playRequestId++;
     mocks.lyrics.mockClear();
     mocks.audio.seek.mockClear();

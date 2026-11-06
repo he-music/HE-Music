@@ -183,7 +183,7 @@ test("验签真实 bytes，拒绝损坏、错误目标、版本、大小、URL �
   await assert.rejects(verifyArtifacts(f.c, f.root, ["darwin/amd64"]));
 });
 
-test("仅官方参数构建，ad hoc/跳过公证；离线模式零 spawn", async (t) => {
+test("发布使用统一资源准备入口和官方参数，ad hoc/跳过公证；离线模式零 spawn", async (t) => {
   const { root } = await fixture(t);
   const calls = [];
   const spawn = (command, args, options) => {
@@ -194,10 +194,9 @@ test("仅官方参数构建，ad hoc/跳过公证；离线模式零 spawn", asyn
   await runRelease({ root, mode: "verify-artifacts", targets: ["darwin/arm64"], env: {}, spawn });
   assert.equal(calls.length, 0);
   await runRelease({ root, mode: "build", targets: ["darwin/arm64"], env, spawn });
-  assert.equal(calls[0].command, "go");
+  assert.equal(calls[0].command, process.execPath);
   assert.deepEqual(calls[0].args, [
-    "tool",
-    "mygo",
+    path.join(root, "scripts/vendor/mygo.mjs"),
     "build",
     "-platform",
     "darwin/arm64",

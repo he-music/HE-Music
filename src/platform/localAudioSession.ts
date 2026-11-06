@@ -1,23 +1,34 @@
 const writeBlocks = new Set<symbol>();
-let stopLocalAudio: (() => void) | undefined;
+let stopLocalAudio: ((grantToken?: string) => void | Promise<void>) | undefined;
 
 /** The player owns stopping its source and invalidating a pending local load. */
-export function registerLocalAudioStopper(stop: () => void): void {
+export function registerLocalAudioStopper(
+  stop: (grantToken?: string) => void | Promise<void>,
+): void {
   stopLocalAudio = stop;
 }
 
-export function blockLocalAudio(): () => void {
+export interface LocalAudioRelease {
+  (): void;
+  readonly ready?: Promise<void>;
+}
+export function blockLocalAudio(grantToken?: string): LocalAudioRelease {
   const token = Symbol("local-file-write");
   writeBlocks.add(token);
   try {
-    stopLocalAudio?.();
+    const ready = Promise.resolve(stopLocalAudio?.(grantToken));
+    // 生命周期撤销等同步调用者也会得到失败已处理的 promise；写入者仍 await 原 promise。
+    void ready.catch(() => undefined);
+    return Object.assign(
+      () => {
+        writeBlocks.delete(token);
+      },
+      { ready },
+    );
   } catch (error) {
     writeBlocks.delete(token);
     throw error;
   }
-  return () => {
-    writeBlocks.delete(token);
-  };
 }
 
 export function localAudioBlocked(): boolean {

@@ -110,7 +110,7 @@ async function fixture() {
     })),
   };
   const release = vi.fn();
-  const blockAudio = vi.fn(() => release);
+  const blockAudio = vi.fn((grantToken?: string) => (grantToken ? vi.fn() : release));
   const owner = new FilesSession(provider, { blockAudio });
   sources.push(owner);
   await owner.start();
@@ -152,6 +152,20 @@ it("preserves committed truth when the library refresh fails", async () => {
   expect(f.metadata.operation).toBeUndefined();
 });
 
+it("撤销目录前等待音频读取者真实释放", async () => {
+  const f = await fixture();
+  const gate = deferred<void>();
+  const release = vi.fn();
+  f.blockAudio.mockReturnValueOnce(Object.assign(release, { ready: gate.promise }));
+  const revoked = f.owner.revokeDirectory("grant");
+  await Promise.resolve();
+  expect(f.provider.revokeDirectory).not.toHaveBeenCalled();
+  expect(f.blockAudio).toHaveBeenLastCalledWith("grant");
+  gate.resolve();
+  await expect(revoked).resolves.toMatchObject({ status: "completed" });
+  expect(f.provider.revokeDirectory).toHaveBeenCalledWith(7, "grant");
+  expect(release).toHaveBeenCalledOnce();
+});
 it("keeps an unrelated grant change out of the active save and retires only its own grant", async () => {
   const f = await fixture();
   const response = deferred<MetadataResult>();

@@ -49,6 +49,9 @@
     "release:desktop:verify": "node scripts/package/mygo-release.mjs --verify-artifacts",
     "release:desktop:build": "node scripts/package/mygo-release.mjs --build",
     "test:desktop:release": "node --test scripts/package/mygo-release*.test.mjs",
+    "mpv:prepare": "node scripts/mpv/resources.mjs",
+    "mpv:check": "node scripts/mpv/resources.mjs --check",
+    "test:desktop:mpv": "python3 -m unittest discover -s scripts/mpv -p '*_test.py' && node --test scripts/mpv/*.test.mjs",
     "build:win": "pnpm run build:desktop:win",
     "build:mac": "pnpm run build:desktop:mac",
     "build:linux": "pnpm run build:desktop:linux"

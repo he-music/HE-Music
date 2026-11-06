@@ -75,7 +75,7 @@ describe("Player local file audio", () => {
     const url = "http://127.0.0.1:1234/session/__local/audio?path=%2Ffixture%2Fsong.mp3";
     expect(mocks.audio.play).toHaveBeenCalledOnce();
     expect(mocks.audio.play.mock.calls[0][0]).toContain(url + "&v=");
-    expect(mocks.audio.play.mock.calls[0][1]).toEqual({ fadeIn: false, autoPlay: false });
+    expect(mocks.audio.play.mock.calls[0][1]).toEqual({ fadeIn: false, autoPlay: false, seek: 5 });
     expect(mocks.audio.seek).toHaveBeenCalledWith(5);
     expect(mocks.history).toHaveBeenCalledOnce();
   });

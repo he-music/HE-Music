@@ -90,7 +90,7 @@
           <PlayerControl @mouseenter.stop="stopHide" @mouseleave.stop="playerMove" />
           <!-- 音乐频谱 -->
           <PlayerSpectrum
-            v-if="settingStore.showSpectrums"
+            v-if="settingStore.showSpectrums && playbackCapabilities.supportsSpectrum"
             :color="statusStore.mainColor ? `rgb(${statusStore.mainColor})` : 'rgb(239 239 239)'"
             :show="!statusStore.playerMetaShow"
             :height="60"
@@ -105,6 +105,7 @@
 import { useMobile } from "@/composables/useMobile";
 import { useStatusStore, useMusicStore, useSettingStore, usePlatformStore } from "@/stores";
 import { FeatureSupportFlag } from "@/api/platform";
+import { playbackCapabilities } from "@/utils/audioManager";
 
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();

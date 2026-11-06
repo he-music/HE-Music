@@ -59,6 +59,30 @@ function fixture(save: LocalMetadataAccess["save"] = vi.fn(async () => result())
 afterEach(() => vi.useRealTimers());
 
 describe("LocalMetadataSession", () => {
+  it.each([false, true])("等待音频真实释放后才写标签，释放失败=%s", async (fail) => {
+    const gate = deferred<void>();
+    const save = vi.fn(async () => result());
+    const release = vi.fn();
+    const session = new LocalMetadataSession({
+      access: () => ({
+        current: () => true,
+        read: async () => result(),
+        save,
+        cancel: async () => result(),
+      }),
+      blockAudio: () => Object.assign(release, { ready: gate.promise }),
+      refreshLibrary: async () => {},
+    });
+    const pendingSave = session.save(ref, "sha", patch);
+    await Promise.resolve();
+    expect(save).not.toHaveBeenCalled();
+    if (fail) gate.reject(new Error("release"));
+    else gate.resolve();
+    const output = await pendingSave;
+    expect(save).toHaveBeenCalledTimes(fail ? 0 : 1);
+    expect(output.code).toBe(fail ? "audio_release_failed" : "ok");
+    expect(release).toHaveBeenCalledOnce();
+  });
   it("keeps nil fields, accepts a valid renamed ref, and waits for refresh", async () => {
     const refreshGate = deferred<void>();
     const save = vi.fn(async () => result({ code: "saved_cleanup_required" }));

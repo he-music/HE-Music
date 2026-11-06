@@ -10,6 +10,8 @@ import { readOutputDevices } from "@/utils/audioOutputDevices";
 import { computed, getCurrentScope, onScopeDispose, ref } from "vue";
 import { usePlayer } from "@/utils/player";
 import { t } from "@/i18n";
+import type { PlaybackEngineId } from "@/core/audio-player/IPlaybackEngine";
+import { defaultOutputDevices } from "@/utils/playbackSettings";
 
 export const usePlaySettings = (): SettingConfig => {
   const settingStore = useSettingStore();
@@ -17,6 +19,28 @@ export const usePlaySettings = (): SettingConfig => {
   const player = usePlayer();
   const isDesktop = isMygo;
 
+  const selectedEngine = computed(() => settingStore.playbackEngine ?? "web-audio");
+  const rememberedDevice = computed(
+    () =>
+      settingStore.outputDevices?.[selectedEngine.value] ?? {
+        id: settingStore.playDevice || "default",
+        label: "",
+      },
+  );
+  const displayedOutputs = computed(() => {
+    const selected = rememberedDevice.value;
+    const id = selected.id === "default" ? "" : selected.id;
+    return outputDevices.value.some((item) => item.value === id)
+      ? outputDevices.value
+      : [
+          ...outputDevices.value,
+          {
+            value: id,
+            label: `${selected.label || id} (${t("mygo.audio.unavailable")})`,
+            disabled: true,
+          },
+        ];
+  });
   const canRequestOutputAccess = isMygo && platform.os === "darwin";
   const outputDevices = ref<SelectOption[]>([{ label: t("common.system_default"), value: "" }]);
   const readingOutputs = ref(false);
@@ -35,6 +59,23 @@ export const usePlaySettings = (): SettingConfig => {
     const current = () => active && revision === operation;
     readingOutputs.value = true;
     try {
+      if (selectedEngine.value === "mpv") {
+        if (!platform.mpvPlayback) throw new Error("mpv unavailable");
+        const snapshot = await platform.mpvPlayback.initialize();
+        const devices = await platform.mpvPlayback.getOutputDevices(snapshot.lifecycle);
+        if (!current()) return;
+        outputDevices.value = [
+          { label: t("common.system_default"), value: "" },
+          ...devices
+            .filter((device) => device.id !== "auto")
+            .map((device) => ({
+              label: device.label,
+              value: device.id,
+              disabled: !device.available,
+            })),
+        ];
+        return;
+      }
       if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices)
         throw new DOMException("Media devices unavailable", "NotSupportedError");
       const needsCapture =
@@ -60,12 +101,10 @@ export const usePlaySettings = (): SettingConfig => {
     } catch (error) {
       if (!current()) return;
       console.error("获取 WebAudio 设备失败", error);
-      if (requestAccess) {
-        const denied = error instanceof DOMException && error.name === "NotAllowedError";
-        window.$message.error(
-          t(denied ? "mygo.audio.output_access_denied" : "mygo.audio.output_devices_failed"),
-        );
-      }
+      const denied = error instanceof DOMException && error.name === "NotAllowedError";
+      window.$message.error(
+        t(denied ? "mygo.audio.output_access_denied" : "mygo.audio.output_devices_failed"),
+      );
     } finally {
       readingOutputs.value = false;
     }
@@ -76,14 +115,31 @@ export const usePlaySettings = (): SettingConfig => {
     // 找到对应的 label 用于显示
     const option = outputDevices.value.find((d) => d.value === deviceId);
     const label = option?.label || deviceId;
+    settingStore.outputDevices ??= defaultOutputDevices();
+    settingStore.outputDevices[selectedEngine.value] = {
+      id: deviceId || "default",
+      label: String(label),
+    };
     try {
-      await player.toggleOutputDevice(deviceId);
-      settingStore.playDevice = deviceId;
+      await player.changePlaybackOutput();
       window.$message.success(t("message.output_device_change_success", { device: label }));
     } catch (error) {
       console.error("Failed to change audio output device:", error);
       window.$message.error(t("message.output_device_change_failed"));
     }
+  };
+  const changeEngine = async (engine: PlaybackEngineId) => {
+    settingStore.playbackEngine = engine;
+    revision++;
+    readingOutputs.value = false;
+    outputDevices.value = [{ label: t("common.system_default"), value: "" }];
+    try {
+      await player.changePlaybackOutput(engine);
+    } catch (error) {
+      console.error("切换播放引擎失败", error);
+      window.$message.error(t("mygo.audio.engine_change_failed"));
+    }
+    await getOutputDevices();
   };
   // 音质数据
   const songLevelData = {
@@ -198,6 +254,7 @@ export const usePlaySettings = (): SettingConfig => {
             key: "songVolumeFade",
             label: t("setting.play.song_volume_fade"),
             type: "switch",
+            disabled: computed(() => selectedEngine.value === "mpv"),
             value: computed({
               get: () => settingStore.songVolumeFade,
               set: (v) => (settingStore.songVolumeFade = v),
@@ -238,23 +295,37 @@ export const usePlaySettings = (): SettingConfig => {
             }),
           },
           {
+            key: "playbackEngine",
+            label: t("mygo.audio.playback_engine"),
+            type: "select",
+            show: isDesktop,
+            options: [
+              { label: "Web Audio", value: "web-audio" },
+              { label: "mpv", value: "mpv" },
+            ],
+            value: computed({
+              get: () => selectedEngine.value,
+              set: (value: PlaybackEngineId) => void changeEngine(value),
+            }),
+          },
+          {
             key: "playDevice",
             label: t("setting.play.output_device"),
             type: "select",
             show: isDesktop,
-            description: t("setting.play.output_device_tip"),
+
             disabled: readingOutputs,
             extraButton: {
               label: t("mygo.audio.read_output_devices"),
-              show: canRequestOutputAccess,
+              show: isDesktop,
               action: () => void getOutputDevices(true),
             },
-            options: outputDevices,
+            options: displayedOutputs,
             componentProps: {
               renderOption,
             },
             value: computed({
-              get: () => settingStore.playDevice,
+              get: () => (rememberedDevice.value.id === "default" ? "" : rememberedDevice.value.id),
               set: (v) => playDeviceChange(v),
             }),
           },

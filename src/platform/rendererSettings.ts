@@ -1,4 +1,5 @@
 import { createSettingState, type SettingState } from "@/stores/setting";
+import { migratePlaybackSettings } from "@/utils/playbackSettings";
 import { createShortcutState, type ShortcutStore, type ShortcutType } from "@/stores/shortcut";
 import type { FontStyleSelection } from "@/types/global";
 import type { RendererSettings } from "./mygo.bindings";
@@ -142,6 +143,14 @@ const settingSchema: Schema<SettingState> = {
   proxyPort: number,
   songLevel: string,
   playDevice: string,
+  playbackEngine: enumeration("web-audio", "mpv"),
+  outputDevices: (value) => {
+    const input = object(value);
+    const device = (value: unknown) =>
+      decode({ id: "default", label: "" }, { id: string, label: string }, value);
+    if (Object.keys(input).some((key) => key !== "web-audio" && key !== "mpv")) return invalid();
+    return { "web-audio": device(input["web-audio"]), mpv: device(input.mpv) };
+  },
   autoPlay: bool,
   songVolumeFade: bool,
   songVolumeFadeTime: number,
@@ -223,7 +232,7 @@ const shortcutList: Reader<ShortcutStore["shortcutList"]> = (value) =>
   );
 
 export function validateSettingState(value: unknown): SettingState {
-  const input = object(value);
+  const input = object(migratePlaybackSettings(value));
   // This is the only legacy renderer key supported by the existing deserializer.
   if (own(input, "useAMLyrics")) {
     const legacy = bool(input.useAMLyrics);

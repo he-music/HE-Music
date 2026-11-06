@@ -1,14 +1,18 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { effectScope, unref } from "vue";
+import { effectScope, unref, reactive } from "vue";
 
 const mocks = vi.hoisted(() => ({
   env: { isElectron: true, isMygo: false },
-  toggleOutputDevice: vi.fn(),
+  changePlaybackOutput: vi.fn(),
   success: vi.fn(),
   error: vi.fn(),
   warning: vi.fn(),
-  platform: { os: "darwin" },
-  settings: { playDevice: "" },
+  platform: { os: "darwin", mpvPlayback: { initialize: vi.fn(), getOutputDevices: vi.fn() } },
+  settings: {
+    playDevice: "",
+    playbackEngine: "web-audio",
+    outputDevices: { "web-audio": { id: "default", label: "" }, mpv: { id: "default", label: "" } },
+  },
 }));
 vi.mock("@/stores", () => ({ useSettingStore: () => mocks.settings, useStatusStore: () => ({}) }));
 vi.mock("@/utils/env", () => mocks.env);
@@ -18,11 +22,17 @@ vi.mock("@/utils/player", () => ({ usePlayer: () => mocks }));
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
 import { usePlaySettings } from "./play";
 
+mocks.settings = reactive(mocks.settings);
 afterEach(() => {
   mocks.env.isElectron = true;
   mocks.env.isMygo = false;
   mocks.platform.os = "darwin";
   mocks.settings.playDevice = "";
+  mocks.settings.playbackEngine = "web-audio";
+  mocks.settings.outputDevices = {
+    "web-audio": { id: "default", label: "" },
+    mpv: { id: "default", label: "" },
+  };
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   vi.clearAllMocks();
@@ -53,12 +63,51 @@ function deviceSetting() {
 }
 
 describe("output device feedback", () => {
+  it("mpv 枚举不请求麦克风，保留失效设备与名称", async () => {
+    vi.stubGlobal("window", { $message: mocks });
+    const capture = vi.fn();
+    vi.stubGlobal("navigator", { mediaDevices: { getUserMedia: capture } });
+    mocks.settings.playbackEngine = "mpv";
+    mocks.settings.outputDevices.mpv = { id: "missing", label: "Headphones" };
+    mocks.platform.mpvPlayback.initialize.mockResolvedValue({ lifecycle: 8 });
+    mocks.platform.mpvPlayback.getOutputDevices.mockResolvedValue([
+      { id: "auto", label: "Default", available: true },
+    ]);
+    const { config, output } = mygoOutputConfig();
+    await config.onActivate?.();
+    expect(capture).not.toHaveBeenCalled();
+    expect(mocks.platform.mpvPlayback.getOutputDevices).toHaveBeenCalledWith(8);
+    expect(unref(output.options)).toContainEqual({
+      value: "missing",
+      label: "Headphones (mygo.audio.unavailable)",
+      disabled: true,
+    });
+    expect(mocks.settings.outputDevices.mpv.id).toBe("missing");
+  });
+  it("引擎切换失败保留新引擎与另一引擎的设备", async () => {
+    vi.stubGlobal("window", { $message: mocks });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    mocks.settings.outputDevices["web-audio"] = { id: "speaker", label: "Speaker" };
+    mocks.platform.mpvPlayback.initialize.mockResolvedValue({ lifecycle: 8 });
+    mocks.platform.mpvPlayback.getOutputDevices.mockResolvedValue([]);
+    mocks.changePlaybackOutput.mockRejectedValueOnce(new Error("library"));
+    const { config } = mygoOutputConfig();
+    const engine = config.groups
+      .flatMap((group) => group.items)
+      .find((item) => item.key === "playbackEngine");
+    if (!engine?.value) throw new Error("missing engine setting");
+    engine.value.value = "mpv";
+    await flush();
+    expect(mocks.settings.playbackEngine).toBe("mpv");
+    expect(mocks.settings.outputDevices["web-audio"].id).toBe("speaker");
+    expect(mocks.error).toHaveBeenCalledWith("mygo.audio.engine_change_failed");
+  });
   it("waits for the device switch before reporting success and reports real failure", async () => {
     vi.stubGlobal("window", { $message: mocks });
     vi.spyOn(console, "error").mockImplementation(() => {});
     try {
       let resolve: () => void = () => {};
-      mocks.toggleOutputDevice.mockImplementationOnce(
+      mocks.changePlaybackOutput.mockImplementationOnce(
         () =>
           new Promise<void>((done) => {
             resolve = done;
@@ -71,13 +120,15 @@ describe("output device feedback", () => {
       resolve();
       for (let n = 0; n < 10; n++) await Promise.resolve();
       expect(mocks.success).toHaveBeenCalledOnce();
-      expect(mocks.settings.playDevice).toBe("speakers");
-      mocks.toggleOutputDevice.mockRejectedValueOnce(new DOMException("denied", "NotAllowedError"));
+      expect(mocks.settings.outputDevices["web-audio"].id).toBe("speakers");
+      mocks.changePlaybackOutput.mockRejectedValueOnce(
+        new DOMException("denied", "NotAllowedError"),
+      );
       item.value.value = "missing";
       for (let n = 0; n < 10; n++) await Promise.resolve();
       expect(mocks.success).toHaveBeenCalledOnce();
       expect(mocks.error).toHaveBeenCalledExactlyOnceWith("message.output_device_change_failed");
-      expect(mocks.settings.playDevice).toBe("speakers");
+      expect(mocks.settings.outputDevices["web-audio"].id).toBe("missing");
     } finally {
       vi.unstubAllGlobals();
       vi.restoreAllMocks();
@@ -151,7 +202,7 @@ describe("output device feedback", () => {
     await flush();
     expect(getUserMedia).toHaveBeenCalledOnce();
     expect(enumerateDevices).toHaveBeenCalledTimes(3);
-    expect(mocks.toggleOutputDevice).not.toHaveBeenCalled();
+    expect(mocks.changePlaybackOutput).not.toHaveBeenCalled();
   });
 
   it("reports permission denial without changing the saved output", async () => {
@@ -170,7 +221,7 @@ describe("output device feedback", () => {
     await flush();
     expect(mocks.error).toHaveBeenCalledExactlyOnceWith("mygo.audio.output_access_denied");
     expect(mocks.settings.playDevice).toBe("remembered");
-    expect(mocks.toggleOutputDevice).not.toHaveBeenCalled();
+    expect(mocks.changePlaybackOutput).not.toHaveBeenCalled();
     expect(unref(output.disabled)).toBe(false);
   });
 
@@ -241,7 +292,7 @@ describe("output device feedback", () => {
         .flatMap((group) => group.items)
         .find((item) => item.key === "playDevice");
       await config.onActivate?.();
-      expect(unref(output?.extraButton?.show)).toBe(false);
+      expect(unref(output?.extraButton?.show)).toBe(mocks.env.isMygo);
       expect(getUserMedia).not.toHaveBeenCalled();
     },
   );

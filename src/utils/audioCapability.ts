@@ -5,6 +5,9 @@ export type AudioSourceAccess = "native" | "web-audio";
 export interface AudioSourceInfo {
   readonly platform: string;
   readonly format: string;
+  readonly localRef?: import("@/platform/mygo.bindings").LocalFileRef;
+  readonly fileEpoch?: number;
+  readonly identity?: string;
 }
 
 export interface AudioSourceProbeOptions {

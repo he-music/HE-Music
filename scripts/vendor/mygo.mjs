@@ -6,6 +6,7 @@ import { spawnSync } from "node:child_process";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
+import { ensureMpvResources } from "../mpv/resources.mjs";
 export const SDK_VERSION = "v0.6.5-0.20261026063203-07ebe19ac0dc";
 export const SDK_WINDOWS_FILE = "github.com/egoist/mygo/internal/windows/window.go";
 const definitionFile = "patches/mygo/patch.json";
@@ -244,6 +245,7 @@ export async function main(args = process.argv.slice(2), root = process.cwd()) {
     throw new Error(
       "用法：mygo.mjs check | refresh | test-windows | build/dev/generate/doctor [官方参数]",
     );
+  if (args[0] === "build" || args[0] === "dev") ensureMpvResources(root, args);
   const result = spawnSync("go", ["tool", "mygo", ...args], {
     cwd: root,
     env: vendoredGoEnvironment(),

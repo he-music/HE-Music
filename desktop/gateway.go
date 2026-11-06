@@ -193,6 +193,10 @@ func (g *NetworkGateway) serveHTTP(w http.ResponseWriter, r *http.Request) {
 	if serveGatewayProbe(w, r, path) {
 		return
 	}
+	if token, ok := strings.CutPrefix(path, "/__mpv/"); ok {
+		g.serveMpvResource(w, r, token)
+		return
+	}
 	if r.Method == "CONNECT" || r.Method == "TRACE" {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return

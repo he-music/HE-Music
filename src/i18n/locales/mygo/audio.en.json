@@ -1,9 +1,13 @@
 {
   "audio": {
-    "effects_unavailable": "Audio effects are unavailable for this source. Regular playback is preserved.",
+    "effects_unavailable": "Audio effects are unavailable for the current playback engine or source.",
     "read_output_devices": "Read devices",
     "output_access_denied": "Microphone permission was not granted. Output devices could not be read.",
     "output_devices_failed": "Failed to read output devices.",
+    "playback_engine": "Playback engine",
+    "engine_change_failed": "Failed to change playback engine. Playback stopped.",
+    "device_unavailable": "The selected output device is unavailable. Select an output device.",
+    "unavailable": "Unavailable",
     "output_devices_empty": "No output devices were returned."
   }
 }

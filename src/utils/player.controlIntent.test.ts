@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { reactive } from "vue";
 import type { SongInfo } from "@/types/main.hemusic";
+import type { PlatformMpvPlayback, MpvSnapshot } from "@/platform/mpvPlayback";
 
 import type { ControlCommand, ControlProvider } from "@/platform/controlSession";
 
 const mocks = vi.hoisted(() => ({
+  engine: "web-audio" as "web-audio" | "mpv",
+  mpv: undefined as PlatformMpvPlayback | undefined,
   music: {
     playSong: { id: "A", platform: "test", name: "A", path: "", links: [] as SongInfo["links"] },
     songCover: "cover",
@@ -42,6 +45,9 @@ vi.mock("@/stores", () => ({
   useStatusStore: () => mocks.status,
   useDataStore: () => mocks.data,
   useSettingStore: () => ({
+    get playbackEngine() {
+      return mocks.engine;
+    },
     smtcOpen: false,
     showSpectrums: true,
     get playDevice() {
@@ -50,6 +56,13 @@ vi.mock("@/stores", () => ({
     getFadeTime: 0,
     songLevel: "128mp3",
   }),
+}));
+vi.mock("@/platform", () => ({
+  platform: {
+    get mpvPlayback() {
+      return mocks.mpv;
+    },
+  },
 }));
 vi.mock("./songManager", () => ({
   default: {
@@ -139,6 +152,8 @@ let retry: (() => unknown) | undefined;
 beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
+  mocks.engine = "web-audio";
+  mocks.mpv = undefined;
   mocks.music = reactive({
     playSong: { ...song("A"), path: "" },
     songCover: "cover",
@@ -196,7 +211,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   for (const stop of stops.splice(0)) await stop();
-  manager.clearSource();
+  await manager.clearSource();
   elements.length = 0;
   retry = undefined;
   vi.restoreAllMocks();
@@ -229,6 +244,79 @@ async function shell(generation: number) {
     emit: (action: string) => emit({ generation, requestId: ++requestId, action }),
   };
 }
+
+describe("real Player + MpvPlaybackEngine errors", () => {
+  it.each(["local-load", "online-load", "online-url", "online-empty"])(
+    "%s 拒绝且没有 error 事件时停止并保留当前歌曲",
+    async (failure) => {
+      let snapshot: MpvSnapshot = {
+        lifecycle: 1,
+        session: 0,
+        sequence: 1,
+        state: "idle",
+        position: 0,
+        duration: 90,
+        rate: 1,
+        volume: 1,
+        source: "",
+        device: "auto",
+        error: null,
+      };
+      const next = () => (snapshot = { ...snapshot, sequence: snapshot.sequence + 1 });
+      const provider: PlatformMpvPlayback = {
+        capabilities: {
+          supportsRate: true,
+          supportsSinkId: true,
+          supportsEqualizer: false,
+          supportsSpectrum: false,
+          supportsFade: false,
+        },
+        initialize: vi.fn(async () => snapshot),
+        load: vi.fn(async () => {
+          throw new Error("provider load rejected without native event");
+        }),
+        play: vi.fn(async () => {}),
+        pause: vi.fn(async () => {}),
+        clearSource: vi.fn(async () => next()),
+        stop: vi.fn(async () => next()),
+        seek: vi.fn(async () => {}),
+        setVolume: vi.fn(async () => {}),
+        setRate: vi.fn(async () => {}),
+        setOutputDevice: vi.fn(async () => {}),
+        getOutputDevices: vi.fn(async () => []),
+        snapshot: vi.fn(async () => snapshot),
+        destroy: vi.fn(async () => {}),
+        onEvent: vi.fn(() => () => {}),
+        teardown: vi.fn(),
+      };
+      mocks.engine = "mpv";
+      mocks.mpv = provider;
+      if (failure === "local-load") {
+        mocks.data.playList[0] = song("A", "/fixture/A.mp3");
+        mocks.ref.fileId = "A";
+      }
+      if (failure === "online-url") mocks.url.mockRejectedValueOnce(new Error("URL failed"));
+      if (failure === "online-empty") mocks.url.mockResolvedValueOnce("");
+      const nextOrPrev = vi.spyOn(player, "nextOrPrev");
+      mocks.status.playStatus = true;
+      await player.initPlayer();
+      expect(manager.engineId).toBe("mpv");
+      expect(mocks.data.playList).toHaveLength(2);
+      expect(mocks.status.playIndex).toBe(0);
+      expect(mocks.music.playSong.id).toBe("A");
+      expect(nextOrPrev).not.toHaveBeenCalled();
+      expect(manager.src).toBe("");
+      expect(manager.paused).toBe(true);
+      expect(mocks.status.playStatus).toBe(false);
+      expect(mocks.status.playLoading).toBe(false);
+      expect(provider.play).not.toHaveBeenCalled();
+      expect(window.$message.error).toHaveBeenCalledWith("message.song_play_fail");
+      expect(provider.load).toHaveBeenCalledTimes(
+        failure === "online-url" || failure === "online-empty" ? 0 : 1,
+      );
+    },
+  );
+});
 
 describe("real Player HTTP control autoplay intent", () => {
   it.each(["next", "prev"] as const)(
@@ -446,6 +534,13 @@ describe("real Player HTTP control autoplay intent", () => {
   );
   it("restores the configured output when spectrum display is enabled", async () => {
     mocks.device.mockReturnValue("saved-speakers");
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        enumerateDevices: async () => [
+          { kind: "audiooutput", deviceId: "saved-speakers", label: "Saved" },
+        ],
+      },
+    });
     await player.nextOrPrev("next");
     expect(mocks.sink).toHaveBeenCalledWith("saved-speakers");
     expect(manager.paused).toBe(false);

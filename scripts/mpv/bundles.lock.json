@@ -1,0 +1,1005 @@
+{
+  "bundleVersion": "v0.42.0-2",
+  "clientAPI": "2.6",
+  "ffmpegVersion": "8.0.1",
+  "materials": {
+    "asset": "libmpv-materials-v0.42.0-2.tar.gz",
+    "manifestSHA256": "81c2bb5a27fab72f7b8b7460845f70ad93216bcd2b8a988db32683989404a16f",
+    "root": "materials",
+    "sha256": "6484ecfbd76cbca86c1faf751baac50d2384d1106a3251e6dce7eb971bac66a5",
+    "size": 72649121,
+    "url": "https://github.com/he-music/mpv-bundles/releases/download/v0.42.0-2/libmpv-materials-v0.42.0-2.tar.gz"
+  },
+  "mpvVersion": "0.42.0",
+  "origin": {
+    "bundleVersion": "v0.42.0-1",
+    "manifestSHA256": "ce0842745e6cd77af959f6cc5127d1cb09f5439a84b1520276b8af322954b346"
+  },
+  "recipeSHA256": "25f8655011fcf7d534e6d06816d07d29a09c1396ce491b52a2fdcbe557f4bb6a",
+  "repository": "he-music/mpv-bundles",
+  "schemaVersion": 2,
+  "targets": {
+    "darwin/universal": {
+      "asset": "libmpv-darwin-universal-v0.42.0-2.tar.gz",
+      "correspondingSourceStatus": "project-fixed-sources",
+      "library": "libmpv.2.dylib",
+      "licenseFiles": {
+        "licenses/NOTICE.txt": {
+          "sha256": "9ddb4ef908a2a5e9970f14a01e2f23068df1dfd444d4fb89a9dc565e8b305008",
+          "size": 564
+        },
+        "licenses/NOTICES.md": {
+          "sha256": "3bd38f4a3eabf3d9bab8aa92776947da082b32cbc44da78d3601e0c381c7ddfc",
+          "size": 2785
+        },
+        "licenses/SOURCE-MATERIALS.json": {
+          "sha256": "d6a3ab98038dfa3be3cc2c189a1cbba8901d8949463fbdcceefe65b289bab1e7",
+          "size": 714
+        },
+        "licenses/fast_float/LICENSE-APACHE": {
+          "sha256": "097a889aa954d04e088b790b10a4014d6189561d0a6013935a73ce3d4ddaaf06",
+          "size": 10767
+        },
+        "licenses/fast_float/LICENSE-MIT": {
+          "sha256": "e562f3f974ced7e69dd1db77b820b36bcf8f30377f1aa105723fba449c53c4e6",
+          "size": 1079
+        },
+        "licenses/ffmpeg/COPYING.LGPLv2.1": {
+          "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+          "size": 26517
+        },
+        "licenses/ffmpeg/LICENSE.md": {
+          "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af",
+          "size": 4346
+        },
+        "licenses/freetype/FTL.TXT": {
+          "sha256": "5a5ee54c5001bbad1cdc1a57cc3dd4c42199b2da09d39c7ee41fab002d02967f",
+          "size": 6743
+        },
+        "licenses/freetype/GPLv2.TXT": {
+          "sha256": "c4120c6752c910c299e3bd9cb3a46ff262c268303ca2069b61f92f10a5656c18",
+          "size": 17994
+        },
+        "licenses/freetype/LICENSE.TXT": {
+          "sha256": "bd36c8b474855fa294c2ec5c184544478ef3720aad37d65a6296a4f264fd2d3b",
+          "size": 2149
+        },
+        "licenses/fribidi/COPYING": {
+          "sha256": "32434afcc8666ba060e111d715bfdb6c2d5dd8a35fa4d3ab8ad67d8f850d2f2b",
+          "size": 26440
+        },
+        "licenses/harfbuzz/COPYING": {
+          "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+          "size": 1971
+        },
+        "licenses/libass/COPYING": {
+          "sha256": "f7e30699d02798351e7f839e3d3bfeb29ce65e44efa7735c225464c4fd7dfe9c",
+          "size": 755
+        },
+        "licenses/libplacebo/LICENSE": {
+          "sha256": "b3aa400aca6d2ba1f0bd03bd98d03d1fe7489a3bbb26969d72016360af8a5c9d",
+          "size": 24478
+        },
+        "licenses/lua/readme.html": {
+          "sha256": "a686d9158c8878ee4c6e1c90d719949c2b70031b74d6e945e6e218a063ebcb20",
+          "size": 13160
+        },
+        "licenses/mpv/Copyright": {
+          "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23",
+          "size": 4096
+        },
+        "licenses/mpv/LICENSE.LGPL": {
+          "sha256": "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9",
+          "size": 26410
+        },
+        "licenses/pkgconf/COPYING": {
+          "sha256": "07ee94b50a41ee3fc4e13a9b9c60b26fc28488494c465639f7e5f07a3952ec04",
+          "size": 509
+        },
+        "licenses/vulkan-headers/Apache-2.0.txt": {
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "size": 11358
+        },
+        "licenses/vulkan-headers/LICENSE.md": {
+          "sha256": "ac24e5ea920e4318e4d02c4086ae51f53cfb03feed06c18df1019e7ada1ec7bc",
+          "size": 458
+        },
+        "licenses/vulkan-headers/MIT.txt": {
+          "sha256": "1ca3502222d967f3be5751c55f6b7ee735b5383909c3b501495f54b216dbf227",
+          "size": 1084
+        }
+      },
+      "manifestSHA256": "db5c8d2681ad562c6cdbd81ec1b0511433b747202d6caa070cc7e7b471359e16",
+      "root": "mpv",
+      "runtimeFiles": {
+        "libmpv.2.dylib": {
+          "sha256": "9784f8ed8b2cca91f5c3d1ff05ff767ac301db4df9cbeba2a24d67c4e78c7855",
+          "size": 24342032
+        }
+      },
+      "sha256": "d6021ccdaf40a858d440ea17be6182ea2dac832caeaeecc39df8f65d0853dd5b",
+      "size": 10994494,
+      "url": "https://github.com/he-music/mpv-bundles/releases/download/v0.42.0-2/libmpv-darwin-universal-v0.42.0-2.tar.gz"
+    },
+    "linux/amd64": {
+      "asset": "libmpv-linux-amd64-v0.42.0-2.tar.gz",
+      "correspondingSourceStatus": "project-fixed-sources",
+      "library": "libmpv.so.2",
+      "licenseFiles": {
+        "licenses/NOTICE.txt": {
+          "sha256": "9ddb4ef908a2a5e9970f14a01e2f23068df1dfd444d4fb89a9dc565e8b305008",
+          "size": 564
+        },
+        "licenses/NOTICES.md": {
+          "sha256": "3bd38f4a3eabf3d9bab8aa92776947da082b32cbc44da78d3601e0c381c7ddfc",
+          "size": 2785
+        },
+        "licenses/SOURCE-MATERIALS.json": {
+          "sha256": "1379459b201c8c3462d9b64012c5072f414ef768bce02ee55287c3366ad565b6",
+          "size": 704
+        },
+        "licenses/fast_float/LICENSE-APACHE": {
+          "sha256": "097a889aa954d04e088b790b10a4014d6189561d0a6013935a73ce3d4ddaaf06",
+          "size": 10767
+        },
+        "licenses/fast_float/LICENSE-MIT": {
+          "sha256": "e562f3f974ced7e69dd1db77b820b36bcf8f30377f1aa105723fba449c53c4e6",
+          "size": 1079
+        },
+        "licenses/ffmpeg/COPYING.LGPLv2.1": {
+          "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+          "size": 26517
+        },
+        "licenses/ffmpeg/LICENSE.md": {
+          "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af",
+          "size": 4346
+        },
+        "licenses/freetype/FTL.TXT": {
+          "sha256": "5a5ee54c5001bbad1cdc1a57cc3dd4c42199b2da09d39c7ee41fab002d02967f",
+          "size": 6743
+        },
+        "licenses/freetype/GPLv2.TXT": {
+          "sha256": "c4120c6752c910c299e3bd9cb3a46ff262c268303ca2069b61f92f10a5656c18",
+          "size": 17994
+        },
+        "licenses/freetype/LICENSE.TXT": {
+          "sha256": "bd36c8b474855fa294c2ec5c184544478ef3720aad37d65a6296a4f264fd2d3b",
+          "size": 2149
+        },
+        "licenses/fribidi/COPYING": {
+          "sha256": "32434afcc8666ba060e111d715bfdb6c2d5dd8a35fa4d3ab8ad67d8f850d2f2b",
+          "size": 26440
+        },
+        "licenses/harfbuzz/COPYING": {
+          "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+          "size": 1971
+        },
+        "licenses/libass/COPYING": {
+          "sha256": "f7e30699d02798351e7f839e3d3bfeb29ce65e44efa7735c225464c4fd7dfe9c",
+          "size": 755
+        },
+        "licenses/libplacebo/LICENSE": {
+          "sha256": "b3aa400aca6d2ba1f0bd03bd98d03d1fe7489a3bbb26969d72016360af8a5c9d",
+          "size": 24478
+        },
+        "licenses/lua/readme.html": {
+          "sha256": "a686d9158c8878ee4c6e1c90d719949c2b70031b74d6e945e6e218a063ebcb20",
+          "size": 13160
+        },
+        "licenses/mpv/Copyright": {
+          "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23",
+          "size": 4096
+        },
+        "licenses/mpv/LICENSE.LGPL": {
+          "sha256": "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9",
+          "size": 26410
+        },
+        "licenses/pkgconf/COPYING": {
+          "sha256": "07ee94b50a41ee3fc4e13a9b9c60b26fc28488494c465639f7e5f07a3952ec04",
+          "size": 509
+        },
+        "licenses/vulkan-headers/Apache-2.0.txt": {
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "size": 11358
+        },
+        "licenses/vulkan-headers/LICENSE.md": {
+          "sha256": "ac24e5ea920e4318e4d02c4086ae51f53cfb03feed06c18df1019e7ada1ec7bc",
+          "size": 458
+        },
+        "licenses/vulkan-headers/MIT.txt": {
+          "sha256": "1ca3502222d967f3be5751c55f6b7ee735b5383909c3b501495f54b216dbf227",
+          "size": 1084
+        }
+      },
+      "manifestSHA256": "a0dff4e335fa947db45d68889ca0c5d34a0bc9dc8f44de805c766a85df49324d",
+      "root": "mpv",
+      "runtimeFiles": {
+        "libmpv.so.2": {
+          "sha256": "5e5f9efa0c7df006c9b4f7d6767bdcaf478a09f95e53fccb1b5f49238b49d0a2",
+          "size": 12234040
+        }
+      },
+      "sha256": "e04902fb733360e0aef41f25e1bd9dcefb9ae49400d931593d4ec05c312f8fb9",
+      "size": 5510721,
+      "url": "https://github.com/he-music/mpv-bundles/releases/download/v0.42.0-2/libmpv-linux-amd64-v0.42.0-2.tar.gz"
+    },
+    "linux/arm64": {
+      "asset": "libmpv-linux-arm64-v0.42.0-2.tar.gz",
+      "correspondingSourceStatus": "project-fixed-sources",
+      "library": "libmpv.so.2",
+      "licenseFiles": {
+        "licenses/NOTICE.txt": {
+          "sha256": "9ddb4ef908a2a5e9970f14a01e2f23068df1dfd444d4fb89a9dc565e8b305008",
+          "size": 564
+        },
+        "licenses/NOTICES.md": {
+          "sha256": "3bd38f4a3eabf3d9bab8aa92776947da082b32cbc44da78d3601e0c381c7ddfc",
+          "size": 2785
+        },
+        "licenses/SOURCE-MATERIALS.json": {
+          "sha256": "561797b79078839a8213a1fa72b637f8020b3c03e34b260e17969dc30417e36d",
+          "size": 704
+        },
+        "licenses/fast_float/LICENSE-APACHE": {
+          "sha256": "097a889aa954d04e088b790b10a4014d6189561d0a6013935a73ce3d4ddaaf06",
+          "size": 10767
+        },
+        "licenses/fast_float/LICENSE-MIT": {
+          "sha256": "e562f3f974ced7e69dd1db77b820b36bcf8f30377f1aa105723fba449c53c4e6",
+          "size": 1079
+        },
+        "licenses/ffmpeg/COPYING.LGPLv2.1": {
+          "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+          "size": 26517
+        },
+        "licenses/ffmpeg/LICENSE.md": {
+          "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af",
+          "size": 4346
+        },
+        "licenses/freetype/FTL.TXT": {
+          "sha256": "5a5ee54c5001bbad1cdc1a57cc3dd4c42199b2da09d39c7ee41fab002d02967f",
+          "size": 6743
+        },
+        "licenses/freetype/GPLv2.TXT": {
+          "sha256": "c4120c6752c910c299e3bd9cb3a46ff262c268303ca2069b61f92f10a5656c18",
+          "size": 17994
+        },
+        "licenses/freetype/LICENSE.TXT": {
+          "sha256": "bd36c8b474855fa294c2ec5c184544478ef3720aad37d65a6296a4f264fd2d3b",
+          "size": 2149
+        },
+        "licenses/fribidi/COPYING": {
+          "sha256": "32434afcc8666ba060e111d715bfdb6c2d5dd8a35fa4d3ab8ad67d8f850d2f2b",
+          "size": 26440
+        },
+        "licenses/harfbuzz/COPYING": {
+          "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+          "size": 1971
+        },
+        "licenses/libass/COPYING": {
+          "sha256": "f7e30699d02798351e7f839e3d3bfeb29ce65e44efa7735c225464c4fd7dfe9c",
+          "size": 755
+        },
+        "licenses/libplacebo/LICENSE": {
+          "sha256": "b3aa400aca6d2ba1f0bd03bd98d03d1fe7489a3bbb26969d72016360af8a5c9d",
+          "size": 24478
+        },
+        "licenses/lua/readme.html": {
+          "sha256": "a686d9158c8878ee4c6e1c90d719949c2b70031b74d6e945e6e218a063ebcb20",
+          "size": 13160
+        },
+        "licenses/mpv/Copyright": {
+          "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23",
+          "size": 4096
+        },
+        "licenses/mpv/LICENSE.LGPL": {
+          "sha256": "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9",
+          "size": 26410
+        },
+        "licenses/pkgconf/COPYING": {
+          "sha256": "07ee94b50a41ee3fc4e13a9b9c60b26fc28488494c465639f7e5f07a3952ec04",
+          "size": 509
+        },
+        "licenses/vulkan-headers/Apache-2.0.txt": {
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "size": 11358
+        },
+        "licenses/vulkan-headers/LICENSE.md": {
+          "sha256": "ac24e5ea920e4318e4d02c4086ae51f53cfb03feed06c18df1019e7ada1ec7bc",
+          "size": 458
+        },
+        "licenses/vulkan-headers/MIT.txt": {
+          "sha256": "1ca3502222d967f3be5751c55f6b7ee735b5383909c3b501495f54b216dbf227",
+          "size": 1084
+        }
+      },
+      "manifestSHA256": "8fe8f1a32f83d60f35a6d0fd34cca1c823e1a81d6fe154ef39c097e2279268fa",
+      "root": "mpv",
+      "runtimeFiles": {
+        "libmpv.so.2": {
+          "sha256": "f9a30df73e71cda4fdcc29f738b8866d0998909171c23a060d4bb0b3a77074a2",
+          "size": 11793416
+        }
+      },
+      "sha256": "5832b13a13ed9254daa569c6986d1a74521ca7717ff9fe2b90825ae9c5a39f74",
+      "size": 5594984,
+      "url": "https://github.com/he-music/mpv-bundles/releases/download/v0.42.0-2/libmpv-linux-arm64-v0.42.0-2.tar.gz"
+    },
+    "windows/amd64": {
+      "asset": "libmpv-windows-amd64-v0.42.0-2.tar.gz",
+      "correspondingSourceStatus": "project-fixed-sources-and-windows-runtime-materials",
+      "library": "libmpv-2.dll",
+      "licenseFiles": {
+        "licenses/NOTICE.txt": {
+          "sha256": "9ddb4ef908a2a5e9970f14a01e2f23068df1dfd444d4fb89a9dc565e8b305008",
+          "size": 564
+        },
+        "licenses/NOTICES.md": {
+          "sha256": "3bd38f4a3eabf3d9bab8aa92776947da082b32cbc44da78d3601e0c381c7ddfc",
+          "size": 2785
+        },
+        "licenses/SOURCE-MATERIALS.json": {
+          "sha256": "2b99ae8de7c130f1d8c6154f8ab716a6eeb9509f6531df62d465404c6aa9b358",
+          "size": 708
+        },
+        "licenses/fast_float/LICENSE-APACHE": {
+          "sha256": "097a889aa954d04e088b790b10a4014d6189561d0a6013935a73ce3d4ddaaf06",
+          "size": 10767
+        },
+        "licenses/fast_float/LICENSE-MIT": {
+          "sha256": "e562f3f974ced7e69dd1db77b820b36bcf8f30377f1aa105723fba449c53c4e6",
+          "size": 1079
+        },
+        "licenses/ffmpeg/COPYING.LGPLv2.1": {
+          "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+          "size": 26517
+        },
+        "licenses/ffmpeg/LICENSE.md": {
+          "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af",
+          "size": 4346
+        },
+        "licenses/freetype/FTL.TXT": {
+          "sha256": "5a5ee54c5001bbad1cdc1a57cc3dd4c42199b2da09d39c7ee41fab002d02967f",
+          "size": 6743
+        },
+        "licenses/freetype/GPLv2.TXT": {
+          "sha256": "c4120c6752c910c299e3bd9cb3a46ff262c268303ca2069b61f92f10a5656c18",
+          "size": 17994
+        },
+        "licenses/freetype/LICENSE.TXT": {
+          "sha256": "bd36c8b474855fa294c2ec5c184544478ef3720aad37d65a6296a4f264fd2d3b",
+          "size": 2149
+        },
+        "licenses/fribidi/COPYING": {
+          "sha256": "32434afcc8666ba060e111d715bfdb6c2d5dd8a35fa4d3ab8ad67d8f850d2f2b",
+          "size": 26440
+        },
+        "licenses/harfbuzz/COPYING": {
+          "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+          "size": 1971
+        },
+        "licenses/libass/COPYING": {
+          "sha256": "f7e30699d02798351e7f839e3d3bfeb29ce65e44efa7735c225464c4fd7dfe9c",
+          "size": 755
+        },
+        "licenses/libplacebo/LICENSE": {
+          "sha256": "b3aa400aca6d2ba1f0bd03bd98d03d1fe7489a3bbb26969d72016360af8a5c9d",
+          "size": 24478
+        },
+        "licenses/lua/readme.html": {
+          "sha256": "a686d9158c8878ee4c6e1c90d719949c2b70031b74d6e945e6e218a063ebcb20",
+          "size": 13160
+        },
+        "licenses/mpv/Copyright": {
+          "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23",
+          "size": 4096
+        },
+        "licenses/mpv/LICENSE.LGPL": {
+          "sha256": "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9",
+          "size": 26410
+        },
+        "licenses/pkgconf/COPYING": {
+          "sha256": "07ee94b50a41ee3fc4e13a9b9c60b26fc28488494c465639f7e5f07a3952ec04",
+          "size": 509
+        },
+        "licenses/vulkan-headers/Apache-2.0.txt": {
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "size": 11358
+        },
+        "licenses/vulkan-headers/LICENSE.md": {
+          "sha256": "ac24e5ea920e4318e4d02c4086ae51f53cfb03feed06c18df1019e7ada1ec7bc",
+          "size": 458
+        },
+        "licenses/vulkan-headers/MIT.txt": {
+          "sha256": "1ca3502222d967f3be5751c55f6b7ee735b5383909c3b501495f54b216dbf227",
+          "size": 1084
+        },
+        "licenses/windows-toolchain/bzip2/LICENSE": {
+          "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
+          "size": 1896
+        },
+        "licenses/windows-toolchain/clang-analyzer/LICENSE": {
+          "sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+          "size": 15140
+        },
+        "licenses/windows-toolchain/clang-libs/LICENSE": {
+          "sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+          "size": 15140
+        },
+        "licenses/windows-toolchain/clang-tools-extra/LICENSE": {
+          "sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+          "size": 15140
+        },
+        "licenses/windows-toolchain/clang/LICENSE": {
+          "sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+          "size": 15140
+        },
+        "licenses/windows-toolchain/compiler-rt/LICENSE": {
+          "sha256": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d",
+          "size": 16708
+        },
+        "licenses/windows-toolchain/crt/COPYING": {
+          "sha256": "99a69660981156c21336fdb5661f89341b013c94e4bf9e1c7467b4745718397f",
+          "size": 2326
+        },
+        "licenses/windows-toolchain/crt/COPYING.MinGW-w64-runtime.txt": {
+          "sha256": "1db8da07b436c68833c0673ffee3d9fcb2526047f3820b81661865dfedc79a1f",
+          "size": 12155
+        },
+        "licenses/windows-toolchain/crt/COPYING.MinGW-w64.txt": {
+          "sha256": "f38e6194bd3bfa1b654f118e5acefe0aead437bbe669eee43957ccc65a7127f1",
+          "size": 5905
+        },
+        "licenses/windows-toolchain/expat/COPYING": {
+          "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87",
+          "size": 1144
+        },
+        "licenses/windows-toolchain/gettext-runtime/COPYING": {
+          "sha256": "7ef2cdfe58e0c0460657b6598b49af29d4e03c1e41cbaf0e1da1eb8ad74b95d0",
+          "size": 495
+        },
+        "licenses/windows-toolchain/gettext-runtime/intl/COPYING.LIB": {
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "size": 26419
+        },
+        "licenses/windows-toolchain/gettext-runtime/libasprintf/COPYING": {
+          "sha256": "03133addae5b99a6148c538300e6d97074453089be1423b741bd081f18e2b298",
+          "size": 65
+        },
+        "licenses/windows-toolchain/gettext-runtime/libasprintf/COPYING.LIB": {
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "size": 26419
+        },
+        "licenses/windows-toolchain/headers/COPYING": {
+          "sha256": "99a69660981156c21336fdb5661f89341b013c94e4bf9e1c7467b4745718397f",
+          "size": 2326
+        },
+        "licenses/windows-toolchain/headers/COPYING.MinGW-w64-runtime.txt": {
+          "sha256": "1db8da07b436c68833c0673ffee3d9fcb2526047f3820b81661865dfedc79a1f",
+          "size": 12155
+        },
+        "licenses/windows-toolchain/headers/COPYING.MinGW-w64.txt": {
+          "sha256": "f38e6194bd3bfa1b654f118e5acefe0aead437bbe669eee43957ccc65a7127f1",
+          "size": 5905
+        },
+        "licenses/windows-toolchain/headers/ddk-readme.txt": {
+          "sha256": "8d8f9924e4ea5466932000bdb9a4104da1d8ca3e4c979bb8207225522ba63826",
+          "size": 650
+        },
+        "licenses/windows-toolchain/libb2/LICENSE": {
+          "sha256": "6a1ee543e5282cd9061881edf462e6fdab181f328da71fc2c9a6950a80e94d01",
+          "size": 6556
+        },
+        "licenses/windows-toolchain/libc++/LICENSE": {
+          "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b",
+          "size": 16703
+        },
+        "licenses/windows-toolchain/libffi/LICENSE": {
+          "sha256": "17b64dc60f3b6897a60f971e288b973f655c2edcdf08b25f3c3dd5549857881c",
+          "size": 1132
+        },
+        "licenses/windows-toolchain/libiconv/COPYING": {
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "size": 35147
+        },
+        "licenses/windows-toolchain/libiconv/COPYING.LIB": {
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "size": 26419
+        },
+        "licenses/windows-toolchain/libiconv/README": {
+          "sha256": "ff0400ffb0c3dace1a64012f4125f292a3fef58c5b8486c7f9ba0c01a0637f3c",
+          "size": 5743
+        },
+        "licenses/windows-toolchain/libiconv/libcharset/COPYING.LIB": {
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "size": 26419
+        },
+        "licenses/windows-toolchain/libsystre/LICENSE": {
+          "sha256": "3200024286eb0a33c22da3a31c470df07c7b8cfbead2b9528195d67d107264ec",
+          "size": 1445
+        },
+        "licenses/windows-toolchain/libtre/LICENSE": {
+          "sha256": "6a50ab50d856b30c965cf2dd899e577ec108c938242fd3a2e7a7a25eed996200",
+          "size": 1479
+        },
+        "licenses/windows-toolchain/libunwind/LICENSE": {
+          "sha256": "b5efebcaca80879234098e52d1725e6d9eb8fb96a19fce625d39184b705f7b6d",
+          "size": 16706
+        },
+        "licenses/windows-toolchain/libwinpthread/COPYING": {
+          "sha256": "63263614cdd29f2f93cba85e992f041b31f9fc7b4033692f31269489a8a1b177",
+          "size": 2883
+        },
+        "licenses/windows-toolchain/libxml2/COPYING": {
+          "sha256": "5d4873884a890122a4b9b20ad56ac6f7da1d796a5bfcf04a427970ac96217626",
+          "size": 1314
+        },
+        "licenses/windows-toolchain/lld/LICENSE": {
+          "sha256": "f7891568956e34643eb6a0db1462db30820d40d7266e2a78063f2fe233ece5a0",
+          "size": 15138
+        },
+        "licenses/windows-toolchain/lldb/LICENSE": {
+          "sha256": "76be4deddeef87f6fa9940f4992a9506c7bb222af60eb3b2a47cf65719528bbe",
+          "size": 15032
+        },
+        "licenses/windows-toolchain/llvm-libs/LICENSE": {
+          "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+          "size": 15141
+        },
+        "licenses/windows-toolchain/llvm-tools/LICENSE": {
+          "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+          "size": 15141
+        },
+        "licenses/windows-toolchain/llvm/LICENSE": {
+          "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+          "size": 15141
+        },
+        "licenses/windows-toolchain/make/COPYING": {
+          "sha256": "e79e9c8a0c85d735ff98185918ec94ed7d175efc377012787aebcf3b80f0d90b",
+          "size": 35151
+        },
+        "licenses/windows-toolchain/mpdecimal/LICENSE": {
+          "sha256": "dba079e24a0286052f9f36a5e0b4f6cc95bc83ada657eb26bef8c0b6473f6512",
+          "size": 1285
+        },
+        "licenses/windows-toolchain/ncurses/LICENSE": {
+          "sha256": "708999f95527e1ffa670c6fce288c6c600cb477dd04afcc1171422b3dd4ee226",
+          "size": 1447
+        },
+        "licenses/windows-toolchain/ninja/COPYING": {
+          "sha256": "eb7e9ab9690124c5c9f42bdc81383d886a3dede26345b6ed15bbad7caf81f7ea",
+          "size": 11358
+        },
+        "licenses/windows-toolchain/openmp/LICENSE": {
+          "sha256": "fdad1758a9e1f9d5a81e18879b3406772115edc92c24bfa36b70c654f325e8e4",
+          "size": 19741
+        },
+        "licenses/windows-toolchain/openssl/LICENSE": {
+          "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+          "size": 10175
+        },
+        "licenses/windows-toolchain/pcre2/COPYING": {
+          "sha256": "99272c55f3dcfa07a8a7e15a5c1a33096e4727de74241d65fa049fccfdd59507",
+          "size": 97
+        },
+        "licenses/windows-toolchain/pcre2/LICENCE.md": {
+          "sha256": "197d8a73ffee0d6b09adba2f9c677b5f5aede24edf89258a68e48248d010d811",
+          "size": 4011
+        },
+        "licenses/windows-toolchain/python-distlib/LICENSE": {
+          "sha256": "808e10c8a6ab8deb149ff9b3fb19f447a808094606d712a9ca57fead3552599d",
+          "size": 14531
+        },
+        "licenses/windows-toolchain/python-pip/LICENSE.txt": {
+          "sha256": "634300a669d49aeae65b12c6c48c924c51a4cdf3d1ff086dc3456dc8bcaa2104",
+          "size": 1093
+        },
+        "licenses/windows-toolchain/python-setuptools/LICENSE": {
+          "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741",
+          "size": 1023
+        },
+        "licenses/windows-toolchain/python3.14/LICENSE": {
+          "sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231",
+          "size": 13804
+        },
+        "licenses/windows-toolchain/sqlite3/LICENSE": {
+          "sha256": "0b76663a90e034f3d7f2af5bfada4cedec5ebc275361899eccc5c18e6f01ff1f",
+          "size": 1528
+        },
+        "licenses/windows-toolchain/tzdata/LICENSE": {
+          "sha256": "0613408568889f5739e5ae252b722a2659c02002839ad970a63dc5e9174b27cf",
+          "size": 252
+        },
+        "licenses/windows-toolchain/wineditline/LICENSE": {
+          "sha256": "e1a9520a9b3143ad64adb356c5d2fca6bb09a3ad3950cf1f7213946543582440",
+          "size": 1588
+        },
+        "licenses/windows-toolchain/winpthreads/COPYING": {
+          "sha256": "63263614cdd29f2f93cba85e992f041b31f9fc7b4033692f31269489a8a1b177",
+          "size": 2883
+        },
+        "licenses/windows-toolchain/xz/COPYING": {
+          "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8",
+          "size": 3119
+        },
+        "licenses/windows-toolchain/xz/COPYING.0BSD": {
+          "sha256": "0b01625d853911cd0e2e088dcfb743261034a091bb379246cb25a14cc4c74bf1",
+          "size": 607
+        },
+        "licenses/windows-toolchain/xz/COPYING.GPLv2": {
+          "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6",
+          "size": 17984
+        },
+        "licenses/windows-toolchain/xz/COPYING.GPLv3": {
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "size": 35149
+        },
+        "licenses/windows-toolchain/xz/COPYING.LGPLv2.1": {
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "size": 26419
+        },
+        "licenses/windows-toolchain/zlib/LICENSE": {
+          "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2",
+          "size": 1002
+        },
+        "licenses/windows-toolchain/zstd/LICENSE": {
+          "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+          "size": 1549
+        }
+      },
+      "manifestSHA256": "de0f009c7880eb7ee8195c60a1263e8de67658ec7d465b7e2388c30a8e37ffef",
+      "root": "mpv",
+      "runtimeFiles": {
+        "libiconv-2.dll": {
+          "sha256": "de91a00fc21d31a7a672ab04f44cd86db05d8711e07c873a8d5c57cd4a093d7a",
+          "size": 1120768
+        },
+        "libmpv-2.dll": {
+          "sha256": "09f167cb06a859d5421771dc31abcbd40f9d5058aa48fa3427af555e55b01813",
+          "size": 13289472
+        }
+      },
+      "sha256": "cc59afeece6f84a86861c190b1e2437e7ad43493a41fdcbed3e572f99e601c0c",
+      "size": 6909477,
+      "url": "https://github.com/he-music/mpv-bundles/releases/download/v0.42.0-2/libmpv-windows-amd64-v0.42.0-2.tar.gz"
+    },
+    "windows/arm64": {
+      "asset": "libmpv-windows-arm64-v0.42.0-2.tar.gz",
+      "correspondingSourceStatus": "project-fixed-sources-and-windows-runtime-materials",
+      "library": "libmpv-2.dll",
+      "licenseFiles": {
+        "licenses/NOTICE.txt": {
+          "sha256": "9ddb4ef908a2a5e9970f14a01e2f23068df1dfd444d4fb89a9dc565e8b305008",
+          "size": 564
+        },
+        "licenses/NOTICES.md": {
+          "sha256": "3bd38f4a3eabf3d9bab8aa92776947da082b32cbc44da78d3601e0c381c7ddfc",
+          "size": 2785
+        },
+        "licenses/SOURCE-MATERIALS.json": {
+          "sha256": "3502995bfb425819bf20cd0c24534538041f169305652ab8da9d1009785529cb",
+          "size": 708
+        },
+        "licenses/fast_float/LICENSE-APACHE": {
+          "sha256": "097a889aa954d04e088b790b10a4014d6189561d0a6013935a73ce3d4ddaaf06",
+          "size": 10767
+        },
+        "licenses/fast_float/LICENSE-MIT": {
+          "sha256": "e562f3f974ced7e69dd1db77b820b36bcf8f30377f1aa105723fba449c53c4e6",
+          "size": 1079
+        },
+        "licenses/ffmpeg/COPYING.LGPLv2.1": {
+          "sha256": "246041b6ecf9bc32d718a62c57877c78b5eb397b6467e74ed7ae2626ab189c30",
+          "size": 26517
+        },
+        "licenses/ffmpeg/LICENSE.md": {
+          "sha256": "2e1d16c72fd74e12063776371da757322f8b77589386532f4fd8634bde7de1af",
+          "size": 4346
+        },
+        "licenses/freetype/FTL.TXT": {
+          "sha256": "5a5ee54c5001bbad1cdc1a57cc3dd4c42199b2da09d39c7ee41fab002d02967f",
+          "size": 6743
+        },
+        "licenses/freetype/GPLv2.TXT": {
+          "sha256": "c4120c6752c910c299e3bd9cb3a46ff262c268303ca2069b61f92f10a5656c18",
+          "size": 17994
+        },
+        "licenses/freetype/LICENSE.TXT": {
+          "sha256": "bd36c8b474855fa294c2ec5c184544478ef3720aad37d65a6296a4f264fd2d3b",
+          "size": 2149
+        },
+        "licenses/fribidi/COPYING": {
+          "sha256": "32434afcc8666ba060e111d715bfdb6c2d5dd8a35fa4d3ab8ad67d8f850d2f2b",
+          "size": 26440
+        },
+        "licenses/harfbuzz/COPYING": {
+          "sha256": "ba8f810f2455c2f08e2d56bb49b72f37fcf68f1f4fade38977cfd7372050ad64",
+          "size": 1971
+        },
+        "licenses/libass/COPYING": {
+          "sha256": "f7e30699d02798351e7f839e3d3bfeb29ce65e44efa7735c225464c4fd7dfe9c",
+          "size": 755
+        },
+        "licenses/libplacebo/LICENSE": {
+          "sha256": "b3aa400aca6d2ba1f0bd03bd98d03d1fe7489a3bbb26969d72016360af8a5c9d",
+          "size": 24478
+        },
+        "licenses/lua/readme.html": {
+          "sha256": "a686d9158c8878ee4c6e1c90d719949c2b70031b74d6e945e6e218a063ebcb20",
+          "size": 13160
+        },
+        "licenses/mpv/Copyright": {
+          "sha256": "bfe9ee4cceabcb8ecbfadf208d04156f73d801e6a57369a5606bb8341e204a23",
+          "size": 4096
+        },
+        "licenses/mpv/LICENSE.LGPL": {
+          "sha256": "72b672113d642cbb8ef5dcc76938db801983c56e50b1400ab930f1a64d6dc8d9",
+          "size": 26410
+        },
+        "licenses/pkgconf/COPYING": {
+          "sha256": "07ee94b50a41ee3fc4e13a9b9c60b26fc28488494c465639f7e5f07a3952ec04",
+          "size": 509
+        },
+        "licenses/vulkan-headers/Apache-2.0.txt": {
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+          "size": 11358
+        },
+        "licenses/vulkan-headers/LICENSE.md": {
+          "sha256": "ac24e5ea920e4318e4d02c4086ae51f53cfb03feed06c18df1019e7ada1ec7bc",
+          "size": 458
+        },
+        "licenses/vulkan-headers/MIT.txt": {
+          "sha256": "1ca3502222d967f3be5751c55f6b7ee735b5383909c3b501495f54b216dbf227",
+          "size": 1084
+        },
+        "licenses/windows-toolchain/bzip2/LICENSE": {
+          "sha256": "c6dbbf828498be844a89eaa3b84adbab3199e342eb5cb2ed2f0d4ba7ec0f38a3",
+          "size": 1896
+        },
+        "licenses/windows-toolchain/clang-analyzer/LICENSE": {
+          "sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+          "size": 15140
+        },
+        "licenses/windows-toolchain/clang-libs/LICENSE": {
+          "sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+          "size": 15140
+        },
+        "licenses/windows-toolchain/clang-tools-extra/LICENSE": {
+          "sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+          "size": 15140
+        },
+        "licenses/windows-toolchain/clang/LICENSE": {
+          "sha256": "ebcd9bbf783a73d05c53ba4d586b8d5813dcdf3bbec50265860ccc885e606f47",
+          "size": 15140
+        },
+        "licenses/windows-toolchain/compiler-rt/LICENSE": {
+          "sha256": "1a8f1058753f1ba890de984e48f0242a3a5c29a6a8f2ed9fd813f36985387e8d",
+          "size": 16708
+        },
+        "licenses/windows-toolchain/crt/COPYING": {
+          "sha256": "99a69660981156c21336fdb5661f89341b013c94e4bf9e1c7467b4745718397f",
+          "size": 2326
+        },
+        "licenses/windows-toolchain/crt/COPYING.MinGW-w64-runtime.txt": {
+          "sha256": "1db8da07b436c68833c0673ffee3d9fcb2526047f3820b81661865dfedc79a1f",
+          "size": 12155
+        },
+        "licenses/windows-toolchain/crt/COPYING.MinGW-w64.txt": {
+          "sha256": "f38e6194bd3bfa1b654f118e5acefe0aead437bbe669eee43957ccc65a7127f1",
+          "size": 5905
+        },
+        "licenses/windows-toolchain/expat/COPYING": {
+          "sha256": "31b15de82aa19a845156169a17a5488bf597e561b2c318d159ed583139b25e87",
+          "size": 1144
+        },
+        "licenses/windows-toolchain/gettext-runtime/COPYING": {
+          "sha256": "7ef2cdfe58e0c0460657b6598b49af29d4e03c1e41cbaf0e1da1eb8ad74b95d0",
+          "size": 495
+        },
+        "licenses/windows-toolchain/gettext-runtime/intl/COPYING.LIB": {
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "size": 26419
+        },
+        "licenses/windows-toolchain/gettext-runtime/libasprintf/COPYING": {
+          "sha256": "03133addae5b99a6148c538300e6d97074453089be1423b741bd081f18e2b298",
+          "size": 65
+        },
+        "licenses/windows-toolchain/gettext-runtime/libasprintf/COPYING.LIB": {
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "size": 26419
+        },
+        "licenses/windows-toolchain/headers/COPYING": {
+          "sha256": "99a69660981156c21336fdb5661f89341b013c94e4bf9e1c7467b4745718397f",
+          "size": 2326
+        },
+        "licenses/windows-toolchain/headers/COPYING.MinGW-w64-runtime.txt": {
+          "sha256": "1db8da07b436c68833c0673ffee3d9fcb2526047f3820b81661865dfedc79a1f",
+          "size": 12155
+        },
+        "licenses/windows-toolchain/headers/COPYING.MinGW-w64.txt": {
+          "sha256": "f38e6194bd3bfa1b654f118e5acefe0aead437bbe669eee43957ccc65a7127f1",
+          "size": 5905
+        },
+        "licenses/windows-toolchain/headers/ddk-readme.txt": {
+          "sha256": "8d8f9924e4ea5466932000bdb9a4104da1d8ca3e4c979bb8207225522ba63826",
+          "size": 650
+        },
+        "licenses/windows-toolchain/libb2/LICENSE": {
+          "sha256": "6a1ee543e5282cd9061881edf462e6fdab181f328da71fc2c9a6950a80e94d01",
+          "size": 6556
+        },
+        "licenses/windows-toolchain/libc++/LICENSE": {
+          "sha256": "539dd7aed86e8a4f12cbdd0e6c50c189c7d74847e4fecc64ce2c6ee3a01da38b",
+          "size": 16703
+        },
+        "licenses/windows-toolchain/libffi/LICENSE": {
+          "sha256": "17b64dc60f3b6897a60f971e288b973f655c2edcdf08b25f3c3dd5549857881c",
+          "size": 1132
+        },
+        "licenses/windows-toolchain/libiconv/COPYING": {
+          "sha256": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
+          "size": 35147
+        },
+        "licenses/windows-toolchain/libiconv/COPYING.LIB": {
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "size": 26419
+        },
+        "licenses/windows-toolchain/libiconv/README": {
+          "sha256": "ff0400ffb0c3dace1a64012f4125f292a3fef58c5b8486c7f9ba0c01a0637f3c",
+          "size": 5743
+        },
+        "licenses/windows-toolchain/libiconv/libcharset/COPYING.LIB": {
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "size": 26419
+        },
+        "licenses/windows-toolchain/libsystre/LICENSE": {
+          "sha256": "3200024286eb0a33c22da3a31c470df07c7b8cfbead2b9528195d67d107264ec",
+          "size": 1445
+        },
+        "licenses/windows-toolchain/libtre/LICENSE": {
+          "sha256": "6a50ab50d856b30c965cf2dd899e577ec108c938242fd3a2e7a7a25eed996200",
+          "size": 1479
+        },
+        "licenses/windows-toolchain/libunwind/LICENSE": {
+          "sha256": "b5efebcaca80879234098e52d1725e6d9eb8fb96a19fce625d39184b705f7b6d",
+          "size": 16706
+        },
+        "licenses/windows-toolchain/libwinpthread/COPYING": {
+          "sha256": "63263614cdd29f2f93cba85e992f041b31f9fc7b4033692f31269489a8a1b177",
+          "size": 2883
+        },
+        "licenses/windows-toolchain/libxml2/COPYING": {
+          "sha256": "5d4873884a890122a4b9b20ad56ac6f7da1d796a5bfcf04a427970ac96217626",
+          "size": 1314
+        },
+        "licenses/windows-toolchain/lld/LICENSE": {
+          "sha256": "f7891568956e34643eb6a0db1462db30820d40d7266e2a78063f2fe233ece5a0",
+          "size": 15138
+        },
+        "licenses/windows-toolchain/lldb/LICENSE": {
+          "sha256": "76be4deddeef87f6fa9940f4992a9506c7bb222af60eb3b2a47cf65719528bbe",
+          "size": 15032
+        },
+        "licenses/windows-toolchain/llvm-libs/LICENSE": {
+          "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+          "size": 15141
+        },
+        "licenses/windows-toolchain/llvm-tools/LICENSE": {
+          "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+          "size": 15141
+        },
+        "licenses/windows-toolchain/llvm/LICENSE": {
+          "sha256": "8d85c1057d742e597985c7d4e6320b015a9139385cff4cbae06ffc0ebe89afee",
+          "size": 15141
+        },
+        "licenses/windows-toolchain/make/COPYING": {
+          "sha256": "e79e9c8a0c85d735ff98185918ec94ed7d175efc377012787aebcf3b80f0d90b",
+          "size": 35151
+        },
+        "licenses/windows-toolchain/mpdecimal/LICENSE": {
+          "sha256": "dba079e24a0286052f9f36a5e0b4f6cc95bc83ada657eb26bef8c0b6473f6512",
+          "size": 1285
+        },
+        "licenses/windows-toolchain/ncurses/LICENSE": {
+          "sha256": "708999f95527e1ffa670c6fce288c6c600cb477dd04afcc1171422b3dd4ee226",
+          "size": 1447
+        },
+        "licenses/windows-toolchain/ninja/COPYING": {
+          "sha256": "eb7e9ab9690124c5c9f42bdc81383d886a3dede26345b6ed15bbad7caf81f7ea",
+          "size": 11358
+        },
+        "licenses/windows-toolchain/openmp/LICENSE": {
+          "sha256": "fdad1758a9e1f9d5a81e18879b3406772115edc92c24bfa36b70c654f325e8e4",
+          "size": 19741
+        },
+        "licenses/windows-toolchain/openssl/LICENSE": {
+          "sha256": "7d5450cb2d142651b8afa315b5f238efc805dad827d91ba367d8516bc9d49e7a",
+          "size": 10175
+        },
+        "licenses/windows-toolchain/pcre2/COPYING": {
+          "sha256": "99272c55f3dcfa07a8a7e15a5c1a33096e4727de74241d65fa049fccfdd59507",
+          "size": 97
+        },
+        "licenses/windows-toolchain/pcre2/LICENCE.md": {
+          "sha256": "197d8a73ffee0d6b09adba2f9c677b5f5aede24edf89258a68e48248d010d811",
+          "size": 4011
+        },
+        "licenses/windows-toolchain/python-distlib/LICENSE": {
+          "sha256": "808e10c8a6ab8deb149ff9b3fb19f447a808094606d712a9ca57fead3552599d",
+          "size": 14531
+        },
+        "licenses/windows-toolchain/python-pip/LICENSE.txt": {
+          "sha256": "634300a669d49aeae65b12c6c48c924c51a4cdf3d1ff086dc3456dc8bcaa2104",
+          "size": 1093
+        },
+        "licenses/windows-toolchain/python-setuptools/LICENSE": {
+          "sha256": "86da0f01aeae46348a3c3d465195dc1ceccde79f79e87769a64b8da04b2a4741",
+          "size": 1023
+        },
+        "licenses/windows-toolchain/python3.14/LICENSE": {
+          "sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231",
+          "size": 13804
+        },
+        "licenses/windows-toolchain/sqlite3/LICENSE": {
+          "sha256": "0b76663a90e034f3d7f2af5bfada4cedec5ebc275361899eccc5c18e6f01ff1f",
+          "size": 1528
+        },
+        "licenses/windows-toolchain/tzdata/LICENSE": {
+          "sha256": "0613408568889f5739e5ae252b722a2659c02002839ad970a63dc5e9174b27cf",
+          "size": 252
+        },
+        "licenses/windows-toolchain/wineditline/LICENSE": {
+          "sha256": "e1a9520a9b3143ad64adb356c5d2fca6bb09a3ad3950cf1f7213946543582440",
+          "size": 1588
+        },
+        "licenses/windows-toolchain/winpthreads/COPYING": {
+          "sha256": "63263614cdd29f2f93cba85e992f041b31f9fc7b4033692f31269489a8a1b177",
+          "size": 2883
+        },
+        "licenses/windows-toolchain/xz/COPYING": {
+          "sha256": "616a3ad264ce29b8f1cb97e53037b139d406899ca8d1f799651e17bfa09830b8",
+          "size": 3119
+        },
+        "licenses/windows-toolchain/xz/COPYING.0BSD": {
+          "sha256": "0b01625d853911cd0e2e088dcfb743261034a091bb379246cb25a14cc4c74bf1",
+          "size": 607
+        },
+        "licenses/windows-toolchain/xz/COPYING.GPLv2": {
+          "sha256": "edaef632cbb643e4e7a221717a6c441a4c1a7c918e6e4d56debc3d8739b233f6",
+          "size": 17984
+        },
+        "licenses/windows-toolchain/xz/COPYING.GPLv3": {
+          "sha256": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+          "size": 35149
+        },
+        "licenses/windows-toolchain/xz/COPYING.LGPLv2.1": {
+          "sha256": "20e50fe7aae3e56378ebf0417d9de904f55a0e61e4df315333e632a4d3555d95",
+          "size": 26419
+        },
+        "licenses/windows-toolchain/zlib/LICENSE": {
+          "sha256": "e32ff4e00d9d94930537635291da39e7e612703334bf6fde8c7f1686fe8a45a2",
+          "size": 1002
+        },
+        "licenses/windows-toolchain/zstd/LICENSE": {
+          "sha256": "7055266497633c9025b777c78eb7235af13922117480ed5c674677adc381c9d8",
+          "size": 1549
+        }
+      },
+      "manifestSHA256": "897963dcc658bd41bc1511b4a38f0bd6f7c88e0807c426eceea154f0b9236212",
+      "root": "mpv",
+      "runtimeFiles": {
+        "libiconv-2.dll": {
+          "sha256": "9f9f3a2d41f19894298188881a75c5eea5d5ec043e56e672351bc496bcd7b79e",
+          "size": 1110528
+        },
+        "libmpv-2.dll": {
+          "sha256": "584f1d5da02bde6a48388eacd77b19d9f98cfe67bddb4d0163fb812690ea341e",
+          "size": 11873280
+        }
+      },
+      "sha256": "e3e4bd03e4841a6ee03a40e9007f6615ab8b7e237754a91faec7d499154e31c2",
+      "size": 6693942,
+      "url": "https://github.com/he-music/mpv-bundles/releases/download/v0.42.0-2/libmpv-windows-arm64-v0.42.0-2.tar.gz"
+    }
+  }
+}

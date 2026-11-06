@@ -23,13 +23,6 @@ func requireTestEqual[T comparable](t testing.TB, got, want T) {
 	}
 }
 
-func requireTestError(t testing.TB, err error) {
-	t.Helper()
-	if err == nil {
-		t.Fatal("expected an error")
-	}
-}
-
 func requireTestErrorIs(t testing.TB, err, target error) {
 	t.Helper()
 	if !errors.Is(err, target) {

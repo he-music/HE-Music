@@ -1,4 +1,10 @@
 import { applicationStorage } from "@/platform/applicationStorage";
+import type { PlaybackEngineId } from "@/core/audio-player/IPlaybackEngine";
+import {
+  defaultOutputDevices,
+  migratePlaybackSettings,
+  type PlaybackOutputDevices,
+} from "@/utils/playbackSettings";
 import { defineStore } from "pinia";
 import { keywords, regexes } from "@/assets/data/exclude";
 import { ThemeColorType } from "@/types/color";
@@ -75,6 +81,8 @@ export interface SettingState {
   proxyPort: number;
   songLevel: string;
   playDevice: "default" | string;
+  playbackEngine: PlaybackEngineId;
+  outputDevices: PlaybackOutputDevices;
   autoPlay: boolean;
   songVolumeFade: boolean;
   songVolumeFadeTime: number;
@@ -160,6 +168,8 @@ export const createSettingState = (): SettingState => ({
   // 播放
   songLevel: "320mp3", // 音质
   playDevice: "default", // 播放设备
+  playbackEngine: "web-audio",
+  outputDevices: defaultOutputDevices(),
   autoPlay: false, // 自动播放
   songVolumeFade: true, // 渐入渐出
   songVolumeFadeTime: 300, // 渐入渐出时间
@@ -269,7 +279,7 @@ export const useSettingStore = defineStore("setting", {
     storage: applicationStorage,
     serializer: {
       serialize: JSON.stringify,
-      deserialize: deserializeLyricSettings,
+      deserialize: (value) => migratePlaybackSettings(deserializeLyricSettings(value)),
     },
   },
 });

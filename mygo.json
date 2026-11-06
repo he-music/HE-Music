@@ -9,6 +9,9 @@
   "out": "build/mygo",
   "linux": {
     "depends": [
+      "libc6 (>= 2.35)",
+      "libstdc++6",
+      "libpulse0",
       "gstreamer1.0-plugins-base",
       "gstreamer1.0-plugins-good",
       "gstreamer1.0-plugins-bad",

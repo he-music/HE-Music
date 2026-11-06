@@ -14,6 +14,9 @@ import { nativeLocalEntry } from "@/platform/localFilesSession";
 import lyricManager from "./lyricManager";
 import audioManager, { AudioEventType } from "./audioManager";
 import type { AudioSourceInfo } from "./audioCapability";
+import type { PlaybackEngineId } from "@/core/audio-player/IPlaybackEngine";
+import { filesSession } from "@/platform/filesSession";
+import { getSongCanPlayLinks } from "./song";
 import { listRadioSongs } from "@/api/radio";
 import { t } from "@/i18n";
 import type { Link, SongInfo } from "@/types/main.hemusic";
@@ -21,6 +24,7 @@ import { AxiosError } from "axios";
 import { createNativePlayModeCoordinator } from "./nativePlayMode";
 
 import { gatewayProxyUrl } from "@/platform/gateway";
+class PlaybackOutputError extends Error {}
 /**
  * 播放器核心
  * 基于 AudioManager 实现
@@ -72,15 +76,21 @@ class Player {
   private nativeModes?: ReturnType<typeof createNativePlayModeCoordinator>;
 
   constructor() {
-    registerLocalAudioStopper(() => {
+    registerLocalAudioStopper((grantToken) => {
       if (!useMusicStore().playSong.path) return;
+      if (
+        grantToken &&
+        nativeLocalEntry(useMusicStore().playSong.id)?.ref.grantToken !== grantToken
+      )
+        return;
       ++this.playRequestId;
       this.playbackAttempt = undefined;
       this.pendingAutoPlay = undefined;
-      audioManager.clearSource();
+      const released = audioManager.clearSource();
       const status = useStatusStore();
       status.playStatus = false;
       status.playLoading = false;
+      return released;
     });
     // 初始化媒体会话
     this.initMediaSession();
@@ -197,6 +207,21 @@ class Player {
         "❌ song error:",
         `code=${errorCode}; ${reasons[errorCode] || "未知媒体错误"}${errorMessage ? `; ${errorMessage}` : ""}`,
       );
+      if (
+        audioManager.engineId === "mpv" ||
+        audioManager.error?.kind === "device" ||
+        audioManager.error?.kind === "engine"
+      ) {
+        this.autoPlayIntent = false;
+        const status = useStatusStore();
+        status.playStatus = false;
+        status.playLoading = false;
+        void audioManager
+          .pause()
+          .catch((error: unknown) => this.logPlaybackError("暂停失败:", error));
+        window.$message.error(errorMessage || t("message.song_play_fail"));
+        return;
+      }
       if (this.offerHttpsRetry(errorCode)) return;
       this.handlePlaybackError(errorCode);
     };
@@ -345,28 +370,28 @@ class Player {
     // 播放信息
     const { id, platform, path } = musicStore.playSong;
     // 设置音量和速率
-    audioManager.setVolume(statusStore.playVolume);
-    audioManager.setRate(statusStore.playRate);
-    void this.toggleOutputDevice().catch((error: unknown) => {
-      this.logPlaybackError("Failed to restore audio output device:", error);
-    });
     const requestId = this.playRequestId;
+    await this.toggleOutputDevice();
+    await audioManager.setVolume(statusStore.playVolume);
+    await audioManager.setRate(statusStore.playRate);
+    if (requestId !== this.playRequestId) return;
     this.playbackAttempt = { src, autoPlay, seek, requestId, canAutoPlay, source };
     const pending = this.pendingAutoPlay;
     if (pending && pending.owner === canAutoPlay && pending.requestId === requestId) {
-      pending.src = src;
+      pending.src = audioManager.engineId === "mpv" ? (source?.identity ?? src) : src;
     }
     const allowsAutoPlay = () =>
       autoPlay &&
       this.autoPlayIntent &&
       requestId === this.playRequestId &&
-      (!canAutoPlay || canAutoPlay());
+      (!this.autoPlayOwner || this.autoPlayOwner());
     // 加载并播放
     try {
       // AudioManager reads autoPlay after its asynchronous source probe/load.
       // A getter keeps explicit pause and owner revocation effective during it.
       await audioManager.play(src, {
         fadeIn: false,
+        ...(seek > 0 ? { seek: seek / 1000 } : {}),
         ...(source ? { source } : {}),
         get autoPlay() {
           return allowsAutoPlay();
@@ -375,7 +400,7 @@ class Player {
       if (requestId !== this.playRequestId) return;
       // 恢复进度
       if (seek && seek > 0) {
-        audioManager.seek(seek / 1000);
+        await audioManager.seek(seek / 1000);
         this.notifySeek();
       }
     } catch (error) {
@@ -585,11 +610,11 @@ class Player {
     seek: number = 0,
     quality: string = "",
     canAutoPlay?: () => boolean,
+    preserveIntent = false,
   ) {
     this.radioOperation = undefined;
-    this.autoPlayIntent = autoPlay;
+    if (!preserveIntent) this.autoPlayIntent = autoPlay;
     this.autoPlayOwner = canAutoPlay;
-    if (useMusicStore().playSong.path) audioManager.clearSource();
     const currentRequestId = ++this.playRequestId;
     this.pendingAutoPlay = canAutoPlay
       ? { owner: canAutoPlay, requestId: currentRequestId }
@@ -600,6 +625,19 @@ class Player {
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
     try {
+      const engine = isMygo ? (useSettingStore().playbackEngine ?? "web-audio") : "web-audio";
+      if (
+        engine === "mpv" ||
+        audioManager.engineId === "mpv" ||
+        preserveIntent ||
+        useMusicStore().playSong.path
+      ) {
+        await audioManager.clearSource();
+        if (currentRequestId !== this.playRequestId) return;
+      }
+      if (engine === "mpv" || (audioManager.engineId && audioManager.engineId !== engine))
+        await audioManager.setEngine(engine);
+      if (currentRequestId !== this.playRequestId) return;
       // 获取播放数据
       const playSongData = songManager.getPlaySongData();
       if (!playSongData) {
@@ -628,12 +666,25 @@ class Player {
           }
           const url = localResourceURL("audio", nativeEntry);
           if (!url || currentRequestId !== this.playRequestId) return;
-          const source = /\.flac$/i.test(nativeEntry.path)
-            ? { platform: "local", format: "flac" }
-            : undefined;
+          const source: AudioSourceInfo | undefined =
+            engine === "mpv"
+              ? {
+                  platform: "local",
+                  format: nativeEntry.path.split(".").pop()?.toLowerCase() ?? "",
+                  localRef: nativeEntry.ref,
+                  fileEpoch: filesSession.value?.directories.value.find(
+                    (grant) => grant.token === nativeEntry.ref.grantToken,
+                  )?.epoch,
+                  identity: id,
+                }
+              : /\.flac$/i.test(nativeEntry.path)
+                ? { platform: "local", format: "flac" }
+                : undefined;
           await this.createPlayer(url, autoPlay, seek, this.autoPlayOwner, source);
         } catch (error) {
           if (currentRequestId !== this.playRequestId) return;
+          if (engine === "mpv" || preserveIntent || error instanceof PlaybackOutputError)
+            throw error;
           this.logPlaybackError("播放器初始化错误（本地）：", error);
           // createPlayer 内部已触发 handlePlaybackError，这里只记录日志
           // 如果 createPlayer 没有触发错误处理，则手动触发
@@ -658,16 +709,23 @@ class Player {
           console.log(`Getting online song url: ${this.getSongLogInfo()}; quality=${link.name}`);
           const resolved = await songManager.getOnlineSource(id, platform, link);
           playerUrl = resolved?.url ?? null;
+          if (engine === "mpv" && !playerUrl) throw new Error("Get song URL error");
           const format = resolved?.format;
           if (
+            engine === "mpv" ||
             format === "flac" ||
             (platform === "migu" && format === "m4a") ||
             (isMygo && platform === "soda" && (format === "m4a" || format === "mp4"))
           ) {
-            source = { platform, format };
+            source = {
+              platform,
+              format: format || link.format || "",
+              ...(engine === "mpv" ? { identity: `${platform}:${id}` } : {}),
+            };
           }
         } catch (err) {
           if (currentRequestId !== this.playRequestId) return;
+          if (engine === "mpv" || preserveIntent) throw err;
           this.logPlaybackError("❌ 获取歌曲地址出错：", err);
           // 如果是 AxiosError 的 401 就忽略
           if (err instanceof AxiosError && err.response?.status === 401) {
@@ -689,6 +747,8 @@ class Player {
             }
           } catch (error) {
             if (currentRequestId !== this.playRequestId) return;
+            if (engine === "mpv" || preserveIntent || error instanceof PlaybackOutputError)
+              throw error;
             this.logPlaybackError("播放器初始化错误（在线）：", error);
             // createPlayer 内部已触发 handlePlaybackError，这里只记录日志
             // 如果 createPlayer 没有触发错误处理，则手动触发
@@ -702,6 +762,21 @@ class Player {
       }
     } catch (error) {
       if (currentRequestId !== this.playRequestId) return;
+      if (
+        error instanceof PlaybackOutputError ||
+        preserveIntent ||
+        (isMygo && useSettingStore().playbackEngine === "mpv")
+      ) {
+        this.autoPlayIntent = false;
+        statusStore.playStatus = false;
+        statusStore.playLoading = false;
+        await audioManager.clearSource();
+        if (preserveIntent) throw error;
+        window.$message.error(
+          error instanceof PlaybackOutputError ? error.message : t("message.song_play_fail"),
+        );
+        return;
+      }
       this.logPlaybackError("❌ 初始化音乐播放器出错：", error);
       window.$message.error(t("message.song_play_fail"));
       await this.handlePlaybackError(undefined);
@@ -716,11 +791,15 @@ class Player {
     this.radioOperation = undefined;
     const statusStore = useStatusStore();
     if (pendingRadio) statusStore.playLoading = false;
+    this.autoPlayIntent = true;
+    this.autoPlayOwner = canAutoPlay;
+    if (statusStore.playLoading && !audioManager.src) return;
     if (
       useMusicStore().playSong?.path &&
       (localAudioBlocked() ||
-        audioManager.src !==
-          localResourceURL("audio", nativeLocalEntry(useMusicStore().playSong.id)))
+        (audioManager.src !== useMusicStore().playSong.id &&
+          audioManager.src !==
+            localResourceURL("audio", nativeLocalEntry(useMusicStore().playSong.id))))
     ) {
       statusStore.playStatus = false;
       return;
@@ -787,7 +866,7 @@ class Player {
     }
     // 淡出
     const fadeTime = settingStore.getFadeTime ? settingStore.getFadeTime / 1000 : 0;
-    audioManager.pause({ fadeOut: !!fadeTime, fadeDuration: fadeTime });
+    await audioManager.pause({ fadeOut: !!fadeTime, fadeDuration: fadeTime });
   }
   /**
    * 播放或暂停
@@ -1256,17 +1335,33 @@ class Player {
   public async cleanPlayList() {
     this.radioOperation = undefined;
     ++this.playRequestId;
-    audioManager.clearSource();
+    await audioManager.clearSource();
     this.httpPlaybackDialog?.destroy();
     this.httpPlaybackDialog = undefined;
     this.playbackAttempt = undefined;
     const dataStore = useDataStore();
     const statusStore = useStatusStore();
-    audioManager.stop();
+    await audioManager.stop();
     this.resetStatus();
     statusStore.resetPlayStatus();
     await dataStore.setPlayList([]);
     await dataStore.clearOriginalPlayList();
+  }
+  /** 保存设置后重新解析当前源；恢复阶段持续读取最新播放意图。 */
+  public async changePlaybackOutput(engine?: PlaybackEngineId): Promise<void> {
+    const setting = useSettingStore();
+    if (engine) setting.playbackEngine = engine;
+    const seek = this.getSeek();
+    const status = useStatusStore();
+    if (!status.playLoading) this.autoPlayIntent = status.playStatus;
+    if (songManager.getPlaySongData()) {
+      await this.initPlayer(true, seek, "", this.autoPlayOwner, true);
+    } else {
+      ++this.playRequestId;
+      await audioManager.clearSource();
+      await audioManager.setEngine(isMygo ? setting.playbackEngine : "web-audio");
+      await this.toggleOutputDevice();
+    }
   }
   /**
    * 切换输出设备
@@ -1274,8 +1369,27 @@ class Player {
    */
   public async toggleOutputDevice(deviceId?: string) {
     const settingStore = useSettingStore();
-    const selected = deviceId ?? settingStore.playDevice;
-    if (typeof selected === "string") await audioManager.setSinkId(selected);
+    const engine = isMygo ? (settingStore.playbackEngine ?? "web-audio") : "web-audio";
+    const selected =
+      deviceId ?? settingStore.outputDevices?.[engine]?.id ?? settingStore.playDevice;
+    if (typeof selected !== "string") return;
+    const id = !selected || selected === "default" ? (engine === "mpv" ? "auto" : "") : selected;
+    try {
+      if (id && id !== "auto") {
+        const devices = await audioManager.getOutputDevices();
+        if (!devices.some((device) => device.id === id && device.available)) {
+          await audioManager.pause();
+          throw new PlaybackOutputError(t("mygo.audio.device_unavailable"));
+        }
+      }
+      await audioManager.setSinkId(id);
+    } catch (error) {
+      await Promise.resolve(audioManager.pause()).catch((pauseError: unknown) =>
+        this.logPlaybackError("暂停输出失败:", pauseError),
+      );
+      if (error instanceof PlaybackOutputError) throw error;
+      throw new PlaybackOutputError(t("message.output_device_change_failed"), { cause: error });
+    }
   }
   /**
    * 启用/更新均衡器
@@ -1352,12 +1466,13 @@ class Player {
     const songLevel = settingStore.songLevel;
     const selectedQuality = statusStore.selectedQuality;
 
-    if (songInfo.links?.length == 0) {
+    const links = getSongCanPlayLinks(songInfo, isMygo ? settingStore.playbackEngine : "web-audio");
+    if (links?.length == 0) {
       return null;
     }
 
     // 如果有quality 说明是切换音质
-    let link = songInfo.links.find((item) => item.name === quality);
+    let link = links.find((item) => item.name === quality);
     if (link) {
       return link;
     }
@@ -1366,13 +1481,13 @@ class Player {
       songLevel === "auto" ? [selectedQuality, "hires", "flac", "320mp3", "128mp3"] : []
     ).concat([songLevel, currentQuality, selectedQuality]);
     for (const quality of qualityList) {
-      link = songInfo.links.find((item) => item.name === quality);
+      link = links.find((item) => item.name === quality);
       if (link) {
         return link;
       }
     }
     // 默认返回第一个
-    return songInfo.links[0];
+    return links[0];
   }
 
   /**

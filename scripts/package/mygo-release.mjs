@@ -358,13 +358,18 @@ export async function runRelease({
     } catch {
       fail("vendor 或 Windows 透明补丁校验失败；请运行 pnpm vendor:check 并审查依赖");
     }
-    const args = ["tool", "mygo", "build", "-platform", targets.join(",")];
+    const args = [
+      path.join(root, "scripts/vendor/mygo.mjs"),
+      "build",
+      "-platform",
+      targets.join(","),
+    ];
     if (targets.some((target) => target.startsWith("darwin/")))
       args.push("-sign", "-", "-skip-notarize");
     // 不转发构建 stdout/stderr：下游命令可能意外打印环境中的 secret。
     let result;
     try {
-      result = spawn("go", args, {
+      result = spawn(process.execPath, args, {
         cwd: root,
         env: { ...env, GOTOOLCHAIN: "local", GOWORK: "off", GOFLAGS: "-mod=vendor" },
         shell: false,

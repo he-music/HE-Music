@@ -27,8 +27,8 @@ const (
 	metadataJobBaseBytes  int64 = 16 << 10
 )
 
-// Optional file-mutation preparation hook. Browser file playback is stopped by
-// the frontend before saving; there is no native audio server to drain.
+// Native playback installs this hook to drain its gateway readers before writes.
+// Browser file playback continues to stop in the frontend before saving.
 var beforeLocalFileMutation func(context.Context, *NativeFiles, os.FileInfo) (release func(), err error)
 
 // MetadataResult never transports OS errors or machine paths. SHA256 is the

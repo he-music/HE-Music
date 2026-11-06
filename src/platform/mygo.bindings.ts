@@ -354,6 +354,52 @@ export interface MetadataSaveRequest {
   patch: Patch;
 }
 
+export interface MpvEvent {
+  type: MpvEventType;
+  snapshot: MpvSnapshot;
+}
+
+export type MpvEventType = "loadstart" | "loadedmetadata" | "durationchange" | "loadeddata" | "canplay" | "play" | "playing" | "pause" | "waiting" | "statechange" | "seeking" | "seeked" | "ended" | "emptied" | "error" | "volumechange" | "ratechange" | "timeupdate" | "deviceschange";
+
+export interface MpvFailure {
+  kind: MpvFailureKind;
+  message: string;
+}
+
+export type MpvFailureKind = "library" | "abi" | "symbol" | "source" | "network" | "decode" | "device" | "engine";
+
+export interface MpvLoadRequest {
+  url: string;
+  format: string;
+  fileEpoch: number;
+  localRef: LocalFileRef | null;
+  autoPlay: boolean;
+  start: number;
+}
+
+export interface MpvOutputDevice {
+  id: string;
+  label: string;
+  available: boolean;
+}
+
+export interface MpvSnapshot {
+  lifecycle: number;
+  session: number;
+  sequence: number;
+  state: MpvState;
+  position: number;
+  duration: number;
+  rate: number;
+  volume: number;
+  source: string;
+  device: string;
+  error: MpvFailure | null;
+}
+
+/** 原生协议使用封闭字符串类型，生成绑定会保留这些状态、事件和错误分类。 */
+export type MpvState = "idle" | "loading" | "paused" | "playing" | "buffering" | "ended" | "error";
+
 export interface NetworkProxyConfig {
   protocol: string;
   server: string;
@@ -910,6 +956,49 @@ export const DesktopLyrics = {
   },
 } as const;
 
+export const MpvPlayback = {
+  clearSource(lifecycle: number, session: number): Promise<MpvSnapshot> {
+    return call("MpvPlayback.ClearSource", lifecycle, session);
+  },
+  destroy(lifecycle: number): Promise<void> {
+    return call("MpvPlayback.Destroy", lifecycle);
+  },
+  getOutputDevices(lifecycle: number): Promise<MpvOutputDevice[]> {
+    return call("MpvPlayback.GetOutputDevices", lifecycle);
+  },
+  /** Initialize 仅解析应用资源路径；渲染进程不能指定动态库路径，绑定生成时不加载库。 */
+  initialize(): Promise<MpvSnapshot> {
+    return call("MpvPlayback.Initialize");
+  },
+  load(lifecycle: number, request: MpvLoadRequest): Promise<MpvSnapshot> {
+    return call("MpvPlayback.Load", lifecycle, request);
+  },
+  pause(lifecycle: number, session: number): Promise<void> {
+    return call("MpvPlayback.Pause", lifecycle, session);
+  },
+  play(lifecycle: number, session: number): Promise<void> {
+    return call("MpvPlayback.Play", lifecycle, session);
+  },
+  seek(lifecycle: number, session: number, seconds: number): Promise<void> {
+    return call("MpvPlayback.Seek", lifecycle, session, seconds);
+  },
+  setOutputDevice(lifecycle: number, device: string): Promise<void> {
+    return call("MpvPlayback.SetOutputDevice", lifecycle, device);
+  },
+  setRate(lifecycle: number, session: number, value: number): Promise<void> {
+    return call("MpvPlayback.SetRate", lifecycle, session, value);
+  },
+  setVolume(lifecycle: number, session: number, value: number): Promise<void> {
+    return call("MpvPlayback.SetVolume", lifecycle, session, value);
+  },
+  snapshot(lifecycle: number): Promise<MpvSnapshot> {
+    return call("MpvPlayback.Snapshot", lifecycle);
+  },
+  stop(lifecycle: number, session: number): Promise<MpvSnapshot> {
+    return call("MpvPlayback.Stop", lifecycle, session);
+  },
+} as const;
+
 export const NetworkProxy = {
   apply(c: NetworkProxyConfig): Promise<NetworkProxyReceipt> {
     return call("NetworkProxy.Apply", c);
@@ -1176,6 +1265,7 @@ export const events = {
   desktopLyricsSnapshot: event<LyricsSnapshot>("desktop:lyrics-snapshot"),
   desktopLyricsClock: event<LyricsClock>("desktop:lyrics-clock"),
   desktopLyricsCommand: event<LyricsCommand>("desktop:lyrics-command"),
+  desktopMpv: event<MpvEvent>("desktop:mpv"),
   desktopWindowMaximized: event<boolean>("desktop:window-maximized"),
   desktopProtocolIntent: event<ProtocolIntent>("desktop:protocol-intent"),
   desktopShortcutAction: event<ShortcutEvent>("desktop:shortcut-action"),

@@ -3,7 +3,25 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const host = vi.hoisted(() => ({ isElectron: false, isMygo: false }));
 vi.mock("./env", () => host);
 
+class FakeSource extends EventTarget {
+  src = "";
+  type = "";
+  parent: FakeAudio | undefined;
+  remove() {
+    this.parent?.children.delete(this);
+  }
+}
+
 class FakeAudio extends EventTarget {
+  readyState = 1;
+  ended = false;
+  readonly children = new Set<FakeSource>();
+  readonly ownerDocument = { createElement: () => new FakeSource() };
+  appendChild(source: FakeSource) {
+    source.parent = this;
+    this.children.add(source);
+    return source;
+  }
   src = "";
   crossOrigin: string | null = null;
   currentTime = 0;
@@ -67,6 +85,100 @@ describe.each(["web", "mygo"])("AudioManager %s HTMLAudio path", (kind) => {
     manager = (await import("./audioManager")).default;
   });
 
+  it("preserves typed source admission and its element-less media error through the engine facade", async () => {
+    const url = "https://audio.example/container-without-extension";
+    const error = vi.fn();
+    manager.on("error", error);
+    await manager.play(url, {
+      autoPlay: false,
+      source: { platform: "migu", format: "m4a" },
+    });
+    const source = [...audio.children][0];
+    expect(source).toMatchObject({ src: url, type: "audio/mp4" });
+    expect(audio.src).toBe("");
+    expect(manager.src).toBe(url);
+    const failure = new Event("error");
+    source.dispatchEvent(failure);
+    expect(manager.getErrorCode()).toBe(4);
+    expect(error).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        detail: { originalEvent: failure, errorCode: 4, errorMessage: "" },
+      }),
+    );
+    manager.clearSource();
+    expect(audio.children.size).toBe(0);
+    source.dispatchEvent(new Event("error"));
+    expect(error).toHaveBeenCalledOnce();
+  });
+  it("forwards every legacy media event and independently removes engine subscriptions", async () => {
+    const { audioEventTypes } = await import("@/core/audio-player/IPlaybackEngine");
+    await manager.play("https://audio.example/events.mp3", { autoPlay: false });
+    const first = vi.fn();
+    const second = vi.fn();
+    const unsubscribe = manager.onEngineEvent(first);
+    const unsubscribeSecond = manager.onEngineEvent(second);
+    for (const type of audioEventTypes) {
+      if (type === "processingchange") continue;
+      const listener = vi.fn();
+      manager.on(type, listener);
+      const event = new Event(type);
+      audio.dispatchEvent(event);
+      expect(listener).toHaveBeenCalledOnce();
+      if (type === "error") {
+        expect(listener).toHaveBeenCalledWith(
+          expect.objectContaining({
+            detail: expect.objectContaining({ originalEvent: event }),
+          }),
+        );
+      } else {
+        expect(listener).toHaveBeenCalledWith(event);
+      }
+      manager.off(type, listener);
+    }
+    first.mockClear();
+    second.mockClear();
+    unsubscribe();
+    audio.dispatchEvent(new Event("timeupdate"));
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledOnce();
+    unsubscribeSecond();
+  });
+  it("drops stale owners and stops an in-progress event dispatch when a listener revokes its source", async () => {
+    await manager.play("https://audio.example/retired.mp3");
+    const retired = audio;
+    await manager.play("https://audio.example/current.mp3");
+    const later = vi.fn();
+    manager.on("timeupdate", () => {
+      void manager.clearSource();
+    });
+    manager.on("timeupdate", later);
+    retired.dispatchEvent(new Event("timeupdate"));
+    expect(later).not.toHaveBeenCalled();
+    audio.dispatchEvent(new Event("timeupdate"));
+    expect(manager.src).toBe("");
+    expect(later).not.toHaveBeenCalled();
+  });
+  it("maps paused, buffering, playable stalls and natural EOF without changing the browser readiness snapshot", async () => {
+    expect(manager.state).toBe("idle");
+    await manager.play("https://audio.example/state.mp3", { autoPlay: false });
+    expect(manager.state).toBe("paused");
+    expect(manager.readyState).toBe(1);
+    await manager.play();
+    audio.dispatchEvent(new Event("waiting"));
+    expect(manager.state).toBe("buffering");
+    audio.readyState = 3;
+    audio.dispatchEvent(new Event("stalled"));
+    expect(manager.state).toBe("playing");
+    expect(manager.readyState).toBe(3);
+    manager.pause();
+    audio.dispatchEvent(new Event("waiting"));
+    expect(manager.state).toBe("paused");
+    audio.ended = true;
+    audio.dispatchEvent(new Event("ended"));
+    expect(manager.state).toBe("ended");
+    audio.error = { code: 2 };
+    expect(manager.state).toBe("error");
+  });
   it("clears buffered source when its local authorization is revoked", async () => {
     await manager.play("http://127.0.0.1:12345/ticket", { autoPlay: false });
     const revoked = audio;

@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	scanAudioGlobPattern = "**/*.{mp3,wav,flac,aac,webm,m4a,mp4,ogg,aiff,aif,ape}"
+	scanAudioGlobPattern = "**/*.{mp3,wav,flac,aac,webm,m4a,mp4,ogg,aiff,aif,ape,dsf,dff}"
 	scanPageSize         = 32
 	scanQueueSize        = 64
 	scanMaxOperations    = 8

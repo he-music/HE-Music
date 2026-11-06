@@ -79,6 +79,13 @@ func TestScanAudioGlobMatchesSupportedFormatsAtEveryDepth(t *testing.T) {
 			want[name] = true
 		}
 	}
+	for _, name := range []string{"root.dsf", nested + "/Track.DFF"} {
+		scanTestWrite(t, filepath.Join(directory, filepath.FromSlash(name)), []byte("unreadable tags"))
+		want[name] = true
+		if supportedLocalAudioName(name) {
+			t.Fatal("DSD scan support must not widen download formats")
+		}
+	}
 	entries, issues := scanTestDrain(t, scanTestJob(t, actor.state, ctx, epoch, token))
 	if len(issues) != 0 || len(entries) != len(want) {
 		t.Fatalf("glob results: entries=%d want=%d issues=%v", len(entries), len(want), issues)

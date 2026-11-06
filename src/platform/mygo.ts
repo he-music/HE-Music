@@ -17,6 +17,7 @@ import {
   NetworkGateway,
   WindowAppearanceService,
   LinuxGraphics,
+  MpvPlayback,
   events,
 } from "./mygo.bindings";
 import { externalHttpURL, type PlatformAdapter } from "./types";
@@ -25,9 +26,13 @@ import { desktopLyricsSession } from "./desktopLyricsSession";
 import { filesSession } from "./filesSession";
 import { createSystemFontsProvider } from "./systemFonts";
 import { createNetworkProxyProvider } from "./networkProxy";
+import { createMpvPlaybackProvider } from "./mpvPlayback";
 
 export function createMygoPlatform(): PlatformAdapter {
   const os = runtime().platform;
+  const mpvPlayback = createMpvPlaybackProvider(MpvPlayback, (listener) =>
+    events.desktopMpv.on(listener),
+  );
   const capabilities = shallowReactive({
     windowControls: true,
     tray: false,
@@ -43,6 +48,7 @@ export function createMygoPlatform(): PlatformAdapter {
     os: os === "darwin" || os === "win32" || os === "linux" ? os : "unknown",
     capabilities,
     files: NativeFiles,
+    mpvPlayback,
     deviceName: DesktopPlatform.deviceName,
     preferencesReset: { reset: (mode) => DesktopPlatform.resetPreferences(mode) },
     playbackControl: {
@@ -109,6 +115,7 @@ export function createMygoPlatform(): PlatformAdapter {
       },
       async teardown() {
         capabilities.tray = false;
+        mpvPlayback.teardown();
         await DesktopLifecycle.teardown();
       },
       onCloseRequested: (listener) => events.desktopCloseRequested.on(listener),

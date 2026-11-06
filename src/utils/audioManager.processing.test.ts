@@ -147,6 +147,189 @@ const flush = async () => {
 };
 
 describe("production AudioManager Web Audio consumption", () => {
+  it("publishes capability changes without subscribing settings consumers to media clocks", async () => {
+    const { watch } = await import("vue");
+    const { playbackCapabilities } = await import("./audioManager");
+    const changed = vi.fn();
+    const unwatch = watch(playbackCapabilities, changed, { flush: "sync" });
+    try {
+      await manager.play("https://audio.invalid/capabilities.mp3");
+      expect(manager.engineId).toBe("web-audio");
+      expect(playbackCapabilities.value).toMatchObject({
+        supportsEqualizer: true,
+        supportsSpectrum: true,
+        supportsFade: true,
+      });
+      expect(changed).toHaveBeenCalledOnce();
+      const snapshot = playbackCapabilities.value;
+      for (let n = 0; n < 100; n++) {
+        lastMedia().currentTime = n;
+        lastMedia().dispatchEvent(new Event("timeupdate"));
+      }
+      manager.setVolume(0.6);
+      manager.setRate(1.5);
+      expect(playbackCapabilities.value).toBe(snapshot);
+      expect(changed).toHaveBeenCalledOnce();
+      lastMedia().dispatchEvent(new Event("error"));
+      await flush();
+      expect(available.value).toBe(false);
+      expect(playbackCapabilities.value.supportsEqualizer).toBe(false);
+      expect(changed).toHaveBeenCalledTimes(2);
+    } finally {
+      unwatch();
+    }
+  });
+  it("settles every cancelled fade promise and never pauses a resumed or replacement source", async () => {
+    vi.useFakeTimers();
+    try {
+      await manager.play("https://audio.invalid/settled-fade.mp3");
+      const resumed = manager.pause({ fadeOut: true, fadeDuration: 1 });
+      await manager.play();
+      await resumed;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(manager.paused).toBe(false);
+
+      const replaced = manager.pause({ fadeOut: true, fadeDuration: 1 });
+      await manager.play("https://audio.invalid/replaced-fade.mp3");
+      await replaced;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(manager.src).toBe("https://audio.invalid/replaced-fade.mp3");
+      expect(manager.paused).toBe(false);
+
+      const cleared = manager.pause({ fadeOut: true, fadeDuration: 1 });
+      await manager.clearSource();
+      await cleared;
+      expect(vi.getTimerCount()).toBe(0);
+      expect(manager.src).toBe("");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("cancels pending native starts during a fade request without waiting for the native promise", async () => {
+    await manager.play("https://audio.invalid/pending-start.mp3", { autoPlay: false });
+    const media = lastMedia();
+    let resolvePlay = () => {};
+    media.play.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePlay = resolve;
+        }),
+    );
+    const playing = manager.play();
+    await flush();
+    const error = vi.fn();
+    manager.on("error", error);
+    await manager.pause({ fadeOut: true });
+    await playing;
+    media.paused = false;
+    resolvePlay();
+    await flush();
+    expect(media.paused).toBe(true);
+    expect(error).not.toHaveBeenCalled();
+  });
+  it("cancels autoPlay on stop during a source probe while preserving the preload", async () => {
+    let resolveProbe: (value: { ok: boolean }) => void = () => {};
+    fetcher.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveProbe = resolve;
+        }),
+    );
+    const playing = manager.play("https://audio.invalid/stopped-load.mp3");
+    await flush();
+    await manager.stop();
+    resolveProbe({ ok: true });
+    await playing;
+    expect(manager.src).toBe("https://audio.invalid/stopped-load.mp3");
+    expect(manager.paused).toBe(true);
+    expect(lastMedia().play).not.toHaveBeenCalled();
+    await manager.play();
+    expect(manager.paused).toBe(false);
+  });
+  it("pauses both the graph owner and its routed output after a completed fade", async () => {
+    vi.useFakeTimers();
+    try {
+      await manager.play("https://audio.invalid/bridge-fade.mp3");
+      Reflect.set(lastContext(), "setSinkId", undefined);
+      await manager.setSinkId("speakers");
+      const output = elements.at(-1);
+      const paused = manager.pause({ fadeOut: true, fadeDuration: 0.5 });
+      expect(output?.paused).toBe(false);
+      await vi.advanceTimersByTimeAsync(500);
+      await paused;
+      expect(manager.paused).toBe(true);
+      expect(output?.paused).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("destroys an engine with a pending fade without leaving timers, subscriptions or audio owners", async () => {
+    const { BrowserPlaybackEngine } = await import("@/core/audio-player/BrowserPlaybackEngine");
+    const engine = new BrowserPlaybackEngine();
+    vi.useFakeTimers();
+    try {
+      await engine.init();
+      await engine.play("https://audio.invalid/destroy-fade.mp3");
+      const context = lastContext();
+      const media = lastMedia();
+      const listener = vi.fn();
+      engine.onEvent(listener);
+      const paused = engine.pause({ fadeOut: true, fadeDuration: 1 });
+      await engine.destroy();
+      await paused;
+      media.dispatchEvent(new Event("ended"));
+      media.dispatchEvent(new Event("error"));
+      expect(listener).not.toHaveBeenCalled();
+      expect(engine.state).toBe("idle");
+      expect(engine.src).toBe("");
+      expect(media.paused).toBe(true);
+      expect(context.close).toHaveBeenCalledOnce();
+      expect(vi.getTimerCount()).toBe(0);
+      await expect(engine.play()).rejects.toThrow("destroyed");
+    } finally {
+      await engine.destroy();
+      vi.useRealTimers();
+    }
+  });
+  it("keeps the newest source session when two probes settle in reverse order", async () => {
+    let resolveFirst: (value: { ok: boolean }) => void = () => {};
+    fetcher.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve;
+        }),
+    );
+    const error = vi.fn();
+    const ended = vi.fn();
+    manager.on("error", error);
+    manager.on("ended", ended);
+    const first = manager.play("https://audio.invalid/first-probe.mp3");
+    await flush();
+    await manager.play("https://audio.invalid/latest-probe.mp3");
+    const latest = lastMedia();
+    resolveFirst({ ok: true });
+    await first;
+    expect(manager.src).toBe("https://audio.invalid/latest-probe.mp3");
+    expect(contexts).toHaveLength(1);
+    expect(latest.paused).toBe(false);
+    expect(error).not.toHaveBeenCalled();
+    expect(ended).not.toHaveBeenCalled();
+  });
+  it("ends legacy dispatch when a listener replaces the graph owner within the same source session", async () => {
+    await manager.play("https://audio.invalid/reentrant-fallback.mp3");
+    const graph = lastMedia();
+    const later = vi.fn();
+    manager.on("canplay", () => {
+      graph.dispatchEvent(new Event("error"));
+    });
+    manager.on("canplay", later);
+    graph.dispatchEvent(new Event("canplay"));
+    await flush();
+    expect(manager.src).toBe("https://audio.invalid/reentrant-fallback.mp3");
+    expect(lastMedia()).not.toBe(graph);
+    expect(later).not.toHaveBeenCalled();
+    expect(manager.paused).toBe(false);
+  });
   it("uses the source graph for EQ and spectrum, applies volume once, and restores saved gains on the next source", async () => {
     manager.setVolume(0.4);
     manager.setRate(1.25);

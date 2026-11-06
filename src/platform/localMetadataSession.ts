@@ -1,6 +1,7 @@
 import { shallowRef } from "vue";
 import type { LocalFileRef, MetadataResult, MetadataSaveRequest, Patch } from "./mygo.bindings";
 
+import type { LocalAudioRelease } from "./localAudioSession";
 export type { Info, MetadataResult, MetadataSaveRequest, Patch } from "./mygo.bindings";
 
 export interface LocalMetadataAccess {
@@ -12,7 +13,7 @@ export interface LocalMetadataAccess {
 
 export interface LocalMetadataSessionDeps {
   access(ref: LocalFileRef): LocalMetadataAccess | undefined;
-  blockAudio(): () => void;
+  blockAudio(): LocalAudioRelease;
   refreshLibrary(): Promise<void>;
 }
 
@@ -80,7 +81,7 @@ function plain(result: MetadataResult, refresh: MetadataRefreshState): MetadataS
 export class LocalMetadataSession {
   private active?: {
     access: LocalMetadataAccess;
-    gateRelease: () => void;
+    gateRelease: LocalAudioRelease;
     operation: MetadataOperation;
     fingerprint: string;
     settled: boolean;
@@ -145,7 +146,7 @@ export class LocalMetadataSession {
     }
 
     const id = operationId();
-    let gateRelease: () => void;
+    let gateRelease: LocalAudioRelease;
     try {
       gateRelease = this.deps.blockAudio();
     } catch {
@@ -215,6 +216,9 @@ export class LocalMetadataSession {
     if (active.reconcileStarted) return this.bounded(active.completion, operationId);
     active.reconcileStarted = true;
     try {
+      if (active.gateRelease.ready) await active.gateRelease.ready;
+      if (active.invalidated || !this.current(active.access))
+        return pending(operationId, "session_invalidated");
       const observed = active.access.save(active.operation.request).then(
         (response) => this.observe(active, response),
         () => pending(operationId, "transport_pending"),
@@ -285,6 +289,20 @@ export class LocalMetadataSession {
   ): Promise<void> {
     let native: Promise<MetadataResult>;
     try {
+      if (active.gateRelease.ready) {
+        try {
+          await active.gateRelease.ready;
+        } catch {
+          resolveResult(
+            await this.observe(active, { code: "audio_release_failed", committed: false }),
+          );
+          return;
+        }
+      }
+      if (active.invalidated || !this.current(active.access)) {
+        resolveResult(pending(active.operation.operationId, "session_invalidated"));
+        return;
+      }
       native = active.access.save(active.operation.request);
     } catch {
       resolveResult(pending(active.operation.operationId, "transport_pending"));

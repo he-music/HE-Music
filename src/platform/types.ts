@@ -12,6 +12,7 @@ import type { GatewayProvider } from "./gateway";
 import type { PlatformWindowAppearance } from "./windowAppearance";
 import type { PlatformLinuxGraphics } from "./linuxGraphics";
 import type { PlatformPreferencesReset } from "./preferencesReset";
+import type { PlatformMpvPlayback } from "./mpvPlayback";
 import type {
   CloseRequested,
   CloseResolution,
@@ -61,6 +62,7 @@ export interface PlatformAdapter {
   readonly deviceName?: () => Promise<string>;
   readonly lifecycle?: PlatformLifecycle;
   readonly playbackControl?: ControlProvider;
+  readonly mpvPlayback?: PlatformMpvPlayback;
   readonly preferencesReset?: PlatformPreferencesReset;
   readonly shortcuts?: PlatformShortcuts;
   readonly systemMedia?: PlatformSystemMedia;
