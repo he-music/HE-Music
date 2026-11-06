@@ -5,6 +5,8 @@ import type {
   DownloadWarningCode,
 } from "./localDownloadSession";
 import { createApplicationDatabase } from "./applicationStorage";
+import type { DownloadIssue } from "./mygo.bindings";
+import { copyDownloadIssues, validDownloadIssues } from "./localDownloadDiagnostics";
 
 import { audioOutputFormat } from "./audioSource";
 export interface LocalDownloadSnapshotSource {
@@ -36,6 +38,7 @@ export interface LocalDownloadSnapshot {
   readonly options?: DownloadOptions;
   readonly resolveOptions?: DownloadResolveOptions;
   readonly warning?: DownloadWarningCode;
+  readonly issues?: readonly DownloadIssue[];
   readonly residualName?: string;
   readonly phase: "active" | "unknown" | "success" | "failed" | "saved";
   readonly done: boolean;
@@ -132,11 +135,19 @@ function downloadOptions(value: unknown): DownloadOptions | undefined {
       lyrics: input.lyrics,
     };
   }
+  if (
+    value.keepAudioOnMetadataFailure !== undefined &&
+    typeof value.keepAudioOnMetadataFailure !== "boolean"
+  )
+    throw invalid();
   return {
     writeMetadata: value.writeMetadata,
     writeCover: value.writeCover,
     writeLyrics: value.writeLyrics,
     saveSidecars: value.saveSidecars,
+    ...(value.keepAudioOnMetadataFailure !== undefined
+      ? { keepAudioOnMetadataFailure: value.keepAudioOnMetadataFailure }
+      : {}),
     ...(value.relativeDirectory !== undefined
       ? { relativeDirectory: value.relativeDirectory }
       : {}),
@@ -187,6 +198,7 @@ export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
   }
   const options = downloadOptions(value.options);
   const resolveOptions = validatedResolveOptions(value.resolveOptions);
+  if (value.issues !== undefined && !validDownloadIssues(value.issues)) throw invalid();
   const warning = value.warning;
   const validWarnings = [
     "io_error",
@@ -273,6 +285,7 @@ export function localDownloadSnapshot(value: unknown): LocalDownloadSnapshot {
     ...(options ? { options } : {}),
     ...(resolveOptions ? { resolveOptions } : {}),
     ...(warning ? { warning: warning as DownloadWarningCode } : {}),
+    ...(value.issues ? { issues: copyDownloadIssues(value.issues) } : {}),
     ...(value.residualName ? { residualName: value.residualName } : {}),
     phase,
     done: value.done,

@@ -91,6 +91,9 @@ func (t *downloadTransfer) request(rawURL string) (*http.Response, func(), error
 func (t *downloadTransfer) receive(resp *http.Response, file *os.File) error {
 	if resp.StatusCode != http.StatusOK || resp.Header.Get("Content-Range") != "" || resp.Uncompressed || (resp.Header.Get("Content-Encoding") != "" && resp.Header.Get("Content-Encoding") != "identity") {
 		t.out.Code = "http_rejected"
+		if resp.StatusCode != http.StatusOK {
+			return downloadHTTPError{resp.StatusCode}
+		}
 		return errDownload
 	}
 	if resp.ContentLength > 0 {
@@ -161,48 +164,114 @@ func (t *downloadTransfer) validateAudio(file *os.File, target string) error {
 }
 
 func (t *downloadTransfer) editAudio(root *os.Root, work *downloadOwnedPrivate, owned *[]*downloadOwnedPrivate) error {
+	o := t.job.options
+	if o == nil || o.Metadata == nil {
+		return nil
+	}
+	if !t.keepAudio() {
+		return t.editAudioStep(root, work, owned, o, "metadata")
+	}
+	// A failed cover must not discard successfully written text tags.
+	text := *o
+	text.WriteCover = false
+	if err := t.editAudioStep(root, work, owned, &text, "metadata"); err != nil {
+		return err
+	}
+	if !o.WriteCover {
+		return nil
+	}
+	cover := *o
+	cover.WriteMetadata, cover.WriteLyrics = false, false
+	return t.editAudioStep(root, work, owned, &cover, "cover")
+}
+
+func (t *downloadTransfer) editAudioStep(root *os.Root, work *downloadOwnedPrivate, owned *[]*downloadOwnedPrivate, options *DownloadOptions, stage string) error {
+	if !options.WriteMetadata && !options.WriteCover && (!options.WriteLyrics || options.Metadata.Lyrics == "") {
+		return nil
+	}
 	t.stage = "copy_source"
-	j := t.job
-	source, err := downloadNewPrivate(root, "source", j.io)
-	if source != nil {
-		*owned = append(*owned, source)
-	}
+	source, err := t.copyAudioSource(root, work, owned)
 	if err != nil {
-		return err
-	}
-	if err := j.io.before("source", "copy"); err != nil {
-		return err
-	}
-	if err := j.io.before("source", "write"); err != nil {
-		return err
-	}
-	if _, err := io.Copy(source.file, io.NewSectionReader(work.file, 0, t.out.Received)); err != nil {
-		return err
-	}
-	if err := source.sync(); err != nil {
-		return err
+		return t.optionalFailure(stage, err)
 	}
 	original, err := source.file.Stat()
 	if err != nil {
 		return err
 	}
 	t.stage = "edit_metadata"
-	if err := downloadNativeMetadata(j.ctx, t.coordinator.client, root, work.file, work.name, j.options); err != nil {
+	err = t.job.io.before(stage, "edit")
+	if err == nil {
+		err = downloadNativeMetadata(t.job.ctx, t.coordinator.client, root, work.file, work.name, options)
+	}
+	if err != nil {
 		t.out.Code = "unsupported"
+	} else {
+		t.stage = "verify_metadata"
+		err = t.verifyEditedAudio(source, work, original)
+	}
+	if err == nil || !t.keepAudio() {
 		return err
 	}
-	t.stage = "verify_metadata"
+	// A writer may have partially modified or truncated the private file.
+	// Restore the pinned baseline before treating the optional failure as success.
+	if restoreErr := t.restoreAudio(source, work, original); restoreErr != nil {
+		t.out.Code = "payload_rejected"
+		return restoreErr
+	}
+	return t.optionalFailure(stage, err)
+}
+
+func (t *downloadTransfer) copyAudioSource(root *os.Root, work *downloadOwnedPrivate, owned *[]*downloadOwnedPrivate) (*downloadOwnedPrivate, error) {
+	j := t.job
+	source, err := downloadNewPrivate(root, "source", j.io)
+	if source != nil {
+		*owned = append(*owned, source)
+	}
+	if err != nil {
+		return source, err
+	}
+	if err := j.io.before("source", "copy"); err != nil {
+		return source, err
+	}
+	if err := j.io.before("source", "write"); err != nil {
+		return source, err
+	}
+	info, err := work.file.Stat()
+	if err != nil {
+		return source, err
+	}
+	if err := metadataCopy(j.ctx, source.file, work.file, info.Size()); err != nil {
+		return source, err
+	}
+	return source, source.sync()
+}
+
+func (t *downloadTransfer) verifyEditedAudio(source, work *downloadOwnedPrivate, original os.FileInfo) error {
 	edited, editErr := work.file.Stat()
 	current, sourceErr := source.file.Stat()
 	if editErr != nil || sourceErr != nil || !os.SameFile(current, original) {
 		t.out.Code = "payload_rejected"
 		return errors.Join(editErr, sourceErr, errDownload)
 	}
-	if err := metadata.CompareAudioPayload(j.ctx, source.file, original.Size(), work.file, edited.Size()); err != nil {
+	if err := metadata.CompareAudioPayload(t.job.ctx, source.file, original.Size(), work.file, edited.Size()); err != nil {
 		t.out.Code = "payload_rejected"
 		return err
 	}
 	return nil
+}
+
+func (t *downloadTransfer) restoreAudio(source, work *downloadOwnedPrivate, original os.FileInfo) error {
+	t.stage = "restore_audio"
+	if err := t.job.io.before("work", "restore"); err != nil {
+		return err
+	}
+	if err := metadataCopy(t.job.ctx, work.file, source.file, original.Size()); err != nil {
+		return err
+	}
+	if err := work.file.Truncate(original.Size()); err != nil {
+		return err
+	}
+	return t.verifyEditedAudio(source, work, original)
 }
 
 func (t *downloadTransfer) verifyTargetParent(target string, expected os.FileInfo) error {
@@ -294,8 +363,13 @@ func (t *downloadTransfer) publishSidecars(root *os.Root, sidecars []downloadSta
 			err = sidecar.private.publish(sidecar.public)
 		}
 		if err != nil {
-			t.out.Code = "partial_committed"
-			return err
+			if !t.keepAudio() {
+				t.out.Code = "partial_committed"
+				return err
+			}
+			if err := t.optionalFailure(sidecar.stage, err); err != nil {
+				return err
+			}
 		}
 	}
 	if err := t.job.io.before("commit", "after_sidecars"); err != nil {

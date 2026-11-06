@@ -405,3 +405,65 @@ it("sends legal encoded paths and signed queries unchanged", async () => {
   );
   await session.dispose();
 });
+
+it("keeps optional processing failures successful and restores their reasons from history", async () => {
+  let snapshots: readonly LocalDownloadSnapshot[] = [];
+  const persistence: LocalDownloadPersistence = {
+    load: async () => snapshots,
+    save: async (rows) => {
+      snapshots = rows;
+    },
+  };
+  const onCommitted = vi.fn(async () => {});
+  const access = {
+    current: () => true,
+    start: vi.fn(async (request: { operationId: string }) => ({
+      operationId: request.operationId,
+    })),
+    read: vi.fn(async (id: string) => ({
+      operationId: id,
+      code: "ok",
+      done: true,
+      received: 100,
+      total: 100,
+      committed: true,
+      ref: { grantToken: "grant", relativePath: "song.mp3", fileId: "file", version: "v1" },
+      issues: [{ stage: "cover", reason: "http_rejected", httpStatus: 404 }],
+    })),
+    cancel: vi.fn(),
+  };
+  const session = new LocalDownloadSession({ access: () => access, onCommitted, persistence });
+  await session.restored;
+  const id = await session.start({
+    grantToken: "grant",
+    filename: "song.mp3",
+    url: "https://cdn.test/audio",
+    label: "Song",
+    quality: "320",
+    source: { id: "song", platform: "qq", name: "Song", links: [] },
+    resolveURL: async () => ({ url: "https://cdn.test/audio", format: "mp3" }),
+    options: { ...options, relativeDirectory: undefined, keepAudioOnMetadataFailure: true },
+  });
+  await session.refresh(id!);
+  expect(session.tasks.value[0]).toMatchObject({
+    phase: "success",
+    percent: 100,
+    retryable: false,
+    committed: true,
+    issues: [{ stage: "cover", reason: "http_rejected", httpStatus: 404 }],
+  });
+  expect(onCommitted).toHaveBeenCalledOnce();
+  expect(access.start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      options: expect.objectContaining({ keepAudioOnMetadataFailure: true }),
+    }),
+  );
+  await session.dispose();
+  const restored = new LocalDownloadSession({ access: () => access, onCommitted, persistence });
+  await restored.restored;
+  expect(restored.tasks.value[0]).toMatchObject({
+    phase: "success",
+    issues: [{ stage: "cover", reason: "http_rejected", httpStatus: 404 }],
+  });
+  await restored.dispose();
+});

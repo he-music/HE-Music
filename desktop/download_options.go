@@ -11,12 +11,13 @@ import (
 
 // DownloadOptions is the immutable, bounded native download configuration.
 type DownloadOptions struct {
-	RelativeDirectory string            `json:"relativeDirectory,omitempty"`
-	WriteMetadata     bool              `json:"writeMetadata"`
-	WriteCover        bool              `json:"writeCover"`
-	WriteLyrics       bool              `json:"writeLyrics"`
-	SaveSidecars      bool              `json:"saveSidecars"`
-	Metadata          *DownloadMetadata `json:"metadata,omitempty"`
+	RelativeDirectory          string            `json:"relativeDirectory,omitempty"`
+	WriteMetadata              bool              `json:"writeMetadata"`
+	WriteCover                 bool              `json:"writeCover"`
+	WriteLyrics                bool              `json:"writeLyrics"`
+	SaveSidecars               bool              `json:"saveSidecars"`
+	KeepAudioOnMetadataFailure bool              `json:"keepAudioOnMetadataFailure,omitzero"`
+	Metadata                   *DownloadMetadata `json:"metadata,omitempty"`
 }
 type DownloadMetadata struct {
 	Title    string   `json:"title"`
@@ -74,9 +75,6 @@ func validateDownloadNativeOptions(o *DownloadOptions) error {
 		return err
 	}
 	if o.WriteCover && m.CoverURL != "" && !downloadNativeCoverURL(m.CoverURL) {
-		return errDownloadOptions
-	}
-	if o.WriteCover && m.CoverURL == "" {
 		return errDownloadOptions
 	}
 	return nil

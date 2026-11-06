@@ -2,12 +2,17 @@ package main
 
 import (
 	"context"
+	"image"
 	"io"
 	"net/http"
+	"strings"
 	"sync"
 )
 
 func downloadNativeFetchCover(ctx context.Context, client *http.Client, rawURL string) (data []byte, mime string, err error) {
+	if rawURL == "" {
+		return nil, "", errDownloadCoverUnavailable
+	}
 	if !downloadNativeCoverURL(rawURL) {
 		return nil, "", errDownloadOptions
 	}
@@ -31,7 +36,13 @@ func downloadNativeFetchCover(ctx context.Context, client *http.Client, rawURL s
 			err = closeErr
 		}
 	}()
-	if resp.StatusCode != 200 || resp.ContentLength > 16<<20 || resp.Header.Get("Content-Range") != "" || resp.Uncompressed {
+	if resp.StatusCode != http.StatusOK {
+		return nil, "", downloadHTTPError{resp.StatusCode}
+	}
+	if resp.ContentLength > 16<<20 {
+		return nil, "", errDownloadCoverLimit
+	}
+	if resp.Header.Get("Content-Range") != "" || resp.Uncompressed {
 		return nil, "", errDownloadOptions
 	}
 	data, err = io.ReadAll(io.LimitReader(resp.Body, 16<<20+1))
@@ -39,11 +50,14 @@ func downloadNativeFetchCover(ctx context.Context, client *http.Client, rawURL s
 		return nil, "", err
 	}
 	if len(data) > 16<<20 {
-		return nil, "", errDownloadOptions
+		return nil, "", errDownloadCoverLimit
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, "", err
 	}
 	mime = http.DetectContentType(data)
+	if !strings.HasPrefix(mime, "image/") {
+		return nil, "", image.ErrFormat
+	}
 	return data, mime, nil
 }

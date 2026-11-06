@@ -95,7 +95,7 @@ func nativeEncodedFixture(t *testing.T, suffix string) []byte {
 func TestNativeFormatsFullTransfer(t *testing.T) {
 	for _, suffix := range []string{"mp3", "flac", "wav", "aac", "webm", "m4a", "mp4", "ogg", "aiff", "aif", "ape", "dff"} {
 		t.Run(suffix, func(t *testing.T) {
-			testNativeFormatTransfer(t, suffix, nativeEncodedFixture(t, suffix))
+			testNativeFormatTransfer(t, suffix, nativeEncodedFixture(t, suffix), false)
 		})
 	}
 }
@@ -109,10 +109,14 @@ func TestNativeDFFSampleFullTransfer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testNativeFormatTransfer(t, "dff", data)
+	for _, keep := range []bool{false, true} {
+		t.Run(map[bool]string{false: "strict", true: "keep_audio"}[keep], func(t *testing.T) {
+			testNativeFormatTransfer(t, "dff", data, keep)
+		})
+	}
 }
 
-func testNativeFormatTransfer(t *testing.T, suffix string, data []byte) {
+func testNativeFormatTransfer(t *testing.T, suffix string, data []byte, keep bool) {
 	t.Helper()
 	var jpg bytes.Buffer
 	if err := jpeg.Encode(&jpg, image.NewRGBA(image.Rect(0, 0, 2, 2)), nil); err != nil {
@@ -128,7 +132,7 @@ func testNativeFormatTransfer(t *testing.T, suffix string, data []byte) {
 				return downloadResponse(data, int64(len(data))), nil
 			})
 			req := downloadReq(t, token, "song."+suffix)
-			req.Options = &DownloadOptions{RelativeDirectory: "Artist/Album"}
+			req.Options = &DownloadOptions{RelativeDirectory: "Artist/Album", KeepAudioOnMetadataFailure: keep}
 			if edit {
 				req.Options.WriteMetadata = true
 				req.Options.WriteLyrics = true

@@ -106,6 +106,18 @@ export function createMygoDownloadSettings(hooks: MygoDownloadSettingsHooks = {}
             }),
           })),
           {
+            key: "downloadKeepAudioOnMetadataFailure",
+            label: t("setting.local.keep_audio_on_metadata_failure"),
+            type: "switch" as const,
+            disabled: computed(() => !settings.downloadMeta),
+            value: computed({
+              get: () => settings.downloadKeepAudioOnMetadataFailure,
+              set: (value: boolean) => {
+                settings.downloadKeepAudioOnMetadataFailure = value;
+              },
+            }),
+          },
+          {
             key: "fileNameFormat",
             label: t("setting.local.file_naming_format"),
             type: "select" as const,

@@ -62,6 +62,13 @@ export interface DirectorySelection {
 
 export type DirectorySelectionStatus = "selected" | "cancelled" | "overlap";
 
+/** DownloadIssue carries fixed, localizable codes rather than raw errors or URLs. */
+export interface DownloadIssue {
+  stage: string;
+  reason: string;
+  httpStatus?: number;
+}
+
 export interface DownloadMetadata {
   title: string;
   artists: string[];
@@ -81,6 +88,7 @@ export interface DownloadOptions {
   writeCover: boolean;
   writeLyrics: boolean;
   saveSidecars: boolean;
+  keepAudioOnMetadataFailure?: boolean;
   metadata?: DownloadMetadata;
 }
 
@@ -109,6 +117,7 @@ export interface DownloadState {
   committed: boolean;
   filename?: string;
   residualName?: string;
+  issues?: DownloadIssue[];
   ref?: LocalFileRef;
 }
 

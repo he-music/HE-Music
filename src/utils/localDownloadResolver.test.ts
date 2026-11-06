@@ -103,7 +103,7 @@ describe("mygo local download resolver candidate", () => {
   });
 });
 
-it("rejects before queueing when a required cover cannot be resolved", async () => {
+it("allows downloading audio when a cover cannot be resolved", async () => {
   const resolve = createMygoDownloadResolver(
     vi.fn(async () => ({ url: "https://cdn.test/audio", format: "mp3" })),
     vi.fn(async () => {
@@ -117,7 +117,26 @@ it("rejects before queueing when a required cover cannot be resolved", async () 
       writeLyrics: false,
       saveSidecars: false,
     }),
-  ).rejects.toThrow("Download cover unavailable");
+  ).resolves.toMatchObject({ format: "mp3", metadata: { title: "Song" } });
+});
+
+it("keeps the audio source when an invalid optional cover URL cannot be used", async () => {
+  const resolve = createMygoDownloadResolver(
+    vi.fn(async () => ({ url: "https://cdn.test/audio", format: "mp3" })),
+    vi.fn(async () => {
+      throw new Error("detail down");
+    }),
+  );
+  const resolved = await resolve("320", source, {
+    writeMetadata: true,
+    writeCover: true,
+    writeLyrics: false,
+    saveSidecars: false,
+    keepAudioOnMetadataFailure: true,
+    metadata: { title: "Song", artists: [], album: "", lyrics: "", coverURL: "file:///private" },
+  });
+  expect(resolved.url).toBe("https://cdn.test/audio");
+  expect(resolved.metadata?.coverURL).toBeUndefined();
 });
 
 it("keeps captured metadata when fresh detail is unavailable", async () => {

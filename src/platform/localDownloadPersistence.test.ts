@@ -58,6 +58,38 @@ it.each([
   expect(() => localDownloadSnapshot({ ...task, warning: "raw private error" })).toThrow();
 });
 
+it("persists postprocessing reasons and the selected failure policy without raw error details", async () => {
+  const task = {
+    ...snapshot(),
+    phase: "success" as const,
+    done: true,
+    committed: true,
+    options: {
+      writeMetadata: true,
+      writeCover: true,
+      writeLyrics: false,
+      saveSidecars: false,
+      keepAudioOnMetadataFailure: true,
+    },
+    issues: [{ stage: "cover", reason: "http_rejected", httpStatus: 404, url: "SECRET_URL" }],
+  };
+  const db = storage();
+  const persistence = createLocalDownloadPersistence(db);
+  await persistence.load();
+  await persistence.save([task]);
+  const written = vi.mocked(db.setItem).mock.calls[0][1];
+  expect(JSON.stringify(written)).not.toContain("SECRET_URL");
+  const restored = await createLocalDownloadPersistence(storage(written)).load();
+  expect(restored[0]).toMatchObject({
+    phase: "success",
+    options: { keepAudioOnMetadataFailure: true },
+    issues: [{ stage: "cover", reason: "http_rejected", httpStatus: 404 }],
+  });
+  expect(() =>
+    localDownloadSnapshot({ ...task, issues: [{ stage: "cover", reason: "SECRET" }] }),
+  ).toThrow();
+});
+
 describe("localDownloadPersistence", () => {
   it("round trips allowlisted metadata without authorization, URLs or runtime state", async () => {
     const db = storage();

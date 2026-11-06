@@ -76,6 +76,7 @@ export interface SettingState {
   downloadLyricTran: boolean;
   downloadLyricRoma: boolean;
   saveMetaFile: boolean;
+  downloadKeepAudioOnMetadataFailure: boolean;
   proxyProtocol: "off" | "http" | "https";
   proxyServe: string;
   proxyPort: number;
@@ -235,6 +236,7 @@ export const createSettingState = (): SettingState => ({
   downloadLyricTran: false, // 下载歌词翻译
   downloadLyricRoma: false, // 下载歌词音译
   saveMetaFile: false, // 保留为独立文件
+  downloadKeepAudioOnMetadataFailure: true, // 标签或封面处理失败时仍保存音频
   // 网络
   proxyProtocol: "off", // 代理协议
   proxyServe: "127.0.0.1", // 代理地址

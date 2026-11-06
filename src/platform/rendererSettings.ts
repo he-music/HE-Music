@@ -138,6 +138,7 @@ const settingSchema: Schema<SettingState> = {
   downloadLyricTran: bool,
   downloadLyricRoma: bool,
   saveMetaFile: bool,
+  downloadKeepAudioOnMetadataFailure: bool,
   proxyProtocol: enumeration("off", "http", "https"),
   proxyServe: string,
   proxyPort: number,

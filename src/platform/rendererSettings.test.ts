@@ -38,6 +38,17 @@ const partial = (setting: unknown = {}, shortcut: unknown = {}) => ({
 });
 
 describe("rendererSettings", () => {
+  it("defaults to preserving audio and persists the strict download preference", () => {
+    expect(validateSettingState({}).downloadKeepAudioOnMetadataFailure).toBe(true);
+    const setting = useSettingStore();
+    const shortcut = useShortcutStore();
+    setting.downloadKeepAudioOnMetadataFailure = false;
+    const saved = serializeRendererSettings(setting.$state, shortcut.$state);
+    expect(
+      validateSettingState(JSON.parse(saved["setting-store"])).downloadKeepAudioOnMetadataFailure,
+    ).toBe(false);
+    expect(() => validateSettingState({ downloadKeepAudioOnMetadataFailure: "true" })).toThrow();
+  });
   it("persists native text options independently and rejects malformed imported font data", () => {
     const setting = useSettingStore();
     const shortcut = useShortcutStore();

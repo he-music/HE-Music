@@ -1,6 +1,8 @@
 import { computed, shallowRef } from "vue";
 import { audioOutputFormat } from "./audioSource";
+import { copyDownloadIssues, validDownloadIssues } from "./localDownloadDiagnostics";
 import type {
+  DownloadIssue,
   DownloadMetadata,
   DownloadOperation,
   DownloadOptions,
@@ -117,6 +119,7 @@ export interface LocalDownloadTask {
   readonly retryable: boolean;
   readonly interrupted?: boolean;
   readonly warning?: DownloadWarningCode;
+  readonly issues?: readonly DownloadIssue[];
   readonly residualName?: string;
 }
 interface RecordState {
@@ -256,7 +259,7 @@ export function validDownloadOptions(options: DownloadOptions | undefined): bool
     metadata.artists.reduce((sum, artist) => sum + encoder.encode(artist).length, 0);
   return (
     total <= 2 << 20 &&
-    (!options.writeCover || (!!metadata.coverURL && validDownloadHTTPURL(metadata.coverURL)))
+    (!options.writeCover || !metadata.coverURL || validDownloadHTTPURL(metadata.coverURL))
   );
 }
 
@@ -383,6 +386,7 @@ export class LocalDownloadSession {
       refresh: "none",
       interrupted,
       ...(snapshot.warning ? { warning: snapshot.warning } : {}),
+      ...(snapshot.issues ? { issues: copyDownloadIssues(snapshot.issues) } : {}),
       ...(snapshot.residualName ? { residualName: snapshot.residualName } : {}),
       retryable:
         !snapshot.committed &&
@@ -955,6 +959,7 @@ export class LocalDownloadSession {
             : "active",
         retryable: this.isRetryable(state),
         ...(warning ? { warning } : {}),
+        ...(state.issues?.length ? { issues: copyDownloadIssues(state.issues) } : {}),
         ...(state.residualName ? { residualName: state.residualName } : {}),
       };
       if (state.done && state.committed && state.ref) {
@@ -1131,6 +1136,7 @@ export class LocalDownloadSession {
       (!previous.committed || state.committed) &&
       (state.filename === undefined || state.filename === previous.filename) &&
       (state.residualName === undefined || this.validRelativePath(state.residualName)) &&
+      (state.issues === undefined || validDownloadIssues(state.issues)) &&
       (!state.ref ||
         (state.ref.grantToken === record.token &&
           state.ref.relativePath === this.relativePath(previous.filename, record.recipe?.options) &&

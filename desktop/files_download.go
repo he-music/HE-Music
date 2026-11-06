@@ -42,15 +42,16 @@ type DownloadOperation struct {
 // Total is zero when unknown. Received counts streamed audio bytes without a
 // song-size cap. Clients must inspect Done, Code and Committed, not byte equality.
 type DownloadState struct {
-	OperationID  string        `json:"operationId"`
-	Code         string        `json:"code"`
-	Done         bool          `json:"done"`
-	Received     int64         `json:"received"`
-	Total        int64         `json:"total"`
-	Committed    bool          `json:"committed"`
-	Filename     string        `json:"filename,omitempty"`
-	ResidualName string        `json:"residualName,omitempty"`
-	Ref          *LocalFileRef `json:"ref,omitempty"`
+	OperationID  string          `json:"operationId"`
+	Code         string          `json:"code"`
+	Done         bool            `json:"done"`
+	Received     int64           `json:"received"`
+	Total        int64           `json:"total"`
+	Committed    bool            `json:"committed"`
+	Filename     string          `json:"filename,omitempty"`
+	ResidualName string          `json:"residualName,omitempty"`
+	Issues       []DownloadIssue `json:"issues,omitempty"`
+	Ref          *LocalFileRef   `json:"ref,omitempty"`
 }
 type downloadJob struct {
 	lease       *directoryLease
@@ -308,7 +309,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 	out.Code = "io_error"
 	transfer := downloadTransfer{coordinator: c, job: j, out: &out, stage: "prepare_target"}
 	var err error
-	defer func() { logDownloadFailure(transfer.stage, transfer.status, err, out) }()
+	defer func() { transfer.finish(err) }()
 	target, err := downloadNativeTarget(j.state.Filename, j.options)
 	if err != nil {
 		out.Code = "invalid_request"
@@ -357,7 +358,7 @@ func (c *downloadCoordinator) transfer(s *nativeFilesState, j *downloadJob, rawU
 		return out
 	}
 	transfer.stage = "prepare_sidecars"
-	sidecars, err := downloadNativePrepareSidecars(j.ctx, c.client, root, targetName, j.options, j.io, &owned)
+	sidecars, err := transfer.prepareSidecars(root, targetName, &owned)
 	if err != nil {
 		return out
 	}
@@ -504,10 +505,10 @@ func downloadNativeMetadata(ctx context.Context, client *http.Client, root *os.R
 	}
 	m := options.Metadata
 	var picture *metadata.Picture
-	if options.WriteCover && m.CoverURL != "" {
+	if options.WriteCover {
 		data, mime, err := downloadNativeFetchCover(ctx, client, m.CoverURL)
 		if err != nil {
-			return err
+			return downloadCoverError{err}
 		}
 		picture = &metadata.Picture{MIME: mime, Type: 3, Data: data}
 	}
@@ -532,7 +533,7 @@ func downloadNativeMetadata(ctx context.Context, client *http.Client, root *os.R
 	}
 	parsed, err := metadata.Parse(audio, edited.Size())
 	if err != nil || !metadataPatchMatches(parsed, patch) {
-		return errDownloadOptions
+		return errDownloadMetadataReadback
 	}
 	return nil
 }

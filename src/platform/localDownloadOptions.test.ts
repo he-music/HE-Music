@@ -29,6 +29,7 @@ const settings = {
   downloadLyricTran: true,
   downloadLyricRoma: true,
   saveMetaFile: true,
+  downloadKeepAudioOnMetadataFailure: true,
 };
 
 describe("local download options candidate", () => {
@@ -67,6 +68,7 @@ describe("local download options candidate", () => {
         writeCover: true,
         writeLyrics: true,
         saveSidecars: true,
+        keepAudioOnMetadataFailure: true,
       },
     });
   });
@@ -96,5 +98,12 @@ describe("local download options candidate", () => {
       writeLyrics: false,
       saveSidecars: false,
     });
+  });
+  it("captures the failure policy independently of later setting changes", () => {
+    const mutable = { ...settings };
+    const plan = createLocalDownloadPlan(song, mutable);
+    mutable.downloadKeepAudioOnMetadataFailure = false;
+    expect(plan.options.keepAudioOnMetadataFailure).toBe(true);
+    expect(createLocalDownloadPlan(song, mutable).options.keepAudioOnMetadataFailure).toBe(false);
   });
 });

@@ -5,7 +5,11 @@ import { FilesSession, filesSession } from "@/platform/filesSession";
 import type { PlatformFiles } from "@/platform/files";
 import { createMygoDownloadSettings } from "./localDownloadSettings";
 
-const state = vi.hoisted(() => ({ downloadPath: "" }));
+const state = vi.hoisted(() => ({
+  downloadPath: "",
+  downloadMeta: true,
+  downloadKeepAudioOnMetadataFailure: true,
+}));
 vi.mock("@/stores", () => ({ useSettingStore: () => state }));
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
 afterEach(async () => {
@@ -78,4 +82,12 @@ it("explains a parent or child overlap and keeps the prior destination", async (
   await f.choose();
   expect(state.downloadPath).toBe("/Music/<My Downloads>");
   expect(f.warning).toHaveBeenCalledWith("message.local_path_overlapping");
+});
+
+it("shows the audio preservation switch in download settings", () => {
+  const items = createMygoDownloadSettings().groups[0].items;
+  const item = items.find((item) => item.key === "downloadKeepAudioOnMetadataFailure");
+  expect(item?.type).toBe("switch");
+  expect(item?.label).toBe("setting.local.keep_audio_on_metadata_failure");
+  expect(toValue(item?.value)).toBe(true);
 });

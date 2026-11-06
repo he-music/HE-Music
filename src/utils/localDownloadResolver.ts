@@ -98,7 +98,12 @@ export function createMygoDownloadResolver(
       const captured = options?.metadata;
       const resolvedCover =
         typeof song?.cover === "string" && song.cover ? song.cover : captured?.coverURL;
-      if (options?.writeCover && (!resolvedCover || !validDownloadHTTPURL(resolvedCover)))
+      if (
+        options?.writeCover &&
+        resolvedCover &&
+        !validDownloadHTTPURL(resolvedCover) &&
+        !options.keepAudioOnMetadataFailure
+      )
         throw new Error("Download cover unavailable");
       const fetchedLyrics = lyricText(lyricResult);
       const metadata = {
@@ -106,7 +111,9 @@ export function createMygoDownloadResolver(
         artists: artists.length ? [...artists] : [...(captured?.artists ?? [])],
         album: album || captured?.album || "",
         lyrics: toLineDownloadLyrics(fetchedLyrics || captured?.lyrics),
-        ...(resolvedCover ? { coverURL: resolvedCover } : {}),
+        ...(resolvedCover && validDownloadHTTPURL(resolvedCover)
+          ? { coverURL: resolvedCover }
+          : {}),
       };
       return {
         url,

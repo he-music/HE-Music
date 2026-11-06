@@ -431,6 +431,21 @@ it("suppresses file-index changes and success feedback from a late deletion resp
   expect(f.success).not.toHaveBeenCalled();
   expect(f.tasks.value).toHaveLength(1);
 });
+it("shows specific optional failure reasons while the saved audio remains completed and playable", async () => {
+  const f = setup([
+    saved("saved", {
+      issues: [{ stage: "cover", reason: "http_rejected", httpStatus: 404 }],
+    }),
+  ]);
+  f.entries.value = [entry()];
+  await flushSfcHost();
+  expect(f.text()).toContain("common.completed");
+  expect(f.text()).toContain("local_download.issue.cover");
+  expect(f.text()).toContain("local_download.reason.http_rejected");
+  expect(f.text()).toContain("HTTP 404");
+  expect(f.button("mygo.downloads.retry", f.row("saved"))).toBeUndefined();
+  expect(f.button("common.play", f.row("saved"))?.props.disabled).toBe(false);
+});
 it("does not rerender completed rows for another task's progress but updates necessary task and file changes", async () => {
   const complete = saved();
   const f = setup([complete, record("active")]);

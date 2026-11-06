@@ -81,6 +81,7 @@ export function createLocalDownloadPlan(
     | "downloadCover"
     | "downloadLyric"
     | "saveMetaFile"
+    | "downloadKeepAudioOnMetadataFailure"
   >,
 ): LocalDownloadPlan {
   const artists = names(song.artists);
@@ -109,6 +110,7 @@ export function createLocalDownloadPlan(
     options: {
       ...(relativeDirectory ? { relativeDirectory } : {}),
       writeMetadata,
+      keepAudioOnMetadataFailure: settings.downloadKeepAudioOnMetadataFailure,
       writeCover: writeMetadata && settings.downloadCover,
       writeLyrics: writeMetadata && settings.downloadLyric,
       saveSidecars: writeMetadata && settings.saveMetaFile,

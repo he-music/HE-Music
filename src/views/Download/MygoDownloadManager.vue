@@ -104,9 +104,22 @@
               <n-text v-if="task.interrupted" depth="3">{{
                 t("mygo.downloads.interrupted")
               }}</n-text>
-              <n-text v-if="showTaskWarning(task)" type="warning" role="status">{{
-                t(`local_download.warning.${task.warning}`)
-              }}</n-text>
+              <n-text
+                v-for="issue in task.issues"
+                :key="`${issue.stage}:${issue.reason}:${issue.httpStatus ?? ''}`"
+                :type="task.phase === 'failed' ? 'error' : 'warning'"
+                role="status"
+              >
+                {{ t(`local_download.issue.${issue.stage}`) }}：{{
+                  t(`local_download.reason.${issue.reason}`)
+                }}<template v-if="issue.httpStatus">（HTTP {{ issue.httpStatus }}）</template>
+              </n-text>
+              <n-text
+                v-if="showTaskWarning(task) && !task.issues?.length"
+                type="warning"
+                role="status"
+                >{{ t(`local_download.warning.${task.warning}`) }}</n-text
+              >
               <n-text v-if="task.residualName" depth="3"
                 >{{ t("local_download.residual_file") }}：{{ task.residualName }}</n-text
               >
