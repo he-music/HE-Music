@@ -74,6 +74,10 @@ func main() {
 			options.Page.PreloadScript = desktopGatewayPreloadScript(gatewayOrigin)
 		}
 		win := mygo.NewWindow(options)
+		if mygo.IsDev() {
+			win.SetAutoHideMenuBar(true)
+			win.SetMenu(mygo.NewMenu([]*mygo.MenuItem{{Role: mygo.RoleViewMenu}}))
+		}
 		if mediaErr := configureNativeWebViewMedia(win.NativeHandle()); mediaErr != nil {
 			log.Print("配置 WebView 媒体策略失败，保留默认设置: ", mediaErr)
 		}
