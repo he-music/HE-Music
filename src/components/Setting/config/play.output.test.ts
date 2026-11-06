@@ -63,6 +63,41 @@ function deviceSetting() {
 }
 
 describe("output device feedback", () => {
+  it("Linux WebView 不支持设备枚举时保留系统默认输出，不报读取失败", async () => {
+    mocks.platform.os = "linux";
+    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("window", { $message: mocks });
+    const { config, output } = mygoOutputConfig();
+    await config.onActivate?.();
+    expect(unref(output.options)).toEqual([{ label: "common.system_default", value: "" }]);
+    expect(unref(output.extraButton?.show)).toBe(false);
+    expect(unref(output.value)).toBe("");
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(mocks.changePlaybackOutput).not.toHaveBeenCalled();
+  });
+  it("WebView 明确拒绝设备枚举时保留已选设备，不影响默认输出", async () => {
+    mocks.platform.os = "linux";
+    mocks.settings.outputDevices["web-audio"] = { id: "saved", label: "Saved speaker" };
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        enumerateDevices: vi.fn(async () => {
+          throw new DOMException("Unavailable", "NotSupportedError");
+        }),
+      },
+    });
+    vi.stubGlobal("window", { $message: mocks });
+    const { config, output } = mygoOutputConfig();
+    await config.onActivate?.();
+    expect(unref(output.options)).toEqual([
+      { label: "common.system_default", value: "" },
+      { label: "Saved speaker (mygo.audio.unavailable)", value: "saved", disabled: true },
+    ]);
+    expect(unref(output.extraButton?.show)).toBe(false);
+    expect(mocks.settings.outputDevices["web-audio"].id).toBe("saved");
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(mocks.changePlaybackOutput).not.toHaveBeenCalled();
+  });
   it("mpv 枚举不请求麦克风，保留失效设备与名称", async () => {
     vi.stubGlobal("window", { $message: mocks });
     const capture = vi.fn();
@@ -166,7 +201,8 @@ describe("output device feedback", () => {
       vi.unstubAllGlobals();
     }
   });
-  it("requests microphone access only from the macOS read button and coalesces clicks", async () => {
+  it.each(["darwin", "win32", "linux"])("authorizes restricted outputs on %s", async (os) => {
+    mocks.platform.os = os;
     const stop = vi.fn();
     let grant: (stream: { getTracks(): { stop(): void }[] }) => void = () => {};
     const getUserMedia = vi.fn(
@@ -188,6 +224,7 @@ describe("output device feedback", () => {
     expect(unref(output.extraButton?.show)).toBe(true);
     output.extraButton?.action();
     output.extraButton?.action();
+    await flush();
     expect(getUserMedia).toHaveBeenCalledExactlyOnceWith({ audio: true, video: false });
     expect(unref(output.disabled)).toBe(true);
     grant({ getTracks: () => [{ stop }] });
@@ -201,7 +238,7 @@ describe("output device feedback", () => {
     output.extraButton?.action();
     await flush();
     expect(getUserMedia).toHaveBeenCalledOnce();
-    expect(enumerateDevices).toHaveBeenCalledTimes(3);
+    expect(enumerateDevices).toHaveBeenCalledTimes(4);
     expect(mocks.changePlaybackOutput).not.toHaveBeenCalled();
   });
 
@@ -262,11 +299,12 @@ describe("output device feedback", () => {
     const result = scope.run(mygoOutputConfig);
     if (!result) throw new Error("missing settings scope");
     result.output.extraButton?.action();
+    await flush();
     scope.stop();
     grant({ getTracks: () => [{ stop }] });
     await flush();
     expect(stop).toHaveBeenCalledOnce();
-    expect(enumerateDevices).not.toHaveBeenCalled();
+    expect(enumerateDevices).toHaveBeenCalledOnce();
     expect(mocks.error).not.toHaveBeenCalled();
     expect(mocks.warning).not.toHaveBeenCalled();
     expect(unref(result.output.options)).toEqual([{ label: "common.system_default", value: "" }]);
@@ -278,7 +316,7 @@ describe("output device feedback", () => {
     { electron: false, mygo: true, os: "win32" },
     { electron: false, mygo: true, os: "linux" },
   ])(
-    "does not offer capture-assisted enumeration outside mygo macOS: $os $electron $mygo",
+    "does not request capture on activation: $os $electron $mygo",
     async ({ electron, mygo, os }) => {
       mocks.env.isElectron = electron;
       mocks.env.isMygo = mygo;

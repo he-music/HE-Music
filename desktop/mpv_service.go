@@ -165,6 +165,9 @@ func (p *MpvPlayback) Initialize(ctx context.Context) (MpvSnapshot, error) {
 }
 
 func (s *mpvSession) initializeLocked(ctx context.Context, api *mpvAPI, testAO string) error {
+	if err := prepareMpvNumericLocale(); err != nil {
+		return err
+	}
 	handle := api.create()
 	if handle == 0 {
 		return mpvFail("engine", "mpv_create failed")

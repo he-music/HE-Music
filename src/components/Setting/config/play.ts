@@ -41,8 +41,15 @@ export const usePlaySettings = (): SettingConfig => {
           },
         ];
   });
-  const canRequestOutputAccess = isMygo && platform.os === "darwin";
   const outputDevices = ref<SelectOption[]>([{ label: t("common.system_default"), value: "" }]);
+  const browserEnumerationUnsupported = ref(false);
+  const canReadOutputDevices = computed(
+    () =>
+      selectedEngine.value === "mpv" ||
+      (!browserEnumerationUnsupported.value &&
+        typeof navigator !== "undefined" &&
+        typeof navigator.mediaDevices?.enumerateDevices === "function"),
+  );
   const readingOutputs = ref(false);
   let active = true;
   let revision = 0;
@@ -54,7 +61,7 @@ export const usePlaySettings = (): SettingConfig => {
 
   // Passive enumeration never requests microphone access.
   const getOutputDevices = async (requestAccess = false) => {
-    if (!isDesktop || !active || readingOutputs.value) return;
+    if (!isDesktop || !active || readingOutputs.value || !canReadOutputDevices.value) return;
     const operation = ++revision;
     const current = () => active && revision === operation;
     readingOutputs.value = true;
@@ -76,11 +83,8 @@ export const usePlaySettings = (): SettingConfig => {
         ];
         return;
       }
-      if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices)
-        throw new DOMException("Media devices unavailable", "NotSupportedError");
-      const needsCapture =
-        requestAccess && canRequestOutputAccess && !outputDevices.value.some((item) => item.value);
-      const allDevices = await readOutputDevices(navigator.mediaDevices, needsCapture, current);
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      const allDevices = await readOutputDevices(navigator.mediaDevices, requestAccess, current);
       if (!allDevices) return;
       const devices = uniqBy(
         allDevices.filter(
@@ -100,7 +104,17 @@ export const usePlaySettings = (): SettingConfig => {
         window.$message.warning(t("mygo.audio.output_devices_empty"));
     } catch (error) {
       if (!current()) return;
-      console.error("获取 WebAudio 设备失败", error);
+      if (
+        selectedEngine.value === "web-audio" &&
+        !requestAccess &&
+        error instanceof DOMException &&
+        error.name === "NotSupportedError"
+      ) {
+        browserEnumerationUnsupported.value = true;
+        outputDevices.value = [{ label: t("common.system_default"), value: "" }];
+        return;
+      }
+      console.error(`获取 ${selectedEngine.value} 输出设备失败`, error);
       const denied = error instanceof DOMException && error.name === "NotAllowedError";
       window.$message.error(
         t(denied ? "mygo.audio.output_access_denied" : "mygo.audio.output_devices_failed"),
@@ -317,7 +331,7 @@ export const usePlaySettings = (): SettingConfig => {
             disabled: readingOutputs,
             extraButton: {
               label: t("mygo.audio.read_output_devices"),
-              show: isDesktop,
+              show: computed(() => isDesktop && canReadOutputDevices.value),
               action: () => void getOutputDevices(true),
             },
             options: displayedOutputs,
