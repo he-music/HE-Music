@@ -31,6 +31,56 @@ describe("output device permission lifecycle", () => {
     expect(source.getUserMedia).not.toHaveBeenCalled();
     expect(source.enumerateDevices).toHaveBeenCalledOnce();
   });
+  it("does not request a microphone when a named remote output and a hidden default alias exist", async () => {
+    const { source } = fixture();
+    const remoteDevices = [...restrictedDevices, ...devices];
+    source.enumerateDevices.mockResolvedValueOnce(remoteDevices);
+    expect(await readOutputDevices(source, true, () => true)).toBe(remoteDevices);
+    expect(source.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { name: "default output", initial: restrictedDevices },
+    {
+      name: "unlabeled remote output",
+      initial: [
+        ...restrictedDevices,
+        { kind: "audiooutput" as const, deviceId: "remote", groupId: "", label: "" },
+      ],
+    },
+  ])("keeps $name when optional microphone access finds no input device", async ({ initial }) => {
+    const { source } = fixture();
+    source.enumerateDevices.mockResolvedValueOnce(initial);
+    source.getUserMedia.mockRejectedValueOnce(new DOMException("No microphone", "NotFoundError"));
+    expect(await readOutputDevices(source, true, () => true)).toBe(initial);
+    expect(source.enumerateDevices).toHaveBeenCalledOnce();
+  });
+
+  it("does not hide missing devices when enumeration found no outputs", async () => {
+    const { source } = fixture();
+    source.enumerateDevices.mockResolvedValueOnce([]);
+    const missing = new DOMException("No microphone", "NotFoundError");
+    source.getUserMedia.mockRejectedValueOnce(missing);
+    await expect(readOutputDevices(source, true, () => true)).rejects.toBe(missing);
+  });
+
+  it("discards the fallback outputs when microphone failure arrives after leaving", async () => {
+    const { source } = fixture();
+    source.enumerateDevices.mockResolvedValueOnce(restrictedDevices);
+    let active = true;
+    let rejectCapture: (error: Error) => void = () => {};
+    source.getUserMedia.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          rejectCapture = reject;
+        }),
+    );
+    const pending = readOutputDevices(source, true, () => active);
+    await vi.waitFor(() => expect(source.getUserMedia).toHaveBeenCalledOnce());
+    active = false;
+    rejectCapture(new DOMException("No microphone", "NotFoundError"));
+    expect(await pending).toBeUndefined();
+  });
 
   it.each([
     { name: "empty outputs", initial: [] },

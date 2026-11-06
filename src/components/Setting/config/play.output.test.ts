@@ -63,6 +63,40 @@ function deviceSetting() {
 }
 
 describe("output device feedback", () => {
+  it("Windows 远程会话没有麦克风时仍保留并可选择远程输出", async () => {
+    mocks.platform.os = "win32";
+    const getUserMedia = vi.fn(async () => {
+      throw new DOMException("Requested device not found", "NotFoundError");
+    });
+    vi.stubGlobal("navigator", {
+      mediaDevices: {
+        enumerateDevices: vi.fn(async () => [
+          { kind: "audiooutput", deviceId: "default", groupId: "", label: "" },
+          { kind: "audiooutput", deviceId: "remote", groupId: "remote", label: "" },
+        ]),
+        getUserMedia,
+      },
+    });
+    vi.stubGlobal("window", { $message: mocks });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { config, output } = mygoOutputConfig();
+    await config.onActivate?.();
+    output.extraButton?.action();
+    await flush();
+    expect(getUserMedia).toHaveBeenCalledOnce();
+    expect(mocks.error).not.toHaveBeenCalled();
+    expect(unref(output.disabled)).toBe(false);
+    expect(unref(output.options)).toEqual([
+      { label: "common.system_default", value: "" },
+      { label: "setting.play.output_device 1", value: "remote" },
+    ]);
+    if (!output.value) throw new Error("missing output setting");
+    output.value.value = "remote";
+    await flush();
+    expect(mocks.settings.outputDevices["web-audio"].id).toBe("remote");
+    expect(mocks.changePlaybackOutput).toHaveBeenCalledOnce();
+    expect(mocks.success).toHaveBeenCalledOnce();
+  });
   it("Linux WebView 不支持设备枚举时保留系统默认输出，不报读取失败", async () => {
     mocks.platform.os = "linux";
     vi.stubGlobal("navigator", {});

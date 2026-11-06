@@ -36,10 +36,23 @@ export async function readOutputDevices(
       device.deviceId !== "communications" &&
       device.label.trim(),
   );
-  const hasHiddenOutput = outputs.some((device) => !device.deviceId || !device.label.trim());
+  const hasHiddenOutput = outputs.some(
+    (device) =>
+      device.deviceId !== "default" &&
+      device.deviceId !== "communications" &&
+      (!device.deviceId || !device.label.trim()),
+  );
   if (!requestAccess || !source.getUserMedia || (hasNamedOutput && !hasHiddenOutput))
     return devices;
-  const stream = await source.getUserMedia({ audio: true, video: false });
+  const stream = await source
+    .getUserMedia({ audio: true, video: false })
+    .catch((error: unknown) => {
+      // 远程会话可能只有输出没有麦克风；补全名称失败不应丢弃已枚举的输出。
+      if (error instanceof DOMException && error.name === "NotFoundError" && outputs.length > 0)
+        return undefined;
+      throw error;
+    });
+  if (!stream) return current() ? devices : undefined;
   // 授权只用于补全设备信息；立即关闭全部轨道，避免后续枚举迟迟不返回时占用麦克风。
   for (const track of stream.getTracks()) track.stop();
   if (!current()) return;
