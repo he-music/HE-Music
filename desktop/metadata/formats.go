@@ -132,6 +132,8 @@ func additionalHeaderKind(b [12]byte) string {
 		return "ogg"
 	case string(b[:4]) == "MAC ":
 		return "mac"
+	case string(b[:4]) == "FRM8":
+		return "dff"
 	case binary.BigEndian.Uint32(b[:4]) == 0x1a45dfa3:
 		return "webm"
 	default:
@@ -157,6 +159,8 @@ func hashFormatPayload(s payloadSource, h *formatPayloadHash) error {
 		return hashMACPayload(s, h)
 	case "webm":
 		return hashWebMPayload(s, h)
+	case "dff":
+		return hashDFFPayload(s, h)
 	case "adts":
 		return hashADTSPayload(s, h)
 	default:

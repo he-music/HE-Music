@@ -294,7 +294,7 @@ describe("LocalDownloadSession candidate persistence seam", () => {
     );
   });
 
-  it("accepts >32MiB progress, keeps polling beyond two minutes, and permits all eleven extensions", async () => {
+  it("accepts >32MiB progress, keeps polling beyond two minutes, and permits all supported extensions", async () => {
     vi.useFakeTimers();
     const { session, access } = setup([]);
     await session.restored;

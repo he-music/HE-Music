@@ -66,6 +66,7 @@ export const LOCAL_DOWNLOAD_FORMATS = Object.freeze([
   "aiff",
   "aif",
   "ape",
+  "dff",
 ]);
 
 export function validLocalDownloadFormat(format: string): boolean {

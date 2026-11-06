@@ -10,6 +10,7 @@ var localAudioExtensions = map[string]string{
 	".aac": "audio/aac", ".webm": "audio/webm", ".m4a": "audio/mp4",
 	".mp4": "audio/mp4", ".ogg": "audio/ogg", ".aiff": "audio/aiff",
 	".aif": "audio/aiff", ".ape": "audio/ape",
+	".dff": "audio/dff",
 }
 
 func supportedLocalAudioName(name string) bool {

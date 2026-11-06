@@ -2,7 +2,7 @@
 
 本包使用 `github.com/tommyo123/mtag` 固定提交
 `57fea0d75b4f88edcdee8ca75e9423d522023f86`。GitHub API 已核对 `v1.0.2` 指向该提交。
-本地业务开放 MP3、WAV、FLAC、AAC、WebM、M4A、MP4、OGG、AIFF、AIF、APE；适配层按实际容器读写，未知容器返回 `ErrUnsupportedContainer`。扫描和播放独立于标签解析，无法读取标签时仍可按文件名收录。
+本地业务开放 MP3、WAV、FLAC、AAC、WebM、M4A、MP4、OGG、AIFF、AIF、APE、DFF；适配层按实际容器读写，未知容器返回 `ErrUnsupportedContainer`。扫描和播放独立于标签解析，无法读取标签时仍可按文件名收录。
 包不打开路径、不负责授予文件权限，也不执行原件替换。
 
 ## 调用合同
@@ -24,6 +24,10 @@
 - 时长为秒，码率为 kbps（上游 bits/s 除以 1000），采样率为 Hz，位深为 bit/sample。
   0 表示未知或不适用；不由文件后缀推断无损。短 MP3 码率是上游估计，测试样本约
   139.594 kbps，不等于编码目标精确 128 kbps。
+- DFF 的标签使用 `ID3 ` 区块，兼容未压缩 DSD 与 DST 压缩音频。DST 时长取自
+  `FRTE` 帧数/帧率，DSD 时长按音频字节数、采样率和声道数计算；两者位深为 1。
+  完整性校验保护所有非 ID3 区块，检查 DST 帧边界和数量；带 `DSTI` 的文件还保护
+  音频位置，拒绝会移动音频却不更新绝对索引的标签重排。此校验不负责解码 DST。
 
 ## 原始音乐文件最终写回
 
@@ -42,7 +46,7 @@
 
 ## 实测范围与局限
 
-固定 Go 1.27.3、`GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0`，仅自生成短音频和副本：
+固定 Go 1.27.3、`GOTOOLCHAIN=local GOWORK=off CGO_ENABLED=0`，使用自生成短音频与临时副本；DFF 另验证了用户提供的真实 DST 样本副本：
 
 | 夹具                                   | 已验证                                                                                                                              |
 | -------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
@@ -52,6 +56,8 @@
 | WAV、AIFF/AIF、AAC、M4A/MP4、Ogg、WebM | 中文字段、歌词、封面增长/清除，ffprobe packet SHA256 保持；RF64、Ogg Opus 另有专项                                                  |
 | APE                                    | 合成 MAC 容器结构与负载校验；没有真实 APE 编码/解码夹具，不能据此声称实机播放通过                                                   |
 | 失败                                   | 调用前取消、畸形输入、副本 WriteAt 失败返回错误、原件未变                                                                           |
+
+DFF 另覆盖 DSD/DST 合成结构的标签增长/清空、多艺人、歌词和封面往返、坏帧拒绝，以及真实 DST 样本副本的完整下载和标签写入；写入前后音频负载保持。
 
 fixture 通过测试工具 ffmpeg 自生成，音频 packet 由独立 ffprobe 读取/hash；产品包不执行外部程序。
 字段往返主要由 mtag 重开验证，尚未用第二个标签库证明跨播放器多值互操作。
@@ -63,6 +69,9 @@ Windows 保存先同步 work/backup 文件，仍通过 pinned `os.Root.Rename` �
 
 本机测试需要 ffmpeg、ffprobe；缺少 ffmpeg 时夹具测试会 skip，不能据此声称格式验证通过。
 可设 `METADATA_FIXTURE_DIR` 为已有 scratch 目录，保留生成夹具及失败副本。
+
+可设 `HE_MUSIC_DFF_SAMPLE` 为本地 DFF 样本路径并运行
+`go test ./desktop -run TestNativeDFFSampleFullTransfer -count=1`，验证原样下载和写入标签的完整流程；测试只读样本，产出位于临时目录。
 
 ## 依赖集成
 

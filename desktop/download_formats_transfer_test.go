@@ -18,6 +18,23 @@ import (
 
 func nativeEncodedFixture(t *testing.T, suffix string) []byte {
 	t.Helper()
+	if suffix == "dff" {
+		chunk := func(kind string, data []byte) []byte {
+			out := make([]byte, 12+len(data)+(len(data)&1))
+			copy(out, kind)
+			binary.BigEndian.PutUint64(out[4:12], uint64(len(data)))
+			copy(out[12:], data)
+			return out
+		}
+		// Synthetic uncompressed DSD; the optional sample test covers real DST.
+		props := append([]byte("SND "), chunk("FS  ", []byte{0, 43, 17, 0})...)
+		props = append(props, chunk("CHNL", append([]byte{0, 2}, []byte("SLFTSRGT")...))...)
+		props = append(props, chunk("CMPR", []byte{'D', 'S', 'D', ' ', 0})...)
+		body := append([]byte("DSD "), chunk("FVER", []byte{1, 5, 0, 0})...)
+		body = append(body, chunk("PROP", props)...)
+		body = append(body, chunk("DSD ", bytes.Repeat([]byte{0x69, 0x96}, 32))...)
+		return chunk("FRM8", body)
+	}
 	if suffix == "ape" {
 		// Structural MAC fixture: opaque synthetic frame data, not a valid encoded
 		// Monkey's Audio recording or evidence of decoder compatibility.
@@ -75,66 +92,82 @@ func nativeEncodedFixture(t *testing.T, suffix string) []byte {
 	return b
 }
 
-func TestNativeElevenFormatsFullTransfer(t *testing.T) {
-	for _, suffix := range []string{"mp3", "flac", "wav", "aac", "webm", "m4a", "mp4", "ogg", "aiff", "aif", "ape"} {
+func TestNativeFormatsFullTransfer(t *testing.T) {
+	for _, suffix := range []string{"mp3", "flac", "wav", "aac", "webm", "m4a", "mp4", "ogg", "aiff", "aif", "ape", "dff"} {
 		t.Run(suffix, func(t *testing.T) {
-			data := nativeEncodedFixture(t, suffix)
-			var jpg bytes.Buffer
-			if err := jpeg.Encode(&jpg, image.NewRGBA(image.Rect(0, 0, 2, 2)), nil); err != nil {
+			testNativeFormatTransfer(t, suffix, nativeEncodedFixture(t, suffix))
+		})
+	}
+}
+
+func TestNativeDFFSampleFullTransfer(t *testing.T) {
+	sample := os.Getenv("HE_MUSIC_DFF_SAMPLE")
+	if sample == "" {
+		t.Skip("set HE_MUSIC_DFF_SAMPLE to validate a real DFF recording")
+	}
+	data, err := os.ReadFile(sample)
+	if err != nil {
+		t.Fatal(err)
+	}
+	testNativeFormatTransfer(t, "dff", data)
+}
+
+func testNativeFormatTransfer(t *testing.T, suffix string, data []byte) {
+	t.Helper()
+	var jpg bytes.Buffer
+	if err := jpeg.Encode(&jpg, image.NewRGBA(image.Rect(0, 0, 2, 2)), nil); err != nil {
+		t.Fatal(err)
+	}
+	for _, edit := range []bool{false, true} {
+		t.Run(map[bool]string{false: "preserve", true: "edit"}[edit], func(t *testing.T) {
+			a, ctx, epoch, c, token, dir := downloadFixture(t)
+			c.client.Transport = downloadRoundTripper(func(r *http.Request) (*http.Response, error) {
+				if r.URL.Host == "cover.invalid" {
+					return &http.Response{StatusCode: 200, ContentLength: -1, Header: http.Header{"Content-Type": []string{"image/jpeg"}}, Body: io.NopCloser(bytes.NewReader(jpg.Bytes()))}, nil
+				}
+				return downloadResponse(data, int64(len(data))), nil
+			})
+			req := downloadReq(t, token, "song."+suffix)
+			req.Options = &DownloadOptions{RelativeDirectory: "Artist/Album"}
+			if edit {
+				req.Options.WriteMetadata = true
+				req.Options.WriteLyrics = true
+				req.Options.WriteCover = true
+				req.Options.SaveSidecars = true
+				req.Options.Metadata = &DownloadMetadata{Title: "title", Album: "album", Artists: []string{"first", "second"}, Lyrics: "[00:00.00]lyrics", CoverURL: "https://cover.invalid/image"}
+			}
+			j := downloadStart(t, a, ctx, epoch, c, req)
+			downloadWait(t, j)
+			st, err := c.access(a.state, ctx, epoch, req.OperationID, false)
+			if err != nil {
 				t.Fatal(err)
 			}
-			for _, edit := range []bool{false, true} {
-				t.Run(map[bool]string{false: "preserve", true: "edit"}[edit], func(t *testing.T) {
-					a, ctx, epoch, c, token, dir := downloadFixture(t)
-					c.client.Transport = downloadRoundTripper(func(r *http.Request) (*http.Response, error) {
-						if r.URL.Host == "cover.invalid" {
-							return &http.Response{StatusCode: 200, ContentLength: -1, Header: http.Header{"Content-Type": []string{"image/jpeg"}}, Body: io.NopCloser(bytes.NewReader(jpg.Bytes()))}, nil
-						}
-						return downloadResponse(data, int64(len(data))), nil
-					})
-					req := downloadReq(t, token, "song."+suffix)
-					req.Options = &DownloadOptions{RelativeDirectory: "Artist/Album"}
-					if edit {
-						req.Options.WriteMetadata = true
-						req.Options.WriteLyrics = true
-						req.Options.WriteCover = true
-						req.Options.SaveSidecars = true
-						req.Options.Metadata = &DownloadMetadata{Title: "title", Album: "album", Artists: []string{"first", "second"}, Lyrics: "[00:00.00]lyrics", CoverURL: "https://cover.invalid/image"}
-					}
-					j := downloadStart(t, a, ctx, epoch, c, req)
-					downloadWait(t, j)
-					st, err := c.access(a.state, ctx, epoch, req.OperationID, false)
-					if err != nil {
-						t.Fatal(err)
-					}
-					target := filepath.Join(dir, "Artist/Album", req.Filename)
-					if !st.Committed {
-						if !edit {
-							t.Fatalf("preserve rejected: %+v", st)
-						}
-						if st.Code != "unsupported" && st.Code != "payload_rejected" {
-							t.Fatalf("unexpected edit failure: %+v", st)
-						}
-						if _, err := os.Stat(target); !os.IsNotExist(err) {
-							t.Fatalf("rejected edit published: %v", err)
-						}
-						if suffix != "webm" && suffix != "m4a" && suffix != "mp4" && suffix != "ape" {
-							t.Fatalf("previously writable fixture rejected: %+v", st)
-						}
-						assertRejectedNativeRewrite(t, a, c, j, req, target)
-						t.Logf("explicit unsupported layout: %s %s; existing target preserved", suffix, st.Code)
-						return
-					}
-					if st.Code != "ok" || st.Ref == nil {
-						t.Fatalf("%+v", st)
-					}
-					after, err := os.ReadFile(target)
-					if err != nil {
-						t.Fatal(err)
-					}
-					assertNativeTransferPayload(t, j, data, after, jpg.Bytes(), edit)
-				})
+			target := filepath.Join(dir, "Artist/Album", req.Filename)
+			if !st.Committed {
+				if !edit {
+					t.Fatalf("preserve rejected: %+v", st)
+				}
+				if st.Code != "unsupported" && st.Code != "payload_rejected" {
+					t.Fatalf("unexpected edit failure: %+v", st)
+				}
+				if _, err := os.Stat(target); !os.IsNotExist(err) {
+					t.Fatalf("rejected edit published: %v", err)
+				}
+				if suffix != "webm" && suffix != "m4a" && suffix != "mp4" && suffix != "ape" {
+					t.Fatalf("previously writable fixture rejected: %+v", st)
+				}
+				assertRejectedNativeRewrite(t, a, c, j, req, target)
+				t.Logf("explicit unsupported layout: %s %s; existing target preserved", suffix, st.Code)
+				return
 			}
+			if st.Code != "ok" || st.Ref == nil {
+				t.Fatalf("%+v", st)
+			}
+			after, err := os.ReadFile(target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertNativeTransferPayload(t, j, data, after, jpg.Bytes(), edit)
 		})
 	}
 }

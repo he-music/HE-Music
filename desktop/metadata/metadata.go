@@ -98,6 +98,14 @@ func parse(src io.ReaderAt, size int64, pictures bool) (Info, error) {
 		SampleRateHz: audio.SampleRate, Channels: audio.Channels,
 		BitsPerSample: audio.BitDepth, Codec: audio.Codec,
 	}
+	if info.Container == "dff" {
+		if layout, err := inspectDFF(payloadSource{ctx: context.Background(), r: src, size: size}); err == nil {
+			info.Codec = layout.codec
+			info.BitsPerSample = 1
+			info.DurationSeconds = layout.duration
+			info.BitrateKbps = float64(layout.mediaSize) * 8 / layout.duration / 1000
+		}
+	}
 	if pictures {
 		for _, p := range f.Images() {
 			info.Pictures = append(info.Pictures, Picture{p.MIME, byte(p.Type), p.Description, p.Data})

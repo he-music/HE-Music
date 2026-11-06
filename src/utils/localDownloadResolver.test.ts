@@ -86,6 +86,7 @@ describe("mygo local download resolver candidate", () => {
     ["kuwo", "mflac", "flac"],
     ["soda", "aac", "m4a"],
     ["soda", "flac", "m4a"],
+    ["qq", "dff", "dff"],
   ])("保留 %s 的请求格式并验证解密后格式", async (platform, requested, output) => {
     const request = vi.fn(async () => ({
       url: "http://127.0.0.1:49234/secret/__audio?audio_params=private",

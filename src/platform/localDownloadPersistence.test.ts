@@ -92,8 +92,9 @@ describe("localDownloadPersistence", () => {
     expect(await createLocalDownloadPersistence(storage(written)).load()).toEqual([snapshot()]);
   });
 
-  it("supports all eleven formats and safe byte counts above 32 MiB", () => {
-    expect(LOCAL_DOWNLOAD_FORMATS).toHaveLength(11);
+  it("supports DFF and safe byte counts above 32 MiB", () => {
+    expect(LOCAL_DOWNLOAD_FORMATS).toContain("dff");
+    expect(LOCAL_DOWNLOAD_FORMATS).toHaveLength(12);
     for (const format of LOCAL_DOWNLOAD_FORMATS) {
       expect(validLocalDownloadFormat(format.toUpperCase())).toBe(true);
       expect(
