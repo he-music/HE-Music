@@ -46,7 +46,7 @@ export const sleep = (ms: number): Promise<void> => {
 export const renderOption = ({ node, option }: { node: VNode; option: SelectOption }) =>
   h(
     NTooltip,
-    { placement: "left" },
+    { placement: "left", to: true },
     {
       trigger: () => node,
       default: () => option.label,
