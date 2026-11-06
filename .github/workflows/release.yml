@@ -92,9 +92,9 @@ jobs:
           ffmpeg -version
       - name: Exercise Windows production gateway
         if: runner.os == 'Windows'
-        shell: bash
+        shell: pwsh
         run: |
-          export MPV_INTEGRATION_LIBRARY="$(cygpath -m "$PWD/resources/${{ matrix.id }}/mpv/libmpv-2.dll")"
+          $env:MPV_INTEGRATION_LIBRARY = (Resolve-Path "resources/${{ matrix.id }}/mpv/libmpv-2.dll").Path
           go test ./desktop -run 'TestMpvBundled' -count=1 -v
       - name: Archive resources with permissions
         shell: bash
