@@ -199,6 +199,63 @@ func TestMpvLoadPauseSeekVolumeRateAndNaturalEOF(t *testing.T) {
 	}
 }
 
+func TestMpvPlayConfirmsPlayingWithoutPlaybackRestart(t *testing.T) {
+	fixture := newMpvFixture(t)
+	p, ctx := fixture.player, t.Context()
+	loaded, err := p.Load(ctx, 1, MpvLoadRequest{Format: "wav"})
+	requireTestNoError(t, err)
+	fixture.drain()
+
+	// 隔离库仅在 seek 时发送 playback-restart，普通播放和恢复均不发送。
+	events := make(chan MpvEvent, 64)
+	s := &p.session
+	s.emit = func(event MpvEvent) { events <- event }
+	run, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	t.Cleanup(func() { cancel(); <-done })
+	go func() {
+		defer close(done)
+		s.poll(run)
+	}()
+
+	waitEvent := func(kind MpvEventType) MpvEvent {
+		t.Helper()
+		timer := time.NewTimer(2 * time.Second)
+		defer timer.Stop()
+		for {
+			select {
+			case event := <-events:
+				if event.Type == kind {
+					return event
+				}
+				if event.Type != MpvEventTimeUpdate {
+					t.Fatalf("等待 %s 时收到意外事件: %+v", kind, event)
+				}
+			case <-timer.C:
+				t.Fatalf("没有 playback-restart 时未收到 %s", kind)
+			}
+		}
+	}
+
+	for range 3 {
+		requireTestNoError(t, p.Play(ctx, 1, loaded.Session))
+		waitEvent(MpvEventPlay)
+		playing := waitEvent(MpvEventPlaying)
+		if playing.Snapshot.State != MpvStatePlaying {
+			t.Fatalf("playing 快照状态错误: %+v", playing)
+		}
+		// 后续轮询不应重复发送 playing。
+		waitEvent(MpvEventTimeUpdate)
+		waitEvent(MpvEventTimeUpdate)
+		requireTestNoError(t, p.Pause(ctx, 1, loaded.Session))
+		waitEvent(MpvEventPause)
+		paused := waitEvent(MpvEventTimeUpdate)
+		if paused.Snapshot.State != MpvStatePaused {
+			t.Fatalf("暂停后状态错误: %+v", paused)
+		}
+	}
+}
+
 func TestMpvLoadCancellationAndLatestIntent(t *testing.T) {
 	fixture := newMpvFixture(t)
 	p, ctx := fixture.player, t.Context()

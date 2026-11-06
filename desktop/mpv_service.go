@@ -70,6 +70,7 @@ type mpvSession struct {
 	loaded        bool
 	seeking       bool
 	intent        bool
+	awaitingPlay  bool
 	start         float64
 	emit          func(MpvEvent)
 	queue         *mpvEventQueue
@@ -635,18 +636,29 @@ func (s *mpvSession) poll(ctx context.Context) {
 				s.snapshot.Duration = value
 			}
 			if s.snapshot.State != "error" && s.snapshot.State != "ended" {
-				paused, _ := s.api.flag(s.handle, "pause")
-				buffering, _ := s.api.flag(s.handle, "paused-for-cache")
-				s.snapshot.State = "playing"
-				if paused {
-					s.snapshot.State = "paused"
-				} else if buffering {
-					s.snapshot.State = "buffering"
-				}
+				s.syncPlaybackStateLocked()
 				s.emitLocked("timeupdate")
 			}
 		}
 		s.mu.Unlock()
+	}
+}
+
+func (s *mpvSession) syncPlaybackStateLocked() {
+	paused, pauseErr := s.api.flag(s.handle, "pause")
+	buffering, cacheErr := s.api.flag(s.handle, "paused-for-cache")
+	if pauseErr != nil || cacheErr != nil {
+		return
+	}
+	s.snapshot.State = MpvStatePlaying
+	if paused {
+		s.snapshot.State = MpvStatePaused
+	} else if buffering {
+		s.snapshot.State = MpvStateBuffering
+	}
+	// 恢复播放不一定触发 playback-restart，由实际状态补齐播放确认。
+	if s.awaitingPlay && s.snapshot.State == MpvStatePlaying {
+		s.emitLocked(MpvEventPlaying)
 	}
 }
 
@@ -745,6 +757,12 @@ func (s *mpvSession) fileEndedLocked(end mpvNativeEnd) {
 }
 
 func (s *mpvSession) emitLocked(kind MpvEventType) {
+	switch kind {
+	case MpvEventPlay:
+		s.awaitingPlay = true
+	case MpvEventPlaying, MpvEventPause, MpvEventLoadStart, MpvEventEmptied, MpvEventEnded, MpvEventError:
+		s.awaitingPlay = false
+	}
 	s.snapshot.Sequence++
 	if s.emit != nil {
 		s.emit(MpvEvent{Type: kind, Snapshot: s.snapshot})
