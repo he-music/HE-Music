@@ -151,7 +151,7 @@ func TestMpvBundledProductionGatewayContainers(t *testing.T) {
 		python, err = exec.LookPath("python")
 	}
 	requireTestNoError(t, err)
-	generate := exec.CommandContext(t.Context(), python, "-c", "import runpy,sys; from pathlib import Path; runpy.run_path('../scripts/mpv/smoke.py')['samples'](Path(sys.argv[1]))", directory)
+	generate := exec.CommandContext(t.Context(), python, "-c", "import runpy,sys; from pathlib import Path; runpy.run_path('../scripts/mpv/audio_fixtures.py')['samples'](Path(sys.argv[1]))", directory)
 	if output, err := generate.CombinedOutput(); err != nil {
 		t.Fatalf("生成隔离样本: %v\n%s", err, output)
 	}

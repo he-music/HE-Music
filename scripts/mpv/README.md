@@ -60,8 +60,9 @@ resources/<GOOS>-<GOARCH>/licenses/mpv/ 必要第三方许可和同版本源码�
 `--cache` 可指定其他缓存根目录，仍按发行版本隔离。安装临时目录位于资源所在文件系统，
 允许缓存放在另一磁盘。逗号目标按顺序准备，每个目标独立回滚。
 
-`sources.lock.json`、`prepare.py` 和 `WINDOWS_SOURCES.md` 保留此前源码构建与调查记录；
-正常入口使用 `download.py`，生产者配方在独立分发仓库维护。
+本目录只保留消费端工具：`download.py` 下载和校验固定产物，`resources.mjs` 接入 dev/build，
+`audit_linux.py` 检查最终 Linux 宿主及运行库的 ELF 需求，`audio_fixtures.py` 为 Go 网关测试生成合成音频。
+源码锁、源码构建、上游资产调查与库级 smoke 验证统一在独立的 mpv-bundles 仓库维护。
 
 ## 隔离验证
 

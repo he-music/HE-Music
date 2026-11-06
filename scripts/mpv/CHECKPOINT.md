@@ -11,6 +11,7 @@
 - 新产物：`build/mygo/mpv-slim-v2/darwin-universal/HE-Music.app`，68,764,934 字节（65.58 MiB），比 v1 的 116,575,985 字节减少 47,811,051 字节（约 41%）。未采用 UPX；现有 Go 构建已使用 `-s -w`、`-trimpath`。
 - 双架构宿主与 ad hoc 签名完成，`codesign --verify --deep --strict` 通过。包内纯库目录与许可证逐文件校验通过；生产网关 WAV/DSF/DFF/WebM Go race 和私有 DST 压缩 DFF 控制回归通过，均为 `ao=null`，未启动用户 App。
 - 62 Python + 3 Node 资源测试、compileall、Prettier、actionlint、差异检查通过。无缓存离线 check 和复用前后库/许可文件的 inode、mtime、大小完全不变。增加了安装选择、许可分离、完整锁校验与失败回滚回归；独立审查指出的 v1/v2 CI 许可归档兼容问题已修复并复核。
+- 消费脚本清理后，移除旧源码构建、源码锁、Windows 历史配置和重复库级 smoke runner；Go 网关合成样本保留为 `audio_fixtures.py`。Linux 最终包审计复用下载器校验纯库目录与许可证，仍检查宿主和库的 ELF 需求。当前资源回归为 45 Python + 3 Node，通过；减少的是已由产物仓库负责的旧构建测试。
 
 以下保留 v1 构建与来源材料的历史证据。
 
@@ -33,14 +34,14 @@
 ## 材料与平台闭包
 
 - Windows 两架构各有 261 项最终链接器实际读取输入，逐项核对原文件字节、pacman owner 和固定版本。`--reproduce` 清单与 map 的 SHA256 绑定随包保存；不以匿名 archive member 名推断归属，也不声称每个成员都被选入最终代码。
-- 实际非系统运行 DLL 为 `libiconv-2.dll`。固定 libiconv、完整 MinGW 源树和 MSYS2 配方/补丁原始归档均核过大小/SHA256；工具链许可证、版本和重建指引随包。两架构状态均为 `project-fixed-sources-and-windows-runtime-materials`，详见 [Windows 来源记录](WINDOWS_SOURCES.md)。
+- 实际非系统运行 DLL 为 `libiconv-2.dll`。固定 libiconv、完整 MinGW 源树和 MSYS2 配方/补丁原始归档均核过大小/SHA256；工具链许可证、版本和重建指引随包。两架构状态均为 `project-fixed-sources-and-windows-runtime-materials`，详见 [产物仓库的许可材料说明](https://github.com/he-music/mpv-bundles/blob/main/LICENSES.md)。
 - macOS 实际 Mach-O 双架构、系统/相对依赖均核对。不同宿主的 `otool` 可能重复列出两个 slice；按依赖集合对照一致。Linux 原生容器审计 ELF、依赖、RPATH/RUNPATH 和 GLIBC 2.35 上限；这不等于整个 HE-Music 宿主的最低系统声明。
 - Windows checkout 的 CRLF 曾造成跨平台配方摘要不同，已通过 `.gitattributes` 固定 LF，并在真实 Windows 产物中核对摘要与脚本字节一致。
 
 ## HE-Music 消费验证
 
 - `bundles.lock.json` 是实际发布清单，包含归档大小/SHA256、包内清单原始字节 SHA256、库名和固定 URL。公共 `manifest.json` 与本地锁逐字节相同。
-- `resources.mjs`、`mpv:prepare`/`mpv:check`、dev/build 和 Release CI 使用 `download.py`。常规消费无需源码构建工具；不向资源子进程传发布私钥，不注入旧构建工具 PATH。历史源码工具保留作历史资料。
+- `resources.mjs`、`mpv:prepare`/`mpv:check`、dev/build 和 Release CI 使用 `download.py`。常规消费无需源码构建工具；不向资源子进程传发布私钥，不注入旧构建工具 PATH。源码构建与库级验证由独立产物仓库维护。
 - 通过公开 Release 地址实际下载五目标，全部校验归档、内部文件清单和原生文件头/架构；没有在本机执行 Windows/Linux 库。
 - macOS universal 已从正式缓存安装。无归档缓存的离线 `--check` 通过；离线复用前后全部 staging 文件/目录的 inode、mtime、大小不变，未创建测试缓存目录。
 - Node 24.22.1 下 51 Python + 3 Node 资源测试、24 Release 测试、8 vendor 测试通过；指定 ESLint、Prettier 和 workflow actionlint 通过。消费接线的独立只读审查无问题。
