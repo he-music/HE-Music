@@ -130,7 +130,16 @@
           @dblclick.stop
         />
         <!-- 移动端菜单 -->
-        <SvgIcon v-else name="More" :size="20" @click.stop="emit('show-menu', $event)" />
+        <n-button
+          v-else
+          class="mobile-menu"
+          circle
+          quaternary
+          :aria-label="t('common.more')"
+          @click.stop="emit('show-menu', $event)"
+        >
+          <template #icon><SvgIcon name="More" :size="20" /></template>
+        </n-button>
       </div>
       <!--      &lt;!&ndash; 更新日期 &ndash;&gt;-->
       <!--      <n-text v-if="song.type === 'radio'" class="meta date" depth="3">-->
@@ -448,6 +457,10 @@ const quality = computed(() => getQuality(song.value));
     align-items: center;
     justify-content: center;
     width: 40px;
+    .mobile-menu {
+      width: 44px;
+      height: 44px;
+    }
     .n-icon {
       color: var(--primary-hex);
       transition: transform 0.3s;

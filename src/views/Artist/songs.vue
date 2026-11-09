@@ -9,6 +9,8 @@
     <SongList
       :data="songData"
       :loading="loading"
+      :height="isSmallScreen ? 'auto' : undefined"
+      :single-click-action="isSmallScreen"
       :load-more="hasMore && !failed"
       :show-footer="!failed"
       @reach-bottom="loadMore"
@@ -24,10 +26,12 @@ import { usePlayer } from "@/utils/player";
 import SongList from "@/components/List/SongList.vue";
 import AsyncContent from "@/components/Page/AsyncContent.vue";
 import { usePagedRequest } from "@/composables/usePagedRequest";
+import { useMobile } from "@/composables/useMobile";
 import type { SongInfo } from "@/types/main.hemusic";
 
 const props = defineProps<{ id: string; platform: string }>();
 const emit = defineEmits<{ scroll: [e: Event] }>();
+const { isSmallScreen } = useMobile();
 const player = usePlayer();
 const {
   data: songData,

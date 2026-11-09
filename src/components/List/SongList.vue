@@ -17,8 +17,11 @@
           class="virtual-list-wrapper"
         >
           <!-- 悬浮顶栏 -->
-          <div v-if="showHeader" class="list-header song-card sticky-header">
-            <n-text class="num">#</n-text>
+          <div
+            v-if="showHeader && (!isSmallScreen || !disabledSort)"
+            class="list-header song-card sticky-header"
+          >
+            <n-text v-if="!isSmallScreen" class="num">#</n-text>
             <n-popover
               v-if="!disabledSort"
               trigger="click"
@@ -28,8 +31,19 @@
             >
               <template #trigger>
                 <div class="title has-sort">
-                  <n-text> {{ t("common.title") }}</n-text>
-                  <n-text v-if="statusStore.listSortField !== 'default'" class="sort" depth="3">
+                  <SvgIcon v-if="isSmallScreen" name="Sort" :size="16" />
+                  <n-text>
+                    {{
+                      isSmallScreen
+                        ? t(`sort.field.${statusStore.listSortField}`)
+                        : t("common.title")
+                    }}
+                  </n-text>
+                  <n-text
+                    v-if="!isSmallScreen && statusStore.listSortField !== 'default'"
+                    class="sort"
+                    depth="3"
+                  >
                     {{ t(`sort.field.${statusStore.listSortField}`) }}
                   </n-text>
                 </div>
@@ -71,7 +85,7 @@
             <n-text v-if="!hiddenAlbum && !isSmallScreen" class="album">
               {{ t("common.album") }}
             </n-text>
-            <n-text class="actions">
+            <n-text v-if="!isSmallScreen" class="actions">
               {{ t("common.operation") }}
             </n-text>
             <n-text v-if="!isSmallScreen" class="meta">
@@ -87,7 +101,13 @@
             :item-height="90"
             :item-fixed="false"
             :items="virtualListItems"
-            :height="height === 'auto' ? 'auto' : showHeader ? 'calc(100% - 40px)' : '100%'"
+            :height="
+              height === 'auto'
+                ? 'auto'
+                : showHeader && (!isSmallScreen || !disabledSort)
+                  ? 'calc(100% - 40px)'
+                  : '100%'
+            "
             @scroll="onScroll"
           >
             <template #default="{ item, index }">
@@ -138,7 +158,11 @@
         <Transition name="fade" mode="out-in">
           <n-float-button-group v-if="floatToolShow" class="list-menu">
             <Transition name="fade" mode="out-in">
-              <n-float-button v-if="scrollTop > 100" width="42" @click="scrollToTop">
+              <n-float-button
+                v-if="height !== 'auto' && scrollTop > 100"
+                width="42"
+                @click="scrollToTop"
+              >
                 <SvgIcon :size="22" name="Up" />
               </n-float-button>
             </Transition>
@@ -463,7 +487,7 @@ onBeforeRouteLeave(() => {
 onActivated(() => {
   floatToolShow.value = true;
   if (props.height === "auto") stopCalcHeight();
-  if (scrollIndex.value > 0) {
+  if (props.height !== "auto" && scrollIndex.value > 0) {
     nextTick(() => {
       listRef.value?.scrollToIndex(scrollIndex.value);
     });
@@ -521,6 +545,9 @@ onBeforeUnmount(() => {
       align-items: center;
       padding: 4px 20px 4px 0;
       cursor: pointer;
+      .n-icon {
+        margin-right: 6px;
+      }
       .sort {
         margin-left: 6px;
         &::after {
@@ -580,6 +607,8 @@ onBeforeUnmount(() => {
       opacity 0.3s;
     .sticky-header {
       position: sticky;
+      background: var(--sticky-surface-background, rgb(var(--background)));
+      backdrop-filter: var(--sticky-surface-filter, none);
       top: 0;
       z-index: 10;
     }
@@ -617,6 +646,9 @@ onBeforeUnmount(() => {
   position: fixed;
   right: 40px;
   bottom: 120px;
+  @media (max-width: 767.98px) {
+    right: 16px;
+  }
   .n-float-button {
     height: 42px;
     border: 1px solid rgba(var(--primary), 0.28);

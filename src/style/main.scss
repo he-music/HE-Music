@@ -27,6 +27,8 @@
     body {
       --background-hex: rgba(var(--background), 0.1) !important;
       --surface-container-hex: rgba(var(--surface-container), 0.2) !important;
+      --sticky-surface-background: rgba(var(--background), 0.2);
+      --sticky-surface-filter: blur(20px);
       --n-toggle-bar-color: rgba(var(--background), 0.2) !important;
       --n-toggle-bar-color-hover: rgba(var(--background), 0.4) !important;
     }

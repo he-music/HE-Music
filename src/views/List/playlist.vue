@@ -1,13 +1,72 @@
 <!-- 歌单列表 -->
 <template>
-  <div :class="['playlist', { small: listScrolling }]">
+  <div
+    :ref="detailPageRef"
+    :class="['playlist', { small: listScrolling, 'mobile-detail': isSmallScreen }]"
+  >
     <AsyncContent
       :failed="detailFailed"
       :loading="loading"
       @retry="getPlaylistDetail(playlistId, platform)"
     >
       <Transition name="fade" mode="out-in">
-        <div v-if="playlistDetailData" class="detail">
+        <MobileMusicDetailHeader
+          v-if="isSmallScreen && playlistDetailData"
+          :key="`${platform}:${playlistId}`"
+          v-model:search="searchValue"
+          :title="playlistDetailData.name || t('common.unknown_playlist')"
+          :cover="playlistDetailData.cover"
+          :subtitle="playlistDetailData.creator || t('common.unknown_user')"
+          :description="playlistDetailData.description"
+          :searchable="!!playlistData.length"
+          :loading="songLoading"
+          @play="playAllSongs"
+        >
+          <template #meta>
+            <n-text depth="3">
+              {{ t("common.songs") }} · {{ playlistDetailData.song_count || 0 }}
+            </n-text>
+            <n-text v-if="playlistDetailData.play_count" depth="3">
+              <SvgIcon name="Play" :size="12" />
+              {{ n(Number(playlistDetailData.play_count), "number") }}
+            </n-text>
+          </template>
+          <template v-if="playlistDetailData.categories?.length" #tags>
+            <n-button
+              v-for="category in playlistDetailData.categories"
+              :key="`${category.platform}-${category.id}`"
+              size="small"
+              round
+              secondary
+              @click="
+                router.push({
+                  name: 'playlist-square',
+                  query: { platform: category.platform, category_id: category.id },
+                })
+              "
+            >
+              {{ category.name }}
+            </n-button>
+          </template>
+          <template #actions>
+            <n-button
+              circle
+              secondary
+              :aria-label="isLikePlaylist ? t('common.cancel_collect') : t('common.collect')"
+              @click="toLikePlaylist(playlistDetailData, !isLikePlaylist)"
+            >
+              <template #icon>
+                <SvgIcon :name="isLikePlaylist ? 'Favorite' : 'FavoriteBorder'" />
+              </template>
+            </n-button>
+            <n-dropdown :options="moreOptions" trigger="click" placement="bottom-end">
+              <n-button circle secondary :aria-label="t('common.more')">
+                <template #icon><SvgIcon name="More" /></template>
+              </n-button>
+            </n-dropdown>
+          </template>
+        </MobileMusicDetailHeader>
+        <div v-else-if="playlistDetailData" class="detail">
           <div class="cover">
             <n-image
               :src="gatewayProxyUrl(playlistDetailData.cover || '')"
@@ -187,6 +246,7 @@
           :data="playlistDataShow"
           :loading="songLoading"
           :height="songListHeight"
+          :single-click-action="isSmallScreen"
           :disabled-sort="songHasMore"
           :load-more="songHasMore && !songFailed"
           :show-footer="!songFailed"
@@ -218,6 +278,8 @@
 <script setup lang="ts">
 import { gatewayProxyUrl } from "@/platform/gateway";
 import AsyncContent from "@/components/Page/AsyncContent.vue";
+import MobileMusicDetailHeader from "@/components/Page/MobileMusicDetailHeader.vue";
+import { useMusicDetailLayout } from "@/composables/useMusicDetailLayout";
 import type { DropdownOption, MessageReactive } from "naive-ui";
 import { playlistDetail, playlistSongs } from "@/api/playlist";
 import { copyData, coverLoaded, getShareUrl, renderIcon } from "@/utils/helper";
@@ -236,6 +298,7 @@ import { FeatureSupportFlag } from "@/api/platform";
 import { useI18n } from "vue-i18n";
 
 const { t, n } = useI18n();
+const { isSmallScreen, detailPageRef } = useMusicDetailLayout();
 
 const router = useRouter();
 const player = usePlayer();
@@ -278,7 +341,8 @@ const playlistDataShow = computed(() =>
 );
 
 // 列表高度
-const songListHeight = computed(() => {
+const songListHeight = computed<number | "auto">(() => {
+  if (isSmallScreen.value) return "auto";
   return statusStore.mainContentHeight - (listScrolling.value ? 120 : 240);
 });
 
@@ -402,6 +466,7 @@ const handleSongs = async (id: string, platform: string) => {
 
 // 列表滚动
 const listScroll = (e: Event) => {
+  if (isSmallScreen.value) return;
   // 滚动高度
   const scrollTop = (e.target as HTMLElement).scrollTop;
   listScrolling.value = scrollTop > 10;
@@ -485,7 +550,7 @@ onMounted(() => getPlaylistDetail(playlistId.value, platform.value));
 </script>
 
 <style lang="scss" scoped>
-.playlist {
+.playlist:not(.mobile-detail) {
   display: flex;
   flex-direction: column;
   .detail {

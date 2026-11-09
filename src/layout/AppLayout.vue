@@ -109,7 +109,7 @@
             </Transition>
           </RouterView>
           <!-- 回顶 -->
-          <n-back-top :right="40" :bottom="120">
+          <n-back-top :right="isSmallScreen ? 16 : 40" :bottom="isSmallScreen ? 176 : 120">
             <SvgIcon :size="22" name="Up" />
           </n-back-top>
         </n-layout>
@@ -139,7 +139,7 @@ const statusStore = useStatusStore();
 const settingStore = useSettingStore();
 const dataStore = useDataStore();
 
-const { isDesktop, isMobile } = useMobile();
+const { isDesktop, isMobile, isSmallScreen } = useMobile();
 
 // 主内容
 const contentRef = ref<HTMLElement | null>(null);
@@ -228,6 +228,10 @@ onMounted(() => {
     .router-view {
       position: relative;
       height: 100%;
+      &.mobile-detail {
+        height: auto;
+        min-height: 100%;
+      }
       &.n-result {
         display: flex;
         flex-direction: column;

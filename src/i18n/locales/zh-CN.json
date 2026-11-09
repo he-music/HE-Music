@@ -151,6 +151,7 @@
     "pip": "画中画",
     "platform": "平台",
     "play": "播放",
+    "play_all": "播放全部",
     "add_to_favorites": "添加到收藏",
     "remove_from_favorites": "从收藏中移除",
     "play_mode_repeat": "列表循环",

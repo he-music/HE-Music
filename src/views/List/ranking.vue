@@ -1,14 +1,43 @@
 <!-- 歌单列表 -->
 <template>
   <AsyncContent
-    :class="['toplist', { small: listScrolling }]"
+    :ref="detailPageRef"
+    :class="['toplist', { small: listScrolling, 'mobile-detail': isSmallScreen }]"
     :failed="failed"
     :loading="songLoading"
     :has-data="!!playlistDetailData"
     @retry="handleOnlinePlaylist(playlistId, platform)"
   >
     <Transition name="fade" mode="out-in">
-      <div v-if="playlistDetailData" class="detail">
+      <MobileMusicDetailHeader
+        v-if="isSmallScreen && playlistDetailData"
+        :key="`${platform}:${playlistId}`"
+        v-model:search="searchValue"
+        :title="playlistDetailData.name || t('common.unknown_playlist')"
+        :cover="playlistDetailData.cover"
+        :description="playlistDetailData.description"
+        :searchable="!!playlistData.length"
+        :loading="loading"
+        @play="playAllSongs"
+      >
+        <template #meta>
+          <n-text depth="3">
+            {{ t("common.songs") }} · {{ playlistDetailData.total_count || 0 }}
+          </n-text>
+          <n-text v-if="playlistDetailData.play_count" depth="3">
+            <SvgIcon name="Play" :size="12" />
+            {{ n(Number(playlistDetailData.play_count), "number") }}
+          </n-text>
+        </template>
+        <template #actions>
+          <n-dropdown :options="moreOptions" trigger="click" placement="bottom-end">
+            <n-button circle secondary :aria-label="t('common.more')">
+              <template #icon><SvgIcon name="More" /></template>
+            </n-button>
+          </n-dropdown>
+        </template>
+      </MobileMusicDetailHeader>
+      <div v-else-if="playlistDetailData" class="detail">
         <div class="cover">
           <n-image
             :src="gatewayProxyUrl(playlistDetailData.cover || '')"
@@ -150,6 +179,7 @@
         :data="playlistDataShow"
         :loading="songLoading"
         :height="songListHeight"
+        :single-click-action="isSmallScreen"
         :load-more="songHasMore && !failed"
         :show-footer="!failed"
         disabled-sort
@@ -180,6 +210,8 @@ import { useSongSearch } from "@/composables/useSongSearch";
 import { renderToolbar } from "@/utils/meta";
 import { debounce } from "lodash-es";
 import AsyncContent from "@/components/Page/AsyncContent.vue";
+import MobileMusicDetailHeader from "@/components/Page/MobileMusicDetailHeader.vue";
+import { useMusicDetailLayout } from "@/composables/useMusicDetailLayout";
 import { useStatusStore } from "@/stores";
 import { openBatchList } from "@/utils/modal";
 import { usePlayer } from "@/utils/player";
@@ -188,6 +220,7 @@ import { computed } from "vue";
 import SongList from "@/components/List/SongList.vue";
 import { useI18n } from "vue-i18n";
 const { t, n } = useI18n();
+const { isSmallScreen, detailPageRef } = useMusicDetailLayout();
 
 const router = useRouter();
 const player = usePlayer();
@@ -229,7 +262,8 @@ const playlistDataShow = computed(() =>
 );
 
 // 列表高度
-const songListHeight = computed(() => {
+const songListHeight = computed<number | "auto">(() => {
+  if (isSmallScreen.value) return "auto";
   return statusStore.mainContentHeight - (listScrolling.value ? 120 : 240);
 });
 
@@ -304,6 +338,7 @@ const handleOnlinePlaylist = async (id: string, platform: string) => {
 
 // 列表滚动
 const listScroll = (e: Event) => {
+  if (isSmallScreen.value) return;
   // 滚动高度
   const scrollTop = (e.target as HTMLElement).scrollTop;
   listScrolling.value = scrollTop > 10;
@@ -379,7 +414,7 @@ onMounted(() => getTopDetail(playlistId.value, platform.value));
 </script>
 
 <style lang="scss" scoped>
-.toplist {
+.toplist:not(.mobile-detail) {
   display: flex;
   flex-direction: column;
   .detail {

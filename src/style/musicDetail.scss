@@ -1,0 +1,77 @@
+// 移动端详情页与外层内容区共用滚动容器，列表继续使用虚拟渲染。
+@media (max-width: 767.98px) {
+  .mobile-detail {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    > .async-content {
+      display: contents;
+    }
+    > .detail,
+    > .async-content > .detail {
+      display: grid;
+      grid-template-columns: 104px minmax(0, 1fr);
+      gap: 14px;
+      padding: 12px 0 16px;
+      .cover {
+        width: 104px;
+        height: 104px;
+        border-radius: 12px;
+      }
+    }
+    .song-list {
+      flex-shrink: 0;
+    }
+    .song-list .sticky-header {
+      position: relative;
+      z-index: 0;
+    }
+    &.artist {
+      .tabs {
+        position: sticky;
+        top: var(--mobile-detail-toolbar-height, 60px);
+        z-index: 11;
+        padding: 8px 0;
+        background: var(--sticky-surface-background, rgb(var(--background)));
+        backdrop-filter: var(--sticky-surface-filter, none);
+      }
+      > .router-view {
+        height: auto;
+        overflow: visible;
+      }
+    }
+    .song-list .song-card .song-content {
+      padding: 8px;
+      border-color: transparent;
+      box-shadow: none;
+      .num {
+        display: none;
+      }
+      .title {
+        padding-right: 4px;
+        .cover {
+          width: 48px;
+          height: 48px;
+          min-width: 48px;
+          margin-right: 10px;
+        }
+      }
+      .actions {
+        width: 44px;
+        min-height: 44px;
+      }
+      &.play {
+        border-color: rgba(var(--primary), 0.45);
+      }
+    }
+    &.toplist .song-list .song-card .song-content .num {
+      display: flex;
+      width: 24px;
+      min-width: 24px;
+      margin-right: 8px;
+    }
+    .song-list .virtual-item .song-card {
+      padding-bottom: 4px;
+    }
+  }
+}

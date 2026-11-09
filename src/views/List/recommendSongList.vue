@@ -1,5 +1,5 @@
 <template>
-  <div class="recommend-song-list">
+  <div :ref="detailPageRef" class="recommend-song-list" :class="{ 'mobile-detail': isSmallScreen }">
     <n-result
       v-if="loadError"
       status="error"
@@ -14,7 +14,34 @@
     </n-result>
 
     <template v-else-if="info">
-      <div class="detail">
+      <MobileMusicDetailHeader
+        v-if="isSmallScreen"
+        :key="`${platform}:${targetId}`"
+        v-model:search="searchValue"
+        :title="info.title"
+        :cover="cover"
+        :description="info.description"
+        :searchable="!!info.songs.length"
+        :loading="playLoading"
+        :disabled="!info.songs.length"
+        @play="playAllSongs"
+      >
+        <template #meta>
+          <n-text depth="3">{{ t("common.songs") }} · {{ info.songs.length }}</n-text>
+        </template>
+        <template #actions>
+          <n-button
+            circle
+            secondary
+            :disabled="!displaySongs.length"
+            :aria-label="t('common.batch_operation')"
+            @click="openBatchList(displaySongs, false)"
+          >
+            <template #icon><SvgIcon name="Batch" /></template>
+          </n-button>
+        </template>
+      </MobileMusicDetailHeader>
+      <div v-else class="detail">
         <div class="cover">
           <n-image
             :src="gatewayProxyUrl(cover)"
@@ -138,6 +165,8 @@
 import { gatewayProxyUrl } from "@/platform/gateway";
 import { getRecommendSongList } from "@/api/page";
 import SongList from "@/components/List/SongList.vue";
+import MobileMusicDetailHeader from "@/components/Page/MobileMusicDetailHeader.vue";
+import { useMusicDetailLayout } from "@/composables/useMusicDetailLayout";
 import SvgIcon from "@/components/Global/SvgIcon.vue";
 import type { RecommendSongListInfo } from "@/types/page";
 import { useSongSearch } from "@/composables/useSongSearch";
@@ -148,6 +177,7 @@ import { useI18n } from "vue-i18n";
 const route = useRoute();
 const player = usePlayer();
 const { t } = useI18n();
+const { isSmallScreen, detailPageRef } = useMusicDetailLayout();
 const info = shallowRef<RecommendSongListInfo | null>(null);
 const loadError = ref(false);
 const playLoading = ref(false);

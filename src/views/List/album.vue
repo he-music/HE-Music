@@ -1,14 +1,60 @@
 <!-- 专辑列表 -->
 <template>
   <AsyncContent
-    :class="['album', { small: listScrolling }]"
+    :ref="detailPageRef"
+    :class="['album', { small: listScrolling, 'mobile-detail': isSmallScreen }]"
     :failed="failed"
     :loading="loading"
     :has-data="!!albumDetailData"
     @retry="getAlbumDetail(albumId, platform, true)"
   >
     <Transition name="fade" mode="out-in">
-      <div v-if="albumDetailData" class="detail">
+      <MobileMusicDetailHeader
+        v-if="isSmallScreen && albumDetailData"
+        :key="`${platform}:${albumId}`"
+        v-model:search="searchValue"
+        :title="albumDetailData.name || t('common.unknown_album')"
+        :cover="albumDetailData.cover"
+        :description="albumDetailData.description"
+        :searchable="!!albumData.length"
+        :loading="loading"
+        @play="playAllSongs"
+      >
+        <template #meta>
+          <n-text
+            class="mobile-artists"
+            @click="openJumpArtist(albumDetailData.platform, albumDetailData.artists || '')"
+          >
+            {{
+              Array.isArray(albumDetailData.artists)
+                ? albumDetailData.artists.map((artist) => artist.name).join(" / ")
+                : albumDetailData.artists
+            }}
+          </n-text>
+          <n-text depth="3">{{ t("common.songs") }} · {{ albumDetailData.song_count || 0 }}</n-text>
+          <n-text v-if="albumDetailData.publish_time" depth="3">
+            {{ formatTimestamp(Number(albumDetailData.publish_time) * 1000) }}
+          </n-text>
+        </template>
+        <template #actions>
+          <n-button
+            circle
+            secondary
+            :aria-label="isLikeAlbum ? t('common.cancel_collect') : t('common.collect')"
+            @click="toLikeAlbum(albumDetailData, !isLikeAlbum)"
+          >
+            <template #icon>
+              <SvgIcon :name="isLikeAlbum ? 'Favorite' : 'FavoriteBorder'" />
+            </template>
+          </n-button>
+          <n-dropdown :options="moreOptions" trigger="click" placement="bottom-end">
+            <n-button circle secondary :aria-label="t('common.more')">
+              <template #icon><SvgIcon name="More" /></template>
+            </n-button>
+          </n-dropdown>
+        </template>
+      </MobileMusicDetailHeader>
+      <div v-else-if="albumDetailData" class="detail">
         <div class="cover">
           <n-image
             :src="gatewayProxyUrl(albumDetailData.cover || '')"
@@ -158,6 +204,7 @@
         :data="albumDataShow"
         :loading="loading"
         :height="songListHeight"
+        :single-click-action="isSmallScreen"
         :doubleClickAction="searchData?.length ? 'add' : 'all'"
         hidden-album
         @scroll="listScroll"
@@ -179,6 +226,8 @@
 <script setup lang="ts">
 import { gatewayProxyUrl } from "@/platform/gateway";
 import AsyncContent from "@/components/Page/AsyncContent.vue";
+import MobileMusicDetailHeader from "@/components/Page/MobileMusicDetailHeader.vue";
+import { useMusicDetailLayout } from "@/composables/useMusicDetailLayout";
 import { albumDetail } from "@/api/album";
 import { copyData, coverLoaded, getShareUrl, renderIcon } from "@/utils/helper";
 import { useSongSearch } from "@/composables/useSongSearch";
@@ -197,6 +246,7 @@ import { DropdownOption } from "naive-ui";
 import { FeatureSupportFlag } from "@/api/platform";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
+const { isSmallScreen, detailPageRef } = useMusicDetailLayout();
 
 const router = useRouter();
 const player = usePlayer();
@@ -237,7 +287,8 @@ const isLikeAlbum = computed(() =>
 const albumDataShow = computed(() => (searchValue.value ? searchData.value : albumData.value));
 
 // 列表高度
-const songListHeight = computed(() => {
+const songListHeight = computed<number | "auto">(() => {
+  if (isSmallScreen.value) return "auto";
   return statusStore.mainContentHeight - (listScrolling.value ? 120 : 240);
 });
 
@@ -321,6 +372,7 @@ const getAlbumDetail = async (id: string, platform: string, refresh: boolean = f
 
 // 列表滚动
 const listScroll = (e: Event) => {
+  if (isSmallScreen.value) return;
   // 滚动高度
   const scrollTop = (e.target as HTMLElement).scrollTop;
   listScrolling.value = scrollTop > 10;
@@ -363,7 +415,7 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.album {
+.album:not(.mobile-detail) {
   display: flex;
   flex-direction: column;
   .detail {
