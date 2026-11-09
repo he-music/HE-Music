@@ -23,7 +23,7 @@
 
 ## 事务、属性与恢复责任
 
-只读打开并确认源 ref，关闭探测 FD 后获取 SameFile 可取消槽，再重新 resolve。对源计算完整 SHA256，比对用户基准；在固定父 os.Root 内以 O_EXCL、随机 32 字节 nonce、0600 创建工作文件，复制后验证其完整 hash 等于基准。正式调用 metadata.EditWorkingCopy，随后 CompareAudioPayload 硬门及 Parse 重开检查 patch 目标字段。比较器保证限定布局的编码音频区域一致，不是 PCM 解码验证。
+只读打开并确认源 ref，关闭探测 FD 后获取 SameFile 可取消槽，再重新 resolve。对源计算完整 SHA256，比对用户基准；在固定父 os.Root 内以 O_EXCL、随机 32 字节 nonce、0600 创建工作文件，复制后验证其完整 hash 等于基准。正式调用 metadata.EditWorkingCopy，随后 CompareMetadataPayload 保留校验及 Parse 重开检查 patch 目标字段。比较器保护媒体、必要配置及原有不透明附加数据，不因存在无关尾部内容而要求修复原件；不是 PCM 解码验证。下载输入的格式验收仍使用独立的 CompareAudioPayload。
 
 另建同目录 O_EXCL 独立 backup，复制原件并以完整 SHA256 验证，复制属性后 Sync；工作文件属性也复制并 Sync，父目录 Sync。排空后重新 resolve 原件、核对身份/版本、完整 SHA256 和父目录身份，再通过既有 claim。Rename 直接以工作文件替换原始 basename，不先移动原件，因此 Rename 失败原件仍在；不执行 truncate fallback 或盲目覆盖恢复。成功后 Sync 父目录、注册新 ref、删除全部旧别名索引，再删除 backup。
 

@@ -186,6 +186,16 @@ func EditWorkingCopy(ctx context.Context, src WorkingCopy, size int64, patch Pat
 	if err := ctx.Err(); err != nil {
 		return err
 	}
+	if src == nil || size <= 0 {
+		return ErrInvalidPayload
+	}
+	return editPreservingTrailer(ctx, src, size, patch)
+}
+
+func editWorkingCopy(ctx context.Context, src WorkingCopy, size int64, patch Patch) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	f, err := mtag.OpenWritableSource(src, size, mtag.WithCreateV2OnV1Only(), mtag.WithSyncV1toV2())
 	if err != nil {
 		return err

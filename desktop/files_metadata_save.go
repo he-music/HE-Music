@@ -80,7 +80,7 @@ func prepareMetadataEdit(ctx context.Context, source, work *os.File, size int64,
 	if edited.Size() <= 0 {
 		return metadata.Info{}, "limit"
 	}
-	if err := metadata.CompareAudioPayload(ctx, source, size, work, edited.Size()); err != nil {
+	if err := metadata.CompareMetadataPayload(ctx, source, size, work, edited.Size()); err != nil {
 		return metadata.Info{}, metadataCode(err)
 	}
 	parsed, err := metadata.Parse(work, edited.Size())
