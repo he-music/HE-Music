@@ -7,7 +7,7 @@
       <n-text v-if="devices.length === 0" class="empty-tip" depth="3">
         {{ t("device.no_devices") }}
       </n-text>
-      <n-scrollbar v-else max-height="400px">
+      <n-scrollbar v-else style="max-height: min(400px, calc(100dvh - 240px))">
         <n-list bordered>
           <n-list-item v-for="device in devices" :key="device.device_id">
             <n-thing>
