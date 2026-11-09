@@ -191,6 +191,7 @@ const appRoutes: Array<RouteRecordRaw> = [
   {
     path: "/user-playlist",
     name: "user-playlist",
+    meta: { needLogin: true },
     beforeEnter: (to, _, next) => {
       if (!to.query.id || to.query.id === "0") next({ path: "/403" });
       else next();

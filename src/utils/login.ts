@@ -19,13 +19,18 @@ export async function completeLogin(result: LoginResult): Promise<void> {
   const statusStore = useStatusStore();
   const settingStore = useSettingStore();
   const player = usePlayer();
+  const resetCaches = dataStore.resetIdentityCaches();
   dataStore.token = token;
   dataStore.refreshToken = result.refresh_token || "";
   dataStore.expiresAt = result.expires_at || 0;
   dataStore.userLoginStatus = true;
   applicationStorage.setItem("lastLoginTime", Date.now().toString());
   // 用户数据局部刷新失败也应尝试刷新平台，避免成功登录后保留匿名平台列表。
-  const updates = await Promise.allSettled([updateUserData(), platformStore.loadPlatforms()]);
+  const updates = await Promise.allSettled([
+    resetCaches,
+    updateUserData(),
+    platformStore.loadPlatforms(),
+  ]);
   if (statusStore.playLoading) player.initPlayer(settingStore.autoPlay, player.getSeek());
   if (updates.some((update) => update.status === "rejected")) {
     throw new Error("Login data refresh failed");

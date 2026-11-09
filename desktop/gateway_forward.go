@@ -68,6 +68,9 @@ func (g *NetworkGateway) forward(w http.ResponseWriter, r *http.Request, client 
 	copyDesktopGatewayHeaders(req.Header, r.Header, false)
 	req.Header.Del("Cookie")
 	req.Header.Del("Referer")
+	if !api || !strings.HasPrefix(r.URL.Path, prefix+"/__api/hemusic/") {
+		req.Header.Del("X-Client-Instance-ID")
+	}
 	if !api {
 		req.Header.Del("Authorization")
 		req.Header.Set("Accept-Encoding", "identity")
@@ -133,6 +136,7 @@ func gatewayRedirectRequest(req *http.Request, response *http.Response, body []b
 	}
 	if gatewayURLOrigin(next) != gatewayURLOrigin(req.URL) {
 		nextReq.Header.Del("Authorization")
+		nextReq.Header.Del("X-Client-Instance-ID")
 		nextReq.Header.Set("Accept-Encoding", "identity")
 	}
 	return nextReq, body, nil

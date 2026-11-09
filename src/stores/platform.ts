@@ -1,18 +1,25 @@
 import { defineStore } from "pinia";
+import { isAxiosError } from "axios";
 import type { PlatformInfo } from "@/types/main.hemusic";
 import { platforms } from "@/api/platform";
 
 interface PlatformData {
   platforms: PlatformInfo[];
   loading: boolean;
+  loaded: boolean;
+  loginRequired: boolean;
+  revision: number;
 }
 
-let loadingPlatforms: Promise<void> | null = null;
+const requests = new WeakMap<object, Promise<void>>();
 
 export const usePlatformStore = defineStore("platform", {
   state: (): PlatformData => ({
     platforms: [],
     loading: false,
+    loaded: false,
+    loginRequired: false,
+    revision: 0,
   }),
 
   getters: {
@@ -42,13 +49,25 @@ export const usePlatformStore = defineStore("platform", {
   },
 
   actions: {
+    invalidatePlatforms() {
+      this.revision++;
+      this.platforms = [];
+      this.loaded = false;
+      this.loginRequired = false;
+      this.loading = false;
+      requests.delete(this);
+    },
     async loadPlatforms() {
-      if (this.platforms.length) return;
-      if (loadingPlatforms) return loadingPlatforms;
-
+      if (this.loaded) return;
+      const pending = requests.get(this);
+      if (pending) return pending;
+      const revision = this.revision;
       this.loading = true;
-      loadingPlatforms = platforms()
+      const request = platforms()
         .then((res) => {
+          if (revision !== this.revision) return;
+          this.loaded = true;
+          this.loginRequired = false;
           this.platforms = res.list.map((item) => {
             return {
               ...item,
@@ -59,12 +78,24 @@ export const usePlatformStore = defineStore("platform", {
             };
           });
         })
+        .catch((error: unknown) => {
+          if (revision !== this.revision) return;
+          if (isAxiosError(error) && error.response?.status === 401) {
+            this.platforms = [];
+            this.loginRequired = true;
+            this.loaded = true;
+            return;
+          }
+          throw error;
+        })
         .finally(() => {
+          if (revision !== this.revision) return;
           this.loading = false;
-          loadingPlatforms = null;
+          requests.delete(this);
         });
 
-      return loadingPlatforms;
+      requests.set(this, request);
+      return request;
     },
   },
 });

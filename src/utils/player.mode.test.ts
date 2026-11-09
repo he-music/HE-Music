@@ -35,6 +35,7 @@ vi.mock("localforage", () => ({
     }),
   },
 }));
+vi.mock("@/api/platform", () => ({ platforms: vi.fn() }));
 vi.mock("@/api/playlist", () => ({ playlistCategories: vi.fn() }));
 vi.mock("@/api/artist", () => ({ artistFilters: vi.fn(), artistPhotos: vi.fn() }));
 vi.mock("@/api/video", () => ({ mvFilters: vi.fn() }));

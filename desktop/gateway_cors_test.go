@@ -75,7 +75,7 @@ func TestGatewayCORSPreflightRoutes(t *testing.T) {
 	_, base := gatewayTestServer(t, GatewayAPIConfig{})
 	for _, route := range []string{"/__proxy/https://media.invalid/cover.jpg", "/__api/hemusic/path", "/__api/netease/path", "/__api/unblock/path", "/__audio", "/__health"} {
 		t.Run(route, func(t *testing.T) {
-			for _, requestedHeaders := range []string{"authorization, content-type", "range, if-range"} {
+			for _, requestedHeaders := range []string{"authorization, content-type", "range, if-range", "x-client-instance-id"} {
 				response, _ := gatewayRequest(t, http.MethodOptions, base+route, "", map[string]string{
 					"Origin": "http://127.0.0.1:14667", "Access-Control-Request-Method": "GET",
 					"Access-Control-Request-Headers": requestedHeaders,
@@ -102,7 +102,7 @@ func assertGatewayCORS(t *testing.T, header http.Header, origin string) {
 	if origin != "" && header.Get("Access-Control-Allow-Credentials") != "true" {
 		t.Fatalf("origin %q: credentials not allowed", origin)
 	}
-	if header.Get("Access-Control-Expose-Headers") != "Content-Length, Content-Range, Accept-Ranges" {
+	if header.Get("Access-Control-Expose-Headers") != "Content-Length, Content-Range, Accept-Ranges, X-Client-Instance-ID" {
 		t.Fatal("media response headers not exposed")
 	}
 	assertGatewayVary(t, header, "Origin")

@@ -20,7 +20,7 @@
       </n-tab-pane>
     </n-tabs>
     <PageSectionSkeleton v-else-if="platformStore.loading" />
-    <n-empty v-else :description="t('page_section.no_platform')" size="large" />
+    <PlatformAccessEmpty v-else />
   </div>
 </template>
 
@@ -28,13 +28,12 @@
 import { FeatureSupportFlag } from "@/api/platform";
 import { usePlatformStore } from "@/stores";
 import type { PlatformInfo } from "@/types/main.hemusic";
-import { useI18n } from "vue-i18n";
 import PageSectionSkeleton from "@/components/Page/PageSectionSkeleton.vue";
+import PlatformAccessEmpty from "@/components/Page/PlatformAccessEmpty.vue";
 import RecommendOnline from "./RecommendOnline.vue";
 
 const router = useRouter();
 const platformStore = usePlatformStore();
-const { t } = useI18n();
 
 const supportPlatforms = computed<PlatformInfo[]>(
   () => platformStore.featureSupportList(FeatureSupportFlag.GetRecommendPage) || [],

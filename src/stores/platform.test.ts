@@ -83,4 +83,64 @@ describe("平台高位功能标记", () => {
     expect(restartedStore.isFeatureSupport("qq", FeatureSupportFlag.ListMVFeeds)).toBe(false);
     expect(restartedStore.isFeatureSupport("qq", FeatureSupportFlag.GetSearchDefault)).toBe(true);
   });
+  it("匿名401记为登录入口，同身份导航不重复请求", async () => {
+    platformsMock.mockRejectedValue({ isAxiosError: true, response: { status: 401 } });
+    const store = usePlatformStore();
+    await store.loadPlatforms();
+    await store.loadPlatforms();
+    expect(store.loginRequired).toBe(true);
+    expect(store.platforms).toEqual([]);
+    expect(platformsMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("空列表也缓存，权限切换只用新列表并忽略旧响应", async () => {
+    let resolveOld!: (value: ReturnType<typeof platformResponse>) => void;
+    platformsMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveOld = resolve;
+      }),
+    );
+    const store = usePlatformStore();
+    const old = store.loadPlatforms();
+    store.invalidatePlatforms();
+    platformsMock.mockResolvedValueOnce({ list: [] });
+    await store.loadPlatforms();
+    resolveOld(platformResponse(1));
+    await old;
+    expect(store.platforms).toEqual([]);
+    await store.loadPlatforms();
+    expect(platformsMock).toHaveBeenCalledTimes(2);
+    store.invalidatePlatforms();
+    platformsMock.mockResolvedValueOnce(platformResponse(2));
+    await store.loadPlatforms();
+    expect(store.platforms.map((item) => item.id)).toEqual(["qq"]);
+    expect(store.getPlatformInfo("qq")?.feature_support_flag).toBe(2n);
+  });
+
+  it("旧身份请求结束不清掉新身份进行中的请求", async () => {
+    let rejectOld!: (error: unknown) => void;
+    let resolveNew!: (value: ReturnType<typeof platformResponse>) => void;
+    platformsMock.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectOld = reject;
+      }),
+    );
+    const store = usePlatformStore();
+    const old = store.loadPlatforms();
+    store.invalidatePlatforms();
+    platformsMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveNew = resolve;
+      }),
+    );
+    const current = store.loadPlatforms();
+    rejectOld(new Error("old identity"));
+    await old;
+    expect(store.loading).toBe(true);
+    const joined = store.loadPlatforms();
+    expect(platformsMock).toHaveBeenCalledTimes(2);
+    resolveNew(platformResponse(4));
+    await Promise.all([current, joined]);
+    expect(store.loading).toBe(false);
+  });
 });

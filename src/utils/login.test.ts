@@ -1,6 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
-  data: { token: "", refreshToken: "", expiresAt: 0, userLoginStatus: false },
+  data: {
+    token: "",
+    refreshToken: "",
+    expiresAt: 0,
+    userLoginStatus: false,
+    resetIdentityCaches: vi.fn(),
+  },
   platform: { loadPlatforms: vi.fn() },
   status: { playLoading: true },
   setting: { autoPlay: false },
@@ -37,9 +43,14 @@ describe("completeLogin", () => {
       refreshToken: "refresh",
       expiresAt: 123,
       userLoginStatus: true,
+      resetIdentityCaches: mocks.data.resetIdentityCaches,
     });
     await completion;
     expect(mocks.update).toHaveBeenCalledOnce();
+    expect(mocks.data.resetIdentityCaches).toHaveBeenCalledOnce();
+    expect(mocks.data.resetIdentityCaches.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.platform.loadPlatforms.mock.invocationCallOrder[0],
+    );
     expect(mocks.platform.loadPlatforms).toHaveBeenCalledOnce();
     expect(mocks.player.initPlayer).toHaveBeenCalledWith(false, 12);
   });

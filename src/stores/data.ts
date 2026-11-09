@@ -17,6 +17,7 @@ import {
 import { artistFilters } from "@/api/artist";
 import { createPlaybackListSnapshot, createPlaybackSongSnapshot, songEqual } from "@/utils/song";
 import { mvFilters } from "@/api/video";
+import { usePlatformStore } from "./platform";
 
 interface ListState {
   playList: SongInfo[];
@@ -30,6 +31,7 @@ interface ListState {
   userData: UserInfo;
   // 登录状态
   userLoginStatus: boolean;
+  identityRevision: number;
   token: string;
   // refresh token 和过期时间
   refreshToken: string;
@@ -94,6 +96,7 @@ export const useDataStore = defineStore("data", {
     localPlayList: [],
     // 登录状态
     userLoginStatus: false,
+    identityRevision: 0,
     token: "",
     refreshToken: "",
     expiresAt: 0,
@@ -339,12 +342,27 @@ export const useDataStore = defineStore("data", {
     ): Promise<void> {
       try {
         // 更新本地存储
-        await userDB.setItem(name, cloneDeep(data));
         this.userLikeData[name] = data;
+        await userDB.setItem(name, cloneDeep(data));
       } catch (error) {
         console.error("Error updating user data:", error);
         throw error;
       }
+    },
+    resetIdentityCaches() {
+      this.identityRevision++;
+      this.playlistCategories = {};
+      this.artistFilters = {};
+      this.mvFilters = {};
+      this.userCreatedPlaylist = [];
+      this.userData = { id: "", username: "", email: "", status: 0, nickname: "", avatar: "" };
+      usePlatformStore().invalidatePlatforms();
+      const writes = Object.keys(this.userLikeData).map((key) => {
+        const name = key as UserDataKeys;
+        this.userLikeData[name] = [];
+        return this.setUserLikeData(name, []);
+      });
+      return Promise.all(writes);
     },
     // 清除用户数据
     async clearUserData() {
@@ -353,22 +371,8 @@ export const useDataStore = defineStore("data", {
         this.token = "";
         this.refreshToken = "";
         this.expiresAt = 0;
-        this.userCreatedPlaylist = [];
-        this.userData = {
-          id: "",
-          username: "",
-          email: "",
-          status: 0,
-          nickname: "",
-          avatar: "",
-        };
-        await Promise.all(
-          Object.keys(this.userLikeData).map(async (key) => {
-            const userDataKey = key as UserDataKeys;
-            await this.setUserLikeData(userDataKey, []);
-            this.userLikeData[userDataKey] = [];
-          }),
-        );
+        const reset = this.resetIdentityCaches();
+        await Promise.all([reset, usePlatformStore().loadPlatforms()]);
       } catch (error) {
         console.error("Error clearing user data:", error);
         throw error;
@@ -395,7 +399,9 @@ export const useDataStore = defineStore("data", {
       if (!isEmpty(this.playlistCategories[platform])) return;
       // 获取歌单分类
       try {
+        const revision = this.identityRevision;
         const res = await playlistCategories(platform);
+        if (revision !== this.identityRevision) return;
         this.playlistCategories[platform] = res.groups;
       } catch (error) {
         console.error("Error getting playlist cat list:", error);
@@ -407,7 +413,9 @@ export const useDataStore = defineStore("data", {
       if (!isEmpty(this.artistFilters[platform])) return;
       // 获取歌单分类
       try {
+        const revision = this.identityRevision;
         const res = await artistFilters(platform);
+        if (revision !== this.identityRevision) return;
         this.artistFilters[platform] = res.filters;
       } catch (error) {
         console.error("Error getting artist filters:", error);
@@ -419,7 +427,9 @@ export const useDataStore = defineStore("data", {
       if (!isEmpty(this.mvFilters[platform])) return;
       // 获取歌单分类
       try {
+        const revision = this.identityRevision;
         const res = await mvFilters(platform);
+        if (revision !== this.identityRevision) return;
         this.mvFilters[platform] = res.filters;
       } catch (error) {
         console.error("Error getting mv filters:", error);

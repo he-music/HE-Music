@@ -1,10 +1,10 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
 import { isDev } from "@/utils/env";
 import { useDataStore, useSettingStore } from "@/stores";
-import { isLogin } from "@/utils/auth";
 import { openCaptcha, openUserLogin } from "@/utils/modal";
 import { refreshTokenApi } from "@/api/auth";
 import { getDeviceInfo } from "@/utils/device";
+import { clientInstanceHeader, getClientInstanceID, isHemusicRequest } from "./clientInstance";
 
 import { gatewayRequestURL, mygoGatewayOrigin, rewriteRequestToGateway } from "@/platform/gateway";
 export const API_URL = String(import.meta.env["VITE_API_URL"]);
@@ -18,6 +18,7 @@ export type HemusicRequestConfig = AxiosRequestConfig & {
   skipErrorMessage?: boolean;
   /** 非幂等操作禁止刷新令牌后重放原请求。 */
   skipAuthRefresh?: boolean;
+  _authRetried?: boolean;
 };
 
 // Token 刷新并发保护
@@ -68,13 +69,19 @@ const server: AxiosInstance = axios.create({
 // 基础配置
 const serverHemusic: AxiosInstance = axios.create({
   baseURL: API_URL,
+  // 浏览器不能安全检查自动跨域重定向；API 重定向直接拒绝，避免实例标识外泄。
+  adapter: "fetch",
+  fetchOptions: { redirect: "error" },
   // 允许跨域
   withCredentials: true,
   // 超时时间
   timeout: 15000,
 });
 
-server.interceptors.request.use((request) => rewriteRequestToGateway(request, baseURL, "netease"));
+server.interceptors.request.use((request) => {
+  request.headers.delete(clientInstanceHeader);
+  return rewriteRequestToGateway(request, baseURL, "netease");
+});
 
 // 请求拦截器
 serverHemusic.interceptors.request.use(
@@ -82,11 +89,16 @@ serverHemusic.interceptors.request.use(
     // pinia
     const settingStore = useSettingStore();
     if (!request.params) request.params = {};
-    if (isLogin()) {
-      const token = useDataStore().token;
-      request.headers.set("Authorization", "Bearer " + token);
-    }
+    const token = useDataStore().token;
+    if (token) request.headers.set("Authorization", "Bearer " + token);
     request.headers.set("Accept-Language", `${settingStore.language};q=0.9`);
+    if (isHemusicRequest(request, API_URL)) {
+      const instanceID = getClientInstanceID();
+      if (instanceID) request.headers.set(clientInstanceHeader, instanceID);
+      else request.headers.delete(clientInstanceHeader);
+    } else {
+      request.headers.delete(clientInstanceHeader);
+    }
     // 没有content-type，添加默认值
     if (!request.headers.get("Content-Type")) {
       request.headers.set("Content-Type", "application/json");
@@ -125,16 +137,34 @@ serverHemusic.interceptors.response.use(
         const options: HemusicRequestConfig | undefined = config;
         if (options?.skipAuthRefresh) break;
         const dataStore = useDataStore();
+        const sentAuthorization = config?.headers.get?.("Authorization");
+        if (
+          (sentAuthorization && sentAuthorization !== `Bearer ${dataStore.token}`) ||
+          (config?.headers.has?.("Authorization") === false && dataStore.token)
+        ) {
+          return Promise.reject(error);
+        }
         const refreshToken = dataStore.refreshToken;
+        // 匿名 401 由入口展示登录按钮，不弹全局登录框，也不重放为其他身份。
+        if (!dataStore.token && !config?.headers.get?.("Authorization")) {
+          return Promise.reject(error);
+        }
         // 刷新请求的 401 交给发起刷新流程的外层请求统一处理，避免重复登出
         if (gatewayRequestURL(config)?.includes(REFRESH_TOKEN_URL)) return Promise.reject(error);
         // 有 refreshToken 且不是登录/刷新接口，尝试自动刷新
-        if (refreshToken && !isSkipRefreshUrl(gatewayRequestURL(config))) {
+        if (
+          refreshToken &&
+          !options?._authRetried &&
+          !isSkipRefreshUrl(gatewayRequestURL(config))
+        ) {
+          if (options) options._authRetried = true;
+          const originalToken = dataStore.token;
           if (isRefreshing) {
             // 已有刷新请求在进行中，加入等待队列
             return new Promise((resolve, reject) => {
               pendingQueue.push({ resolve, reject });
             }).then((token) => {
+              if (dataStore.token !== token) return Promise.reject(error);
               if (config) {
                 config.headers.set("Authorization", "Bearer " + token);
                 return serverHemusic.request(config);
@@ -146,6 +176,10 @@ serverHemusic.interceptors.response.use(
           isRefreshing = true;
           try {
             const res = await refreshTokenApi(refreshToken, await getDeviceInfo());
+            if (dataStore.token !== originalToken || dataStore.refreshToken !== refreshToken) {
+              processPendingQueue(error);
+              return Promise.reject(error);
+            }
             // 更新 token 信息
             dataStore.token = res.access_token;
             dataStore.refreshToken = res.refresh_token;
@@ -160,7 +194,7 @@ serverHemusic.interceptors.response.use(
           } catch (refreshError) {
             // 刷新失败时拒绝所有等待请求，只有 refresh token 明确失效才强制退出
             processPendingQueue(refreshError);
-            if (isInvalidRefreshTokenError(refreshError)) {
+            if (isInvalidRefreshTokenError(refreshError) && dataStore.token === originalToken) {
               try {
                 await dataStore.clearUserData();
               } catch (clearError) {
@@ -177,7 +211,7 @@ serverHemusic.interceptors.response.use(
         } else {
           // 无 refreshToken 或是登录/刷新接口，直接清除登录状态
           console.error("未授权：", response.status, response.statusText);
-          dataStore.userLoginStatus = false;
+          await dataStore.clearUserData();
           openUserLogin();
           return Promise.reject(error);
         }

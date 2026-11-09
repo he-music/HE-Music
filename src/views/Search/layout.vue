@@ -10,6 +10,7 @@
     </div>
     <!-- 标签页 -->
     <n-tabs
+      v-if="!platformStore.loginRequired"
       :value="searchType"
       class="tabs"
       type="segment"
@@ -196,6 +197,7 @@
         </n-tabs>
       </n-tab-pane>
     </n-tabs>
+    <PlatformAccessEmpty v-else />
 
     <!-- 路由 -->
     <!--    <RouterView v-slot="{ Component }">-->
@@ -210,6 +212,7 @@
 
 <script setup lang="ts">
 import { usePlatformStore } from "@/stores";
+import PlatformAccessEmpty from "@/components/Page/PlatformAccessEmpty.vue";
 import Songs from "@/views/Search/songs.vue";
 import Lyrics from "@/views/Search/lyrics.vue";
 import Playlists from "@/views/Search/playlists.vue";

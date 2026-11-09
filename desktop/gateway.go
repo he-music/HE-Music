@@ -289,7 +289,7 @@ func gatewayCORS(header http.Header, r *http.Request) {
 		header.Set("Access-Control-Allow-Origin", origin)
 		header.Set("Access-Control-Allow-Credentials", "true")
 	}
-	header.Set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges")
+	header.Set("Access-Control-Expose-Headers", "Content-Length, Content-Range, Accept-Ranges, X-Client-Instance-ID")
 	header.Set("Referrer-Policy", "no-referrer")
 }
 

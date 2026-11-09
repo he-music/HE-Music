@@ -53,7 +53,9 @@ export const updateUserAccountInfo = async () => {
   if (!isLogin()) return;
   const dataStore = useDataStore();
   // userId
+  const revision = dataStore.identityRevision;
   const userInfo = await userAccount();
+  if (revision !== dataStore.identityRevision || !isLogin()) return;
   // 更改用户信息
   dataStore.userData = {
     ...userInfo,
@@ -64,9 +66,11 @@ export const updateUserData = async () => {
   try {
     if (!isLogin()) return;
 
+    const revision = useDataStore().identityRevision;
     // 先更新用户信息
     await updateUserAccountInfo();
 
+    if (revision !== useDataStore().identityRevision || !isLogin()) return;
     // 获取用户喜欢数据
     const allUserLikeResult = await Promise.allSettled([
       updateUserLikeSongs(),
@@ -91,7 +95,9 @@ export const updateUserData = async () => {
 export const updateUserLikeSongs = async () => {
   const dataStore = useDataStore();
   if (!isLogin() || !dataStore.userData.id) return;
+  const revision = dataStore.identityRevision;
   const result = await userFavouriteSong(0, 1);
+  if (revision !== dataStore.identityRevision || !isLogin()) return;
   dataStore.setUserLikeData("songs", result.list);
 };
 
@@ -100,7 +106,9 @@ export const updateUserLikePlaylist = async () => {
   const dataStore = useDataStore();
   const userId = dataStore.userData.id;
   if (!isLogin() || !userId) return;
+  const revision = dataStore.identityRevision;
   const result = await userFavouritePlaylist(0, 1);
+  if (revision !== dataStore.identityRevision || !isLogin()) return;
   dataStore.setUserLikeData("playlists", result.list);
 };
 
@@ -109,7 +117,9 @@ export const updateUserLikeArtists = async () => {
   const dataStore = useDataStore();
   const userId = dataStore.userData.id;
   if (!isLogin() || !userId) return;
+  const revision = dataStore.identityRevision;
   const result = await userFavouriteArtist(0, 1);
+  if (revision !== dataStore.identityRevision || !isLogin()) return;
   dataStore.setUserLikeData("artists", result.list);
 };
 
@@ -118,7 +128,9 @@ export const updateUserLikeAlbums = async () => {
   const dataStore = useDataStore();
   const userId = dataStore.userData.id;
   if (!isLogin() || !userId) return;
+  const revision = dataStore.identityRevision;
   const result = await userFavouriteAlbum(0, 1);
+  if (revision !== dataStore.identityRevision || !isLogin()) return;
   dataStore.setUserLikeData("albums", result.list);
 };
 
@@ -127,7 +139,9 @@ export const updateUserCreatedPlaylist = async () => {
   const dataStore = useDataStore();
   const userId = dataStore.userData.id;
   if (!isLogin() || !userId) return;
+  const revision = dataStore.identityRevision;
   const result = await getUserPlaylists(0, 1);
+  if (revision !== dataStore.identityRevision || !isLogin()) return;
   dataStore.userCreatedPlaylist = result.list;
 };
 
@@ -139,6 +153,7 @@ export const toLikeSong = debounce(
       return;
     }
     const dataStore = useDataStore();
+    const revision = dataStore.identityRevision;
     const { id, platform, path } = song;
     if (path) {
       window.$message.warning(t("message.local_song_not_support_operation"));
@@ -149,10 +164,12 @@ export const toLikeSong = debounce(
     try {
       if (like) {
         await likeSong(id, platform);
+        if (revision !== dataStore.identityRevision || !isLogin()) return;
         likeList.push({ id, platform });
         window.$message.success(t("message.my_favorite_music_added"));
       } else {
         await unlikeSong(id, platform);
+        if (revision !== dataStore.identityRevision || !isLogin()) return;
         const idx = likeList.findIndex((item) => item.id === id && item.platform === platform);
         if (idx !== -1) {
           likeList.splice(idx, 1);

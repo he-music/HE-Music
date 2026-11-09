@@ -40,10 +40,10 @@ vi.mock("axios", async (importOriginal) => ({
 
 vi.mock("@/utils/env", () => ({ isDev: false }));
 vi.mock("@/stores", () => ({
-  useDataStore: () => ({ ...mocks.dataStore, clearUserData: mocks.clearUserData }),
+  useDataStore: () => Object.assign(mocks.dataStore, { clearUserData: mocks.clearUserData }),
   useSettingStore: () => ({ language: "zh-CN", proxyProtocol: "off" }),
 }));
-vi.mock("@/utils/auth", () => ({ isLogin: () => true }));
+vi.mock("@/utils/auth", () => ({ isLogin: () => mocks.dataStore.userLoginStatus }));
 vi.mock("@/utils/modal", () => ({
   openCaptcha: mocks.openCaptcha,
   openUserLogin: mocks.openUserLogin,
@@ -88,6 +88,85 @@ describe("HE Music Token 刷新", () => {
     vi.unstubAllEnvs();
   });
 
+  it("匿名401不刷新、不弹窗、不匿名重放", async () => {
+    Object.assign(mocks.dataStore, { token: "", refreshToken: "", userLoginStatus: false });
+    const error = createHttpError(401);
+    await expect(handleResponseError(error)).rejects.toBe(error);
+    expect(mocks.refreshTokenApi).not.toHaveBeenCalled();
+    expect(mocks.openUserLogin).not.toHaveBeenCalled();
+    expect(mocks.hemusicServer.request).not.toHaveBeenCalled();
+  });
+
+  it("旧匿名401在登录后返回时不影响新身份", async () => {
+    const error = {
+      ...createHttpError(401),
+      config: { url: "/v1/platforms", headers: new AxiosHeaders() },
+    };
+    await expect(handleResponseError(error)).rejects.toBe(error);
+    expect(mocks.refreshTokenApi).not.toHaveBeenCalled();
+    expect(mocks.clearUserData).not.toHaveBeenCalled();
+    expect(mocks.openUserLogin).not.toHaveBeenCalled();
+  });
+
+  it("登录标记失效但仍有凭据时不能降级匿名", () => {
+    mocks.dataStore.userLoginStatus = false;
+    const intercept = mocks.hemusicServer.interceptors.request.use.mock.calls[0][0];
+    const config = intercept({ headers: new AxiosHeaders(), url: "/v1/platforms" });
+    expect(config.headers.get("Authorization")).toBe("Bearer access-token");
+    const netease = mocks.neteaseServer.interceptors.request.use.mock.calls[0][0];
+    const thirdParty = netease({
+      headers: new AxiosHeaders({ "X-Client-Instance-ID": "private" }),
+      url: "/song",
+    });
+    expect(thirdParty.headers.has("X-Client-Instance-ID")).toBe(false);
+  });
+  it("刷新后的401不再刷新，也不降级匿名重放", async () => {
+    const error = createHttpError(401);
+    mocks.refreshTokenApi.mockResolvedValueOnce({
+      access_token: "renewed",
+      refresh_token: "refresh2",
+      expires_at: 2,
+    });
+    mocks.hemusicServer.request.mockImplementationOnce((config) =>
+      handleResponseError({ ...error, config }),
+    );
+    await expect(handleResponseError(error)).rejects.toBeDefined();
+    expect(mocks.refreshTokenApi).toHaveBeenCalledOnce();
+    expect(mocks.hemusicServer.request).toHaveBeenCalledOnce();
+    expect(mocks.clearUserData).toHaveBeenCalledOnce();
+  });
+
+  it("刷新期间退出后不恢复旧凭据", async () => {
+    let finish!: (value: unknown) => void;
+    mocks.refreshTokenApi.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+    );
+    const error = createHttpError(401);
+    const run = handleResponseError(error);
+    await vi.waitFor(() => expect(mocks.refreshTokenApi).toHaveBeenCalledOnce());
+    Object.assign(mocks.dataStore, { token: "", refreshToken: "", userLoginStatus: false });
+    finish({ access_token: "stale", refresh_token: "stale", expires_at: 2 });
+    await expect(run).rejects.toBe(error);
+    expect(mocks.dataStore.token).toBe("");
+    expect(mocks.hemusicServer.request).not.toHaveBeenCalled();
+  });
+
+  it("实例Header仅进入本站API，外部请求主动删除且Web禁止自动redirect", () => {
+    const intercept = mocks.hemusicServer.interceptors.request.use.mock.calls[0][0];
+    const local = intercept({ headers: new AxiosHeaders(), url: "/v1/platforms" });
+    expect(local.headers.get("X-Client-Instance-ID")).toMatch(/^[!-~]{1,128}$/);
+    const external = intercept({
+      headers: new AxiosHeaders({ "X-Client-Instance-ID": "must-remove" }),
+      url: "https://cdn.invalid/song",
+    });
+    expect(external.headers.has("X-Client-Instance-ID")).toBe(false);
+    expect(mocks.axiosCreate.mock.calls[1][0]).toMatchObject({
+      adapter: "fetch",
+      fetchOptions: { redirect: "error" },
+    });
+  });
   it("由界面处理曲谱请求错误时不重复显示通用错误消息", async () => {
     const error = {
       ...createHttpError(501, "NotImplemented", "/v1/song/sheet-music"),
@@ -173,7 +252,7 @@ describe("HE Music Token 刷新", () => {
     const gateway = await import("@/platform/gateway");
     const { API_URL } = await import("./request");
     await gateway.initializeGateway({ configure: vi.fn(async () => {}) }, API_URL, "/api/netease");
-    const headers = new AxiosHeaders();
+    const headers = new AxiosHeaders({ Authorization: "Bearer access-token" });
     const setHeader = vi.spyOn(headers, "set");
     const error = {
       ...createHttpError(401),
