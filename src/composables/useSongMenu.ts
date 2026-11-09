@@ -166,6 +166,7 @@ export const useSongMenu = () => {
       {
         key: "playlist-add",
         label: t("menu.add_to_playlist"),
+        show: !isLocal,
         props: {
           onClick: () => openPlaylistAdd([song], isLocal),
         },

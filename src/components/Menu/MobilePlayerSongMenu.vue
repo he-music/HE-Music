@@ -23,7 +23,11 @@
       </template>
       <div class="menu-content">
         <div class="menu-tool">
-          <div class="menu-tool-item" @click.stop="handleAddToPlaylist(currentSong)">
+          <div
+            v-if="!currentSong?.path"
+            class="menu-tool-item"
+            @click.stop="handleAddToPlaylist(currentSong)"
+          >
             <n-button :focusable="false" :title="t('menu.add_to_playlist')" tertiary circle>
               <template #icon>
                 <SvgIcon name="AddList" :size="24" />

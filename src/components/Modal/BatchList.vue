@@ -34,6 +34,7 @@
         <!-- 添加到歌单 -->
         <n-button
           :disabled="!checkCount"
+          v-if="!isLocal"
           type="primary"
           strong
           secondary

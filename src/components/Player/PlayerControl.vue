@@ -19,6 +19,7 @@
           <!-- 添加到歌单 -->
           <div
             class="menu-icon"
+            v-if="!musicStore.playSong.path"
             @click.stop="openPlaylistAdd([musicStore.playSong], !!musicStore.playSong.path)"
           >
             <SvgIcon name="AddList" />
