@@ -1,6 +1,5 @@
 import { useDataStore, useSettingStore, useShortcutStore, useStatusStore } from "@/stores";
 import { useEventListener } from "@vueuse/core";
-import { openUserAgreement } from "@/utils/modal";
 import { platform } from "@/platform";
 import { shortcutSession } from "@/platform/shortcutSession";
 import packageJson from "@/../package.json";
@@ -21,9 +20,6 @@ const init = async () => {
   locale.value = settingStore.language;
 
   printVersion();
-
-  // 用户协议
-  openUserAgreement();
 
   // 事件监听
   initEventListener();

@@ -1,4 +1,3 @@
-import { applicationStorage } from "@/platform/applicationStorage";
 import { h } from "vue";
 import type { SettingType } from "@/types/main";
 import type { ModalReactive } from "naive-ui";
@@ -42,34 +41,22 @@ const setModalClosed = (modalKey: string): void => {
   openedModals.delete(modalKey);
 };
 
-// 用户协议
+// 查看用户协议
 export const openUserAgreement = async () => {
-  const isAgree = applicationStorage.getItem("isAgree");
-  if (isAgree) return;
-
   const { default: UserAgreement } = await import("@/components/Modal/UserAgreement.vue");
+  const modalKey = "userAgreement";
+  if (isModalOpen(modalKey)) return;
+  setModalOpen(modalKey);
   const modal = window.$modal.create({
     preset: "card",
     transformOrigin: "center",
     autoFocus: false,
-    maskClosable: false,
-    closeOnEsc: false,
-    closable: false,
     style: {
-      maxWidth: "70vw",
+      width: "800px",
+      maxWidth: "calc(100vw - 32px)",
     },
-    content: () => {
-      return h(UserAgreement, {
-        onClose: () => {
-          modal.destroy();
-          // 储存状态
-          applicationStorage.setItem("isAgree", Date.now().toString());
-        },
-      });
-    },
-    onEsc: () => {
-      window.$message.warning(t("message.agreement_required"));
-    },
+    content: () => h(UserAgreement, { onClose: () => modal.destroy() }),
+    onAfterLeave: () => setModalClosed(modalKey),
   });
 };
 

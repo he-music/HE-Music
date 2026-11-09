@@ -1,7 +1,7 @@
 <!-- 用户协议 -->
 <template>
   <div class="user-agreement">
-    <n-h1 class="title"> 用户协议 </n-h1>
+    <n-h1 class="title"> {{ t("setting.about.user_agreement") }} </n-h1>
     <n-scrollbar class="scrollbar">
       <n-flex class="date" justify="center">
         <n-tag round> 生效日期：2024 年 7 月 16 日 </n-tag>
@@ -107,39 +107,21 @@
           本协议构成您与开发者之间关于使用本软件的完整协议，并取代之前的所有口头或书面协议和陈述。
         </n-li>
       </n-ol>
-      <n-card ref="readOverRef">
-        若你（使用者）接受以上协议，请点击下面的“同意并使用”按钮签署本协议，若不接受，请点击“不同意”后软件将退出并清除本软件的所有数据。
-      </n-card>
     </n-scrollbar>
     <n-flex justify="center">
-      <n-button v-if="isMygo" type="error" @click="closeApp"> 不同意 </n-button>
-      <n-button type="success" :disabled="!isReadOver" @click="emit('close')">
-        {{ isReadOver ? "同意并使用" : "请先完整阅读" }}
-      </n-button>
+      <n-button @click="emit('close')">{{ t("common.close") }}</n-button>
     </n-flex>
   </div>
 </template>
 
 <script setup lang="ts">
-import { isMygo } from "@/utils/env";
-import { platform } from "@/platform";
+import { useI18n } from "vue-i18n";
 
 const emit = defineEmits<{
   close: [];
 }>();
 
-const readOverRef = ref<HTMLElement | null>(null);
-
-// 是否阅读完毕
-const isReadOver = useElementVisibility(readOverRef);
-
-// 关闭软件
-const closeApp = async () => {
-  if (isMygo) {
-    await platform.lifecycle?.quit();
-    return;
-  }
-};
+const { t } = useI18n();
 </script>
 
 <style lang="scss" scoped>
@@ -161,12 +143,6 @@ const closeApp = async () => {
   }
   .n-ol {
     font-size: 16px;
-  }
-  .n-card {
-    --n-font-size: 18px;
-    --n-border-radius: 12px;
-    margin-top: 20px;
-    margin-bottom: 20px;
   }
 }
 </style>

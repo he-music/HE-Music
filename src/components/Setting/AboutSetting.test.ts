@@ -18,6 +18,7 @@ function mount() {
     new URL("./AboutSetting.vue", import.meta.url),
     {
       "@/utils/helper": { openLink: vi.fn() },
+      "@/utils/modal": { openUserAgreement: vi.fn() },
       "@/utils/updateLog": { getUpdateLog: async () => [] },
       "lodash-es": { debounce },
       "@/stores": { useStatusStore: () => ({ updateCheck: false }) },
@@ -96,7 +97,7 @@ it("opens the available update from the original about-page button and reports n
   await flushSfcHost();
   expect(check).toHaveBeenCalledOnce();
   expect(open).toHaveBeenCalledExactlyOnceWith(current.value);
-  expect(host.all().filter((node) => node.tag === "NButton")).toHaveLength(2);
+  expect(host.all().filter((node) => node.tag === "NButton")).toHaveLength(3);
   await vi.advanceTimersByTimeAsync(300);
   state.value = { phase: "no-update" };
   host.click();

@@ -662,6 +662,8 @@
   "setting": {
     "about": {
       "about_software": "关于软件",
+      "user_agreement": "用户协议",
+      "view_agreement": "查看协议",
       "beta_version": "测试版",
       "check_update": "检查更新",
       "checking_update": "正在检查更新",

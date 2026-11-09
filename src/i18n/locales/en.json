@@ -662,6 +662,8 @@
   "setting": {
     "about": {
       "about_software": "About This Application",
+      "user_agreement": "User Agreement",
+      "view_agreement": "View Agreement",
       "beta_version": "Beta Version",
       "check_update": "Check for Updates",
       "checking_update": "Checking for Updates",

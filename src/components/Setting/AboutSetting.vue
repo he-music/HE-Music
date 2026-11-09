@@ -22,6 +22,12 @@
           }}
         </n-button>
       </n-card>
+      <n-card class="set-item">
+        <n-text>{{ t("setting.about.user_agreement") }}</n-text>
+        <n-button strong secondary @click="openUserAgreement">
+          {{ t("setting.about.view_agreement") }}
+        </n-button>
+      </n-card>
       <n-card class="set-item mobile-client">
         <n-flex :wrap="false" align="center" class="mobile-client-info">
           <div class="mobile-client-icon">
@@ -134,6 +140,7 @@
 <script setup lang="ts">
 import type { UpdateLogType } from "@/types/main";
 import { openLink } from "@/utils/helper";
+import { openUserAgreement } from "@/utils/modal";
 import { getUpdateLog } from "@/utils/updateLog";
 import { debounce } from "lodash-es";
 import { useStatusStore } from "@/stores";
