@@ -1,5 +1,6 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { FilesSession } from "./filesSession";
+import type { LocalAudioBlockTarget } from "./localAudioSession";
 import { localFilesSession } from "./localFilesSession";
 import type { PlatformFiles } from "./files";
 import type { MetadataResult, Patch, ScanEntry, ScanPage } from "./mygo.bindings";
@@ -110,7 +111,9 @@ async function fixture() {
     })),
   };
   const release = vi.fn();
-  const blockAudio = vi.fn((grantToken?: string) => (grantToken ? vi.fn() : release));
+  const blockAudio = vi.fn((target?: LocalAudioBlockTarget) =>
+    target && typeof target === "string" ? vi.fn() : release,
+  );
   const owner = new FilesSession(provider, { blockAudio });
   sources.push(owner);
   await owner.start();

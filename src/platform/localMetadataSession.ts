@@ -1,7 +1,7 @@
 import { shallowRef } from "vue";
 import type { LocalFileRef, MetadataResult, MetadataSaveRequest, Patch } from "./mygo.bindings";
 
-import type { LocalAudioRelease } from "./localAudioSession";
+import type { LocalAudioBlockTarget, LocalAudioRelease } from "./localAudioSession";
 export type { Info, MetadataResult, MetadataSaveRequest, Patch } from "./mygo.bindings";
 
 export interface LocalMetadataAccess {
@@ -13,7 +13,7 @@ export interface LocalMetadataAccess {
 
 export interface LocalMetadataSessionDeps {
   access(ref: LocalFileRef): LocalMetadataAccess | undefined;
-  blockAudio(): LocalAudioRelease;
+  blockAudio(target?: LocalAudioBlockTarget): LocalAudioRelease;
   refreshLibrary(): Promise<void>;
 }
 
@@ -148,7 +148,11 @@ export class LocalMetadataSession {
     const id = operationId();
     let gateRelease: LocalAudioRelease;
     try {
-      gateRelease = this.deps.blockAudio();
+      gateRelease = this.deps.blockAudio({
+        grantToken: ref.grantToken,
+        relativePath: ref.relativePath,
+        fileId: ref.fileId,
+      });
     } catch {
       return pending("", "transport_pending");
     }

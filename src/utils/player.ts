@@ -9,7 +9,11 @@ import songManager from "./songManager";
 import { hasNativeSystemMedia, isMygo } from "./env";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 import { localResourceURL } from "@/platform/localResource";
-import { localAudioBlocked, registerLocalAudioStopper } from "@/platform/localAudioSession";
+import {
+  localAudioBlocked,
+  registerLocalAudioStopper,
+  type LocalAudioBlockTarget,
+} from "@/platform/localAudioSession";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
 import lyricManager from "./lyricManager";
 import audioManager, { AudioEventType } from "./audioManager";
@@ -78,11 +82,17 @@ class Player {
   private nativeModes?: ReturnType<typeof createNativePlayModeCoordinator>;
 
   constructor() {
-    registerLocalAudioStopper((grantToken) => {
+    registerLocalAudioStopper((target?: LocalAudioBlockTarget) => {
       if (!useMusicStore().playSong.path) return;
+      const entry = nativeLocalEntry(useMusicStore().playSong.id);
       if (
-        grantToken &&
-        nativeLocalEntry(useMusicStore().playSong.id)?.ref.grantToken !== grantToken
+        target &&
+        (typeof target === "string"
+          ? entry?.ref.grantToken !== target
+          : !entry ||
+            entry.ref.grantToken !== target.grantToken ||
+            entry.ref.relativePath !== target.relativePath ||
+            entry.ref.fileId !== target.fileId)
       )
         return;
       ++this.playRequestId;

@@ -58,13 +58,13 @@ export interface FileDownloadAccess {
 export type FileOperationResult<T> =
   { status: "completed"; value: T } | { status: "busy" | "unavailable" | "stale" | "failed" };
 
-import type { LocalAudioRelease } from "./localAudioSession";
+import type { LocalAudioBlockTarget, LocalAudioRelease } from "./localAudioSession";
 const activeSession = shallowRef<FilesSession>();
 let filesOwnerGeneration = 0;
 export const filesSession = computed(() => activeSession.value);
 
 export interface FilesSessionDependencies {
-  blockAudio(grantToken?: string): LocalAudioRelease;
+  blockAudio(target?: LocalAudioBlockTarget): LocalAudioRelease;
   resolveURL?: LocalDownloadResolver;
 }
 

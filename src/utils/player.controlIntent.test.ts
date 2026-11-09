@@ -781,6 +781,24 @@ describe("real Player HTTP control autoplay intent", () => {
     expect(manager.paused).toBe(false);
   });
 
+  it("keeps another local file playing while metadata is blocked", async () => {
+    mocks.music.playSong = { ...song("A", "A.mp3"), path: "A.mp3" };
+    mocks.data.playList = [song("A", "A.mp3")];
+    mocks.ref.fileId = "A";
+    mocks.ref.relativePath = "A.mp3";
+    await player.initPlayer(true);
+    expect(manager.paused).toBe(false);
+
+    const { blockLocalAudio } = await import("@/platform/localAudioSession");
+    const release = blockLocalAudio({
+      grantToken: "grant",
+      relativePath: "B.mp3",
+      fileId: "B",
+    });
+    expect(manager.paused).toBe(false);
+    release();
+  });
+
   it("a pause or owner revoke during AudioManager's deferred source probe still blocks autoplay", async () => {
     const probe = deferred<Response>();
     vi.mocked(fetch).mockReturnValueOnce(probe.promise);
