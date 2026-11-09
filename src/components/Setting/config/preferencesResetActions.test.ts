@@ -42,7 +42,7 @@ const native = {
     mode,
   })),
 };
-const lifecycle = { quit: vi.fn(async () => {}) };
+const lifecycle = { restart: vi.fn(async () => {}) };
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -55,7 +55,7 @@ beforeEach(() => {
   mocks.deleteDB.mockResolvedValue();
   mocks.disposeFiles.mockResolvedValue();
   mocks.dropInstance.mockResolvedValue();
-  lifecycle.quit.mockResolvedValue();
+  lifecycle.restart.mockResolvedValue();
   dialog = undefined;
   vi.stubGlobal("window", {
     $dialog: {
@@ -113,10 +113,10 @@ it("cancellation and dismissal do not touch native, renderer or file sessions", 
   expect(mocks.disposeFiles).not.toHaveBeenCalled();
   expect(clearLocal).not.toHaveBeenCalled();
   expect(mocks.resetSettings).not.toHaveBeenCalled();
-  expect(lifecycle.quit).not.toHaveBeenCalled();
+  expect(lifecycle.restart).not.toHaveBeenCalled();
 });
 
-it("settings reset preserves renderer history and awaits file cleanup before quit", async () => {
+it("settings reset preserves renderer history and awaits file cleanup before restart", async () => {
   const { actions } = setup();
   let finish: (() => void) | undefined;
   mocks.disposeFiles.mockImplementationOnce(
@@ -130,7 +130,7 @@ it("settings reset preserves renderer history and awaits file cleanup before qui
   const task = confirmation().onPositiveClick();
   await vi.waitFor(() => expect(mocks.disposeFiles).toHaveBeenCalledOnce());
   expect(mocks.resetSettings).not.toHaveBeenCalled();
-  expect(lifecycle.quit).not.toHaveBeenCalled();
+  expect(lifecycle.restart).not.toHaveBeenCalled();
   finish?.();
   await task;
   expect(mocks.resetSettings).toHaveBeenCalledOnce();
@@ -138,13 +138,13 @@ it("settings reset preserves renderer history and awaits file cleanup before qui
   expect(clearSession).not.toHaveBeenCalled();
   expect(mocks.deleteDB).not.toHaveBeenCalled();
   expect(mocks.dropInstance).not.toHaveBeenCalled();
-  expect(lifecycle.quit).toHaveBeenCalledOnce();
+  expect(lifecycle.restart).toHaveBeenCalledOnce();
   expect(success).toHaveBeenCalledWith("mygo.reset_scheduled");
   await confirmation().onPositiveClick();
   expect(native.reset).toHaveBeenCalledOnce();
 });
 
-it("clear all awaits renderer database clearing before quitting", async () => {
+it("clear all awaits renderer database clearing before restarting", async () => {
   const { actions } = setup();
   let finish: (() => void) | undefined;
   mocks.deleteDB.mockImplementationOnce(
@@ -159,10 +159,10 @@ it("clear all awaits renderer database clearing before quitting", async () => {
   await vi.waitFor(() => expect(mocks.deleteDB).toHaveBeenCalledOnce());
   expect(clearLocal).toHaveBeenCalledOnce();
   expect(clearSession).toHaveBeenCalledOnce();
-  expect(lifecycle.quit).not.toHaveBeenCalled();
+  expect(lifecycle.restart).not.toHaveBeenCalled();
   finish?.();
   await task;
-  expect(lifecycle.quit).toHaveBeenCalledOnce();
+  expect(lifecycle.restart).toHaveBeenCalledOnce();
   expect(mocks.resetSettings).not.toHaveBeenCalled();
 });
 
@@ -176,7 +176,7 @@ it("native failure leaves renderer intact and allows a fresh confirmed retry", a
   expect(mocks.disposeFiles).not.toHaveBeenCalled();
   expect(clearLocal).not.toHaveBeenCalled();
   expect(mocks.deleteDB).not.toHaveBeenCalled();
-  expect(lifecycle.quit).not.toHaveBeenCalled();
+  expect(lifecycle.restart).not.toHaveBeenCalled();
   expect(actions.disabled.value).toBe(false);
   actions.request("all");
   await confirmation().onPositiveClick();
@@ -184,18 +184,18 @@ it("native failure leaves renderer intact and allows a fresh confirmed retry", a
   expect(mocks.deleteDB).toHaveBeenCalledOnce();
 });
 
-it("partial clear and quit failures report scheduled reset honestly", async () => {
+it("partial clear and restart failures report scheduled reset honestly", async () => {
   const { actions } = setup();
   mocks.deleteDB.mockRejectedValueOnce(new Error("IndexedDB"));
-  lifecycle.quit.mockRejectedValueOnce(new Error("owner lost"));
+  lifecycle.restart.mockRejectedValueOnce(new Error("owner lost"));
   actions.request("all");
   await confirmation().onPositiveClick();
-  expect(error.mock.calls).toEqual([["mygo.reset_renderer_failed"], ["mygo.reset_quit_failed"]]);
+  expect(error.mock.calls).toEqual([["mygo.reset_renderer_failed"], ["mygo.reset_restart_failed"]]);
   expect(success).not.toHaveBeenCalled();
   expect(actions.disabled.value).toBe(true);
 });
 
-it("a disposed settings owner cannot clear or quit after a pending native call", async () => {
+it("a disposed settings owner cannot clear or restart after a pending native call", async () => {
   const { scope, actions } = setup();
   let finish: ((receipt: PreferencesResetReceipt) => void) | undefined;
   native.reset.mockImplementationOnce(
@@ -211,7 +211,7 @@ it("a disposed settings owner cannot clear or quit after a pending native call",
   await task;
   expect(mocks.disposeFiles).not.toHaveBeenCalled();
   expect(clearLocal).not.toHaveBeenCalled();
-  expect(lifecycle.quit).not.toHaveBeenCalled();
+  expect(lifecycle.restart).not.toHaveBeenCalled();
   expect(success).not.toHaveBeenCalled();
 });
 
@@ -226,7 +226,7 @@ it("a cache drop failure is partial failure, never success or automatic destruct
   });
   expect(error).toHaveBeenCalledWith("mygo.reset_renderer_failed");
   expect(success).not.toHaveBeenCalled();
-  expect(lifecycle.quit).toHaveBeenCalledOnce();
+  expect(lifecycle.restart).toHaveBeenCalledOnce();
   await confirmation().onPositiveClick();
   expect(mocks.dropInstance).toHaveBeenCalledTimes(1);
 });
@@ -250,11 +250,11 @@ it("native await replacement never disposes the new files owner", async () => {
   expect(replacement.dispose).not.toHaveBeenCalled();
   expect(mocks.disposeFiles).not.toHaveBeenCalled();
   expect(clearLocal).not.toHaveBeenCalled();
-  expect(lifecycle.quit).not.toHaveBeenCalled();
+  expect(lifecycle.restart).not.toHaveBeenCalled();
   expect(success).not.toHaveBeenCalled();
 });
 
-it("owner replacement during captured dispose wait prevents renderer clearing and quit", async () => {
+it("owner replacement during captured dispose wait prevents renderer clearing and restart", async () => {
   const { actions } = setup();
   let finish: (() => void) | undefined;
   mocks.disposeFiles.mockImplementationOnce(
@@ -274,7 +274,7 @@ it("owner replacement during captured dispose wait prevents renderer clearing an
   expect(replacement.dispose).not.toHaveBeenCalled();
   expect(clearLocal).not.toHaveBeenCalled();
   expect(mocks.deleteDB).not.toHaveBeenCalled();
-  expect(lifecycle.quit).not.toHaveBeenCalled();
+  expect(lifecycle.restart).not.toHaveBeenCalled();
   expect(success).not.toHaveBeenCalled();
   expect(error).not.toHaveBeenCalled();
 });
@@ -288,7 +288,7 @@ it("a stale confirmation cannot commit native reset after its file owner was rep
   expect(native.reset).not.toHaveBeenCalled();
   expect(mocks.disposeFiles).not.toHaveBeenCalled();
   expect(clearLocal).not.toHaveBeenCalled();
-  expect(lifecycle.quit).not.toHaveBeenCalled();
+  expect(lifecycle.restart).not.toHaveBeenCalled();
 });
 
 it("replacement during an already-started database clear prevents further cache drops", async () => {
@@ -308,6 +308,6 @@ it("replacement during an already-started database clear prevents further cache 
   finish?.();
   await task;
   expect(mocks.dropInstance).not.toHaveBeenCalled();
-  expect(lifecycle.quit).not.toHaveBeenCalled();
+  expect(lifecycle.restart).not.toHaveBeenCalled();
   expect(success).not.toHaveBeenCalled();
 });

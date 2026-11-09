@@ -14,7 +14,7 @@ export interface PlatformPreferencesReset {
 export type PreferencesResetResult =
   | { status: "native-failed" }
   | { status: "stale"; nativePending: boolean }
-  | { status: "scheduled"; rendererFailed: boolean; quitFailed: boolean };
+  | { status: "scheduled"; rendererFailed: boolean; restartFailed: boolean };
 
 /** The durable native commit must precede every destructive renderer action. */
 export async function executePreferencesReset(deps: {
@@ -22,7 +22,7 @@ export async function executePreferencesReset(deps: {
   native: PlatformPreferencesReset;
   current(): boolean;
   clearRenderer(): Promise<void>;
-  quit(): Promise<void>;
+  restart(): Promise<void>;
   reportRendererFailure(): void;
 }): Promise<PreferencesResetResult> {
   if (!deps.current()) return { status: "stale", nativePending: false };
@@ -49,9 +49,9 @@ export async function executePreferencesReset(deps: {
   }
   if (!deps.current()) return { status: "stale", nativePending: true };
   try {
-    await deps.quit();
-    return { status: "scheduled", rendererFailed, quitFailed: false };
+    await deps.restart();
+    return { status: "scheduled", rendererFailed, restartFailed: false };
   } catch {
-    return { status: "scheduled", rendererFailed, quitFailed: true };
+    return { status: "scheduled", rendererFailed, restartFailed: true };
   }
 }

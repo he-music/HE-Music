@@ -94,7 +94,7 @@ it.each(["settings", "all"] as const)(
         },
         current: () => true,
         clearRenderer,
-        quit: vi.fn(),
+        restart: vi.fn(),
         reportRendererFailure: vi.fn(),
       }),
     ).toEqual({ status: "native-failed" });
@@ -135,7 +135,7 @@ it("owner replacement after receipt retains intent that the next early bootstrap
       },
       current: () => current,
       clearRenderer,
-      quit: vi.fn(),
+      restart: vi.fn(),
       reportRendererFailure: vi.fn(),
     }),
   ).toEqual({ status: "stale", nativePending: true });

@@ -49,6 +49,7 @@ export interface PlatformLifecycle {
   show(): Promise<void>;
   hide(): Promise<void>;
   quit(): Promise<void>;
+  restart(): Promise<void>;
   teardown(): Promise<void>;
   onCloseRequested(listener: (request: CloseRequested) => void): () => void;
   onTrayAction(listener: (action: TrayRequest) => void): () => void;

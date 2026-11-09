@@ -145,6 +145,17 @@ func (l *DesktopLifecycle) Quit(ctx context.Context) error {
 	return l.call(ctx, true, func() error { l.quit(); return nil })
 }
 
+// Restart bypasses close requests and relaunches after normal shutdown cleanup.
+func (l *DesktopLifecycle) Restart(ctx context.Context) error {
+	return l.call(ctx, true, func() error {
+		desktopControl.revoke()
+		l.state.beginQuit()
+		l.stopPrompt()
+		mygo.App.Relaunch()
+		return nil
+	})
+}
+
 // AcknowledgeClose runs once the confirmation UI is shown, before awaiting user input.
 // If no subscriber acknowledges within five seconds, the native close proceeds.
 func (l *DesktopLifecycle) AcknowledgeClose(ctx context.Context, requestID uint64) error {

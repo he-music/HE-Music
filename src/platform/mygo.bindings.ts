@@ -872,6 +872,10 @@ export const DesktopLifecycle = {
   resolveClose(requestID: number, resolution: CloseResolution): Promise<void> {
     return call("DesktopLifecycle.ResolveClose", requestID, resolution);
   },
+  /** Restart bypasses close requests and relaunches after normal shutdown cleanup. */
+  restart(): Promise<void> {
+    return call("DesktopLifecycle.Restart");
+  },
   show(): Promise<void> {
     return call("DesktopLifecycle.Show");
   },

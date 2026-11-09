@@ -191,6 +191,7 @@ function lifecycle(ready = Promise.resolve({ trayAvailable: false, epoch: 1 })) 
     show: vi.fn(async () => {}),
     hide: vi.fn(async () => {}),
     quit: vi.fn(async () => {}),
+    restart: vi.fn(async () => {}),
     teardown: vi.fn(async () => {}),
     onCloseRequested: () => () => {},
     onTrayAction: () => () => {},

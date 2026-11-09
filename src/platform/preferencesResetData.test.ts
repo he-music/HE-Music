@@ -82,7 +82,7 @@ it("real FilesSession drains an old history save before clearing only the three 
   });
   expect(await session.downloads?.retire("A")).toBe(true);
   await vi.waitFor(() => expect(backend.order).toContain("save started"));
-  const quit = vi.fn(async () => {});
+  const restart = vi.fn(async () => {});
   const task = executePreferencesReset({
     mode: "all",
     native: {
@@ -98,14 +98,14 @@ it("real FilesSession drains an old history save before clearing only the three 
       await session.dispose();
       await clearAdditionalPreferencesData();
     },
-    quit,
+    restart,
     reportRendererFailure: vi.fn(),
   });
   await vi.waitFor(() => expect(session.ready.value).toBe(false));
   expect(backend.drop).not.toHaveBeenCalled();
-  expect(quit).not.toHaveBeenCalled();
+  expect(restart).not.toHaveBeenCalled();
   finish?.();
-  expect(await task).toEqual({ status: "scheduled", rendererFailed: false, quitFailed: false });
+  expect(await task).toEqual({ status: "scheduled", rendererFailed: false, restartFailed: false });
   expect(backend.order.slice(-3)).toEqual([
     "drop local-data/local_download_history",
     "drop local-data/local",
@@ -119,5 +119,5 @@ it("real FilesSession drains an old history save before clearing only the three 
   );
   expect(backend.data.has(historyKey)).toBe(false);
   expect([...backend.data]).toEqual([["unrelated/database/key", "untouched"]]);
-  expect(quit).toHaveBeenCalledOnce();
+  expect(restart).toHaveBeenCalledOnce();
 });

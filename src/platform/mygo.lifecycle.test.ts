@@ -15,6 +15,12 @@ afterEach(() => {
   bridge.os = "darwin";
 });
 describe("mygo lifecycle capability", () => {
+  it("重启请求通过原生生命周期重新启动程序", async () => {
+    const lifecycle = createMygoPlatform().lifecycle;
+    if (!lifecycle) throw new Error("Missing lifecycle");
+    await lifecycle.restart();
+    expect(bridge.call).toHaveBeenCalledExactlyOnceWith("DesktopLifecycle.Restart");
+  });
   it("only exposes Windows taskbar providers and forwards exact deferred native failure events", async () => {
     expect(createMygoPlatform().taskbar).toBeUndefined();
     bridge.os = "win32";

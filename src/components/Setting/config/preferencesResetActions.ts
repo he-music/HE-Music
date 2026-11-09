@@ -13,7 +13,7 @@ import { t } from "@/i18n";
 /** Owned by settings setup, alongside import/export; never create in a computed getter. */
 export function usePreferencesResetActions(
   native: PlatformPreferencesReset | undefined,
-  lifecycle: Pick<PlatformLifecycle, "quit"> | undefined,
+  lifecycle: Pick<PlatformLifecycle, "restart"> | undefined,
   owner: MaybeRefOrGetter<PreferencesResetFilesOwner | undefined>,
 ) {
   const settingStore = useSettingStore();
@@ -69,7 +69,7 @@ export function usePreferencesResetActions(
             }
             await flushApplicationWrites();
           },
-          quit: () => lifecycle.quit(),
+          restart: () => lifecycle.restart(),
           reportRendererFailure: () => {
             if (!disposed) window.$message.error(t("mygo.reset_renderer_failed"));
           },
@@ -80,7 +80,7 @@ export function usePreferencesResetActions(
           confirmed = false;
           window.$message.error(t("mygo.reset_native_failed"));
         } else if (result.status === "scheduled") {
-          if (result.quitFailed) window.$message.error(t("mygo.reset_quit_failed"));
+          if (result.restartFailed) window.$message.error(t("mygo.reset_restart_failed"));
           else if (!result.rendererFailed) window.$message.success(t("mygo.reset_scheduled"));
         }
       },

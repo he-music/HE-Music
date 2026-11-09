@@ -103,6 +103,10 @@ export function createMygoPlatform(): PlatformAdapter {
         await flushApplicationWrites();
         await DesktopLifecycle.quit();
       },
+      async restart() {
+        await flushApplicationWrites();
+        await DesktopLifecycle.restart();
+      },
       async resolveClose(requestId, resolution) {
         if (resolution !== "cancel") await flushApplicationWrites();
         await DesktopLifecycle.resolveClose(requestId, resolution);
