@@ -1,5 +1,7 @@
 # HE-Music
 
+[![Listed on Awesome MyGo](https://awesomemygo.dev/badge.svg)](https://awesomemygo.dev/apps/he-music)
+
 > 一个简约的音乐播放器，基于 [SPlayer](https://github.com/imsyy/SPlayer) 修改和跟随, SPlayer 是一个非常漂亮的播放器。
 >
 > 该版本为无后端的纯前端，不能独立运行，和 SPlayer 不兼容，不知道后端服务的用户请使用 SPlayer
