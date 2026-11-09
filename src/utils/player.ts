@@ -71,6 +71,8 @@ class Player {
     canAutoPlay?: () => boolean;
   };
   private httpPlaybackDialog?: DialogReactive;
+  private mpvPlaybackDialog?: DialogReactive;
+  private mpvRetryRequestId?: number;
   private lastHttpRetrySrc = "";
 
   private nativeModes?: ReturnType<typeof createNativePlayModeCoordinator>;
@@ -84,6 +86,8 @@ class Player {
       )
         return;
       ++this.playRequestId;
+      this.mpvPlaybackDialog?.destroy();
+      this.mpvPlaybackDialog = undefined;
       this.playbackAttempt = undefined;
       this.pendingAutoPlay = undefined;
       const released = audioManager.clearSource();
@@ -223,6 +227,7 @@ class Player {
         return;
       }
       if (this.offerHttpsRetry(errorCode)) return;
+      if (this.offerMpvRetry(errorCode)) return;
       this.handlePlaybackError(errorCode);
     };
     audioManager.on("error", errorCallback);
@@ -273,6 +278,68 @@ class Player {
     };
     audioManager.on("canplay", canplayCallback);
     this.eventCallbacks.set("canplay", canplayCallback);
+  }
+  /** 媒体错误只能提示兼容性可能性；由用户决定是否切换原生引擎重试。 */
+  private offerMpvRetry(errorCode: number): boolean {
+    const attempt = this.playbackAttempt;
+    if (
+      !isMygo ||
+      audioManager.engineId !== "web-audio" ||
+      (errorCode !== 3 && errorCode !== 4) ||
+      this.httpPlaybackDialog ||
+      !attempt ||
+      attempt.requestId !== this.playRequestId ||
+      audioManager.error?.kind === "device" ||
+      audioManager.error?.kind === "engine" ||
+      audioManager.error?.kind === "network"
+    ) {
+      return false;
+    }
+    if (this.mpvRetryRequestId === attempt.requestId) return true;
+    this.mpvRetryRequestId = attempt.requestId;
+    const status = useStatusStore();
+    status.playStatus = false;
+    status.playLoading = false;
+    void audioManager.pause().catch((error: unknown) => this.logPlaybackError("暂停失败:", error));
+    let settled = false;
+    const isCurrent = () =>
+      !settled &&
+      attempt.requestId === this.playRequestId &&
+      !this.radioOperation &&
+      audioManager.engineId === "web-audio";
+    const dismiss = () => {
+      if (!isCurrent()) return;
+      settled = true;
+      this.mpvPlaybackDialog = undefined;
+      this.autoPlayIntent = false;
+      attempt.autoPlay = false;
+    };
+    this.mpvPlaybackDialog = window.$dialog.warning({
+      title: t("mygo.audio.compatibility_title"),
+      content: t("mygo.audio.compatibility_hint"),
+      positiveText: t("mygo.audio.switch_to_mpv"),
+      negativeText: t("common.cancel"),
+      onPositiveClick: async () => {
+        if (!isCurrent()) return;
+        settled = true;
+        this.mpvPlaybackDialog = undefined;
+        const seek = Math.max(attempt.seek, this.getSeek());
+        useSettingStore().playbackEngine = "mpv";
+        const requestId = this.playRequestId + 1;
+        try {
+          await this.initPlayer(true, seek, status.playQuality, this.autoPlayOwner, true);
+        } catch (error) {
+          if (requestId !== this.playRequestId) return;
+          this.logPlaybackError("切换 mpv 重试失败:", error);
+          window.$message.error(t("mygo.audio.engine_change_failed"));
+        }
+      },
+      onNegativeClick: dismiss,
+      onClose: dismiss,
+      onMaskClick: dismiss,
+      onEsc: dismiss,
+    });
+    return true;
   }
   /** HTTP 地址失败时提供 HTTPS 排查入口；媒体错误码无法判断证书是否有效。 */
   private offerHttpsRetry(errorCode: number): boolean {
@@ -423,14 +490,20 @@ class Player {
     // 更新 MediaSession
     if (!path) this.updateMediaSession();
   }
-  /** 播放策略拒绝保留当前音源，等待下一次用户操作。 */
+  /** 处理播放权限和格式兼容错误，覆盖未派发媒体事件的拒绝。 */
   private handlePlayRejection(error: unknown): boolean {
-    if (!(error instanceof Error) || error.name !== "NotAllowedError") return false;
-    const statusStore = useStatusStore();
-    statusStore.playLoading = false;
-    statusStore.playStatus = false;
-    window.$message.error(t("message.song_play_fail"));
-    return true;
+    if (error instanceof Error && error.name === "NotAllowedError") {
+      const statusStore = useStatusStore();
+      statusStore.playLoading = false;
+      statusStore.playStatus = false;
+      window.$message.error(t("message.song_play_fail"));
+      return true;
+    }
+    return this.offerMpvRetry(
+      error instanceof Error && error.name === "NotSupportedError"
+        ? 4
+        : audioManager.getErrorCode(),
+    );
   }
   /**
    * 初始化 MediaSession
@@ -621,6 +694,8 @@ class Player {
       : undefined;
     this.httpPlaybackDialog?.destroy();
     this.httpPlaybackDialog = undefined;
+    this.mpvPlaybackDialog?.destroy();
+    this.mpvPlaybackDialog = undefined;
     this.playbackAttempt = undefined;
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
@@ -1338,6 +1413,8 @@ class Player {
     await audioManager.clearSource();
     this.httpPlaybackDialog?.destroy();
     this.httpPlaybackDialog = undefined;
+    this.mpvPlaybackDialog?.destroy();
+    this.mpvPlaybackDialog = undefined;
     this.playbackAttempt = undefined;
     const dataStore = useDataStore();
     const statusStore = useStatusStore();
@@ -1503,6 +1580,8 @@ class Player {
   ) {
     const operation = Symbol("radio");
     this.radioOperation = operation;
+    this.mpvPlaybackDialog?.destroy();
+    this.mpvPlaybackDialog = undefined;
     this.autoPlayIntent = autoPlay;
     this.autoPlayOwner = canAutoPlay;
     const requestId = this.playRequestId;

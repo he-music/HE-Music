@@ -5,7 +5,20 @@ import type { PlatformMpvPlayback, MpvSnapshot } from "@/platform/mpvPlayback";
 
 import type { ControlCommand, ControlProvider } from "@/platform/controlSession";
 
+interface PlaybackWarning {
+  title?: string;
+  content?: string;
+  positiveText?: string;
+  onPositiveClick?: () => unknown;
+  onNegativeClick?: () => unknown;
+  onClose?: () => unknown;
+  onMaskClick?: () => unknown;
+  onEsc?: () => unknown;
+}
+
 const mocks = vi.hoisted(() => ({
+  mygo: true,
+  destroyDialog: vi.fn(),
   engine: "web-audio" as "web-audio" | "mpv",
   mpv: undefined as PlatformMpvPlayback | undefined,
   music: {
@@ -38,7 +51,7 @@ const mocks = vi.hoisted(() => ({
   device: vi.fn<() => string | undefined>(() => undefined),
   lyrics: vi.fn(),
   cover: vi.fn(),
-  warning: vi.fn<(options: { onNegativeClick?: () => unknown }) => { destroy(): void }>(),
+  warning: vi.fn<(options: PlaybackWarning) => { destroy(): void }>(),
   ref: { grantToken: "grant", fileId: "B", version: "one", relativePath: "B.mp3" },
   radio: vi.fn(),
 }));
@@ -84,7 +97,13 @@ vi.mock("./songManager", () => ({
   },
 }));
 vi.mock("./lyricManager", () => ({ default: { handleLyric: mocks.lyrics } }));
-vi.mock("./env", () => ({ isElectron: false, isMygo: true, hasNativeSystemMedia: true }));
+vi.mock("./env", () => ({
+  isElectron: false,
+  get isMygo() {
+    return mocks.mygo;
+  },
+  hasNativeSystemMedia: true,
+}));
 vi.mock("./helper", () => ({ shuffleArray: (items: unknown[]) => items }));
 vi.mock("./blob", () => ({ default: {} }));
 vi.mock("@/api/radio", () => ({ listRadioSongs: mocks.radio }));
@@ -157,6 +176,7 @@ let retry: (() => unknown) | undefined;
 beforeEach(async () => {
   vi.resetModules();
   vi.clearAllMocks();
+  mocks.mygo = true;
   mocks.engine = "web-audio";
   mocks.mpv = undefined;
   mocks.music = reactive({
@@ -187,7 +207,7 @@ beforeEach(async () => {
 
   mocks.warning.mockImplementation((options) => {
     retry = options.onNegativeClick;
-    return { destroy() {} };
+    return { destroy: mocks.destroyDialog };
   });
   vi.stubGlobal("window", {
     document: { title: "" },
@@ -323,6 +343,241 @@ describe("Player 切换输出时的音质选择", () => {
 
     expect(mocks.status.playQuality).toBe("flac");
     expect(window.$message.success).toHaveBeenCalledWith("message.change_quality_to");
+  });
+});
+
+function mpvProvider(): PlatformMpvPlayback {
+  let snapshot: MpvSnapshot = {
+    lifecycle: 1,
+    session: 0,
+    sequence: 1,
+    state: "idle",
+    position: 0,
+    duration: 180,
+    rate: 1,
+    volume: 1,
+    source: "",
+    device: "auto",
+    error: null,
+  };
+  const update = (patch: Partial<MpvSnapshot>) =>
+    (snapshot = { ...snapshot, ...patch, sequence: snapshot.sequence + 1 });
+  return {
+    capabilities: {
+      supportsRate: true,
+      supportsSinkId: true,
+      supportsEqualizer: false,
+      supportsSpectrum: false,
+      supportsFade: false,
+    },
+    initialize: vi.fn(async () => snapshot),
+    load: vi.fn(async (_lifecycle, request) =>
+      update({
+        session: snapshot.session + 1,
+        source: request.url,
+        position: request.start,
+        state: "paused",
+      }),
+    ),
+    play: vi.fn(async () => {
+      update({ state: "playing" });
+    }),
+    pause: vi.fn(async () => {
+      update({ state: "paused" });
+    }),
+    clearSource: vi.fn(async () => update({ source: "", state: "idle", position: 0 })),
+    stop: vi.fn(async () => update({ source: "", state: "idle", position: 0 })),
+    seek: vi.fn(async (_lifecycle, _session, position) => {
+      update({ position });
+    }),
+    setVolume: vi.fn(async () => {}),
+    setRate: vi.fn(async () => {}),
+    setOutputDevice: vi.fn(async () => {}),
+    getOutputDevices: vi.fn(async () => []),
+    snapshot: vi.fn(async () => snapshot),
+    destroy: vi.fn(async () => {}),
+    onEvent: vi.fn(() => () => {}),
+    teardown: vi.fn(),
+  };
+}
+
+function currentMedia() {
+  const element = elements.at(-1);
+  if (!element) throw new Error("Missing media element");
+  return element;
+}
+
+function failMedia(code: number) {
+  const element = currentMedia();
+  element.error = { code };
+  element.dispatchEvent(new Event("error"));
+}
+
+function mpvWarning() {
+  const options = mocks.warning.mock.calls.find(
+    ([options]) => options.title === "mygo.audio.compatibility_title",
+  )?.[0];
+  if (!options) throw new Error("Missing mpv recovery dialog");
+  return options;
+}
+
+describe("Web Audio 格式兼容引导", () => {
+  beforeEach(() => {
+    mocks.mpv = mpvProvider();
+  });
+
+  it.each([3, 4])("媒体错误 %s 提供 mpv 重试，保留歌曲、音质和进度", async (code) => {
+    await player.initPlayer(true);
+    currentMedia().currentTime = 12;
+    const next = vi.spyOn(player, "nextOrPrev");
+
+    failMedia(code);
+    failMedia(code);
+
+    expect(mocks.warning).toHaveBeenCalledOnce();
+    expectPaused();
+    expect(mocks.status.playLoading).toBe(false);
+    expect(next).not.toHaveBeenCalled();
+    expect(mocks.engine).toBe("web-audio");
+
+    await mpvWarning().onPositiveClick?.();
+
+    expect(manager.engineId).toBe("mpv");
+    expect(mocks.engine).toBe("mpv");
+    expect(mocks.music.playSong.id).toBe("A");
+    expect(mocks.mpv?.load).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ format: "mp3", start: 12 }),
+    );
+    expect(mocks.mpv?.play).toHaveBeenCalledOnce();
+    expect(mocks.status.playQuality).toBe("128mp3");
+    expect(window.$message.success).not.toHaveBeenCalled();
+  });
+
+  it("没有媒体错误事件的 NotSupportedError 也提供引导", async () => {
+    vi.spyOn(manager, "play").mockRejectedValueOnce(
+      new DOMException("Unsupported", "NotSupportedError"),
+    );
+    const next = vi.spyOn(player, "nextOrPrev");
+
+    await player.initPlayer();
+
+    expect(mpvWarning().positiveText).toBe("mygo.audio.switch_to_mpv");
+    expect(mocks.warning).toHaveBeenCalledOnce();
+    expect(next).not.toHaveBeenCalled();
+    expect(mocks.status.playLoading).toBe(false);
+    expect(window.$message.error).not.toHaveBeenCalled();
+  });
+
+  it("HTTP 排查提示优先，媒体事件和播放拒绝不产生两个提示", async () => {
+    mocks.url.mockResolvedValueOnce("http://synthetic.invalid/current");
+    vi.spyOn(manager, "play").mockImplementationOnce(async () => {
+      failMedia(4);
+      throw new DOMException("Unsupported", "NotSupportedError");
+    });
+
+    await player.initPlayer();
+
+    expect(mocks.warning).toHaveBeenCalledOnce();
+    expect(mocks.warning.mock.calls[0][0].title).toBe("音源 HTTPS 访问失败排查");
+  });
+
+  it.each(["onNegativeClick", "onClose", "onMaskClick", "onEsc"] as const)(
+    "%s 关闭后保持停止，重复错误不再次提示",
+    async (action) => {
+      await player.initPlayer();
+      failMedia(4);
+      mpvWarning()[action]?.();
+      failMedia(4);
+      expectPaused();
+      expect(mocks.engine).toBe("web-audio");
+      expect(mocks.warning).toHaveBeenCalledOnce();
+    },
+  );
+
+  it("切换歌曲关闭提示，旧提示不能再切换引擎", async () => {
+    await player.initPlayer();
+    failMedia(4);
+    const old = mpvWarning();
+    await player.nextOrPrev("next");
+    expect(mocks.destroyDialog).toHaveBeenCalledOnce();
+    await old.onPositiveClick?.();
+    expect(mocks.engine).toBe("web-audio");
+    expect(mocks.music.playSong.id).toBe("B");
+    expect(mocks.mpv?.initialize).not.toHaveBeenCalled();
+  });
+
+  it.each(["pause", "preload", "owner"])(
+    "%s 撤销自动播放后，切换到 mpv 仍保持暂停",
+    async (reason) => {
+      let owner = true;
+      await player.initPlayer(
+        reason !== "preload",
+        0,
+        "",
+        reason === "owner" ? () => owner : undefined,
+      );
+      failMedia(4);
+      if (reason === "pause") await player.pause();
+      else if (reason === "owner") owner = false;
+      await mpvWarning().onPositiveClick?.();
+      expect(manager.engineId).toBe("mpv");
+      expect(mocks.mpv?.load).toHaveBeenCalledOnce();
+      expect(mocks.mpv?.play).not.toHaveBeenCalled();
+      expect(manager.paused).toBe(true);
+    },
+  );
+
+  it("mpv 初始化失败时给出反馈并保持停止", async () => {
+    await player.initPlayer();
+    failMedia(3);
+    const provider = mocks.mpv;
+    if (!provider) throw new Error("Missing mpv provider");
+    vi.mocked(provider.initialize).mockRejectedValueOnce(new Error("mpv library missing"));
+    await mpvWarning().onPositiveClick?.();
+    expect(mocks.engine).toBe("mpv");
+    expect(mocks.status.playStatus).toBe(false);
+    expect(mocks.status.playLoading).toBe(false);
+    expect(window.$message.error).toHaveBeenCalledWith("mygo.audio.engine_change_failed");
+  });
+
+  it.each([1, 2])("中止或网络错误 %s 不引导切换 mpv", async (code) => {
+    await player.initPlayer();
+    failMedia(code);
+    expect(mocks.warning).not.toHaveBeenCalled();
+    await flush();
+  });
+
+  it("网页端不提供 mpv 引导", async () => {
+    mocks.mygo = false;
+    await player.initPlayer();
+    failMedia(3);
+    expect(mocks.warning).not.toHaveBeenCalled();
+  });
+
+  it.each(["device", "engine"] as const)("%s 错误不引导切换 mpv", async (kind) => {
+    await player.initPlayer();
+    vi.spyOn(manager, "error", "get").mockReturnValue({ kind, message: "Unavailable" });
+    failMedia(4);
+    expect(mocks.warning).not.toHaveBeenCalled();
+    expect(window.$message.error).toHaveBeenCalled();
+  });
+
+  it("已使用 mpv 时不再提供切换引导", async () => {
+    mocks.engine = "mpv";
+    vi.spyOn(manager, "play").mockRejectedValueOnce(
+      new DOMException("Unsupported", "NotSupportedError"),
+    );
+    await player.initPlayer();
+    expect(mocks.warning).not.toHaveBeenCalled();
+    expect(window.$message.error).toHaveBeenCalledWith("message.song_play_fail");
+  });
+
+  it("自动播放权限错误不引导切换 mpv", async () => {
+    vi.spyOn(manager, "play").mockRejectedValueOnce(new DOMException("Denied", "NotAllowedError"));
+    await player.initPlayer();
+    expect(mocks.warning).not.toHaveBeenCalled();
+    expect(window.$message.error).toHaveBeenCalledWith("message.song_play_fail");
   });
 });
 
@@ -570,8 +825,9 @@ describe("real Player HTTP control autoplay intent", () => {
   );
 
   it.each([2, 3])(
-    "error %s retries preserve pause rather than restore old autoplay",
+    "web error %s retries preserve pause rather than restore old autoplay",
     async (code) => {
+      mocks.mygo = false;
       await player.initPlayer();
       await player.pause();
       const url = deferred<string>();
