@@ -6,11 +6,24 @@ import {
   createDefaultDesktopLyricStyle,
   parseDesktopLyricStyle,
 } from "@/platform/desktopLyricStyle";
-
+import type { LyricLine } from "@applemusic-like-lyrics/lyric";
+import type { LyricsLine } from "@/platform/desktopLyrics";
 import {
   createDefaultDesktopLyricOptions,
   parseDesktopLyricOptions,
 } from "@/platform/desktopLyricOptions";
+
+const serializeLyricLines = (lines: LyricLine[]): LyricsLine[] =>
+  lines.map((line) => ({
+    ...line,
+    // LRC 末句用 Infinity 表示无结束时间；原生接口要求有限值，以零时长保留该语义。
+    endTime: line.endTime === Infinity ? line.startTime : line.endTime,
+    words: line.words.map((word) => ({
+      ...word,
+      endTime: word.endTime === Infinity ? word.startTime : word.endTime,
+    })),
+  }));
+
 export function createShellDesktopLyricsSession(): DesktopLyricsSession | undefined {
   const provider = platform.kind === "mygo" ? platform.desktopLyrics : undefined;
   if (!provider) return;
@@ -76,14 +89,8 @@ export function createShellDesktopLyricsSession(): DesktopLyricsSession | undefi
       style: parseDesktopLyricStyle(setting.desktopLyricStyle) ?? createDefaultDesktopLyricStyle(),
       options:
         parseDesktopLyricOptions(setting.desktopLyricOptions) ?? createDefaultDesktopLyricOptions(),
-      lrcData: music.songLyric.lrcData.map((line) => ({
-        ...line,
-        words: line.words.map((word) => ({ ...word })),
-      })),
-      yrcData: music.songLyric.yrcData.map((line) => ({
-        ...line,
-        words: line.words.map((word) => ({ ...word })),
-      })),
+      lrcData: serializeLyricLines(music.songLyric.lrcData),
+      yrcData: serializeLyricLines(music.songLyric.yrcData),
     }),
     clock,
     onSeek: (listener) => player.onSeek(listener),

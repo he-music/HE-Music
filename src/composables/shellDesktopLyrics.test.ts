@@ -2,7 +2,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDefaultDesktopLyricStyle } from "@/platform/desktopLyricStyle";
 import { createDefaultDesktopLyricOptions } from "@/platform/desktopLyricOptions";
 import { createRenderer, h, nextTick, reactive } from "vue";
-import type { LyricsCommand, PlatformDesktopLyrics } from "@/platform/desktopLyrics";
+import type {
+  LyricsCommand,
+  LyricsSnapshot,
+  PlatformDesktopLyrics,
+} from "@/platform/desktopLyrics";
+import type { SongLyric } from "@/types/lyric";
+import { parseLineLyric } from "@/utils/lyric";
 
 const mocks = vi.hoisted(() => ({
   platform: { kind: "mygo", desktopLyrics: undefined as PlatformDesktopLyrics | undefined },
@@ -208,4 +214,102 @@ describe("shellDesktopLyrics", () => {
     await session.dispose();
     app.unmount();
   });
+
+  it.each(["lrcData", "yrcData"] as const)(
+    "%s 加载完成后能同步开放结束时间，且不修改播放器中的歌词",
+    async (lyricKind) => {
+      mocks.platform.kind = "mygo";
+      mocks.setting = reactive({});
+      const songLyric: SongLyric = { lrcData: [], yrcData: [] };
+      const music = reactive({
+        playSong: {
+          id: "mygo-local:file",
+          platform: "local",
+          name: "本地歌曲",
+          artists: "歌手",
+        },
+        songLyric,
+      });
+      const status = reactive({
+        playStatus: true,
+        playRate: 1,
+        lyricLoading: true,
+        getSongOffset: () => 0,
+      });
+      mocks.music = music;
+      mocks.status = status;
+      let received: LyricsSnapshot | undefined;
+      const publishSnapshot = vi.fn(async (snapshot: LyricsSnapshot) => {
+        // 模拟原生接口对歌词时间的校验，并经 JSON 传输后交给桌面歌词。
+        for (const line of [...snapshot.lrcData, ...snapshot.yrcData]) {
+          const ranges = [line, ...line.words];
+          if (
+            ranges.some(
+              ({ startTime, endTime }) =>
+                !Number.isFinite(startTime) || !Number.isFinite(endTime) || endTime < startTime,
+            )
+          ) {
+            throw new Error("桌面歌词时间无效");
+          }
+        }
+        received = JSON.parse(JSON.stringify(snapshot));
+      });
+      mocks.platform.desktopLyrics = {
+        begin: async () => ({ epoch: 4 }),
+        getState: vi.fn(async () => ({
+          epoch: 4,
+          revision: 1,
+          visible: false,
+          pending: false,
+          locked: false,
+          hoverUnlock: false,
+          bounds: { x: 0, y: 0, width: 800, height: 180 },
+          failure: "",
+        })),
+        publishSnapshot,
+        publishClock: vi.fn(async () => {}),
+        teardown: vi.fn(async () => {}),
+        onWindow: () => () => {},
+        onCommand: () => () => {},
+        onSnapshot: vi.fn(),
+        onClock: vi.fn(),
+        attach: vi.fn(),
+        close: vi.fn(),
+        command: vi.fn(),
+        setVisible: vi.fn(),
+        setBounds: vi.fn(),
+        setLocked: vi.fn(),
+      };
+      const session = createShellDesktopLyricsSession()!;
+      try {
+        await session.start();
+        expect(received?.loading).toBe(true);
+        const lines = parseLineLyric({
+          lyric: "[00:01.00]第一句\n[00:03.00]最后一句",
+          trans: "[00:03.00]末句翻译",
+          roma: "[00:03.00]roman",
+        }).line;
+        music.songLyric[lyricKind] = lines;
+        status.lyricLoading = false;
+        await flush();
+        expect(session.failure.value).toBeUndefined();
+        expect(received?.loading).toBe(false);
+        expect(received?.trackKey).toBe('["local","mygo-local:file"]');
+        expect(received?.[lyricKind][0]).toEqual(lines[0]);
+        expect(received?.[lyricKind][1]).toEqual({
+          ...lines[1],
+          endTime: lines[1].startTime,
+          words: lines[1].words.map((word) => ({ ...word, endTime: word.startTime })),
+        });
+        expect(lines[1].endTime).toBe(Infinity);
+        expect(lines[1].words[0].endTime).toBe(Infinity);
+        await session.publishClock();
+        expect(mocks.platform.desktopLyrics.publishClock).toHaveBeenCalledWith(
+          expect.objectContaining({ trackKey: '["local","mygo-local:file"]' }),
+        );
+      } finally {
+        await session.dispose();
+      }
+    },
+  );
 });
