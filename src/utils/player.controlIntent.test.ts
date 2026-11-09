@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => ({
     progress: 0,
     lyricIndex: -1,
     duration: 180000,
+    playQuality: "128mp3",
+    selectedQuality: "128mp3",
     eqEnabled: false,
   },
   data: { playList: [] as SongInfo[], setHistory: vi.fn(), playListOriginal: [] as SongInfo[] },
@@ -47,6 +49,9 @@ vi.mock("@/stores", () => ({
   useSettingStore: () => ({
     get playbackEngine() {
       return mocks.engine;
+    },
+    set playbackEngine(engine) {
+      mocks.engine = engine;
     },
     smtcOpen: false,
     showSpectrums: true,
@@ -167,6 +172,8 @@ beforeEach(async () => {
     radioMode: false,
     playStatus: false,
     playLoading: false,
+    playQuality: "128mp3",
+    selectedQuality: "128mp3",
   });
   mocks.status.$patch.mockImplementation((patch) => {
     Object.assign(mocks.status, patch);
@@ -244,6 +251,80 @@ async function shell(generation: number) {
     emit: (action: string) => emit({ generation, requestId: ++requestId, action }),
   };
 }
+
+describe("Player 切换输出时的音质选择", () => {
+  beforeEach(() => {
+    vi.spyOn(manager, "setEngine").mockResolvedValue(undefined);
+    vi.spyOn(manager, "play").mockResolvedValue(undefined);
+    mocks.data.playList[0].links.push({
+      name: "flac",
+      quality: 1000,
+      format: "flac",
+      size: "1",
+      url: "synthetic-flac",
+    });
+  });
+
+  it.each(["mpv", "web-audio"] as const)(
+    "切换到 %s 时保留当前音质，不被偏好覆盖",
+    async (engine) => {
+      mocks.engine = engine === "mpv" ? "web-audio" : "mpv";
+      mocks.status.playQuality = "flac";
+      mocks.status.selectedQuality = "flac";
+
+      await player.changePlaybackOutput(engine);
+
+      expect(mocks.engine).toBe(engine);
+      expect(mocks.status.playQuality).toBe("flac");
+      expect(mocks.status.selectedQuality).toBe("flac");
+      expect(mocks.url).toHaveBeenCalledOnce();
+      expect(manager.play).toHaveBeenCalledWith(
+        "https://synthetic.invalid/current",
+        expect.objectContaining({ source: expect.objectContaining({ format: "flac" }) }),
+      );
+      expect(window.$message.success).not.toHaveBeenCalled();
+    },
+  );
+
+  it("目标内核不支持当前音质时，使用现有偏好回退", async () => {
+    mocks.engine = "mpv";
+    mocks.status.playQuality = "dsd";
+    mocks.status.selectedQuality = "dsd";
+    mocks.data.playList[0].links.push({
+      name: "dsd",
+      quality: 2000,
+      format: "dsf",
+      size: "1",
+      url: "synthetic-dsd",
+    });
+
+    await player.changePlaybackOutput("web-audio");
+
+    expect(mocks.status.playQuality).toBe("128mp3");
+    expect(mocks.status.selectedQuality).toBe("dsd");
+    expect(manager.play).toHaveBeenCalledWith(
+      "https://synthetic.invalid/current",
+      expect.not.objectContaining({ source: expect.anything() }),
+    );
+    expect(window.$message.success).not.toHaveBeenCalled();
+  });
+
+  it("正常加载歌曲仍使用音质偏好", async () => {
+    mocks.status.playQuality = "flac";
+    mocks.status.selectedQuality = "flac";
+
+    await player.initPlayer();
+
+    expect(mocks.status.playQuality).toBe("128mp3");
+  });
+
+  it("手动切换音质仍显示操作反馈", async () => {
+    await player.changeQuality("flac");
+
+    expect(mocks.status.playQuality).toBe("flac");
+    expect(window.$message.success).toHaveBeenCalledWith("message.change_quality_to");
+  });
+});
 
 describe("real Player + MpvPlaybackEngine errors", () => {
   it.each(["local-load", "online-load", "online-url", "online-empty"])(

@@ -742,7 +742,7 @@ class Player {
           try {
             await this.createPlayer(playerUrl, autoPlay, seek, undefined, source);
             if (currentRequestId !== this.playRequestId) return;
-            if (quality) {
+            if (quality && !preserveIntent) {
               window.$message.success(t("message.change_quality_to", { quality }));
             }
           } catch (error) {
@@ -1355,7 +1355,7 @@ class Player {
     const status = useStatusStore();
     if (!status.playLoading) this.autoPlayIntent = status.playStatus;
     if (songManager.getPlaySongData()) {
-      await this.initPlayer(true, seek, "", this.autoPlayOwner, true);
+      await this.initPlayer(true, seek, status.playQuality, this.autoPlayOwner, true);
     } else {
       ++this.playRequestId;
       await audioManager.clearSource();
