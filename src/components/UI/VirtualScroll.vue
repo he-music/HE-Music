@@ -72,6 +72,8 @@ const emit = defineEmits<{
 
 const wrapperRef = ref<HTMLElement | null>(null);
 const scrollbarRef = ref<InstanceType<typeof NScrollbar> | null>(null);
+// 从公开 scroll 事件保存实际容器，测量时读取最新位置，不依赖滚动帧是否已处理。
+const scrollContainerRef = shallowRef<HTMLElement | null>(null);
 const isAutoHeight = computed(() => props.height === "auto");
 const externalScrollParent = shallowRef<HTMLElement | null>(null);
 const externalViewportHeight = ref(0);
@@ -107,16 +109,16 @@ const viewportHeight = computed(() => {
   return containerHeight.value || 0;
 });
 
-// 初始化高度数组
+// 用稳定 key 对齐旧测量，追加时 footer 的高度也不会错用到新歌曲上。
+let measuredKeys: Array<string | number> = [];
 const initializeHeights = (reset = false) => {
   if (props.itemFixed) return;
 
-  const length = props.items.length;
-  // 如果之前已经有数据，尽量复用，否则重置
-  if (reset || itemHeights.value.length !== length) {
-    const oldHeights = reset ? [] : itemHeights.value;
-    itemHeights.value = Array.from({ length }, (_, i) => oldHeights[i] || props.itemHeight);
-  }
+  const oldHeights = new Map(
+    reset ? [] : measuredKeys.map((key, index) => [key, itemHeights.value[index]] as const),
+  );
+  measuredKeys = props.items.map(props.getItemKey);
+  itemHeights.value = measuredKeys.map((key) => oldHeights.get(key) ?? props.itemHeight);
   updateTops();
 };
 
@@ -236,6 +238,8 @@ const measureItemHeights = () => {
   if (props.itemFixed) return;
   if (!itemRefs.value.length || props.items.length === 0) return;
 
+  const currentScrollTop = getScrollTop();
+  let scrollAdjustment = 0;
   let firstChangedIndex = props.items.length;
   itemRefs.value.forEach((el) => {
     if (!el) return;
@@ -249,6 +253,11 @@ const measureItemHeights = () => {
 
       // 允许 1px 误差，避免频繁更新
       if (height > 0 && Math.abs(height - itemHeights.value[actualIndex]) > 0.5) {
+        const oldHeight = itemHeights.value[actualIndex];
+        // 只补偿已经位于视口上方的行，保持首个可见条目的行内位置。
+        if (itemTops.value[actualIndex] + oldHeight <= currentScrollTop) {
+          scrollAdjustment += height - oldHeight;
+        }
         itemHeights.value[actualIndex] = height;
         firstChangedIndex = Math.min(firstChangedIndex, actualIndex);
       }
@@ -260,7 +269,20 @@ const measureItemHeights = () => {
   if (firstChangedIndex < props.items.length) {
     triggerRef(itemHeights);
     updateTops(firstChangedIndex);
+    scrollTop.value = currentScrollTop + scrollAdjustment;
     calculateVisibleRange(scrollTop.value);
+    if (scrollAdjustment !== 0) {
+      // 等占位高度更新后再滚动，避免被旧 scrollHeight 截断。
+      nextTick(() => {
+        if (!wrapperRef.value?.isConnected) return;
+        // 测量后若用户继续滚动，保留用户的新位置。
+        if (Math.abs(getScrollTop() - currentScrollTop) <= 0.5) {
+          scrollToPosition(currentScrollTop + scrollAdjustment);
+        }
+        scrollTop.value = getScrollTop();
+        calculateVisibleRange(scrollTop.value);
+      });
+    }
   }
 };
 
@@ -329,6 +351,7 @@ const handleScroll = (event: Event) => {
   const target = event.target as HTMLElement;
   if (!target) return;
 
+  if (!isAutoHeight.value) scrollContainerRef.value = target;
   // 触发外部事件
   emit("scroll", event);
 
@@ -405,7 +428,7 @@ const getScrollTop = () => {
     const parent = externalScrollParent.value;
     return Math.max(0, (parent ? parent.scrollTop : window.scrollY) - getExternalOffset());
   }
-  return scrollTop.value;
+  return scrollContainerRef.value?.scrollTop ?? scrollTop.value;
 };
 
 // 展开可变内容后由父级触发，避免缓存高度导致列表项重叠。
@@ -436,11 +459,17 @@ const scheduleMeasure = () => {
 // 响应窗口换行、异步内容以及详情展开引起的实际行高变化。
 useResizeObserver(itemRefs, scheduleMeasure);
 
-// 数据替换或行高模式变化时丢弃按索引缓存的旧高度；追加数据时复用已有测量。
+// 数组引用变化不代表旧条目失效；仅行高模式或 key 规则变化时清空缓存。
 watch(
-  [() => props.items, () => props.items.length, () => props.itemHeight, () => props.itemFixed],
-  ([items, , height, fixed], [oldItems, , oldHeight, oldFixed]) => {
-    initializeHeights(items !== oldItems || height !== oldHeight || fixed !== oldFixed);
+  [
+    () => props.items,
+    () => props.items.length,
+    () => props.itemHeight,
+    () => props.itemFixed,
+    () => props.getItemKey,
+  ],
+  ([, , height, fixed, getKey], [, , oldHeight, oldFixed, oldGetKey]) => {
+    initializeHeights(height !== oldHeight || fixed !== oldFixed || getKey !== oldGetKey);
     calculateVisibleRange(scrollTop.value);
     nextTick(scheduleMeasure);
   },
