@@ -88,7 +88,6 @@
             :item-fixed="false"
             :items="virtualListItems"
             :height="height === 'auto' ? 'auto' : showHeader ? 'calc(100% - 40px)' : '100%'"
-            :padding-bottom="showFooter ? 80 : 0"
             @scroll="onScroll"
           >
             <template #default="{ item, index }">
@@ -590,7 +589,7 @@ onBeforeUnmount(() => {
     display: flex;
     flex-direction: row;
     justify-content: center;
-    margin: 20px 0 40px;
+    padding: 20px 0;
     .n-spin-body {
       --n-size: 20px;
     }
