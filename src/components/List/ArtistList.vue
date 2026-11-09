@@ -133,12 +133,18 @@ const router = useRouter();
       border-radius: 50%;
       transition: border-radius 0.3s;
       .cover-img {
+        height: auto;
+        aspect-ratio: 1 / 1;
+        flex-shrink: 0;
         border-radius: 50%;
         overflow: hidden;
         z-index: 1;
         transition:
           filter 0.3s,
           transform 0.3s;
+        :deep(img) {
+          object-fit: cover;
+        }
       }
       .cover-shadow {
         opacity: 0;
@@ -167,9 +173,6 @@ const router = useRouter();
         transition:
           opacity 0.3s,
           transform 0.3s;
-      }
-      .n-skeleton {
-        height: 100%;
       }
     }
     .cover-data {
