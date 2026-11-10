@@ -423,7 +423,9 @@ export const useSongMenu = () => {
       },
       {
         key: "quality",
-        label: `${t("common.song_quality")}：${statusStore.playQuality}`,
+        label: `${t("common.song_quality")}：${
+          isLocal ? song.quality || t("common.unknown") : statusStore.playQuality
+        }`,
         props: {
           onClick: () => !isLocal && emit("clickQuality", []),
         },

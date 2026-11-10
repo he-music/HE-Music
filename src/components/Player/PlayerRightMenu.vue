@@ -22,7 +22,7 @@
       :class="{ player: statusStore.showFullPlayer }"
     >
       <div class="menu-icon quality-selector hidden">
-        <span class="current-quality">{{ statusStore.playQuality }}</span>
+        <span class="current-quality">{{ currentQuality }}</span>
       </div>
     </n-dropdown>
     <!-- 播放模式 -->
@@ -108,6 +108,12 @@ const statusStore = useStatusStore();
 const settingStore = useSettingStore();
 const musicStore = useMusicStore();
 const player = usePlayer();
+
+const currentQuality = computed(() =>
+  musicStore.isLocalSong
+    ? musicStore.playSong.quality || t("common.unknown")
+    : statusStore.playQuality,
+);
 
 const desktopLyricsUnavailable = computed(
   () =>
