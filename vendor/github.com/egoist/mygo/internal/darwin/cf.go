@@ -24,6 +24,10 @@ var (
 	iopsGetProvidingPowerSourceType   func(snapshot uintptr) id
 	cgEventSourceSecondsSinceLastType func(state int32, eventType uint32) float64
 
+	// cgEventGetLocation is CGEventGetLocation: where an event happened,
+	// in the display space of Core Graphics.
+	cgEventGetLocation func(event uintptr) NSPoint
+
 	cgDisplayIsBuiltin func(display uint32) bool
 	cgDisplayRotation  func(display uint32) float64
 	nsBeep             func()
@@ -71,6 +75,7 @@ func loadCF() {
 	}
 	purego.RegisterLibFunc(&cgEventSourceSecondsSinceLastType, libCG, "CGEventSourceSecondsSinceLastEventType")
 
+	purego.RegisterLibFunc(&cgEventGetLocation, libCG, "CGEventGetLocation")
 	purego.RegisterLibFunc(&cgDisplayIsBuiltin, libCG, "CGDisplayIsBuiltin")
 	purego.RegisterLibFunc(&cgDisplayRotation, libCG, "CGDisplayRotation")
 	purego.RegisterLibFunc(&nsBeep, libAppKit, "NSBeep")

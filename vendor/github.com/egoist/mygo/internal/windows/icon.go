@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"image"
 	"image/png"
+	"os"
+	"path/filepath"
 	"unsafe"
 )
 
@@ -40,6 +42,30 @@ func (shell) FileIcon(path string, size int) ([]byte, error) {
 		return nil, hresultError(fmt.Sprintf("finding %q", path), r)
 	}
 	defer release(factory)
+	return factoryIcon(factory, size, path)
+}
+
+// TypeIcon returns the icon Explorer shows for files with the extension
+// ext, that of a simple ID list of such a name, which needs no file, drawn
+// as FileIcon draws its icon.
+func (shell) TypeIcon(ext string, size int) ([]byte, error) {
+	path := filepath.Join(os.TempDir(), "file."+ext)
+	pidl, _, _ := procSHSimpleIDListFromPath.Call(uintptr(unsafe.Pointer(u16(path))))
+	if pidl == 0 {
+		return nil, fmt.Errorf("mygo: no ID list for %q", path)
+	}
+	defer procCoTaskMemFree.Call(pidl)
+	var factory uintptr
+	if r, _, _ := procSHCreateItemFromIDList.Call(pidl, uintptr(unsafe.Pointer(&iidIShellItemImageFactory)), uintptr(unsafe.Pointer(&factory))); failed(r) || factory == 0 {
+		return nil, hresultError(fmt.Sprintf("finding %q", path), r)
+	}
+	defer release(factory)
+	return factoryIcon(factory, size, path)
+}
+
+// factoryIcon draws the icon of an IShellItemImageFactory, without
+// thumbnails, for size by size pixels, as a PNG.
+func factoryIcon(factory uintptr, size int, path string) ([]byte, error) {
 	const iconOnly = 0x4 // SIIGBF_ICONONLY
 	var hbm uintptr
 	sz := uintptr(uint32(size)) | uintptr(uint32(size))<<32                                           // SIZE, by value

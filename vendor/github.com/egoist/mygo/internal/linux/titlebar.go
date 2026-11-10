@@ -179,6 +179,22 @@ func buttonLayout() (start, end string) {
 	return windowButtons(before), windowButtons(after)
 }
 
+// WindowButtons returns the buttons of the desktop's layout, none where the
+// compositor decorates windows itself (platform.WindowButtonsBackend).
+func (b *Backend) WindowButtons() (start, end []string) {
+	if b.compositorDecorates {
+		return nil, nil
+	}
+	s, e := buttonLayout()
+	split := func(side string) []string {
+		if side == "" {
+			return nil
+		}
+		return strings.Split(side, ",")
+	}
+	return split(s), split(e)
+}
+
 func windowButtons(side string) string {
 	var kept []string
 	for b := range strings.SplitSeq(side, ",") {

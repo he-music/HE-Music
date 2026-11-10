@@ -60,6 +60,10 @@ var (
 	gSignalLookup           func(name *byte, t uintptr) uint32
 	gSignalEmitAnnouncement func(obj ptr, signal *byte, text *byte)
 	announces               bool
+	// gSignalEmitNotification emits AtkObject's notification signal, of
+	// ATK 2.50, with a politeness: notifies is set where it has.
+	gSignalEmitNotification func(obj ptr, signal *byte, text *byte, politeness int32)
+	notifies                bool
 
 	gtkWidgetAccessibleGetType      func() uintptr
 	gtkDrawingAreaGetType           func() uintptr
@@ -85,6 +89,16 @@ var (
 	atkStateSetAddState                                     func(set ptr, state int32) bool
 	atkRangeNew                                             func(lower, upper float64, description *byte) ptr
 	atkComponentGetExtents                                  func(obj ptr, x, y, w, h *int32, coords int32)
+	// Relations, as what a node controls (aria-controls).
+	atkRelationSetNew                                 func() ptr
+	atkRelationNew                                    func(targets *ptr, n int32, relation int32) ptr
+	atkRelationSetAdd                                 func(set, relation ptr)
+	atkRelationTypeForName                            func(name *byte) int32
+	atkRelationControllerFor, atkRelationControlledBy int32
+	// The relations of descriptions (aria-describedby) and errors
+	// (aria-errormessage), each with the one back.
+	atkRelationDescribedBy, atkRelationDescriptionFor int32
+	atkRelationErrorMessage, atkRelationErrorFor      int32
 
 	cbAreaClassInit, cbRootClassInit, cbNodeClassInit, cbRootComponent     ptr
 	cbComponentInit, cbActionInit, cbValueInit, cbTextInit, cbEditableInit ptr
@@ -99,6 +113,7 @@ var (
 		enabled, sensitive, visible, showing, focusable, focused, checkable, checked, indeterminate,
 		expandable, expanded, editable, readOnly, multiLine, singleLine, selectableText, defunct int32
 		selectable, selected, multiselectable, hasPopup, invalidEntry, vertical, horizontal int32
+		busy, active, supportsAutocompletion                                                int32
 	}
 
 	// The trees of surfaces, by the surface and by its accessible, and the
@@ -132,6 +147,7 @@ const (
 	atkGetNChildren      = 160
 	atkRefChild          = 168
 	atkGetIndexInParent  = 176
+	atkRefRelationSet    = 184
 	atkRefStateSet       = 216
 	atkGetAttributes     = 328
 	gTypeInterfaceHeader = 16 // the functions of interfaces follow a GTypeInterface
@@ -195,6 +211,8 @@ func registerAccess() {
 		{a, &atkObjectSetParent, "atk_object_set_parent"}, {a, &atkObjectNotifyStateChange, "atk_object_notify_state_change"},
 		{a, &atkStateSetNew, "atk_state_set_new"}, {a, &atkStateSetAddState, "atk_state_set_add_state"},
 		{a, &atkRangeNew, "atk_range_new"}, {a, &atkComponentGetExtents, "atk_component_get_extents"},
+		{a, &atkRelationSetNew, "atk_relation_set_new"}, {a, &atkRelationNew, "atk_relation_new"},
+		{a, &atkRelationSetAdd, "atk_relation_set_add"}, {a, &atkRelationTypeForName, "atk_relation_type_for_name"},
 	} {
 		ok = ok && bind(b.lib, b.fn, b.name)
 	}
@@ -210,6 +228,8 @@ func registerAccess() {
 	initAccessCallbacks()
 	announces = bind(o, &gSignalLookup, "g_signal_lookup") && bind(o, &gSignalEmitAnnouncement, "g_signal_emit_by_name") &&
 		gSignalLookup(cs("announcement"), atkObjectGetType()) != 0
+	notifies = announces && bind(o, &gSignalEmitNotification, "g_signal_emit_by_name") &&
+		gSignalLookup(cs("notification"), atkObjectGetType()) != 0
 	register := func(parent uintptr, name string, classInit ptr) uintptr {
 		var q gTypeQueryInfo
 		gTypeQuery(parent, &q)
@@ -296,6 +316,12 @@ func loadAccessNames() {
 	}
 	atkRole.panel, atkRole.text, atkRole.password = role("panel"), role("text"), role("password text")
 	atkRole.listBox = role("list box")
+	atkRelationControllerFor = atkRelationTypeForName(cs("controller-for"))
+	atkRelationControlledBy = atkRelationTypeForName(cs("controlled-by"))
+	atkRelationDescribedBy = atkRelationTypeForName(cs("described-by"))
+	atkRelationDescriptionFor = atkRelationTypeForName(cs("description-for"))
+	atkRelationErrorMessage = atkRelationTypeForName(cs("error-message")) // ATK 2.26
+	atkRelationErrorFor = atkRelationTypeForName(cs("error-for"))
 	for r, names := range map[platform.AccessRole][]string{
 		platform.RoleGroup: {"panel"}, platform.RoleText: {"label"}, platform.RoleButton: {"push button", "button"},
 		platform.RoleLink: {"link"}, platform.RoleCheckBox: {"check box"}, platform.RoleRadio: {"radio button"},
@@ -315,6 +341,17 @@ func loadAccessNames() {
 		platform.RoleMenu: {"menu"}, platform.RoleMenuBar: {"menu bar"}, platform.RoleMenuItem: {"menu item"},
 		platform.RoleMenuItemCheckBox: {"check menu item", "menu item"}, platform.RoleMenuItemRadio: {"radio menu item", "menu item"},
 		platform.RoleHeading: {"heading", "label"},
+		// A landmark, whose xml-roles attribute says which, as Chromium's.
+		platform.RoleNavigation: {"landmark", "panel"}, platform.RoleRegion: {"landmark", "panel"},
+		platform.RoleSearch: {"landmark", "panel"}, platform.RoleArticle: {"article", "panel"},
+		// Live regions, which their object attributes say how to read.
+		platform.RoleLog: {"log", "panel"}, platform.RoleTimer: {"timer", "panel"},
+		platform.RoleAlert:     {"notification", "alert"},
+		platform.RoleSeparator: {"separator"}, platform.RoleRowHeader: {"row header", "table row header"},
+		// Tables, whose xml-roles attribute says which, as Chromium's.
+		platform.RoleGrid: {"table"}, platform.RoleTreeGrid: {"tree table", "table"},
+		// Content removed and added (ATK 2.34), as Chromium's del and ins.
+		platform.RoleDeletion: {"content deletion", "panel"}, platform.RoleInsertion: {"content insertion", "panel"},
 	} {
 		atkRoles[r] = role(names...)
 	}
@@ -327,9 +364,19 @@ func loadAccessNames() {
 		&st.singleLine: "single-line", &st.selectableText: "selectable-text", &st.defunct: "defunct",
 		&st.selectable: "selectable", &st.selected: "selected", &st.multiselectable: "multiselectable",
 		&st.hasPopup: "has-popup", &st.invalidEntry: "invalid-entry", &st.vertical: "vertical", &st.horizontal: "horizontal",
+		&st.busy: "busy", &st.active: "active", &st.supportsAutocompletion: "supports-autocompletion",
 	} {
 		*p = atkStateTypeForName(cs(name))
 	}
+}
+
+// xmlRoles are the ARIA roles of nodes whose ATK role does not say all,
+// as the landmarks' and live regions', in their xml-roles attribute.
+var xmlRoles = map[platform.AccessRole]string{
+	platform.RoleNavigation: "navigation", platform.RoleRegion: "region", platform.RoleSearch: "search", platform.RoleLog: "log",
+	platform.RoleTimer: "timer", platform.RoleAlert: "alert", platform.RoleStatus: "status",
+	platform.RoleGrid: "grid", platform.RoleTreeGrid: "treegrid",
+	platform.RoleDeletion: "deletion", platform.RoleInsertion: "insertion",
 }
 
 // accessTree is what assistive technology sees of a surface.
@@ -362,6 +409,38 @@ type accessNode struct {
 // outline that its list chooses.
 func chooses(n platform.AccessNode) bool {
 	return (n.Role == platform.RoleListItem || n.Role == platform.RoleRow || n.Role == platform.RoleTreeItem) && n.States&platform.AccessSelectable != 0
+}
+
+// gridNames are the object attributes of gridAttributes' values, as
+// Chromium names them, and those of a cell's spans, as Gecko and Orca
+// name them.
+var gridNames = [...]string{"rowcount", "colcount", "rowindex", "colindex", "rowspan", "colspan"}
+
+// gridAttributes returns the size of a table or a grid, the place of a
+// row or a cell in it, as the app gave them, and the rows and columns a
+// cell covers when more than one (aria-rowspan, aria-colspan): 0 for
+// those not given. A cell's row index is its row's unless it has one of
+// its own.
+func (an *accessNode) gridAttributes() (v [6]int) {
+	n := &an.n
+	switch {
+	case n.Role.Tabular():
+		v[0], v[1] = n.RowCount, n.ColCount
+	case n.Role == platform.RoleRow:
+		v[2] = n.RowIndex
+	case cellRole(n.Role):
+		v[2], v[3], v[4], v[5] = n.RowIndex, n.ColIndex, n.RowSpan, n.ColSpan
+		if p := an.parent; v[2] == 0 && p != nil && p.n.Role == platform.RoleRow {
+			v[2] = p.n.RowIndex
+		}
+	}
+	return v
+}
+
+// cellRole reports whether nodes of a role are cells of a table, headers
+// included.
+func cellRole(r platform.AccessRole) bool {
+	return r == platform.RoleCell || r == platform.RoleColumnHeader || r == platform.RoleRowHeader
 }
 
 // chosenRows returns the rows of a list or table that are chosen.
@@ -432,7 +511,7 @@ func accessType(n platform.AccessNode) uintptr {
 		return editableType
 	case platform.RoleText:
 		return textType
-	case platform.RoleList, platform.RoleTable, platform.RoleTree:
+	case platform.RoleList, platform.RoleTable, platform.RoleTree, platform.RoleGrid, platform.RoleTreeGrid:
 		if n.States&platform.AccessSelectable != 0 {
 			return selectionType // choosing its rows
 		}
@@ -565,6 +644,15 @@ func (t *accessTree) update(tree *platform.AccessTree) {
 		for _, text := range tree.Announcements {
 			gSignalEmitAnnouncement(t.root, cs("announcement"), cs(text))
 		}
+		// Alerts interrupt, through the notification signal of ATK 2.50,
+		// assertive (ATK_LIVE_ASSERTIVE); before it, they are announced.
+		for _, text := range tree.Alerts {
+			if notifies {
+				gSignalEmitNotification(t.root, cs("notification"), cs(text), 2)
+			} else {
+				gSignalEmitAnnouncement(t.root, cs("announcement"), cs(text))
+			}
+		}
 	}
 }
 
@@ -637,9 +725,11 @@ func stateList(n platform.AccessNode, focused bool) []int32 {
 	switch n.Role {
 	case platform.RoleCheckBox, platform.RoleRadio, platform.RoleSwitch, platform.RoleMenuItemCheckBox, platform.RoleMenuItemRadio:
 		list = append(list, st.checkable)
-	case platform.RoleTab, platform.RoleTreeItem, platform.RoleRow, platform.RoleListItem:
-		// Rows and items of lists only where their list chooses them.
-		if n.States&platform.AccessSelectable == 0 && (n.Role == platform.RoleRow || n.Role == platform.RoleListItem) {
+	case platform.RoleTab, platform.RoleTreeItem, platform.RoleRow, platform.RoleListItem,
+		platform.RoleCell, platform.RoleColumnHeader, platform.RoleRowHeader:
+		// Rows and items of lists only where their list chooses them, and
+		// cells where they are chosen or not, as ARIA's gridcells.
+		if n.States&platform.AccessSelectable == 0 && n.Role != platform.RoleTab && n.Role != platform.RoleTreeItem {
 			break
 		}
 		list = append(list, st.selectable)
@@ -648,11 +738,9 @@ func stateList(n platform.AccessNode, focused bool) []int32 {
 		}
 	case platform.RolePopUpButton:
 		list = append(list, st.expandable)
-	case platform.RoleSlider:
-		// As GtkScale's.
-		if n.States&platform.AccessVertical != 0 {
-			list = append(list, st.vertical)
-		} else {
+	case platform.RoleSlider, platform.RoleSeparator:
+		// As GtkScale's and GtkSeparator's, across unless told.
+		if n.States&(platform.AccessVertical|platform.AccessHorizontal) == 0 {
 			list = append(list, st.horizontal)
 		}
 	case platform.RoleDisclosure:
@@ -680,8 +768,12 @@ func stateList(n platform.AccessNode, focused bool) []int32 {
 		}
 	}
 	// A toggle button is checked while pressed, as GTK's are.
-	if n.States&platform.AccessChecked != 0 && n.Role != platform.RoleTab && n.Role != platform.RoleTreeItem && n.Role != platform.RoleRow && n.Role != platform.RoleListItem {
+	if n.States&platform.AccessChecked != 0 && n.Role != platform.RoleTab && n.Role != platform.RoleTreeItem && n.Role != platform.RoleRow && n.Role != platform.RoleListItem &&
+		(!cellRole(n.Role) || n.States&platform.AccessSelectable == 0) {
 		list = append(list, st.checked)
+	}
+	if n.HasPopup != platform.PopupNone {
+		list = append(list, st.hasPopup)
 	}
 	if n.States&platform.AccessMixed != 0 || n.Now < n.Min {
 		list = append(list, st.indeterminate) // a progress of unknown length
@@ -697,6 +789,25 @@ func stateList(n platform.AccessNode, focused bool) []int32 {
 	}
 	if n.States&platform.AccessInvalid != 0 {
 		list = append(list, st.invalidEntry)
+	}
+	// Which way it runs, as aria-orientation.
+	switch {
+	case n.States&platform.AccessVertical != 0:
+		list = append(list, st.vertical)
+	case n.States&platform.AccessHorizontal != 0:
+		list = append(list, st.horizontal)
+	}
+	if n.States&platform.AccessBusy != 0 {
+		list = append(list, st.busy)
+	}
+	// The current item is active, as Chromium's aria-current is.
+	if n.Current != platform.CurrentNone {
+		list = append(list, st.active)
+	}
+	// A field whose suggestions complete it, as Core-AAM maps
+	// aria-autocomplete, with its autocomplete attribute.
+	if n.AutoComplete != platform.AutoCompleteNone {
+		list = append(list, st.supportsAutocompletion)
 	}
 	return slices.DeleteFunc(list, func(s int32) bool { return s == 0 })
 }
@@ -912,8 +1023,58 @@ func initAccessCallbacks() {
 		}
 		return set
 	})
-	// Object attributes: the placeholder of a text field, and the place of
-	// a row among its list's, which Orca reads as "5 of 10000".
+	// Relations: the nodes a node controls (controller-for), and those
+	// controlling it (controlled-by), as ARIA's aria-controls; those
+	// describing it (described-by) and those it describes
+	// (description-for), as aria-describedby; and those holding its error
+	// while it is invalid (error-message) and those whose error it holds
+	// (error-for), as aria-errormessage.
+	relations := purego.NewCallback(func(obj ptr) ptr {
+		set := atkRelationSetNew()
+		an := node(obj)
+		if an == nil {
+			return set
+		}
+		add := func(targets []ptr, relation int32) {
+			if len(targets) > 0 && relation != 0 {
+				r := atkRelationNew(&targets[0], int32(len(targets)), relation)
+				atkRelationSetAdd(set, r)
+				gObjectUnref(r) // the set holds it
+			}
+		}
+		both := func(of func(n platform.AccessNode) []uint64, to, back int32) {
+			var targets, from []ptr
+			for _, id := range of(an.n) {
+				if c := an.tree.nodes[id]; c != nil {
+					targets = append(targets, c.obj)
+				}
+			}
+			for _, o := range an.tree.nodes {
+				if slices.Contains(of(o.n), an.n.ID) {
+					from = append(from, o.obj)
+				}
+			}
+			add(targets, to)
+			add(from, back)
+		}
+		both(func(n platform.AccessNode) []uint64 { return n.Controls }, atkRelationControllerFor, atkRelationControlledBy)
+		both(func(n platform.AccessNode) []uint64 { return n.DescribedBy }, atkRelationDescribedBy, atkRelationDescriptionFor)
+		both(func(n platform.AccessNode) []uint64 {
+			if n.States&platform.AccessInvalid == 0 {
+				return nil
+			}
+			return n.ErrorMessage
+		}, atkRelationErrorMessage, atkRelationErrorFor)
+		return set
+	})
+	// Object attributes: the placeholder of a text field, the place of a
+	// row among its list's, which Orca reads as "5 of 10000", which item
+	// the node is the current one of (aria-current), what a field's
+	// suggestions complete (aria-autocomplete), the size of a grid and
+	// the place of its rows and cells as the app gave them (aria-rowcount
+	// and the like), the rows and columns a cell covers (aria-rowspan,
+	// aria-colspan), and the ARIA role of a landmark, a live region or a
+	// grid.
 	attributes := purego.NewCallback(func(obj ptr) ptr {
 		an := node(obj)
 		if an == nil {
@@ -928,6 +1089,11 @@ func initAccessCallbacks() {
 		if an.n.Placeholder != "" {
 			add("placeholder-text", an.n.Placeholder)
 		}
+		// The keys that press or focus it (aria-keyshortcuts), as
+		// Chromium says.
+		if an.n.KeyShortcuts != "" {
+			add("keyshortcuts", an.n.KeyShortcuts)
+		}
 		if an.n.PosInSet > 0 {
 			add("posinset", strconv.Itoa(an.n.PosInSet))
 		}
@@ -937,12 +1103,59 @@ func initAccessCallbacks() {
 		if an.n.Level > 0 {
 			add("level", strconv.Itoa(an.n.Level))
 		}
+		if c := an.n.Current; c != platform.CurrentNone {
+			add("current", c.String())
+		}
+		for i, v := range an.gridAttributes() {
+			if v > 0 {
+				add(gridNames[i], strconv.Itoa(v))
+			}
+		}
+		if a := an.n.AutoComplete; a != platform.AutoCompleteNone {
+			add("autocomplete", a.String())
+		}
+		if r := xmlRoles[an.n.Role]; r != "" {
+			add("xml-roles", r)
+		}
+		// A search field, as Chromium's searchbox.
+		if an.n.Role == platform.RoleTextField && an.n.States&platform.AccessSearch != 0 {
+			add("xml-roles", "searchbox")
+			add("text-input-type", "search")
+		}
+		// How a live region and what is inside it are read, as
+		// Chromium's say aria-live, aria-atomic and aria-relevant.
+		for p := an; p != nil; p = p.parent {
+			live, atomic := p.n.Role.Live()
+			if live == "" {
+				continue
+			}
+			if p == an {
+				add("live", live)
+				add("atomic", strconv.FormatBool(atomic))
+				add("relevant", "additions text")
+			}
+			add("container-live", live)
+			add("container-atomic", strconv.FormatBool(atomic))
+			add("container-relevant", "additions text")
+			add("container-live-role", xmlRoles[p.n.Role])
+			break
+		}
 		// The order of the column a table is sorted by, as Chromium says.
 		switch {
 		case an.n.States&platform.AccessSortAscending != 0:
 			add("sort", "ascending")
 		case an.n.States&platform.AccessSortDescending != 0:
 			add("sort", "descending")
+		case an.n.States&platform.AccessSortOther != 0:
+			add("sort", "other")
+		}
+		// What the app calls the node's role (aria-roledescription), and
+		// the kind of popup it opens (aria-haspopup), as Chromium says.
+		if d := an.n.RoleDescription; d != "" {
+			add("roledescription", d)
+		}
+		if p := an.n.HasPopup; p != platform.PopupNone {
+			add("haspopup", p.String())
 		}
 		return list
 	})
@@ -952,6 +1165,7 @@ func initAccessCallbacks() {
 		*slot(class, atkGetIndexInParent) = index
 		*slot(class, atkRefStateSet) = states
 		*slot(class, atkGetAttributes) = attributes
+		*slot(class, atkRefRelationSet) = relations
 	})
 
 	contains := purego.NewCallback(func(obj ptr, x, y, coords int32) bool {
@@ -1082,7 +1296,11 @@ func initAccessCallbacks() {
 			*(*float64)(unsafe.Pointer(slot(value, 0))) = max(an.n.Now, an.n.Min)
 		}
 		if text != 0 {
+			// The text of the value (aria-valuetext), the caller's to free.
 			*slot(text, 0) = 0
+			if an := node(obj); an != nil && an.n.Value != "" {
+				*slot(text, 0) = cString(an.n.Value)
+			}
 		}
 	})
 	valueRange := purego.NewCallback(func(obj ptr) ptr {

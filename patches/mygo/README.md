@@ -1,6 +1,6 @@
 # 固定 mygo 依赖与 Windows 透明补丁
 
-仓库使用 Go 标准 `vendor/` 保存应用和官方 CLI 实际需要的依赖源码。`go.mod` / `go.sum` 的 mygo 版本仍固定为 `v0.6.5-0.20261026063203-07ebe19ac0dc`，没有本地 `replace`，也不修改 Go 模块缓存。
+仓库使用 Go 标准 `vendor/` 保存应用和官方 CLI 实际需要的依赖源码。`go.mod` / `go.sum` 的 mygo 版本固定为 `v0.8.3`，没有本地 `replace`，也不修改 Go 模块缓存。
 
 ## 补丁范围
 
@@ -8,7 +8,7 @@
 
 用户随后提供了仍有细边框的 Windows 10 截图，当前补丁已追加 v3 边框修正：对透明、无边框、无阴影的网页窗口禁用 DWM 非客户区绘制，并处理 `WM_NCPAINT` / `WM_NCACTIVATE`，保留原生缩放边与命中测试。普通窗口、请求阴影的窗口和原生 UI 窗口继续使用原逻辑。
 
-变更仍限定在 `vendor/github.com/egoist/mygo/internal/windows/window.go`。v3 结果与此前隔离候选源码字节一致，用户已确认 v3 在 Windows 实体机可用。原文件版权、所有依赖许可证及 notice 保留在 vendor 中。
+变更仍限定在 `vendor/github.com/egoist/mygo/internal/windows/window.go`。v3 补丁此前已获 Windows 实体机确认；升级到 v0.8.3 后保留同一修正规则，并重新核对上游与补丁结果摘要，当前版本的桌面歌词透明显示也已获用户实机确认。原文件版权、所有依赖许可证及 notice 保留在 vendor 中。
 
 ## 构建与校验
 

@@ -121,9 +121,16 @@ func Diff(old, new []byte) []byte {
 	return bytes.Join([][]byte{patch, ctrl, diff, extra}, nil)
 }
 
-// search returns the longest prefix of b found in old, and where, by a
-// binary search of the suffix array of old.
+// maxMatch bounds the matches that search compares. Diff searches at each
+// byte while a match is barely better than the previous alignment, so
+// comparing whole matches makes a long one cost time quadratic in its
+// length; a longer match is still taken, in pieces.
+const maxMatch = 64 << 10
+
+// search returns the longest prefix of b found in old, up to maxMatch
+// bytes, and where, by a binary search of the suffix array of old.
 func search(sa []int32, old, b []byte) (length, pos int) {
+	b = b[:min(len(b), maxMatch)]
 	lo, hi := 0, len(sa)-1
 	for hi-lo >= 2 {
 		mid := lo + (hi-lo)/2

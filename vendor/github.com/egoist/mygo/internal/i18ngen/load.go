@@ -448,6 +448,7 @@ func (l *loader) readMeta(f *File, k *Key) {
 			names = append(names, a.Name)
 		}
 	}
+	goNames, tsNames := map[string]bool{"_": true}, map[string]bool{}
 	for _, name := range names {
 		kind, used := kinds[name]
 		if !used && m != nil {
@@ -459,7 +460,7 @@ func (l *loader) readMeta(f *File, k *Key) {
 		} else if !compatible(typ, kind) {
 			l.errorf(f.Name, f.Lines[k.Name], "%q uses %s as a %s argument, which its type %s cannot be", k.Name, name, kind, typ)
 		}
-		k.Params = append(k.Params, Param{Name: name, Type: typ, Go: goParam(name), TS: tsParam(name)})
+		k.Params = append(k.Params, Param{Name: name, Type: typ, Go: uniqueParam(goParam(name), goNames), TS: uniqueParam(tsParam(name), tsNames)})
 	}
 	if m != nil {
 		l.checkPlurals(f, k.Name, m)
@@ -684,6 +685,16 @@ func goName(key string) string {
 		b.WriteString(w[size:])
 	}
 	return b.String()
+}
+
+// uniqueParam keeps escaped names distinct from other placeholders and
+// from the blank identifier, while the original names stay in the args map.
+func uniqueParam(name string, used map[string]bool) string {
+	for used[name] {
+		name += "_"
+	}
+	used[name] = true
+	return name
 }
 
 var goKeywords = strings.Fields(`break case chan const continue default defer else fallthrough for func go goto if import interface map package range return select struct switch type var`)

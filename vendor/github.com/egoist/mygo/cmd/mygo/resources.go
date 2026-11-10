@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -99,6 +100,83 @@ type resource struct {
 	// lipo is the x86_64 half of a universal binary whose arm64 half is
 	// src.
 	lipo string
+	// filter leaves out what src holds that the app does not ship, when
+	// src is in the resources directory.
+	filter *resourceFilter
+}
+
+// resourceFilter tells which files of the resources directory the app
+// leaves out: Go source files, which only builds read (such as a package
+// that embeds files beside it with //go:embed), and the paths that match
+// the patterns of resourcesExclude, relative to the directory. Listed
+// resources ship whole.
+type resourceFilter struct {
+	dir      string // the resources directory
+	patterns []string
+}
+
+func (c *Config) resourceFilter() *resourceFilter {
+	return &resourceFilter{dir: c.path(resourcesDir), patterns: c.ResourcesExclude}
+}
+
+// excludes reports whether the file or directory at path, in the
+// resources directory, is left out of the app, with all it holds. Paths
+// outside the directory never are.
+func (f *resourceFilter) excludes(path string, dir bool) bool {
+	if f == nil {
+		return false
+	}
+	rel, err := filepath.Rel(f.dir, path)
+	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false
+	}
+	rel = filepath.ToSlash(rel)
+	if !dir && filepath.Ext(rel) == ".go" {
+		return true
+	}
+	return slices.ContainsFunc(f.patterns, func(p string) bool { return matchPattern(p, rel) })
+}
+
+// matchPattern reports whether name, a slash path, matches pattern, whose
+// segments match those of name as path.Match matches them, but **, which
+// matches any number of segments, none included.
+func matchPattern(pattern, name string) bool {
+	return matchSegments(strings.Split(pattern, "/"), strings.Split(name, "/"))
+}
+
+func matchSegments(pattern, name []string) bool {
+	for len(pattern) > 0 {
+		if pattern[0] == "**" {
+			for i := range len(name) + 1 {
+				if matchSegments(pattern[1:], name[i:]) {
+					return true
+				}
+			}
+			return false
+		}
+		if len(name) == 0 {
+			return false
+		}
+		if ok, _ := path.Match(pattern[0], name[0]); !ok {
+			return false
+		}
+		pattern, name = pattern[1:], name[1:]
+	}
+	return len(name) == 0
+}
+
+// validPattern reports whether p is a pattern of resourcesExclude:
+// segments that path.Match takes, or **, between single slashes.
+func validPattern(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "" || seg == "." || seg == ".." || strings.Contains(seg, `\`) {
+			return false
+		}
+		if _, err := path.Match(seg, ""); err != nil {
+			return false
+		}
+	}
+	return true
 }
 
 // resources lists what the app for goos/goarch ships with: the entries of
@@ -107,7 +185,8 @@ type resource struct {
 // of the configuration under their base names. For darwin/universal, the
 // contents of darwin-arm64 and darwin-amd64 also merge, into one tree for
 // both architectures (see merger.combine). Names starting with a dot are
-// left out of directories. Installed paths must be unique, ignoring case
+// left out of directories, and so is what the resource filter excludes
+// from the resources directory. Installed paths must be unique, ignoring case
 // as macOS and Windows do, and top-level names must differ from reserved,
 // the files the packaging adds itself.
 func (c *Config) resources(goos, goarch string, reserved ...string) ([]resource, error) {
@@ -117,7 +196,7 @@ func (c *Config) resources(goos, goarch string, reserved ...string) ([]resource,
 // resourcesWith is resources with the native libraries of the app's
 // packages (see natives), installed at the top like listed resources.
 func (c *Config) resourcesWith(goos, goarch string, natives []source, reserved ...string) ([]resource, error) {
-	m := &merger{c: c, reserved: map[string]string{}}
+	m := &merger{c: c, reserved: map[string]string{}, filter: c.resourceFilter()}
 	for _, name := range reserved {
 		m.reserved[strings.ToLower(name)] = name
 	}
@@ -141,7 +220,10 @@ func (c *Config) resourcesWith(goos, goarch string, natives []source, reserved .
 	}
 	for _, e := range entries {
 		name, path := e.Name(), filepath.Join(dir, e.Name())
-		if hiddenName(name) {
+		// The sweep of resources/ takes the top level as it is: a hidden
+		// entry there is the repository's, not the app's (dotfiles inside a
+		// resource directory ship; see walk).
+		if hiddenName(name) || m.filter.excludes(path, isDir(path)) {
 			continue
 		}
 		if filepath.Clean(path) == devIcon {
@@ -247,6 +329,7 @@ func (s source) stat(path string) (fs.FileInfo, error) {
 type merger struct {
 	c        *Config
 	reserved map[string]string // the packaging's own files, by lower-case name
+	filter   *resourceFilter
 	list     []resource
 }
 
@@ -281,7 +364,11 @@ func (m *merger) merge(sources []source) error {
 func (m *merger) place(group []source) error {
 	first := group[0]
 	if len(group) == 1 && first.amd64 == "" {
-		m.list = append(m.list, resource{name: first.name, src: first.path, nested: first.nested})
+		r := resource{name: first.name, src: first.path, nested: first.nested}
+		if !first.listed {
+			r.filter = m.filter
+		}
+		m.list = append(m.list, r)
 		return nil
 	}
 	var children []source
@@ -334,12 +421,12 @@ func (m *merger) isDir(s source) (bool, error) {
 // which must have the same names. nested tells whether s is in a
 // directory of the project rather than a platform directory.
 func (m *merger) children(s source, nested bool) ([]source, error) {
-	names, err := entryNames(s.path)
+	names, err := m.entryNames(s.path, nested)
 	if err != nil {
 		return nil, err
 	}
 	if s.amd64 != "" {
-		amd64, err := entryNames(s.amd64)
+		amd64, err := m.entryNames(s.amd64, nested)
 		if err != nil {
 			return nil, err
 		}
@@ -366,6 +453,21 @@ func (m *merger) children(s source, nested bool) ([]source, error) {
 		list = append(list, child)
 	}
 	return list, nil
+}
+
+// entryNames returns the names in dir that the app ships, sorted: not
+// those starting with a dot, nor those the filter excludes, whose links
+// are followed unless nested.
+func (m *merger) entryNames(dir string, nested bool) ([]string, error) {
+	names, err := entryNames(dir)
+	if err != nil {
+		return nil, err
+	}
+	return slices.DeleteFunc(names, func(n string) bool {
+		path := filepath.Join(dir, n)
+		info, err := source{nested: nested}.stat(path)
+		return m.filter.excludes(path, err == nil && info.IsDir())
+	}), nil
 }
 
 // entryNames returns the names in dir, sorted, but those starting with a
@@ -550,6 +652,18 @@ func reservedNames(c *Config, goos string) []string {
 
 func hiddenName(name string) bool { return strings.HasPrefix(name, ".") }
 
+// junkName reports the names desktops and editors leave behind inside a
+// directory. Only a hidden directory is skipped whole; a hidden file is data
+// an app may read by name — dsh's provider catalog is
+// dist/providers/data/.manifest.json — so it ships.
+func junkName(name string) bool {
+	switch name {
+	case ".DS_Store", "Thumbs.db", "desktop.ini":
+		return true
+	}
+	return false
+}
+
 // copyResources copies list into dir.
 func copyResources(list []resource, dir string) error {
 	for _, r := range list {
@@ -619,8 +733,9 @@ func walkResource(src string, fn func(path string, info fs.FileInfo) error) erro
 }
 
 // walk calls fn for the source of r and, when it is a directory,
-// everything in it, in the order copyTo copies them. Only links inside it
-// are not followed, or with nested, the source itself too.
+// everything in it that the app ships, in the order copyTo copies them.
+// Only links inside it are not followed, or with nested, the source
+// itself too.
 func (r resource) walk(fn func(path string, info fs.FileInfo) error) error {
 	stat := os.Stat
 	if r.nested {
@@ -640,12 +755,17 @@ func (r resource) walk(fn func(path string, info fs.FileInfo) error) error {
 			return err
 		}
 		for _, e := range entries {
-			if hiddenName(e.Name()) {
-				continue
-			}
 			child, err := e.Info() // links are not followed
 			if err != nil {
 				return err
+			}
+			// See junkName: dotfiles ship, hidden directories and the
+			// droppings of a file manager do not.
+			if junkName(e.Name()) || (hiddenName(e.Name()) && child.IsDir()) {
+				continue
+			}
+			if r.filter.excludes(filepath.Join(path, e.Name()), child.IsDir()) {
+				continue
 			}
 			if err := walk(filepath.Join(path, e.Name()), child); err != nil {
 				return err

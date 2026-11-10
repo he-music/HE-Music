@@ -19,6 +19,8 @@ var (
 	gtkIconThemeGetDefault     func() ptr
 	gtkIconThemeLookupByGicon  func(theme, icon ptr, size int32, flags uint32) ptr
 	gtkIconInfoLoadIcon        func(info ptr, gerr *ptr) ptr
+	gContentTypeGuess          func(filename *byte, data ptr, size uintptr, uncertain *int32) ptr
+	gContentTypeGetIcon        func(contentType ptr) ptr
 )
 
 func loadIcons() {
@@ -30,6 +32,8 @@ func loadIcons() {
 		mustBind(libGTK, &gtkIconThemeGetDefault, "gtk_icon_theme_get_default")
 		mustBind(libGTK, &gtkIconThemeLookupByGicon, "gtk_icon_theme_lookup_by_gicon")
 		mustBind(libGTK, &gtkIconInfoLoadIcon, "gtk_icon_info_load_icon")
+		mustBind(libGIO, &gContentTypeGuess, "g_content_type_guess")
+		mustBind(libGIO, &gContentTypeGetIcon, "g_content_type_get_icon")
 	})
 }
 
@@ -64,6 +68,22 @@ func (shell) FileIcon(path string, size int) ([]byte, error) {
 		return png, nil
 	}
 	return nil, fmt.Errorf("mygo: the icon theme has no icon for %q", path)
+}
+
+// TypeIcon returns the icon the file manager shows for files with the
+// extension ext: that of the content type GIO guesses from such a name,
+// from the icon theme at size by size pixels.
+func (shell) TypeIcon(ext string, size int) ([]byte, error) {
+	loadIcons()
+	ct := gContentTypeGuess(cs("file."+ext), 0, 0, nil)
+	icon := gContentTypeGetIcon(ct)
+	gFree(ct)
+	png := themeIcon(icon, size)
+	gObjectUnref(icon)
+	if png == nil {
+		return nil, fmt.Errorf("mygo: the icon theme has no icon for files of type %q", ext)
+	}
+	return png, nil
 }
 
 // themeIcon draws a GIcon from the icon theme at size by size pixels, or

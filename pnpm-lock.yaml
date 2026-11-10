@@ -93,8 +93,8 @@ importers:
         specifier: ^2.3.0
         version: 2.3.0
       mygo-runtime:
-        specifier: 0.6.4
-        version: 0.6.4
+        specifier: 0.8.3
+        version: 0.8.3
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
@@ -1948,8 +1948,8 @@ packages:
   muggle-string@0.4.1:
     resolution: {integrity: sha512-VNTrAak/KhO2i8dqqnqnAHOa3cYBwXEZe9h+D5h/1ZqFSTEFHdM65lR7RoIqq3tBBYavsOXV84NoHXZ0AkPyqQ==}
 
-  mygo-runtime@0.6.4:
-    resolution: {integrity: sha512-uP2SvyLCd2XRRig8azVrczXCX3obY431x3t/jSpU7S0cFCgH9FwY9gbjng5YxhlwAauys3bYkkRwXcHJ0/TaSw==}
+  mygo-runtime@0.8.3:
+    resolution: {integrity: sha512-B2hbQcb6obuqYR+ZP+aJaB+zW7OIsjZrEdj3EqL42VZYyGKa6J4qXvbGkJ0mfxl8zVEkQBO76QDg3/Sl87RDIg==}
 
   naive-ui@2.45.3:
     resolution: {integrity: sha512-D83gJ+6zUdkQ5DuUbmlfyaM1t8pV5WMPa6KmL9mByqQuiL12qBdA0n/iEIth4dQw1x/duNGpOS2anpt5FKO1kw==}
@@ -4316,7 +4316,7 @@ snapshots:
 
   muggle-string@0.4.1: {}
 
-  mygo-runtime@0.6.4: {}
+  mygo-runtime@0.8.3: {}
 
   naive-ui@2.45.3(vue@3.5.43(typescript@5.9.3)):
     dependencies:

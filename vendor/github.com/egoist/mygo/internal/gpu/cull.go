@@ -111,7 +111,7 @@ func (b *Builder) planCull(s *scene.Scene) {
 		cur := &stack[len(stack)-1]
 		switch op.Kind {
 		case scene.OpPushClip:
-			stack = append(stack, b.pushed(cur, op, b.encloses[i]))
+			stack = append(stack, b.pushed(s, cur, op, i))
 		case scene.OpPopClip:
 			if len(stack) > 1 {
 				stack = stack[:len(stack)-1]

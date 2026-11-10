@@ -295,6 +295,9 @@ type patternGenerator struct {
 	buckets     [52][]*dtpEntry
 	defaultHour byte
 	dateTime    [4]string // the glue of a date and a time by style
+	// patternHours keeps the lengths of the hours of patterns, as ICU's
+	// getBestPattern does without UDATPG_MATCH_HOUR_FIELD_LENGTH.
+	patternHours bool
 }
 
 func bucketOf(base string) int {
@@ -540,7 +543,7 @@ func (g *patternGenerator) adjustFieldTypes(pattern string, e *dtpEntry, req *sk
 		}
 		adjLen := reqLen
 		switch {
-		case field == fieldMinute || field == fieldSecond:
+		case field == fieldMinute || field == fieldSecond || field == fieldHour && g.patternHours:
 			adjLen = it.n
 		case e.specified && reqChar != 'c' && reqChar != 'e':
 			skelLen := len(e.skel.original[field])

@@ -76,6 +76,34 @@ type FlyoutOptions struct {
 	Gap int
 	// Width and Height of the flyout in DIPs (default 200x200).
 	Width, Height int
+	// FitContent sizes the flyout to its page's content, and follows it
+	// as it changes, as browsers size the popups of their extensions:
+	// Width and Height are its size until the page tells its own, which
+	// it does before its DOM is ready. The page's root element (html) is
+	// laid out at the width of its content, within MinWidth and MaxWidth,
+	// at which its text wraps; its height is its content's, the body's
+	// margins included, within MinHeight and MaxHeight, beyond which the
+	// page scrolls. A page that gives html a size of its own, as
+	// height: 100%, keeps the flyout at that size.
+	//
+	// Native UI (Content) fits as well: each frame measures the root's
+	// content as it lays it out, at its max-content width within
+	// MinWidth and MaxWidth and its height at that width, within
+	// MinHeight and MaxHeight, beyond which a Scroll in it scrolls; what
+	// is placed Absolute takes none of it. A frame that measures another
+	// size resizes the flyout, and the next lays the content out at that
+	// size: two frames, the first at the size the flyout had. A hidden
+	// flyout draws no frames: content changed while it was hidden lays
+	// out as Show or ShowInactive shows it, which shows the flyout at the
+	// size it takes. A view that sizes its content after the window's
+	// (Context.Size) settles at the size it took, rather than resize back
+	// and forth.
+	FitContent bool
+	// MinWidth, MinHeight, MaxWidth and MaxHeight bound the size
+	// FitContent gives the flyout, in DIPs; 0 is no bound. The work area
+	// bounds it too, as it bounds any flyout.
+	MinWidth, MinHeight int
+	MaxWidth, MaxHeight int
 	// Focusable makes the flyout take the keyboard as it shows, and close
 	// as a menu does when the user presses outside it, another window
 	// takes the keyboard or the app is deactivated: OnClose listeners
@@ -85,7 +113,8 @@ type FlyoutOptions struct {
 	// pointer, but on Anchor, as AppKit's popovers: so a click on the
 	// button that opened it closes it, and does not open it again.
 	// Menus, lists to choose from and popovers are focusable, and handle
-	// their own keys.
+	// their own keys. A window modal to the flyout (WindowOptions.Modal)
+	// keeps it open while it shows: a confirmation the flyout asks for.
 	//
 	// Without it, the flyout never takes the keyboard, which stays in
 	// the parent, and stays until it is closed: tooltips, hover cards,
@@ -151,6 +180,16 @@ func NewFlyout(opts FlyoutOptions) *Window {
 	if err != nil {
 		panic(err)
 	}
+	var fit *fitContent
+	if opts.FitContent {
+		fit = &fitContent{
+			min: platform.Size{Width: opts.MinWidth, Height: opts.MinHeight},
+			max: platform.Size{Width: opts.MaxWidth, Height: opts.MaxHeight},
+		}
+		if opts.Content != nil {
+			fit.native, fit.show = (*Window).connectFit, (*Window).fitBeforeShow
+		}
+	}
 	return createWindow("NewFlyout", WindowOptions{
 		URL:               opts.URL,
 		Width:             or(opts.Width, 200),
@@ -169,14 +208,15 @@ func NewFlyout(opts FlyoutOptions) *Window {
 		Content:           opts.Content,
 		Hidden:            opts.Hidden,
 		Vibrancy:          opts.Vibrancy,
-	}, nil, &flyoutOptions{fo, opts.Tray})
+	}, nil, nil, &flyoutOptions{fo, opts.Tray, fit})
 }
 
 // flyoutOptions carries what newWindow needs of a flyout: its tray's
-// native icon is read on the main thread.
+// native icon is read on the main thread, and FitContent's limits.
 type flyoutOptions struct {
 	flyout *platform.Flyout
 	tray   *Tray
+	fit    *fitContent
 }
 
 func (o *FlyoutOptions) platform() (*platform.Flyout, error) {

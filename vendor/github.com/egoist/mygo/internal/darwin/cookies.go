@@ -13,8 +13,10 @@ import (
 	"github.com/egoist/mygo/internal/platform"
 )
 
-func cookieStore() (id, error) {
-	store := send(class("WKWebsiteDataStore"), "defaultDataStore")
+// cookieStore returns the WKHTTPCookieStore of store, nil for the
+// default one.
+func cookieStore(s platform.DataStore) (id, error) {
+	store := websiteDataStore(s)
 	if !sendBool(store, "respondsToSelector:", uintptr(sel("httpCookieStore"))) || !sendBool(class("NSHTTPCookie"), "instancesRespondToSelector:", uintptr(sel("sameSitePolicy"))) {
 		return 0, fmt.Errorf("mygo: cookies: requires macOS 10.15 or newer: %w", platform.ErrUnsupported)
 	}
@@ -39,7 +41,7 @@ func readCookie(c id) platform.Cookie {
 
 // ListCookies lists every cookie, and matches them with the URL in Go:
 // WKHTTPCookieStore cannot.
-func (a appController) ListCookies(rawURL string, done func([]platform.Cookie, error)) {
+func (a appController) ListCookies(s platform.DataStore, rawURL string, done func([]platform.Cookie, error)) {
 	var u *url.URL
 	if rawURL != "" {
 		var err error
@@ -49,7 +51,7 @@ func (a appController) ListCookies(rawURL string, done func([]platform.Cookie, e
 		}
 	}
 	withPool(func() {
-		store, err := cookieStore()
+		store, err := cookieStore(s)
 		if err != nil {
 			done(nil, err)
 			return
@@ -70,9 +72,9 @@ func (a appController) ListCookies(rawURL string, done func([]platform.Cookie, e
 	})
 }
 
-func (a appController) SetCookie(c platform.Cookie, done func(error)) {
+func (a appController) SetCookie(s platform.DataStore, c platform.Cookie, done func(error)) {
 	withPool(func() {
-		store, err := cookieStore()
+		store, err := cookieStore(s)
 		if err != nil {
 			done(err)
 			return
@@ -128,9 +130,9 @@ func (a appController) SetCookie(c platform.Cookie, done func(error)) {
 	})
 }
 
-func (a appController) DeleteCookie(key platform.CookieKey, done func(error)) {
+func (a appController) DeleteCookie(s platform.DataStore, key platform.CookieKey, done func(error)) {
 	withPool(func() {
-		store, err := cookieStore()
+		store, err := cookieStore(s)
 		if err != nil {
 			done(err)
 			return
@@ -170,18 +172,14 @@ func (a appController) DeleteCookie(key platform.CookieKey, done func(error)) {
 	})
 }
 
-// ClearCookies removes the cookies of the default data store, its
-// other data kept.
-func (a appController) ClearCookies(done func(error)) {
-	withPool(func() {
-		if _, err := cookieStore(); err != nil {
-			done(err)
-			return
-		}
-		store := send(class("WKWebsiteDataStore"), "defaultDataStore")
-		types := send(class("NSSet"), "setWithObject:", uintptr(nsString("WKWebsiteDataTypeCookies")))
-		blk := newBlock(func(_ objc.Block) { a.b.runOnMain(func() { done(nil) }) })
-		send(store, "removeDataOfTypes:modifiedSince:completionHandler:", uintptr(types), uintptr(send(class("NSDate"), "distantPast")), uintptr(blk))
-		blk.Release()
-	})
+// ClearCookies removes the cookies of the data store, its other data
+// kept.
+func (a appController) ClearCookies(s platform.DataStore, done func(error)) {
+	var err error
+	withPool(func() { _, err = cookieStore(s) })
+	if err != nil {
+		done(err)
+		return
+	}
+	a.removeData(s, platform.SiteDataCookies, done)
 }

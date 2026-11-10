@@ -326,10 +326,12 @@ func valueString(locale string, v any) string {
 // (the default: up to three fraction digits, or those of an exact
 // number), "integer", "percent", or a skeleton of ICU's number
 // skeletons ("::percent .00"), of which it reads percent, integer,
-// precision-integer, the precision of fraction digits (.00, .0#, .##)
-// and group-off, and writes the rest as the default. Integers and
-// percents round half to even, as ICU's MessageFormat does; the default,
-// half away from zero, as Intl.NumberFormat does.
+// precision-integer, the precision of fraction digits (.00, .0#, .##),
+// group-off and currency/ (an amount of a currency, "::currency/EUR",
+// once linkFormats linked them), and writes the rest as the default.
+// Integers and percents round half to even, as ICU's MessageFormat does;
+// the default and amounts, half away from zero, as Intl.NumberFormat
+// does.
 func formatNumber(locale string, n number, style string) string {
 	var o NumberOptions
 	stems := []string{style}
@@ -345,13 +347,17 @@ func formatNumber(locale string, n number, style string) string {
 			o.Percent, o.HalfEven = true, true
 		case stem == "group-off":
 			o.NoGrouping = true
+		case strings.HasPrefix(stem, "currency/"):
+			if c := messageCurrency.Load(); c != nil {
+				o.Currency = (*c)(stem[len("currency/"):])
+			}
 		case strings.HasPrefix(stem, ".") && strings.Trim(stem[1:], "0#") == "" && len(stem) > 1:
 			o.MinFractionDigits = strings.Count(stem, "0")
 			o.MaxFractionDigits = len(stem) - 1
 			fraction = true
 		}
 	}
-	if n.exact && !fraction && !o.Integer && !o.Percent {
+	if n.exact && !fraction && !o.Integer && !o.Percent && o.Currency.code == "" {
 		_, frac, _ := strings.Cut(n.decimal, ".")
 		o.MinFractionDigits, o.MaxFractionDigits = min(len(frac), 100), min(len(frac), 100)
 	}
@@ -359,23 +365,30 @@ func formatNumber(locale string, n number, style string) string {
 }
 
 // timeFormat formats the dates and times of messages: formatDate, once
-// linkTimes linked it.
-var timeFormat atomic.Pointer[func(locale string, t time.Time, kind, style string) string]
+// linkFormats linked it; messageCurrency returns the currencies of their
+// skeletons: CurrencyOf, once linkFormats linked it.
+var (
+	timeFormat      atomic.Pointer[func(locale string, t time.Time, kind, style string) string]
+	messageCurrency atomic.Pointer[func(code string) Currency]
+)
 
-// linkTimes links the formatting of dates and times into messages, for
-// the catalogs and messages an app makes: NewCatalog, NewLibraryCatalog
-// and ParseMessage call it. MyGo's own strings, which every app formats,
-// have no dates, so an app that formats none does not link the patterns
-// and names of dates of CLDR's locales.
-func linkTimes() {
+// linkFormats links the formatting of dates and times, and of amounts of
+// money, into messages, for the catalogs and messages an app makes:
+// NewCatalog, NewLibraryCatalog and ParseMessage call it. MyGo's own
+// strings, which every app formats, have neither, so an app that formats
+// none does not link the patterns and names of dates of CLDR's locales,
+// nor those of currencies.
+func linkFormats() {
 	if timeFormat.Load() == nil {
 		f := formatDate
 		timeFormat.Store(&f)
+		c := CurrencyOf
+		messageCurrency.Store(&c)
 	}
 }
 
 // formatTime writes a time of a message for locale (see formatDate), as
-// RFC 3339 before linkTimes linked the formatting of dates, which no
+// RFC 3339 before linkFormats linked the formatting of dates, which no
 // message of MyGo's own strings needs.
 func formatTime(locale string, t time.Time, kind, style string) string {
 	if f := timeFormat.Load(); f != nil {

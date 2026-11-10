@@ -3,11 +3,13 @@ package mygo
 import (
 	"bytes"
 	"cmp"
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
 	"image/color"
 	"image/png"
+	"log"
 	"math"
 	"path/filepath"
 	"runtime"
@@ -76,6 +78,24 @@ func (ShellModule) FileIcon(path string, size int) ([]byte, error) {
 	var png []byte
 	err := onMainValue(func() (err error) {
 		png, err = backend().Shell().FileIcon(path, size)
+		return err
+	})
+	return png, err
+}
+
+// TypeIcon returns the icon the file manager shows for files with the
+// extension ext, such as "pdf" or ".pdf", as a PNG image of size by size
+// pixels, as FileIcon does, though no such file needs to exist: the icon
+// of an attachment not yet downloaded. It fails in browsers.
+func (ShellModule) TypeIcon(ext string, size int) ([]byte, error) {
+	needsApp("Shell.TypeIcon")
+	if size <= 0 {
+		return nil, errors.New("mygo: Shell.TypeIcon: size must be positive")
+	}
+	ext = strings.TrimPrefix(ext, ".")
+	var png []byte
+	err := onMainValue(func() (err error) {
+		png, err = backend().Shell().TypeIcon(ext, size)
 		return err
 	})
 	return png, err
@@ -509,6 +529,95 @@ func (t *ThemeModule) apply() {
 	}
 }
 
+// SetGTKCSS styles the widgets GTK draws for the app on Linux with css, a
+// GTK 3 style sheet: the decorations GTK draws around windows, the title
+// buttons of hidden title bars (TitleBarStyle), menus and dialogs, for a
+// frame that matches the rest of the desktop, as GTK 4's flat header bars
+// and round title buttons. Pages and native UI, which MyGo draws, never
+// see it. GTK takes the sheet at the user's priority
+// (GTK_STYLE_PROVIDER_PRIORITY_USER), above the theme's rules and MyGo's
+// own. A later call replaces the sheet, and "" removes it. A sheet that
+// does not parse returns GTK's error, and the sheet set before stays. On
+// other platforms it does nothing and returns nil.
+//
+// It is safe from any goroutine, and may be called before App.Run: other
+// goroutines wait for Run to load the sheet, and the main goroutine keeps
+// it for Run, which logs a parse error, as no call is left to return it.
+func (t *ThemeModule) SetGTKCSS(css string) error {
+	if _, ok := backend().(platform.StyleBackend); !ok {
+		return nil
+	}
+	if isMainThread() && !App.initialized {
+		pendingGTKCSS = func() {
+			if err := setGTKCSS(css); err != nil {
+				log.Print(err)
+			}
+		}
+		return nil
+	}
+	return onMainValue(func() error { return setGTKCSS(css) })
+}
+
+// pendingGTKCSS loads the sheet main gave Theme.SetGTKCSS last before Run,
+// which calls it once it has initialized the backend; nil without one.
+// Main thread only.
+var pendingGTKCSS func()
+
+// setGTKCSS loads a sheet of Theme.SetGTKCSS. Main thread only.
+func setGTKCSS(css string) error {
+	if err := backend().(platform.StyleBackend).SetStyleSheet(css); err != nil {
+		return fmt.Errorf("mygo: Theme.SetGTKCSS: %w", err)
+	}
+	return nil
+}
+
+// WindowButtons are the window controls the desktop puts in title bars, at
+// their start and at their end: "minimize", "maximize" and "close", in the
+// desktop's order. An app that hides the system's (HideWindowButtons) and
+// draws its own can draw these, where the desktop wants them.
+type WindowButtons struct {
+	Start, End []string
+}
+
+// Has reports that the desktop puts button, "minimize", "maximize" or
+// "close", in title bars.
+func (b WindowButtons) Has(button string) bool {
+	return slices.Contains(b.Start, button) || slices.Contains(b.End, button)
+}
+
+// Empty reports that the desktop puts no buttons in title bars.
+func (b WindowButtons) Empty() bool { return len(b.Start) == 0 && len(b.End) == 0 }
+
+// WindowButtons returns the window controls the desktop's title bars have.
+// On macOS they are close, minimize and maximize at the start; on Windows
+// minimize, maximize and close at the end. On Linux the desktop's button
+// layout (gtk-decoration-layout) decides, as it does for the buttons of a
+// hidden title bar (TitleBarStyle): none under a Wayland compositor that
+// decorates windows itself, as tiling ones such as Hyprland and Sway,
+// which draw no buttons, and none where the user emptied the layout, as
+// users of tiling window managers on X11 do. OnUpdated tells when it
+// changes. It is safe from any goroutine; like the other calls that need
+// the running app, it panics on the main goroutine before App.Run.
+func (t *ThemeModule) WindowButtons() WindowButtons {
+	needsApp("Theme.WindowButtons")
+	if wb, ok := backend().(platform.WindowButtonsBackend); ok {
+		return onMainValue(func() WindowButtons {
+			start, end := wb.WindowButtons()
+			return WindowButtons{Start: start, End: end}
+		})
+	}
+	return defaultWindowButtons(runtime.GOOS)
+}
+
+// defaultWindowButtons are the title bars' buttons of a desktop whose
+// backend does not tell them.
+func defaultWindowButtons(goos string) WindowButtons {
+	if goos == "darwin" {
+		return WindowButtons{Start: []string{"close", "minimize", "maximize"}}
+	}
+	return WindowButtons{End: []string{"minimize", "maximize", "close"}}
+}
+
 // OnUpdated is called when the effective appearance, or the desktop's
 // preferences (Preferences), change.
 func (t *ThemeModule) OnUpdated(fn func()) (off func()) { return t.onUpdated.add(fn, false) }
@@ -761,7 +870,9 @@ func (t *Tray) PopUpMenu() {
 	t.do(func(n platform.Tray) { n.PopUpMenu(snap) })
 }
 
-// Bounds returns the position of the icon on screen.
+// Bounds returns the position of the icon on screen. macOS shows a menu bar
+// item on each display: Bounds is the one the user last clicked, so a window
+// placed against it, as a flyout, goes on the display the user clicked.
 func (t *Tray) Bounds() Rectangle {
 	return onMainValue(func() Rectangle {
 		if t.native == nil {
@@ -802,7 +913,8 @@ func (t *Tray) activatable() {
 	t.do(func(n platform.Tray) { n.SetActivatable(t.onClick.len() > 0) })
 }
 
-// OnRightClick is called when the icon is right-clicked.
+// OnRightClick is called when the icon is right-clicked, or Control-clicked
+// on macOS.
 func (t *Tray) OnRightClick(fn func()) (off func()) { return t.onRight.add(fn, false) }
 
 // Dark reports whether the bar the icon shows on is dark: the macOS menu
@@ -840,6 +952,14 @@ type NotificationOptions struct {
 	// Notification Center (macOS), such as the messages of a conversation.
 	// Empty leaves them in the app's.
 	Group string
+	// Image is an encoded image, PNG or JPEG, that the notification shows
+	// with its text, such as the cover of the track that started playing:
+	// an attachment on macOS, whose thumbnail grows as the notification
+	// expands, the notification's image on Linux, and the balloon's large
+	// icon on Windows. An image the system cannot decode leaves the
+	// notification without one. MyGo does not fetch remote images.
+	// NewNotification copies it.
+	Image []byte
 	// Sender describes the sender of an incoming direct message. macOS 12+
 	// can show its avatar with the app's small icon when the signed app has
 	// the Communication Notifications capability. Otherwise, or if preparing
@@ -913,6 +1033,10 @@ func NewNotification(opts NotificationOptions) *Notification {
 		// Unique across runs too, as notifications outlive them.
 		id = "mygo-" + randomText()
 	}
+	opts.Image = slices.Clone(opts.Image)
+	if len(opts.Image) > 0 {
+		linkNotificationImages()
+	}
 	if opts.Sender != nil {
 		sender := *opts.Sender
 		sender.Name = cmp.Or(sender.Name, opts.Title)
@@ -936,16 +1060,40 @@ var ErrNotificationsDenied = platform.ErrNotificationsDenied
 // Show waits for the answer; it returns ErrNotificationsDenied when they
 // are not allowed.
 func (n *Notification) Show() error {
+	return n.ShowContext(context.Background())
+}
+
+// ShowContext is Show with a cancellable delivery wait. Cancellation stops
+// waiting for authorization and removes an undelivered notification. The
+// context governs delivery only; a successfully shown notification stays.
+func (n *Notification) ShowContext(ctx context.Context) error {
 	needsApp("Notification.Show")
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	notifications.Lock()
 	if notifications.byID == nil {
 		notifications.byID = map[string]*Notification{}
 	}
-	_, shown := notifications.byID[n.id]
+	previous, shown := notifications.byID[n.id]
 	notifications.byID[n.id] = n
 	notifications.Unlock()
 	ch := make(chan error, 1)
-	onMain(func() {
+	var completeOnce sync.Once
+	canceled := false
+	complete := func(err error, fromContext bool) {
+		completeOnce.Do(func() {
+			canceled = fromContext
+			deliver(ch, err)
+		})
+	}
+	stop := context.AfterFunc(ctx, func() { complete(ctx.Err(), true) })
+	defer stop()
+	show := func() {
+		if ctx.Err() != nil {
+			complete(ctx.Err(), true)
+			return
+		}
 		note := &platform.Notification{
 			ID:       n.id,
 			Title:    n.opts.Title,
@@ -953,17 +1101,43 @@ func (n *Notification) Show() error {
 			Body:     n.opts.Body,
 			Silent:   n.opts.Silent,
 			Group:    n.opts.Group,
+			Image:    n.opts.Image,
 		}
 		if s := n.opts.Sender; s != nil {
 			note.Sender = &platform.NotificationSender{ID: s.ID, Name: s.Name, Avatar: s.Avatar}
 		}
-		backend().ShowNotification(note, func(err error) { deliver(ch, err) })
-	})
+		backend().ShowNotification(note, func(err error) {
+			complete(err, false)
+			if canceled {
+				// An authorization answer can arrive after cancellation.
+				// Do not remove a newer notification sharing this ID.
+				postMain(func() {
+					notifications.Lock()
+					current := notifications.byID[n.id]
+					notifications.Unlock()
+					if current == nil || current == n || current == previous {
+						backend().RemoveNotification(n.id)
+					}
+				})
+			}
+		})
+	}
+	if isMainThread() {
+		show()
+	} else if !postMain(show) {
+		complete(errLoopStopped, false)
+	}
 	err := await(ch)
-	if err != nil && !shown {
+	if err != nil {
 		// Nothing will be clicked.
 		notifications.Lock()
-		delete(notifications.byID, n.id)
+		if notifications.byID[n.id] == n {
+			if shown {
+				notifications.byID[n.id] = previous
+			} else {
+				delete(notifications.byID, n.id)
+			}
+		}
 		notifications.Unlock()
 	}
 	return err

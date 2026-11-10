@@ -4,6 +4,7 @@ package darwin
 
 import (
 	"fmt"
+	"image"
 	"math"
 	"os"
 	"sync"
@@ -21,28 +22,69 @@ import (
 
 // TestPerformMenuItem activates an item of the application menu, found by
 // the titles along its path, e.g. TestPerformMenuItem("File", "New").
+// plugins/automation's menu request chooses items with it too.
 func TestPerformMenuItem(path ...string) error {
 	var err error
 	withPool(func() {
-		menu := send(theBackend.app, "mainMenu")
-		for i, title := range path {
-			if menu == 0 {
-				err = fmt.Errorf("mygo: menu %q has no submenu", path[i-1])
-				return
-			}
-			index := sendInt(menu, "indexOfItemWithTitle:", uintptr(nsString(title)))
-			if index < 0 {
-				err = fmt.Errorf("mygo: no menu item %q", title)
-				return
-			}
-			if i == len(path)-1 {
-				send(menu, "performActionForItemAtIndex:", uintptr(index))
-				return
-			}
-			menu = send(send(menu, "itemAtIndex:", uintptr(index)), "submenu")
+		var menu id
+		var index int
+		if menu, index, err = menuItemAt(path); err == nil {
+			send(menu, "performActionForItemAtIndex:", uintptr(index))
 		}
 	})
 	return err
+}
+
+// TestMenuItemEnabled reports whether an item of the application menu,
+// found as TestPerformMenuItem finds it, is enabled once its menu
+// validates its items, as before it opens.
+func TestMenuItemEnabled(path ...string) (enabled bool, err error) {
+	withPool(func() {
+		var menu id
+		var index int
+		if menu, index, err = menuItemAt(path); err == nil {
+			send(menu, "update")
+			enabled = sendBool(send(menu, "itemAtIndex:", uintptr(index)), "isEnabled")
+		}
+	})
+	return enabled, err
+}
+
+// TestMenuItemSubtitle returns the title and the subtitle of an item of the
+// application menu, found by its title as TestPerformMenuItem finds it.
+func TestMenuItemSubtitle(path ...string) (title, subtitle string, err error) {
+	withPool(func() {
+		var menu id
+		var index int
+		if menu, index, err = menuItemAt(path); err == nil {
+			item := send(menu, "itemAtIndex:", uintptr(index))
+			title = goString(send(item, "title"))
+			if respondsTo(item, "subtitle") {
+				subtitle = goString(send(item, "subtitle"))
+			}
+		}
+	})
+	return title, subtitle, err
+}
+
+// menuItemAt finds an item of the application menu by the titles along
+// its path, and returns its menu and its index there.
+func menuItemAt(path []string) (menu id, index int, err error) {
+	menu = send(theBackend.app, "mainMenu")
+	for i, title := range path {
+		if menu == 0 {
+			return 0, 0, fmt.Errorf("mygo: menu %q has no submenu", path[i-1])
+		}
+		index = sendInt(menu, "indexOfItemWithTitle:", uintptr(nsString(title)))
+		if index < 0 {
+			return 0, 0, fmt.Errorf("mygo: no menu item %q", title)
+		}
+		if i == len(path)-1 {
+			return menu, index, nil
+		}
+		menu = send(send(menu, "itemAtIndex:", uintptr(index)), "submenu")
+	}
+	return 0, 0, fmt.Errorf("mygo: no menu item")
 }
 
 // TestPerformKeyEquivalent sends a key press with the Command key (and
@@ -69,6 +111,29 @@ func TestOnScreen(handle uintptr) bool {
 	return sendInt(id(handle), "occlusionState")&occlusionStateVisible != 0
 }
 
+// TestWindowOrder returns the app's windows on screen, panels too, front
+// to back.
+func TestWindowOrder() []uintptr {
+	var order []uintptr
+	withPool(func() {
+		for _, w := range theBackend.windowsFrontToBack() {
+			order = append(order, uintptr(w))
+		}
+	})
+	return order
+}
+
+// TestOnActiveSpace reports whether a window is on the Space that shows,
+// a full-screen window's own when it is in front.
+func TestOnActiveSpace(handle uintptr) bool {
+	return sendBool(id(handle), "isOnActiveSpace")
+}
+
+// TestWindowLevel returns a window's level.
+func TestWindowLevel(handle uintptr) int {
+	return sendInt(id(handle), "level")
+}
+
 // TestEndSheet ends the sheet attached to a window as if its first button
 // was clicked, and reports whether there was one.
 func TestEndSheet(handle uintptr) bool {
@@ -90,6 +155,24 @@ func TestClick(handle uintptr, x, y float64) { testClick(handle, x, y, false) }
 // handled the click when it returns (handlePosted).
 func TestAppClick(handle uintptr, x, y float64) { testClick(handle, x, y, true) }
 
+// TestHitView returns the class of the view a window hit-tests at (x, y)
+// of its content, in DIPs from its top left.
+func TestHitView(handle uintptr, x, y float64) (cls string) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil {
+		return ""
+	}
+	withPool(func() {
+		content := send(w.win, "contentView")
+		b := msgRect(content, sel("bounds"))
+		hit := msgHitTest(content, sel("hitTest:"), NSPoint{X: x, Y: b.Size.Height - y})
+		if hit != 0 {
+			cls = goString(send(hit, "className"))
+		}
+	})
+	return cls
+}
+
 // TestAppPress is half of TestAppClick: the left mouse down, or the up,
 // which a user's click handles apart, a frame or more later.
 func TestAppPress(handle uintptr, x, y float64, down bool) {
@@ -98,6 +181,78 @@ func TestAppPress(handle uintptr, x, y float64, down bool) {
 		typ = 1 // NSEventTypeLeftMouseDown
 	}
 	testMouse(handle, x, y, true, typ)
+}
+
+// TestPostMouse presses (down) or releases the primary button at (x, y)
+// on screen, in MyGo's coordinates (top-left origin), as the user's mouse
+// does: through the window server, to whatever shows there, the menu
+// bar's items too. It reports false where the process may not post events
+// (Accessibility).
+func TestPostMouse(x, y float64, down bool) bool {
+	testPostOnce.Do(func() {
+		purego.RegisterLibFunc(&cgPreflightPostEventAccess, libCG, "CGPreflightPostEventAccess")
+		purego.RegisterLibFunc(&cgEventCreateMouseEvent, libCG, "CGEventCreateMouseEvent")
+		purego.RegisterLibFunc(&cgEventPost, libCG, "CGEventPost")
+	})
+	if !cgPreflightPostEventAccess() {
+		return false
+	}
+	typ := uint32(2) // kCGEventLeftMouseUp
+	if down {
+		typ = 1 // kCGEventLeftMouseDown
+	}
+	ev := cgEventCreateMouseEvent(0, typ, NSPoint{x, y}, 0) // kCGMouseButtonLeft
+	if ev == 0 {
+		return false
+	}
+	cgEventPost(0, ev) // kCGHIDEventTap
+	cfRelease(ev)
+	return true
+}
+
+var (
+	testPostOnce               sync.Once
+	cgPreflightPostEventAccess func() bool
+	cgEventCreateMouseEvent    func(source uintptr, typ uint32, at NSPoint, button uint32) uintptr
+	cgEventPost                func(tap uint32, ev uintptr)
+)
+
+// TestMouseButtons returns how many presses and releases of the primary
+// button the application took from the window server since the first
+// call, which starts counting them: a test that posts them with
+// TestPostMouse waits for them so.
+func TestMouseButtons() (downs, ups int) {
+	if testButtons == 0 {
+		blk := newBlock(func(_ objc.Block, ev id) id {
+			if sendInt(ev, "type") == 1 { // NSEventTypeLeftMouseDown
+				testDowns++
+			} else {
+				testUps++
+			}
+			return ev
+		})
+		testButtons = retain(send(class("NSEvent"), "addLocalMonitorForEventsMatchingMask:handler:", 1<<1|1<<2, uintptr(blk)))
+	}
+	return testDowns, testUps
+}
+
+// testButtons is TestMouseButtons's monitor, counting into testDowns and
+// testUps. Main thread only.
+var (
+	testButtons        id
+	testDowns, testUps int
+)
+
+// TestClosePopover asks a flyout's popover to close as AppKit asks a
+// transient one as the user presses outside it (performClose:), and
+// reports whether it has one.
+func TestClosePopover(handle uintptr) bool {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.popover == 0 {
+		return false
+	}
+	send(w.popover, "performClose:", 0)
+	return true
 }
 
 func testClick(handle uintptr, x, y float64, viaApp bool) {
@@ -191,6 +346,51 @@ func TestDrag(handle uintptr, points [][2]float64) {
 	})
 }
 
+// TestMouseStep is a press (Down), drag or release of the left button at
+// a point of the screen, in MyGo's coordinates (top-left origin).
+type TestMouseStep struct {
+	Down, Up bool // neither is a drag
+	X, Y     float64
+}
+
+// TestAppMouseAt posts steps of the left button in a window through the
+// application's queue, where event monitors see them as they see the
+// user's, and handles them before it returns. Each step is placed in the
+// window where it is when the step is made, so a step keeps its place on
+// the screen when the window moves.
+func TestAppMouseAt(handle uintptr, steps ...TestMouseStep) {
+	withPool(func() {
+		win := id(handle)
+		number := sendInt(win, "windowNumber")
+		screen := primaryScreenHeight()
+		for _, st := range steps {
+			typ := uint(6) // NSEventTypeLeftMouseDragged
+			switch {
+			case st.Down:
+				typ = 1 // NSEventTypeLeftMouseDown
+			case st.Up:
+				typ = 2 // NSEventTypeLeftMouseUp
+			}
+			f := msgRect(win, sel("frame"))
+			loc := NSPoint{st.X - f.Origin.X, screen - st.Y - f.Origin.Y}
+			ev := msgMouseEvent(class("NSEvent"), sel("mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:"),
+				typ, loc, 0, 0, number, 0, 0, 1, 1)
+			send(theBackend.app, "postEvent:atStart:", uintptr(ev), 0)
+		}
+	})
+	handlePosted()
+}
+
+// TestWindowDrag tells where the press stands in moving a window
+// (StartDrag): "idle", "pressed", "native", "manual" or "server"; "idle"
+// for a window no press is down in.
+func TestWindowDrag(handle uintptr) string {
+	if theDrag.win != id(handle) {
+		return dragIdle.String()
+	}
+	return theDrag.phase.String()
+}
+
 // TestControlClick Control-clicks (x, y), in points from the top-left
 // corner of a window's content.
 func TestControlClick(handle uintptr, x, y float64) {
@@ -205,6 +405,55 @@ func TestControlClick(handle uintptr, x, y float64) {
 			send(win, "sendEvent:", uintptr(ev))
 		}
 	})
+}
+
+// TestSecondaryClickAsPrimary clicks (x, y), in points from the top-left
+// corner of a window's content, with the secondary button as data loss
+// prevention agents post its events again: as the primary button's press
+// and release, which keep the secondary button's number.
+func TestSecondaryClickAsPrimary(handle uintptr, x, y float64) (ok bool) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil {
+		return false
+	}
+	testSideOnce.Do(func() {
+		purego.RegisterLibFunc(&cgEventSetIntegerValueField, libCG, "CGEventSetIntegerValueField")
+	})
+	testPinchOnce.Do(func() {
+		purego.RegisterLibFunc(&cgEventSetType, libCG, "CGEventSetType")
+		purego.RegisterLibFunc(&cgEventSetDoubleValueField, libCG, "CGEventSetDoubleValueField")
+		purego.RegisterLibFunc(&cgEventSetLocation, libCG, "CGEventSetLocation")
+	})
+	withPool(func() {
+		content := msgRect(send(w.win, "contentView"), sel("frame"))
+		want := NSPoint{x, content.Size.Height - y}
+		near := func(p NSPoint) bool { return math.Abs(p.X-want.X) < 0.5 && math.Abs(p.Y-want.Y) < 0.5 }
+		number := sendInt(w.win, "windowNumber")
+		for _, typ := range []uint{1, 2} { // NSEventTypeLeftMouseDown, LeftMouseUp
+			ev := msgMouseEvent(class("NSEvent"), sel("mouseEventWithType:location:modifierFlags:timestamp:windowNumber:context:eventNumber:clickCount:pressure:"),
+				typ, want, 0, 0, number, 0, 0, 1, 1)
+			cg := uintptr(send(ev, "CGEvent"))
+			cgEventSetIntegerValueField(cg, 3, 1) // kCGMouseEventButtonNumber: the secondary button
+			ev = send(class("NSEvent"), "eventWithCGEvent:", cg)
+			// The way through CGEvent moves the point by the window's origin
+			// once more: move it back (CoreGraphics' y goes down).
+			if got := msgPoint(ev, sel("locationInWindow")); ev != 0 && !near(got) {
+				at := cgEventGetLocation(cg)
+				cgEventSetLocation(cg, NSPoint{at.X - (got.X - want.X), at.Y + (got.Y - want.Y)})
+				ev = send(class("NSEvent"), "eventWithCGEvent:", cg)
+			}
+			if ev == 0 || sendInt(ev, "type") != int(typ) || sendInt(ev, "buttonNumber") != 1 || !near(msgPoint(ev, sel("locationInWindow"))) {
+				return
+			}
+			name := "mouseDown:"
+			if typ == 2 {
+				name = "mouseUp:"
+			}
+			send(w.surface.view, name, uintptr(ev))
+		}
+		ok = true
+	})
+	return ok
 }
 
 var (
@@ -250,7 +499,6 @@ var (
 	testPinchOnce              sync.Once
 	cgEventSetType             func(event uintptr, typ uint32)
 	cgEventSetDoubleValueField func(event uintptr, field uint32, value float64)
-	cgEventGetLocation         func(event uintptr) NSPoint
 	cgEventSetLocation         func(event uintptr, p NSPoint)
 )
 
@@ -269,7 +517,6 @@ func TestPinch(handle uintptr, x, y, magnification float64) (ok bool) {
 	testPinchOnce.Do(func() {
 		purego.RegisterLibFunc(&cgEventSetType, libCG, "CGEventSetType")
 		purego.RegisterLibFunc(&cgEventSetDoubleValueField, libCG, "CGEventSetDoubleValueField")
-		purego.RegisterLibFunc(&cgEventGetLocation, libCG, "CGEventGetLocation")
 		purego.RegisterLibFunc(&cgEventSetLocation, libCG, "CGEventSetLocation")
 	})
 	withPool(func() {
@@ -319,7 +566,6 @@ func TestSwipe(handle uintptr, back bool) (ok bool) {
 	testPinchOnce.Do(func() {
 		purego.RegisterLibFunc(&cgEventSetType, libCG, "CGEventSetType")
 		purego.RegisterLibFunc(&cgEventSetDoubleValueField, libCG, "CGEventSetDoubleValueField")
-		purego.RegisterLibFunc(&cgEventGetLocation, libCG, "CGEventGetLocation")
 		purego.RegisterLibFunc(&cgEventSetLocation, libCG, "CGEventSetLocation")
 	})
 	withPool(func() {
@@ -388,6 +634,109 @@ func TestTabFocusesLinks(handle uintptr) bool {
 	return w != nil && w.web != 0 && sendBool(send(send(w.web, "configuration"), "preferences"), "tabFocusesLinks")
 }
 
+// TestBackgroundThrottlingOff reports whether the page of a window, or of
+// its first web view, keeps running while it can't be seen: every one of
+// throttlingPrefs WebKit has at its value for that, and the web view's
+// window occlusion detection off where WebKit has it; and how many of
+// those settings WebKit has.
+func TestBackgroundThrottlingOff(handle uintptr, webView bool) (off bool, settings int) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w != nil && webView {
+		if len(w.webViews) == 0 {
+			return false, 0
+		}
+		w = w.webViews[0]
+	}
+	if w == nil || w.web == 0 {
+		return false, 0
+	}
+	off = true
+	withPool(func() {
+		prefs := send(send(w.web, "configuration"), "preferences")
+		for _, p := range throttlingPrefs {
+			if respondsTo(prefs, p.get) {
+				settings++
+				v := uintptr(send(prefs, p.get))
+				if p.boolean {
+					v = boolArg(byte(v) != 0)
+				}
+				off = off && v == p.off
+			}
+		}
+		if respondsTo(w.web, "_windowOcclusionDetectionEnabled") {
+			settings++
+			off = off && !sendBool(w.web, "_windowOcclusionDetectionEnabled")
+		}
+	})
+	return off, settings
+}
+
+// TestMockCaptureDevices gives a window's page WebKit's mock camera and
+// microphone, which getUserMedia() captures without devices or the
+// system's permission (private -[WKPreferences
+// _setMockCaptureDevicesEnabled:]), even while the page is not focused
+// (_setGetUserMediaRequiresFocus:), for the pages it loads from then on;
+// false when WebKit doesn't answer them.
+func TestMockCaptureDevices(handle uintptr) bool {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.web == 0 {
+		return false
+	}
+	prefs := send(send(w.web, "configuration"), "preferences")
+	if !respondsTo(prefs, "_setMockCaptureDevicesEnabled:") {
+		return false
+	}
+	send(prefs, "_setMockCaptureDevicesEnabled:", boolArg(true))
+	if respondsTo(prefs, "_setMediaDevicesEnabled:") {
+		send(prefs, "_setMediaDevicesEnabled:", boolArg(true))
+	}
+	if respondsTo(prefs, "_setMockCaptureDevicesPromptEnabled:") {
+		send(prefs, "_setMockCaptureDevicesPromptEnabled:", boolArg(false))
+	}
+	if respondsTo(prefs, "_setGetUserMediaRequiresFocus:") {
+		send(prefs, "_setGetUserMediaRequiresFocus:", boolArg(false))
+	}
+	return true
+}
+
+// TestAllowsPictureInPicture reports whether a window's page lets its
+// videos go into picture in picture, and false for supported when WebKit
+// doesn't answer its private _allowsPictureInPictureMediaPlayback.
+func TestAllowsPictureInPicture(handle uintptr) (allowed, supported bool) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.web == 0 {
+		return false, false
+	}
+	prefs := send(send(w.web, "configuration"), "preferences")
+	if !respondsTo(prefs, "_allowsPictureInPictureMediaPlayback") {
+		return false, false
+	}
+	return sendBool(prefs, "_allowsPictureInPictureMediaPlayback"), true
+}
+
+// TestPageGestures reports whether a swipe navigates and a pinch magnifies
+// the page of a window, or with webView 0 or more, of its web view of that
+// index, as WKWebView's properties say. ok is false without that page.
+func TestPageGestures(handle uintptr, webView int) (swipe, pinch, ok bool) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w != nil && webView >= 0 {
+		if webView >= len(w.webViews) {
+			return false, false, false
+		}
+		w = w.webViews[webView]
+	}
+	if w == nil || w.web == 0 {
+		return false, false, false
+	}
+	return sendBool(w.web, "allowsBackForwardNavigationGestures"), sendBool(w.web, "allowsMagnification"), true
+}
+
+// TestActivate brings the application in front, as clicking its Dock icon
+// does.
+func TestActivate() {
+	withPool(func() { send(theBackend.app, "activateIgnoringOtherApps:", 1) })
+}
+
 // TestIsFrontmost reports whether the application is the frontmost one,
 // which NSApp's isActive does not tell while a nonactivating panel is the
 // key window: it reports the app active then.
@@ -428,6 +777,88 @@ func TestMaterial(handle uintptr) (class string, style int, radius float64, acti
 	return class, style, radius, active
 }
 
+// TestMaterialState returns the NSVisualEffectState of a window's
+// material, -1 for none or glass.
+func TestMaterialState(handle uintptr) int {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.effect == 0 || w.glass {
+		return -1
+	}
+	return sendInt(w.effect, "state")
+}
+
+// TestGlassTint returns the glass's tint, in sRGB, and 0, 0, 0, 0 when it
+// has none or the window has no glass.
+func TestGlassTint(handle uintptr) (red, green, blue, alpha float64) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.effect == 0 || !w.glass {
+		return 0, 0, 0, 0
+	}
+	withPool(func() {
+		c := send(w.effect, "tintColor")
+		if c == 0 {
+			return
+		}
+		c = send(c, "colorUsingColorSpace:", uintptr(send(class("NSColorSpace"), "sRGBColorSpace")))
+		if c == 0 {
+			return
+		}
+		red, green, blue, alpha = msgFloat(c, sel("redComponent")), msgFloat(c, sel("greenComponent")),
+			msgFloat(c, sel("blueComponent")), msgFloat(c, sel("alphaComponent"))
+	})
+	return red, green, blue, alpha
+}
+
+// TestNativeGlassSupported reports whether windows show the system's
+// glass: the system has Liquid Glass and does not reduce transparency, as
+// GitHub's macOS runners do.
+func TestNativeGlassSupported() (ok bool) {
+	if !hasClass("NSGlassEffectView") {
+		return false
+	}
+	withPool(func() { ok = !sendBool(workspace(), "accessibilityDisplayShouldReduceTransparency") })
+	return ok
+}
+
+// TestNativeGlass returns the first system's glass view of a window's
+// native content: its class, frame in its view's coordinates, and style.
+func TestNativeGlass(handle uintptr) (class string, frame [4]float64, style int, ok bool) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil {
+		return "", frame, 0, false
+	}
+	for _, v := range w.surface.glass {
+		r := msgRect(v, sel("frame"))
+		return goString(send(v, "className")), [4]float64{r.Origin.X, r.Origin.Y, r.Size.Width, r.Size.Height}, sendInt(v, "style"), true
+	}
+	return "", frame, 0, false
+}
+
+// TestNativeGlassTint returns the first system's glass view of a window's
+// native content tint, in sRGB.
+func TestNativeGlassTint(handle uintptr) (red, green, blue, alpha float64) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil {
+		return 0, 0, 0, 0
+	}
+	for _, v := range w.surface.glass {
+		withPool(func() {
+			c := send(v, "tintColor")
+			if c == 0 {
+				return
+			}
+			c = send(c, "colorUsingColorSpace:", uintptr(send(class("NSColorSpace"), "sRGBColorSpace")))
+			if c == 0 {
+				return
+			}
+			red, green, blue, alpha = msgFloat(c, sel("redComponent")), msgFloat(c, sel("greenComponent")),
+				msgFloat(c, sel("blueComponent")), msgFloat(c, sel("alphaComponent"))
+		})
+		return red, green, blue, alpha
+	}
+	return 0, 0, 0, 0
+}
+
 // TestRoundedBacking reports whether a window is opaque, and the alpha and
 // red, in sRGB, of its content view's background, which fills its rounded
 // corners' inside.
@@ -449,6 +880,23 @@ func TestRoundedBacking(handle uintptr) (opaque bool, alpha, red float64) {
 		}
 	})
 	return opaque, alpha, red
+}
+
+// TestWindowBacking reports whether a window is opaque, and the alpha of
+// its background color, in sRGB.
+func TestWindowBacking(handle uintptr) (opaque bool, alpha float64) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil {
+		return false, 0
+	}
+	opaque = sendBool(w.win, "isOpaque")
+	withPool(func() {
+		c := send(send(w.win, "backgroundColor"), "colorUsingColorSpace:", uintptr(send(class("NSColorSpace"), "sRGBColorSpace")))
+		if c != 0 {
+			alpha = msgFloat(c, sel("alphaComponent"))
+		}
+	})
+	return opaque, alpha
 }
 
 // TestDockInspector opens the web inspector of a window docked to it, and
@@ -686,12 +1134,30 @@ func TestPageKeyShift(handle uintptr, code uint16, chars string, shift bool) boo
 	return true
 }
 
+// TestKeyCmd presses a key with Command held in a window showing native
+// UI, which the window sends to its first responder as it does the
+// keyboard's: the content, or the page of a web view.
+func TestKeyCmd(handle uintptr, code uint16, chars string) bool {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil {
+		return false
+	}
+	sendKeyFlags(w, code, chars, 1<<20) // NSEventModifierFlagCommand
+	return true
+}
+
 // sendKeyToWindow sends a key down and up to a window, as the keyboard does.
 func sendKeyToWindow(w *window, code uint16, chars string, shift bool) {
 	var flags uint
 	if shift {
 		flags = 1 << 17 // NSEventModifierFlagShift
 	}
+	sendKeyFlags(w, code, chars, flags)
+}
+
+// sendKeyFlags sends a key down and up to a window with the modifier
+// flags held, as the keyboard does.
+func sendKeyFlags(w *window, code uint16, chars string, flags uint) {
 	withPool(func() {
 		number := sendInt(w.win, "windowNumber")
 		s := nsString(chars)
@@ -731,6 +1197,34 @@ func TestComposeOver(handle uintptr, text string, caret int, commit bool, from, 
 		caretAt := nsRange{Location: uint(utf16Len(string([]rune(text)[:caret])))}
 		msgSetMarkedText(w.surface.view, sel("setMarkedText:selectedRange:replacementRange:"), nsString(text), caretAt, replace)
 	})
+	return true
+}
+
+// TestKeyComposing presses the key of virtual key code code, typing chars,
+// in a window showing native UI, with the test standing in for the input
+// method that interprets it: the input method inserts commit, unless it
+// is empty, then asks for the key's command (doCommandBySelector:), unless
+// command is empty. The Korean input method takes Return so while it
+// composes: it commits the syllable and asks for insertNewline:. The
+// Japanese one commits the candidate and asks for nothing. It reports
+// false for a window showing a web page.
+func TestKeyComposing(handle uintptr, code uint16, chars, commit, command string) bool {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil {
+		return false
+	}
+	loadTestInput()
+	interpret := interpretKeys
+	defer func() { interpretKeys = interpret }()
+	interpretKeys = func(view, ev id) {
+		if commit != "" {
+			msgInsertText(view, sel("insertText:replacementRange:"), nsString(commit), nsRange{Location: nsNotFound})
+		}
+		if command != "" {
+			send(view, "doCommandBySelector:", uintptr(sel(command)))
+		}
+	}
+	sendKeyToWindow(w, code, chars, false)
 	return true
 }
 
@@ -850,7 +1344,10 @@ type TestAccessNode struct {
 	Focused  bool
 	Depth    int
 	Children int
-	obj      id
+	// Index is a row's place among its table's rows, from 0, and
+	// RowCount how many rows a table has, through the newer API.
+	Index, RowCount int
+	obj             id
 }
 
 // TestAccessibility reads the elements of a window showing native UI as
@@ -874,6 +1371,10 @@ func TestAccessibility(handle uintptr) []TestAccessNode {
 					Depth:    depth,
 					Children: len(kids),
 					obj:      obj,
+				}
+				// Ours, not a page's elements, which may not answer them.
+				if theBackend.byAccess[obj] != nil {
+					n.Index, n.RowCount = sendInt(obj, "accessibilityIndex"), sendInt(obj, "accessibilityRowCount")
 				}
 				if v := send(obj, "accessibilityValue"); v != 0 {
 					n.Value = goString(send(v, "description"))
@@ -1043,4 +1544,241 @@ func TestEndSheetButton(handle uintptr, i int) bool {
 	}
 	send(id(handle), "endSheet:returnCode:", uintptr(sheet), uintptr(nsAlertFirstButtonReturn+i))
 	return true
+}
+
+// TestSheetDestructive reports whether each button of the alert attached
+// to a window as a sheet, in the order the alert was given them, has a
+// destructive action.
+func TestSheetDestructive(handle uintptr) (destructive []bool, ok bool) {
+	withPool(func() {
+		sheet := send(id(handle), "attachedSheet")
+		if sheet == 0 {
+			return
+		}
+		ok = true
+		tagged := map[int]id{}
+		var walk func(v id)
+		walk = func(v id) {
+			if sendBool(v, "isKindOfClass:", uintptr(class("NSButton"))) {
+				if i := sendInt(v, "tag") - nsAlertFirstButtonReturn; i >= 0 {
+					tagged[i] = v
+				}
+			}
+			for _, sub := range arrayItems(send(v, "subviews")) {
+				walk(sub)
+			}
+		}
+		walk(send(sheet, "contentView"))
+		for i := 0; i < len(tagged); i++ {
+			destructive = append(destructive, respondsTo(tagged[i], "hasDestructiveAction") && sendBool(tagged[i], "hasDestructiveAction"))
+		}
+	})
+	return
+}
+
+// TestSheetKey presses and releases a key in the sheet attached to a
+// window, with Command held when cmd is set, through the application's
+// event queue as the keyboard's keys go. It reports whether there was a
+// sheet.
+func TestSheetKey(handle uintptr, code uint16, chars string, cmd bool) bool {
+	sheet := send(id(handle), "attachedSheet")
+	if sheet == 0 {
+		return false
+	}
+	var flags uint
+	if cmd {
+		flags = 1 << 20 // NSEventModifierFlagCommand
+	}
+	withPool(func() {
+		number := sendInt(sheet, "windowNumber")
+		s := nsString(chars)
+		for _, typ := range []uint{10, 11} { // NSEventTypeKeyDown, KeyUp
+			ev := msgKeyEvent(class("NSEvent"), sel("keyEventWithType:location:modifierFlags:timestamp:windowNumber:context:characters:charactersIgnoringModifiers:isARepeat:keyCode:"),
+				typ, NSPoint{}, flags, 0, number, 0, s, s, false, code)
+			send(theBackend.app, "postEvent:atStart:", uintptr(ev), 0)
+		}
+	})
+	handlePosted()
+	return true
+}
+
+// TestModal reports whether a dialog runs for a window, as its sheet or
+// application modal (runModal), and whether it shows: AppKit ordered it
+// in, and the window server put it on screen.
+func TestModal(handle uintptr) (running, shows bool) {
+	panel := send(id(handle), "attachedSheet")
+	if panel == 0 {
+		panel = send(theBackend.app, "modalWindow")
+	}
+	if panel == 0 {
+		return false, false
+	}
+	return true, sendBool(panel, "isVisible") && TestOnScreen(uintptr(panel))
+}
+
+// TestCancelModal dismisses the dialog TestModal finds, as its Cancel
+// button or Escape would, and reports whether there was one.
+func TestCancelModal(handle uintptr) bool {
+	sheet := send(id(handle), "attachedSheet")
+	panel := sheet
+	if panel == 0 {
+		panel = send(theBackend.app, "modalWindow")
+	}
+	switch {
+	case panel == 0:
+		return false
+	case sendBool(panel, "isKindOfClass:", uintptr(class("NSSavePanel"))):
+		send(panel, "cancel:", 0)
+	case sheet != 0:
+		send(id(handle), "endSheet:returnCode:", uintptr(sheet), 0) // NSModalResponseCancel
+	default:
+		send(theBackend.app, "abortModal")
+	}
+	return true
+}
+
+// TestRightClickPage right-clicks (x, y), in points from the top-left
+// corner of a window's content, as TestClick clicks. WebKit opens the
+// page's context menu once the page heard the click, later.
+func TestRightClickPage(handle uintptr, x, y float64) {
+	testMouse(handle, x, y, false, 3, 4) // NSEventTypeRightMouseDown, RightMouseUp
+}
+
+// TestPageMenu returns the titles of the items of the page's context menu
+// being shown, "-" for separators, and false when none is.
+func TestPageMenu() ([]string, bool) {
+	menu := openContextMenu
+	if menu == 0 {
+		return nil, false
+	}
+	labels := []string{}
+	for i := range sendInt(menu, "numberOfItems") {
+		item := send(menu, "itemAtIndex:", uintptr(i))
+		switch {
+		case sendBool(item, "isHidden"):
+		case sendBool(item, "isSeparatorItem"):
+			labels = append(labels, "-")
+		default:
+			labels = append(labels, goString(send(item, "title")))
+		}
+	}
+	return labels, true
+}
+
+// TestChoosePageMenuItem chooses the item titled label of the page's
+// context menu being shown, as a click on it does, closes the menu, and
+// reports whether it has one.
+func TestChoosePageMenuItem(label string) bool {
+	menu := openContextMenu
+	if menu == 0 {
+		return false
+	}
+	for i := range sendInt(menu, "numberOfItems") {
+		item := send(menu, "itemAtIndex:", uintptr(i))
+		if !sendBool(item, "isHidden") && !sendBool(item, "isSeparatorItem") && goString(send(item, "title")) == label {
+			send(menu, "performActionForItemAtIndex:", uintptr(i))
+			send(menu, "cancelTracking")
+			return true
+		}
+	}
+	return false
+}
+
+// TestDismissPageMenu closes the page's context menu being shown, if one
+// is.
+func TestDismissPageMenu() {
+	if openContextMenu != 0 {
+		send(openContextMenu, "cancelTracking")
+	}
+}
+
+var (
+	testPixelsOnce                   sync.Once
+	cgWindowListCreateImage          func(bounds NSRect, list, window, options uint32) uintptr
+	cgBitmapContextCreate            func(data unsafe.Pointer, width, height, bitsPerComponent, bytesPerRow, space uintptr, info uint32) uintptr
+	cgContextSetInterpolationQuality func(ctx uintptr, quality int32)
+	cgContextDrawImage               func(ctx uintptr, rect NSRect, img uintptr)
+	cgContextRelease                 func(ctx uintptr)
+)
+
+// TestWindowPixels returns the content of a window as the window server
+// shows it on screen, not as its views would draw it now: what Core
+// Animation committed and the screen took. One pixel a point, in sRGB;
+// ok is false where the window server gives no image of the window. An
+// app gets the images of its own windows without the permission to record
+// the screen.
+func TestWindowPixels(handle uintptr) (img *image.RGBA, ok bool) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil {
+		return nil, false
+	}
+	loadSurface() // the sRGB color space
+	testPixelsOnce.Do(func() {
+		create, err := purego.Dlsym(libCG, "CGWindowListCreateImage")
+		if err != nil {
+			return // gone from the system
+		}
+		purego.RegisterFunc(&cgWindowListCreateImage, create)
+		purego.RegisterLibFunc(&cgBitmapContextCreate, libCG, "CGBitmapContextCreate")
+		purego.RegisterLibFunc(&cgContextSetInterpolationQuality, libCG, "CGContextSetInterpolationQuality")
+		purego.RegisterLibFunc(&cgContextDrawImage, libCG, "CGContextDrawImage")
+		purego.RegisterLibFunc(&cgContextRelease, libCG, "CGContextRelease")
+	})
+	if cgWindowListCreateImage == nil {
+		return nil, false
+	}
+	const (
+		includingWindow   = 1 << 3 // kCGWindowListOptionIncludingWindow
+		ignoreFraming     = 1 << 0 // kCGWindowImageBoundsIgnoreFraming: no shadow
+		nominalResolution = 1 << 4 // kCGWindowImageNominalResolution
+	)
+	null := NSRect{Origin: NSPoint{math.Inf(1), math.Inf(1)}} // CGRectNull: the window's bounds
+	shot := cgWindowListCreateImage(null, includingWindow, uint32(sendInt(w.win, "windowNumber")), ignoreFraming|nominalResolution)
+	if shot == 0 {
+		return nil, false
+	}
+	defer purego.SyscallN(cgImageRelease, shot)
+	// Drawn into a bitmap of the window's size in points, whatever the
+	// image's resolution, with the rows top to bottom.
+	frame := msgRect(w.win, sel("frame"))
+	fw, fh := int(math.Round(frame.Size.Width)), int(math.Round(frame.Size.Height))
+	if fw <= 0 || fh <= 0 {
+		return nil, false
+	}
+	full := image.NewRGBA(image.Rect(0, 0, fw, fh))
+	const premultipliedLast, byteOrder32Big = 1, 4 << 12
+	ctx := cgBitmapContextCreate(unsafe.Pointer(&full.Pix[0]), uintptr(fw), uintptr(fh), 8, uintptr(full.Stride), cgColorSpaceSRGB, premultipliedLast|byteOrder32Big)
+	if ctx == 0 {
+		return nil, false
+	}
+	cgContextSetInterpolationQuality(ctx, 1) // kCGInterpolationNone
+	cgContextDrawImage(ctx, NSRect{Size: NSSize{float64(fw), float64(fh)}}, shot)
+	cgContextRelease(ctx)
+	// The content view, from the window's bottom-left corner.
+	content := msgRect(send(w.win, "contentView"), sel("frame"))
+	x := int(math.Round(content.Origin.X))
+	y := fh - int(math.Round(content.Origin.Y+content.Size.Height))
+	r := image.Rect(x, y, x+int(math.Round(content.Size.Width)), y+int(math.Round(content.Size.Height))).Intersect(full.Rect)
+	img = image.NewRGBA(image.Rect(0, 0, r.Dx(), r.Dy()))
+	for row := range r.Dy() {
+		copy(img.Pix[row*img.Stride:], full.Pix[full.PixOffset(r.Min.X, r.Min.Y+row):full.PixOffset(r.Max.X, r.Min.Y+row)])
+	}
+	return img, true
+}
+
+// TestDrawablesTrimmed reports whether the GPU renderer of a window's
+// native UI gave back its drawables, as it does once the window has drawn
+// nothing for a while (internal/gpu/metal's trim), and whether the window
+// draws with one.
+func TestDrawablesTrimmed(handle uintptr) (trimmed, ok bool) {
+	w := theBackend.byNSWindow[id(handle)]
+	if w == nil || w.surface == nil {
+		return false, false
+	}
+	l := w.surface.metalLayer()
+	if l == 0 {
+		return false, false
+	}
+	size := msgSize(l, sel("drawableSize"))
+	return size.Width <= 1 && size.Height <= 1, true
 }

@@ -15,6 +15,9 @@ import (
 // focusable is never activated (WS_EX_NOACTIVATE, MA_NOACTIVATE), and one
 // that is closes when another window is activated. Owned windows do not
 // follow their owner: the core places flyouts again as their parent moves.
+// A window modal to a flyout disables it, as it disables any owner, and
+// keeps it open: the flyout is inactive until the window closes, which
+// gives it the activation back.
 
 const (
 	wmMouseActivate  = 0x0021
@@ -114,12 +117,17 @@ func (w *window) flyoutMessage(m uint32, wp, lp uintptr) (uintptr, bool) {
 		}
 	case wmActivate:
 		if loword(wp) == waInactive && w.flyout.Focusable {
-			// Unless the window activated is a flyout of its own.
+			// Unless the window activated is a flyout or a window of
+			// its own, or one is modal to it.
 			for x := w.b.windows[lp]; x != nil; x = x.parent {
 				if x == w {
 					return 0, false
 				}
 			}
+			if w.hasModal() {
+				return 0, false
+			}
+			w.ownersInactive(w.b.windows[lp])
 			// A press on its own tray icon, which activates the taskbar:
 			// the icon's click toggles it.
 			if t, ok := w.flyout.Tray.(*tray); ok {
@@ -148,13 +156,53 @@ func (w *window) flyoutMessage(m uint32, wp, lp uintptr) (uintptr, bool) {
 // what opened them toggles them.
 func (w *window) ownsFocusableFlyout() bool {
 	for _, x := range w.b.windows {
-		if f := x.opts.Flyout; f == nil || !f.Focusable || x.closed || !x.IsVisible() {
+		if f := x.opts.Flyout; f == nil || !f.Focusable || x.closed || !x.IsVisible() || x.hasModal() {
 			continue
 		}
 		for p := x.parent; p != nil; p = p.parent {
 			if p == w {
 				return true
 			}
+		}
+	}
+	return false
+}
+
+// keepsActive reports whether the window draws its frame active though
+// it is not the active window: while its focusable flyout is, which
+// Windows activates as a window of its own.
+func (w *window) keepsActive() bool {
+	return w.opts.Flyout == nil && !w.flyoutLeft && w.ownsFocusableFlyout()
+}
+
+// ownersInactive draws the windows that own the flyout inactive as the
+// activation leaves it for next, unless next is one of them, which
+// Windows activates itself, or another flyout of theirs.
+func (w *window) ownersInactive(next *window) {
+	for n := next; n != nil; n = n.parent {
+		for p := w.parent; p != nil; p = p.parent {
+			if p == n {
+				return
+			}
+		}
+	}
+	for p := w.parent; p != nil; p = p.parent {
+		if p.opts.Flyout == nil && !p.closed && !p.flyoutLeft {
+			p.flyoutLeft = true
+			procSendMessageW.Call(p.hwnd, wmNCActivate, 0, 0)
+			if p.caption != nil {
+				p.caption.activate(false)
+			}
+		}
+	}
+}
+
+// hasModal reports whether a window modal to w is open, which disables
+// w until it closes.
+func (w *window) hasModal() bool {
+	for _, x := range w.b.windows {
+		if x.parent == w && x.opts.Modal && !x.closed && !x.destroying {
+			return true
 		}
 	}
 	return false

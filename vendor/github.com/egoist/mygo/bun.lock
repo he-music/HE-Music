@@ -24,85 +24,85 @@
     },
     "packages/cli": {
       "name": "mygo-cli",
-      "version": "0.6.4",
+      "version": "0.8.3",
       "bin": {
         "mygo": "bin/mygo.js",
       },
       "optionalDependencies": {
-        "@egoist/mygo-cli-darwin-arm64": "0.6.4",
-        "@egoist/mygo-cli-darwin-x64": "0.6.4",
-        "@egoist/mygo-cli-linux-arm64": "0.6.4",
-        "@egoist/mygo-cli-linux-x64": "0.6.4",
-        "@egoist/mygo-cli-win32-arm64": "0.6.4",
-        "@egoist/mygo-cli-win32-x64": "0.6.4",
+        "@egoist/mygo-cli-darwin-arm64": "0.8.3",
+        "@egoist/mygo-cli-darwin-x64": "0.8.3",
+        "@egoist/mygo-cli-linux-arm64": "0.8.3",
+        "@egoist/mygo-cli-linux-x64": "0.8.3",
+        "@egoist/mygo-cli-win32-arm64": "0.8.3",
+        "@egoist/mygo-cli-win32-x64": "0.8.3",
       },
     },
     "packages/cli/npm/darwin-arm64": {
       "name": "@egoist/mygo-cli-darwin-arm64",
-      "version": "0.6.4",
+      "version": "0.8.3",
     },
     "packages/cli/npm/darwin-x64": {
       "name": "@egoist/mygo-cli-darwin-x64",
-      "version": "0.6.4",
+      "version": "0.8.3",
     },
     "packages/cli/npm/linux-arm64": {
       "name": "@egoist/mygo-cli-linux-arm64",
-      "version": "0.6.4",
+      "version": "0.8.3",
     },
     "packages/cli/npm/linux-x64": {
       "name": "@egoist/mygo-cli-linux-x64",
-      "version": "0.6.4",
+      "version": "0.8.3",
     },
     "packages/cli/npm/win32-arm64": {
       "name": "@egoist/mygo-cli-win32-arm64",
-      "version": "0.6.4",
+      "version": "0.8.3",
     },
     "packages/cli/npm/win32-x64": {
       "name": "@egoist/mygo-cli-win32-x64",
-      "version": "0.6.4",
+      "version": "0.8.3",
     },
     "packages/runtime": {
       "name": "mygo-runtime",
-      "version": "0.6.4",
+      "version": "0.8.3",
     },
     "plugins/fetch": {
       "name": "@mygo-plugins/fetch",
-      "version": "0.6.4",
+      "version": "0.8.3",
       "devDependencies": {
-        "mygo-runtime": "^0.6.4",
+        "mygo-runtime": "^0.8.3",
       },
       "peerDependencies": {
-        "mygo-runtime": "^0.6.4",
+        "mygo-runtime": "^0.8.3",
       },
     },
     "plugins/sqlite": {
       "name": "@mygo-plugins/sqlite",
-      "version": "0.6.4",
+      "version": "0.8.3",
       "devDependencies": {
-        "mygo-runtime": "^0.6.4",
+        "mygo-runtime": "^0.8.3",
       },
       "peerDependencies": {
-        "mygo-runtime": "^0.6.4",
+        "mygo-runtime": "^0.8.3",
       },
     },
     "plugins/watch": {
       "name": "@mygo-plugins/watch",
-      "version": "0.6.4",
+      "version": "0.8.3",
       "devDependencies": {
-        "mygo-runtime": "^0.6.4",
+        "mygo-runtime": "^0.8.3",
       },
       "peerDependencies": {
-        "mygo-runtime": "^0.6.4",
+        "mygo-runtime": "^0.8.3",
       },
     },
     "plugins/websocket": {
       "name": "@mygo-plugins/websocket",
-      "version": "0.6.4",
+      "version": "0.8.3",
       "devDependencies": {
-        "mygo-runtime": "^0.6.4",
+        "mygo-runtime": "^0.8.3",
       },
       "peerDependencies": {
-        "mygo-runtime": "^0.6.4",
+        "mygo-runtime": "^0.8.3",
       },
     },
     "website": {

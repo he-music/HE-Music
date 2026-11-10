@@ -280,7 +280,7 @@ func writeSigned(path string, key ed25519.PrivateKey, write func(io.Writer) erro
 // deltas from, and returns the files written. Deltas only save downloads,
 // so a version without one is skipped with a message.
 func writeDeltas(c *Config, key ed25519.PrivateKey, stage, target string, entries []string, m *update.Manifest, n int) ([]string, error) {
-	published, err := fetchManifest(c.updateFeed(target))
+	published, err := fetchDeltaManifest(c, target)
 	if err != nil {
 		if errors.Is(err, errNotPublished) {
 			logf("No delta updates for %s: no version is published yet", target)
@@ -399,6 +399,65 @@ func fetchManifest(feed string) (*update.Manifest, error) {
 		return nil, fmt.Errorf("reading %s: %w", u, err)
 	}
 	return &m, nil
+}
+
+// fetchDeltaManifest reads the published manifest as usual. If a GitHub
+// release has no manifest for target, an earlier release of that platform
+// can still supply the delta bases, without changing what installed apps
+// check for updates.
+func fetchDeltaManifest(c *Config, target string) (*update.Manifest, error) {
+	published, err := fetchManifest(c.updateFeed(target))
+	if !errors.Is(err, errNotPublished) || c.Updates.GitHub == "" {
+		return published, err
+	}
+	name := update.ManifestName(target)
+	type asset struct {
+		Name string `json:"name"`
+	}
+	// Match the bound used to resolve tagged feeds: at most 1,000 releases.
+	const perPage, maxPages = 100, 10
+	for page := 1; page <= maxPages; page++ {
+		u := fmt.Sprintf("%s/repos/%s/releases?per_page=%d&page=%d", update.GitHubAPI, c.Updates.GitHub, perPage, page)
+		resp, err := updateGet(u, 30*time.Second)
+		if err != nil {
+			return nil, err
+		}
+		var releases []struct {
+			TagName    string  `json:"tag_name"`
+			Draft      bool    `json:"draft"`
+			Prerelease bool    `json:"prerelease"`
+			Assets     []asset `json:"assets"`
+		}
+		err = json.NewDecoder(io.LimitReader(resp.Body, 64<<20)).Decode(&releases)
+		resp.Body.Close()
+		if err != nil {
+			return nil, fmt.Errorf("reading %s: %w", u, err)
+		}
+		for _, r := range releases {
+			v, ok := strings.CutPrefix(r.TagName, c.Updates.TagPrefix)
+			if r.Draft || r.Prerelease || !ok || v == "" || v[0] < '0' || v[0] > '9' || update.Compare(v, c.Version) >= 0 {
+				continue
+			}
+			if !slices.ContainsFunc(r.Assets, func(a asset) bool { return a.Name == name }) {
+				continue
+			}
+			feed := "https://github.com/" + c.Updates.GitHub + "/releases/download/" + url.PathEscape(r.TagName) + "/" + url.PathEscape(name)
+			published, err := fetchManifest(feed)
+			if errors.Is(err, errNotPublished) {
+				continue // The asset may have been removed since the API listed it.
+			}
+			if err != nil {
+				return nil, err
+			}
+			if published.Version != "" && update.Compare(published.Version, c.Version) < 0 {
+				return published, nil
+			}
+		}
+		if len(releases) < perPage {
+			break
+		}
+	}
+	return nil, errNotPublished
 }
 
 // fetchSigned downloads a file of an update to path and checks its size

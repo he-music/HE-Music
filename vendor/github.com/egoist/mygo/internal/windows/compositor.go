@@ -30,6 +30,7 @@ import (
 
 var (
 	procDCompositionCreateDevice = systemDLL("dcomp.dll").NewProc("DCompositionCreateDevice")
+	procCreateDXGIFactory1       = systemDLL("dxgi.dll").NewProc("CreateDXGIFactory1")
 	procCreateEventW             = kernel32.NewProc("CreateEventW")
 	procSetEvent                 = kernel32.NewProc("SetEvent")
 	procWaitForSingleObject      = kernel32.NewProc("WaitForSingleObject")
@@ -37,6 +38,7 @@ var (
 	procKillTimer                = user32.NewProc("KillTimer")
 
 	iidIDXGIDevice         = guid("54ec77fa-1377-44e6-8c32-88fd5f44c84c")
+	iidIDXGIFactory1       = guid("770aae78-f26f-4dba-a829-253c83d1b387")
 	iidID3D11Device4       = guid("8992ab71-02e6-4b8d-ba48-b056dcda42c4")
 	iidID3D11Texture2D     = guid("6f15aaf2-d208-4e89-9ab4-489535d34f9c")
 	iidIDCompositionDevice = guid("c37ea93a-e7aa-450d-b16f-9746cb0407f3")

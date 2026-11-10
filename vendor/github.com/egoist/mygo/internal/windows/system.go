@@ -324,26 +324,37 @@ type screen struct{}
 var monitorEnumCallback uintptr
 
 func (screen) Displays() []platform.Display {
-	var mons []uintptr
-	enumMonitors(func(m uintptr) { mons = append(mons, m) })
-	out := make([]platform.Display, 0, len(mons))
-	for _, m := range mons {
-		info := monitorInfo(m)
-		dpi := monitorDPI(m)
-		conv := func(r rect) platform.Rect {
-			return platform.Rect{X: toDIP(r.Left, dpi), Y: toDIP(r.Top, dpi), Width: toDIP(r.Right-r.Left, dpi), Height: toDIP(r.Bottom-r.Top, dpi)}
-		}
+	s := screenSpace()
+	out := make([]platform.Display, 0, len(s.displays))
+	for i, d := range s.displays {
+		info := monitorInfo(d.handle)
+		bounds, work := s.displayDIPs(i)
 		out = append(out, platform.Display{
-			ID:          int64(m),
+			ID:          int64(d.handle),
 			Label:       string(utf16Decode(info.Device[:])),
-			Bounds:      conv(info.Monitor),
-			WorkArea:    conv(info.Work),
-			ScaleFactor: float64(dpi) / 96,
+			Bounds:      bounds,
+			WorkArea:    work,
+			ScaleFactor: float64(d.dpi) / 96,
 			Primary:     info.Flags&monitorInfoPrimary != 0,
 		})
 	}
 	return out
 }
+
+// screenDisplays returns the monitors, in pixels. Main thread only.
+func screenDisplays() []screenDisplay {
+	var displays []screenDisplay
+	enumMonitors(func(m uintptr) {
+		info := monitorInfo(m)
+		displays = append(displays, screenDisplay{bounds: pixelRect(info.Monitor), work: pixelRect(info.Work), dpi: monitorDPI(m), handle: m})
+	})
+	return displays
+}
+
+// screenSpace returns the space of DIPs of the monitors as they are now,
+// which every conversion of a point or a rectangle of the screen between
+// pixels and DIPs goes through. Main thread only.
+func screenSpace() dipSpace { return newDIPSpace(screenDisplays(), dpiOf(0)) }
 
 var monitorSink func(uintptr)
 
@@ -365,8 +376,7 @@ func enumMonitors(fn func(uintptr)) {
 func (screen) CursorPoint() platform.Point {
 	var pt point
 	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
-	dpi := monitorDPI(monitorAt(int(pt.X), int(pt.Y)))
-	return platform.Point{X: toDIP(pt.X, dpi), Y: toDIP(pt.Y, dpi)}
+	return screenSpace().pointToDIP(int(pt.X), int(pt.Y))
 }
 
 // Theme.
@@ -397,6 +407,7 @@ const (
 	textScaleFactor           = "TextScaleFactor"
 	settingImmersiveColorSet  = "ImmersiveColorSet"
 	settingWindowMetrics      = "WindowMetrics"
+	settingSlateMode          = "ConvertibleSlateMode"
 	// settingIntl is the lParam of WM_SETTINGCHANGE when the display
 	// languages or the regional formats changed.
 	settingIntl = "intl"
@@ -416,8 +427,8 @@ func highContrastOn() bool {
 }
 
 // Preferences reads the accent of the title bars and the Start menu, the
-// settings of animation and transparency effects and contrast themes, and
-// the size of text of Accessibility.
+// settings of animation and transparency effects and contrast themes, the
+// size of text of Accessibility, and the pointing devices.
 func (t theme) Preferences() platform.Preferences {
 	var p platform.Preferences
 	if v, ok := regDWORD(hkeyCurrentUser, dwmKey, "AccentColor"); ok { // 0xAABBGGRR
@@ -437,12 +448,59 @@ func (t theme) Preferences() platform.Preferences {
 	if v, ok := regDWORD(hkeyCurrentUser, accessibilityKey, textScaleFactor); ok && v >= 100 && v <= 500 {
 		p.TextScale = float64(v) / 100
 	}
+	p.Pointer, p.AnyPointer, p.NoHover, p.NoAnyHover = pointingDevices()
 	return p
 }
 
+// GetSystemMetrics' metrics of the pointing devices, and the bits of
+// SM_DIGITIZER's.
+const (
+	smMousePresent     = 19
+	smDigitizer        = 94
+	smConvertibleSlate = 0x2003
+	nidIntegratedTouch = 0x01
+	nidExternalTouch   = 0x02
+	nidIntegratedPen   = 0x04
+	nidExternalPen     = 0x08
+	nidReady           = 0x80
+	nidTouch           = nidIntegratedTouch | nidExternalTouch
+	nidPen             = nidIntegratedPen | nidExternalPen
+)
+
+// pointingDevices returns how accurate the primary pointing device is and
+// the most accurate of all, and whether they cannot hover, as Chromium
+// tells them on Windows: a mouse (SM_MOUSEPRESENT, which a virtual one
+// sets too) and a pen point finely and hover, a touch screen coarsely,
+// without hovering; with a touch screen, the primary device is the finest
+// but in tablet mode (SM_CONVERTIBLESLATEMODE 0), where it is the touch
+// screen.
+func pointingDevices() (primary, finest platform.PointerAccuracy, noHover, noneHover bool) {
+	mouse, _, _ := procGetSystemMetrics.Call(smMousePresent)
+	digitizer, _, _ := procGetSystemMetrics.Call(smDigitizer)
+	if digitizer&nidReady == 0 {
+		digitizer = 0
+	}
+	fine, touch := mouse != 0 || digitizer&nidPen != 0, digitizer&nidTouch != 0
+	switch {
+	case fine:
+		finest = platform.PointerFine
+	case touch:
+		finest, noneHover = platform.PointerCoarse, true
+	default:
+		finest, noneHover = platform.PointerNone, true
+	}
+	primary, noHover = finest, noneHover
+	if touch && fine {
+		if slate, _, _ := procGetSystemMetrics.Call(smConvertibleSlate); slate == 0 {
+			primary, noHover = platform.PointerCoarse, true
+		}
+	}
+	return primary, finest, noHover, noneHover
+}
+
 // preferencesChanged reports whether a WM_SETTINGCHANGE is about the
-// preferences: the colors, animation effects, contrast themes or the size
-// of text.
+// preferences: the colors, animation effects, contrast themes, the size
+// of text or tablet mode.
 func preferencesChanged(wp, lp uintptr) bool {
 	switch wp {
 	case spiSetClientAreaAnimation, spiSetHighContrast:
@@ -452,7 +510,7 @@ func preferencesChanged(wp, lp uintptr) bool {
 		return false
 	}
 	switch wstr(lp) {
-	case settingImmersiveColorSet, settingWindowMetrics, textScaleFactor:
+	case settingImmersiveColorSet, settingWindowMetrics, textScaleFactor, settingSlateMode:
 		return true
 	}
 	return false
@@ -495,12 +553,29 @@ func (b *Backend) applyWindowTheme(w *window) {
 }
 
 // applyWebViewTheme makes prefers-color-scheme follow an overridden
-// appearance; "system" leaves it to WebView2.
+// appearance; "system" leaves it to WebView2. The profile's
+// PreferredColorScheme holds from a document's start, where DevTools'
+// emulation, for runtimes without it, reaches a new document a moment
+// after it started: long enough for it to see the system's appearance.
 func (b *Backend) applyWebViewTheme(w *window) {
-	value := ""
+	scheme, value := uintptr(0), "" // COREWEBVIEW2_PREFERRED_COLOR_SCHEME_AUTO
 	switch b.themeSource {
-	case "dark", "light":
-		value = b.themeSource
+	case "light":
+		scheme, value = 1, "light"
+	case "dark":
+		scheme, value = 2, "dark"
+	}
+	if wv13 := queryInterface(w.webview, &iidICoreWebView2_13); wv13 != 0 {
+		var profile uintptr
+		comCall(wv13, wv13GetProfile, uintptr(unsafe.Pointer(&profile)))
+		release(wv13)
+		if profile != 0 {
+			hr := comCall(profile, profilePutPreferredColorScheme, scheme)
+			release(profile)
+			if !failed(hr) {
+				return
+			}
+		}
 	}
 	w.devtools("Emulation.setEmulatedMedia", `{"features":[{"name":"prefers-color-scheme","value":"`+value+`"}]}`, nil)
 }

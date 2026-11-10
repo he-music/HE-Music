@@ -50,15 +50,14 @@ func FoldTranslations() {
 	}
 }
 
-// folding reports whether renderers fold translations (FoldTranslations).
-func folding() bool { return fold.Load() != nil }
-
 // Fold returns s, or, when any of its ops only translates, a copy of it
 // with those folded: fills and shadows, and images and glyphs moved by
 // whole pixels, glyphs without transforms of their own (renderers round
 // their places, a glyph's bitmap staying on whole pixels without a
-// transform). Clips, effects and holes keep their transforms. The copy
-// holds until the next Fold. Before FoldTranslations, it returns s.
+// transform), and clips: their edges are computed where they fall, as a
+// fill's, rather than rasterized into a mask each frame the clip moves.
+// Effects and holes keep their transforms. The copy holds until the next
+// Fold. Before FoldTranslations, it returns s.
 func (f *TranslationFolder) Fold(s *Scene) *Scene {
 	fn := fold.Load()
 	if fn == nil {
@@ -106,14 +105,9 @@ func (f *TranslationFolder) fold(s *Scene) *Scene {
 				g.Y = float32(math.Round(float64(g.Y))) + y
 			}
 		}
-		if op.Kind == OpFill || op.Kind == OpGlyphs {
-			// The points of gradients; stripes start from Rect.
-			switch op.Paint {
-			case PaintLinear, PaintOklab, PaintLinearStops, PaintLinearStopsOklab:
-				op.Gradient = [4]float32{op.Gradient[0] + x, op.Gradient[1] + y, op.Gradient[2] + x, op.Gradient[3] + y}
-			case PaintConic, PaintConicOklab:
-				op.Gradient[0], op.Gradient[1] = op.Gradient[0]+x, op.Gradient[1]+y
-			}
+		if op.Kind == OpFill || op.Kind == OpGlyphs || op.Kind == OpPushClip {
+			// The points of gradients, a clip's masking it among them.
+			op.moveGradient(x, y)
 		}
 	}
 	return &f.s
@@ -127,7 +121,7 @@ func folds(s *Scene, op *Op) bool {
 	}
 	whole := x == float32(math.Trunc(float64(x))) && y == float32(math.Trunc(float64(y)))
 	switch op.Kind {
-	case OpFill, OpShadow:
+	case OpFill, OpShadow, OpPushClip:
 		return true
 	case OpImage:
 		// Images sample their texels where they fall, which the CPU's

@@ -54,6 +54,9 @@ type clip struct {
 	transform, inverse scene.Affine
 	valid              bool
 	round              bool
+	// masked tells that mask masks the clip too (scene.ClipShape.Masks).
+	masked bool
+	mask   clipMasking
 	// spans is where in spanBuf the clip, with continuous corners, keeps
 	// the spans clipSolid found for the rows of the area, lo and hi a row
 	// (noSpan until found), or -1.
@@ -83,6 +86,23 @@ func Render(dst *Image, s *scene.Scene) {
 	drawCanvases(s)
 	var r Renderer
 	r.d.draw(dst, s, image.Rect(0, 0, dst.W, dst.H), r.opBounds(s))
+}
+
+// restorePixels makes the pixels of the images s draws within area again
+// where an owner dropped them, leaving out the ops that miss it. The GPU
+// renderers ask Image.Pixels, which restores them, and so does the op
+// that draws an image without a transform; the ops that draw one with a
+// transform read Pix, so a bitmap released after its uploads
+// (Bitmap.ReleasePixels) would be sampled from no pixels, which panics on
+// a slice of length 0.
+func restorePixels(s *scene.Scene, area image.Rectangle, bounds []image.Rectangle) {
+	for i := range s.Ops {
+		op := &s.Ops[i]
+		if op.Kind != scene.OpImage || op.Image == nil || !bounds[i].Overlaps(area) {
+			continue
+		}
+		op.Image.Pixels()
+	}
 }
 
 // A large area is drawn on several cores at once, in bands of bandRows
@@ -116,6 +136,11 @@ func (d *drawer) draw(dst *Image, s *scene.Scene, area image.Rectangle, bounds [
 	// the GPU (gpu.Builder).
 	s = d.fold.Fold(s)
 	area = area.Intersect(image.Rect(0, 0, dst.W, dst.H))
+	// An owner may have dropped an image's pixels (Bitmap.ReleasePixels)
+	// once a GPU renderer uploaded them: make them again before the bands
+	// draw, as the ops that sample them read Pix directly, and once, as
+	// the bands draw on several cores.
+	restorePixels(s, area, bounds)
 	d.blurred = d.blurImages(s, area, bounds)
 	defer func() { d.blurred = nil }()
 	// px draws operation from, an effect over the backdrop b.
@@ -275,11 +300,14 @@ func (r *renderer) render(dst *Image, s *scene.Scene, area image.Rectangle, boun
 				}
 			}
 		case scene.OpPushClip:
-			rect, transform := scene.MovedClip(op.Rect, op.Transform)
-			radii := scene.Corners(rect, op.Radii, op.Continuous)
-			c := clip{shape: newShape(rect, radii), round: hasRadii(radii), spans: -1}
-			c.transform = transform
-			c.inverse, c.valid = transform.Inverse()
+			cs := scene.ClipShapeOf(op, s.Stops)
+			radii := scene.Corners(cs.Rect, cs.Radii, cs.Continuous)
+			c := clip{shape: newShape(cs.Rect, radii), round: hasRadii(radii), spans: -1}
+			c.transform = cs.Transform
+			c.inverse, c.valid = cs.Transform.Inverse()
+			if c.masked = cs.Masks(); c.masked {
+				c.mask = newClipMasking(&cs)
+			}
 			if c.continuous && !c.transform.Set {
 				// Continuous corners take long to find the spans of, which
 				// every operation within the clip needs.
@@ -359,6 +387,9 @@ func (r *renderer) clipCoverage(x, y int) float32 {
 			// Partial pixels at fractional clip edges.
 			cov *= clamp01(min(px-c.r.X, c.r.X+c.r.W-px)+0.5) * clamp01(min(py-c.r.Y, c.r.Y+c.r.H-py)+0.5)
 		}
+		if c.masked && cov > 0 {
+			cov *= c.mask.atFrame(c.transform, c.inverse, px, py)
+		}
 		if cov == 0 {
 			return 0
 		}
@@ -372,7 +403,7 @@ func (r *renderer) clipSolid(y int) (lo, hi int) {
 	lo, hi = r.x0, r.x1
 	for i := range r.clips {
 		c := &r.clips[i]
-		if c.transform.Set {
+		if c.transform.Set || c.masked {
 			return lo, lo
 		}
 		var l, h int
@@ -578,6 +609,25 @@ func blend(p []byte, c [4]float32, cov float32) {
 	p[3] = to8(a + float32(p[3])/255*inv)
 }
 
+// blendFilled composites a fill of color f covering fc of a pixel and a
+// border over it of color b covering bc, times the clips' coverage clip,
+// as one color, which the shaders blend: under a clip that lets a part
+// through, as a mask's gradient does, the fill does not show through the
+// border.
+func blendFilled(p []byte, f [4]float32, fc float32, b [4]float32, bc, clip float32) {
+	if clip >= 1 {
+		blend(p, f, fc)
+		blend(p, b, bc)
+		return
+	}
+	k := 1 - b[3]*bc
+	var c [4]float32
+	for i := range c {
+		c[i] = f[i]*fc*k + b[i]*bc
+	}
+	blend(p, c, clip)
+}
+
 // blendSubpixel composites a straight color c over a pixel with the
 // coverage a of each subpixel, times w, each channel by its own: as
 // renderers blend subpixel glyphs with a second color for the source's
@@ -734,6 +784,9 @@ func (p *painter) at(px, py float32) [4]float32 {
 	case scene.PaintConic, scene.PaintConicOklab:
 		t := conicT(px-p.g[0], py-p.g[1], p.g[2])
 		return p.stopsAt(t)
+	case scene.PaintRadial, scene.PaintRadialOklab:
+		dx, dy := px-p.g[0], py-p.g[1]
+		return p.stopsAt(float32(math.Sqrt(float64(dx*dx+dy*dy))) / max(p.g[2], 0.0001))
 	}
 	g := p.g
 	dx, dy := g[2]-g[0], g[3]-g[1]
@@ -786,7 +839,7 @@ func (p *painter) stopsAt(t float32) [4]float32 {
 	a, b := &s[i-1], &s[i]
 	k := clamp01((t - a.at) / max(b.at-a.at, 1e-6))
 	alpha := a.c[3]*(1-k) + b.c[3]*k
-	if p.paint == scene.PaintLinearStops || p.paint == scene.PaintConic {
+	if p.paint == scene.PaintLinearStops || p.paint == scene.PaintConic || p.paint == scene.PaintRadial {
 		return [4]float32{a.c[0]*(1-k) + b.c[0]*k, a.c[1]*(1-k) + b.c[1]*k, a.c[2]*(1-k) + b.c[2]*k, alpha}
 	}
 	if alpha <= 0 {
@@ -932,22 +985,27 @@ func (r *renderer) fill(op *scene.Op) {
 				}
 			}
 			p := row[4*x : 4*x+4]
+			var fc [4]float32
 			if hasFill {
-				blend(p, pt.at(px, py), oc*clipCov)
+				fc = pt.at(px, py)
 			}
-			if hasBorder {
-				ic := float32(0)
-				if !inner.r.Empty() {
-					ic = coverage(&inner, px, py)
-				}
-				bc := oc - ic
-				if bc > 0 && op.Dashed {
-					bc *= dash(op.Rect, bw, px, py)
-				}
-				if bc > 0 {
-					blend(p, borderAt(bp, border, op.BorderColor, px, py), bc*clipCov)
-				}
+			if !hasBorder {
+				blend(p, fc, oc*clipCov)
+				continue
 			}
+			ic := float32(0)
+			if !inner.r.Empty() {
+				ic = coverage(&inner, px, py)
+			}
+			bc := oc - ic
+			if bc > 0 && op.Dashed {
+				bc *= dash(op.Rect, bw, px, py)
+			}
+			var bcol [4]float32
+			if bc > 0 {
+				bcol = borderAt(bp, border, op.BorderColor, px, py)
+			}
+			blendFilled(p, fc, oc, bcol, max(bc, 0), clipCov)
 		}
 	}
 }
@@ -1518,6 +1576,11 @@ func abs32(v float32) float32 { return float32(math.Abs(float64(v))) }
 // sample reads a premultiplied pixel at (u, v) with bilinear filtering,
 // clamped to src.
 func sample(img *scene.Image, u, v float32, src scene.Rect) [4]float32 {
+	if len(img.Pix) < 4*img.W*img.H {
+		// Pixels an owner dropped and a renderer did not restore: draw
+		// nothing rather than read past the slice.
+		return [4]float32{}
+	}
 	u, v = u-0.5, v-0.5
 	x0, y0 := int(math.Floor(float64(u))), int(math.Floor(float64(v)))
 	tx, ty := u-float32(x0), v-float32(y0)

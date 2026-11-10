@@ -14,10 +14,22 @@ type DialogModule struct{}
 var Dialog DialogModule
 
 // FileFilter limits the files a file dialog shows, e.g.
-// {Name: "Images", Extensions: []string{"png", "jpg"}}.
+// {Name: "Images", Extensions: []string{"png", "jpg"}}, or by type, as
+// HTML's accept: {Name: "Images", MIMETypes: []string{"image/*"}} takes
+// every picture the system knows.
 type FileFilter struct {
-	Name       string
+	Name string
+	// Extensions are file name extensions, with or without the dot, or
+	// "*" for every file.
 	Extensions []string
+	// MIMETypes are media types, as "image/png", or all of one kind, as
+	// "image/*", which the system's picker takes as its own: types
+	// (UTType) on macOS 11 and later, which knows image/*, audio/*,
+	// video/*, text/* and font/* (earlier versions only those kinds), GTK's
+	// MIME patterns, and on Windows the extensions the registry gives the
+	// type, or of the kind (its PerceivedType too). The filter takes the
+	// files of its extensions and of its types.
+	MIMETypes []string
 }
 
 // OpenDialogOptions configures Dialog.Open.
@@ -81,13 +93,23 @@ type MessageOptions struct {
 	Detail string
 	// Buttons defaults to a single "OK" button.
 	Buttons []string
-	// DefaultButton is the index of the button activated with Enter.
+	// DefaultButton is the index of the button activated with Enter, or -1
+	// for none (macOS only). Windows uses the first button for -1;
+	// GTK gives Enter to the focused control.
 	DefaultButton int
-	// CancelButton is the index of the button activated with Escape. When
-	// zero, the first button labeled "Cancel" or "No" is used.
-	CancelButton    int
-	CheckboxLabel   string
-	CheckboxChecked bool
+	// CancelButton is the index of the button activated with Escape (and
+	// Cmd+. on macOS), also when it is the default button. When zero, the
+	// first button labeled "Cancel" or "No" is used, else the first button,
+	// even a destructive one. -1 is none: Escape then does nothing on
+	// macOS, and dismissing the dialog reports Button -1 on Linux, in
+	// Windows task dialogs and in browsers' confirm dialogs.
+	CancelButton int
+	// DestructiveButtons are the indexes of buttons whose actions delete
+	// data or can't be undone. macOS 11 and later and Linux set them apart;
+	// macOS may keep Enter from activating them, even as the default.
+	DestructiveButtons []int
+	CheckboxLabel      string
+	CheckboxChecked    bool
 }
 
 // MessageResult is the outcome of Dialog.Message.
@@ -205,6 +227,7 @@ func (DialogModule) Message(opts MessageOptions) (MessageResult, error) {
 		Buttons:         buttons,
 		DefaultID:       opts.DefaultButton,
 		CancelID:        cancel,
+		DestructiveIDs:  opts.DestructiveButtons,
 		CheckboxLabel:   opts.CheckboxLabel,
 		CheckboxChecked: opts.CheckboxChecked,
 	}

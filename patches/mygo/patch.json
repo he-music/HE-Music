@@ -1,11 +1,11 @@
 {
   "schemaVersion": 1,
-  "sdkVersion": "v0.6.5-0.20261026063203-07ebe19ac0dc",
+  "sdkVersion": "v0.8.3",
   "patch": {
     "id": "windows-transparent-shadowless-frame-v3",
     "file": "github.com/egoist/mygo/internal/windows/window.go",
-    "upstreamSHA256": "6f9c3d76af2dc8cee5b4b5b0c1f631012f2bff49b51bc587d4d4f5d90ce24534",
-    "patchedSHA256": "ea6a355d709c522eacddc31f3e025b5a354f5308bc77fc5e7286fa9390ef6bef",
+    "upstreamSHA256": "9578f8a275d37ba4d4f67fcc63b0733a539d9d125dc0bccf075564d42ebae4e6",
+    "patchedSHA256": "a8563763a521a621aaeaa84d16e8d9f399d54005dc8ebf89bf00c38953da4a3c",
     "before": "\tw.noRedirect = o.Vibrancy != \"\" && systemBackdrops() && (!w.hiddenTitleBar && !o.Surface || b.composition() != nil)",
     "after": "\tw.noRedirect = !o.Surface && o.Transparent || o.Vibrancy != \"\" && systemBackdrops() && (!w.hiddenTitleBar && !o.Surface || b.composition() != nil)",
     "additionalEdits": [

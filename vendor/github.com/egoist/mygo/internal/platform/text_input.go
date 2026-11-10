@@ -49,6 +49,17 @@ func (c *InputComposition) End(client TextInputClient) {
 	}
 	client.UnmarkText()
 }
+
+// Cancel discards the marked text, for an input method that gives its
+// composition up without emptying it first. The rest of the document,
+// the selection included, stays as it is.
+func (c *InputComposition) Cancel(client TextInputClient) {
+	c.pending = nil
+	if _, ok := client.MarkedRange(); ok {
+		client.SetMarkedText(nil, "", TextRange{})
+		client.UnmarkText()
+	}
+}
 func (c *InputComposition) Replace(client TextInputClient, r *TextRange, text string) {
 	if r == nil && c.pending != nil {
 		r = c.pending

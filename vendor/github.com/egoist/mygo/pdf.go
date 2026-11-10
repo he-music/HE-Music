@@ -43,7 +43,7 @@ type Margins struct{ Top, Right, Bottom, Left float64 }
 // PDFs WebKit prints name radicals for many Chinese characters, as ⼈
 // (U+2F08) for 人, PrintToPDF puts back the characters the fonts draw.
 func (p *Page) PrintToPDF(opts PDFOptions) ([]byte, error) {
-	if p.w.content != nil {
+	if p.w.content {
 		return nil, errNoPage
 	}
 	size := opts.PageSize

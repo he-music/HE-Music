@@ -8,7 +8,7 @@ github.com/ebitengine/purego/internal/cgo
 github.com/ebitengine/purego/internal/fakecgo
 github.com/ebitengine/purego/internal/strings
 github.com/ebitengine/purego/objc
-# github.com/egoist/mygo v0.6.5-0.20261026063203-07ebe19ac0dc
+# github.com/egoist/mygo v0.8.3
 ## explicit; go 1.27.3
 github.com/egoist/mygo
 github.com/egoist/mygo/cmd/mygo
@@ -41,6 +41,10 @@ github.com/egoist/mygo/internal/watchdriver
 github.com/egoist/mygo/internal/web
 github.com/egoist/mygo/internal/webview2
 github.com/egoist/mygo/internal/windows
+github.com/egoist/mygo/locales/ja
+github.com/egoist/mygo/locales/zh-Hans
+github.com/egoist/mygo/locales/zh-Hant
+github.com/egoist/mygo/netproxy
 github.com/egoist/mygo/transfer
 # github.com/tommyo123/mtag v1.0.2
 ## explicit; go 1.23
@@ -52,7 +56,6 @@ github.com/tommyo123/mtag/id3v2
 github.com/tommyo123/mtag/mp4
 # golang.org/x/crypto v0.57.0
 ## explicit; go 1.26.0
-golang.org/x/crypto/tea
 # golang.org/x/net v0.59.0
 ## explicit; go 1.26.0
 golang.org/x/net/publicsuffix

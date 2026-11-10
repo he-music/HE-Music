@@ -17,7 +17,7 @@ struct Effect {
 
 vec2 framePoint(Effect e, vec2 q) {
 	vec3 h = vec3(dot(e.transform0.xyz, vec3(q, 1.0)), dot(e.transform1.xyz, vec3(q, 1.0)),
-				  dot(vec3(e.transform2.xy, 1.0), vec3(q, 1.0)));
+				  dot(vec3(e.transform2.xy, 1.0 - 2.0 * e.transform2.z), vec3(q, 1.0)));
 	return h.xy / h.z;
 }
 

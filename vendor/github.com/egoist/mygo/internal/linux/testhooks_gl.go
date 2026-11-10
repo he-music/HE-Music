@@ -2,7 +2,11 @@
 
 package linux
 
-import "github.com/egoist/mygo/internal/gpu/gl"
+import (
+	"image"
+
+	"github.com/egoist/mygo/internal/gpu/gl"
+)
 
 // TestSurfaceGL tells how the native UI of a window draws: "opengl" when
 // its renderer draws in the GtkGLArea, "memory" when the GtkGLArea shows
@@ -84,4 +88,46 @@ func TestProbeGL() (renderer, failure string, freed func() bool) {
 		return renderer, failure, nil
 	}
 	return renderer, failure, func() bool { return *slot(location, 0) == 0 }
+}
+
+// TestGLDamage returns what the paints of a window of native UI drawing
+// with OpenGL told a Wayland compositor they changed since the last call,
+// beside GTK's own damage (damageGLPaint), in the window's coordinates;
+// where its GtkGLArea is in them; and the window's scale. The first call
+// starts recording. It returns ok false but on Wayland, for a GtkGLArea.
+func TestGLDamage(handle uintptr) (damage []image.Rectangle, area image.Point, scale int, ok bool) {
+	w := windowByHandle(handle)
+	if w == nil || w.surface == nil || !w.surface.gl || w.b.waylandSurface == nil {
+		return nil, image.Point{}, 0, false
+	}
+	if testGLDamage == nil {
+		testGLDamaged = map[*window][]image.Rectangle{}
+		testGLDamage = func(w *window, r image.Rectangle) { testGLDamaged[w] = append(testGLDamaged[w], r) }
+	}
+	damage, testGLDamaged[w] = testGLDamaged[w], nil
+	// The area has no GdkWindow of its own: its allocation is in the
+	// window's.
+	var at gdkRectangle
+	gtkWidgetGetAllocation(w.surface.area, &at)
+	return damage, image.Pt(int(at.X), int(at.Y)), int(gtkWidgetGetScaleFactor(w.win)), true
+}
+
+// testGLDamaged holds what TestGLDamage recorded, by window.
+var testGLDamaged map[*window][]image.Rectangle
+
+// TestFrameClockInterval returns the refresh interval, in microseconds, in
+// the timings of the last frame of the frame clock of a window showing
+// native UI, which the clock waits after it for the next (paceFrameClock),
+// and the refresh rate of the monitor showing the window in millihertz.
+func TestFrameClockInterval(handle uintptr) (interval int64, mhz int32) {
+	s := surfaceByHandle(handle)
+	if s == nil {
+		return 0, 0
+	}
+	if clock := gtkWidgetGetFrameClock(s.area); clock != 0 {
+		if t := gdkFrameClockCurrentTimings(clock); t != 0 {
+			interval = gdkFrameTimingsRefresh(t)
+		}
+	}
+	return interval, s.refreshMilliHz()
 }

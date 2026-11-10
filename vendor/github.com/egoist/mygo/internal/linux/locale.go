@@ -66,12 +66,16 @@ func (a appController) SetLanguages(tags []string, rtl bool) {
 		gtkWidgetSetDefaultDirection(dir)
 	}
 	a.b.languages = append([]string(nil), tags...)
-	if libWebKit != 0 {
+	// WebKitGTK may have loaded on another goroutine (WebViewAvailable),
+	// which libWebKit does not tell safely: webKit then makes its first
+	// calls here, on the main thread.
+	if webKitLoaded.Load() && webKit() == nil {
 		a.b.applyWebLanguages()
 	}
 }
 
-// applyWebLanguages gives the default web context the app's languages.
+// applyWebLanguages gives the web contexts, the default one and those of
+// sessions, the app's languages.
 func (b *Backend) applyWebLanguages() {
 	if len(b.languages) == 0 || webkitWebContextSetPreferredLanguages == nil {
 		return
@@ -81,6 +85,9 @@ func (b *Backend) applyWebLanguages() {
 		strs[i] = cs(l)
 	}
 	webkitWebContextSetPreferredLanguages(webkitWebContextGetDefault(), &strs[0])
+	for _, s := range b.stores {
+		webkitWebContextSetPreferredLanguages(s.ctx, &strs[0])
+	}
 }
 
 // Region returns the formats of LC_TIME, as glibc has them for the

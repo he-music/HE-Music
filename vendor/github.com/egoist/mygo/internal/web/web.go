@@ -88,7 +88,8 @@ func (b *Backend) Init(h platform.AppHandler, _ platform.AppOptions) error {
 		b.sync(func() { b.h.ThemeChanged() })
 		return nil
 	})
-	for _, q := range []string{"(prefers-color-scheme: dark)", "(prefers-reduced-motion: reduce)", "(prefers-reduced-transparency: reduce)", "(prefers-contrast: more)"} {
+	for _, q := range []string{"(prefers-color-scheme: dark)", "(prefers-reduced-motion: reduce)", "(prefers-reduced-transparency: reduce)", "(prefers-contrast: more)",
+		"(pointer: fine)", "(pointer: coarse)", "(any-pointer: fine)", "(any-pointer: coarse)", "(hover: none)", "(any-hover: none)"} {
 		js.Global().Call("matchMedia", q).Call("addEventListener", "change", changed)
 	}
 	// The languages the user reads: the browser's.
@@ -246,7 +247,12 @@ func (app) SetOpenAtLogin(bool, string, string, string) error { return errUnsupp
 func (app) OpenAtLogin(string, string, string) bool           { return false }
 func (app) OpenedAtLogin() bool                               { return false }
 func (app) SetDockMenu(*platform.Menu)                        {}
-func (app) ClearBrowsingData(done func(error))                { done(errUnsupported) }
+func (app) ClearBrowsingData(_ platform.DataStore, _ platform.SiteData, done func(error)) {
+	done(errUnsupported)
+}
+func (app) NewDataStore(platform.DataStoreOptions) (platform.DataStore, error) {
+	return nil, errUnsupported
+}
 
 // PreferredLanguages returns the browser's languages, navigator.languages.
 func (app) PreferredLanguages() []string {
@@ -400,6 +406,44 @@ func (c clipboard) WriteText(text string) {
 	}
 }
 
+// WriteTextThen writes text as WriteText does, and gives done what the
+// browser's clipboard answers: an error where it refuses, as without the
+// user acting, or in a page of no secure context, which has no clipboard
+// API. The text is copied in the page either way, which pastes it.
+func (c clipboard) WriteTextThen(text string, done func(error)) {
+	c.b.mu.Lock()
+	c.b.clip = text
+	c.b.clipData = transfer.TextData(text)
+	c.b.mu.Unlock()
+	var p js.Value
+	if cb := js.Global().Get("navigator").Get("clipboard"); cb.IsUndefined() || cb.IsNull() {
+		p = js.Global().Get("Promise").Call("reject", js.Global().Get("Error").New("no clipboard API outside secure contexts"))
+	} else {
+		p = cb.Call("writeText", text)
+	}
+	var ok, failed js.Func
+	answer := func(err error) {
+		ok.Release()
+		failed.Release()
+		c.b.sync(func() { done(err) })
+	}
+	ok = js.FuncOf(func(js.Value, []js.Value) any {
+		answer(nil)
+		return nil
+	})
+	failed = js.FuncOf(func(_ js.Value, args []js.Value) any {
+		msg := "refused"
+		if len(args) > 0 && args[0].Type() == js.TypeObject {
+			if m := args[0].Get("message"); m.Type() == js.TypeString && m.String() != "" {
+				msg = m.String()
+			}
+		}
+		answer(errors.New("mygo: the browser did not write the clipboard: " + msg))
+		return nil
+	})
+	p.Call("then", ok, failed)
+}
+
 func (c clipboard) ReadData(formats []transfer.Format) (transfer.Data, error) {
 	c.b.mu.Lock()
 	d := c.b.clipData
@@ -470,6 +514,7 @@ func (shell) ShowItemInFolder(string)              {}
 func (shell) TrashItem(string) error               { return errUnsupported }
 func (shell) Beep()                                {}
 func (shell) FileIcon(string, int) ([]byte, error) { return nil, errUnsupported }
+func (shell) TypeIcon(string, int) ([]byte, error) { return nil, errUnsupported }
 func (shell) OpenApplication(string) error         { return errUnsupported }
 
 func (*Backend) Applications() ([]platform.Application, error) { return nil, errUnsupported }
@@ -543,7 +588,25 @@ func (theme) Preferences() platform.Preferences {
 		ReduceTransparency: matches("(prefers-reduced-transparency: reduce)"),
 		HighContrast:       matches("(prefers-contrast: more)"),
 		TextScale:          1,
+		Pointer:            pointer("pointer"),
+		AnyPointer:         pointer("any-pointer"),
+		NoHover:            matches("(hover: none)"),
+		NoAnyHover:         matches("(any-hover: none)"),
 	}
+}
+
+// pointer returns the accuracy the media feature (pointer or any-pointer)
+// matches: the finest of any-pointer's.
+func pointer(feature string) platform.PointerAccuracy {
+	switch {
+	case matches("(" + feature + ": fine)"):
+		return platform.PointerFine
+	case matches("(" + feature + ": coarse)"):
+		return platform.PointerCoarse
+	case matches("(" + feature + ": none)"):
+		return platform.PointerNone
+	}
+	return platform.PointerFine // a browser without the feature
 }
 
 type power struct{}

@@ -7,7 +7,7 @@ import (
 	"time"
 )
 
-// Cookie is a normalized snapshot of a cookie in the default page store.
+// Cookie is a normalized snapshot of a cookie in a page store.
 // SameSite is lax, strict, none, or empty (unknown on output only).
 // A zero Expires denotes a session cookie.
 type Cookie struct {

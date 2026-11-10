@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 	"syscall"
@@ -171,6 +172,7 @@ func setupFileDialog(dlg uintptr, opts uint32, title, button, nameLabel, default
 	// in specs until the call returns.
 	type filterSpec struct{ Name, Spec *uint16 }
 	var specs []filterSpec
+	var types *mimeTypes
 	for _, f := range filters {
 		var patterns []string
 		for _, e := range f.Extensions {
@@ -178,6 +180,16 @@ func setupFileDialog(dlg uintptr, opts uint32, title, button, nameLabel, default
 				patterns = append(patterns, "*.*")
 			} else {
 				patterns = append(patterns, "*."+strings.TrimPrefix(e, "."))
+			}
+		}
+		if len(f.MIMETypes) > 0 && types == nil {
+			types = readMIMETypes()
+		}
+		for _, m := range f.MIMETypes {
+			for _, e := range types.extensions(m) {
+				if p := "*" + e; !slices.Contains(patterns, p) {
+					patterns = append(patterns, p)
+				}
 			}
 		}
 		if len(patterns) > 0 {

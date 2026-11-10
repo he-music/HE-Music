@@ -256,6 +256,7 @@ func (d *Document[T]) Set(content T) {
 	d.mu.Lock()
 	d.content = content
 	d.changes++
+	at, savedAt := d.changes, d.savedAt
 	edited := true
 	// Equal is the app's and may read the document, so it is called with
 	// the lock down: a document holding it would deadlock on the mutex its
@@ -266,7 +267,7 @@ func (d *Document[T]) Set(content T) {
 	if eq != nil && known {
 		edited = !eq(content, saved)
 	}
-	d.changed(edited)
+	d.changedAt(edited, at, savedAt)
 }
 
 // Changed tells that the content changed without being replaced, for a
@@ -506,8 +507,18 @@ func (b *docBase) OnStateChange(fn func(DocumentState)) (off func()) {
 func (b *docBase) OnReload(fn func()) (off func()) { return b.onReload.add(fn, false) }
 
 // changed follows an edit of the content: edited is the new edited state.
-func (b *docBase) changed(edited bool) {
+func (b *docBase) changed(edited bool) { b.changedAt(edited, 0, 0) }
+
+// changedAt applies edited only if the content and saved change counters
+// still match at and savedAt. A zero at skips that check. The check and the
+// change share one critical section so an Equal computed for older content
+// cannot overwrite a newer edit or save.
+func (b *docBase) changedAt(edited bool, at, savedAt uint64) {
 	b.mu.Lock()
+	if at != 0 && (b.changes != at || b.savedAt != savedAt) {
+		b.mu.Unlock()
+		return
+	}
 	was := b.edited
 	b.edited = edited
 	switch {

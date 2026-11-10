@@ -3,6 +3,7 @@
 package darwin
 
 import (
+	"math"
 	"slices"
 	"sync"
 
@@ -22,6 +23,12 @@ import (
 // takes no mouse moves where the content painted over it. Its delegate is
 // the web view's alone, never the NSWindow's, so it hears only of its
 // page.
+//
+// Between the clip view and the web view, a pane at the web view's frame
+// cuts it to the corners of the content's hole. A transform of the
+// content scaling the page scales the pane's bounds: the web view keeps
+// its size, which the page lays out at, and shows scaled, as AppKit draws
+// and finds the pointer in views of scaled bounds.
 
 // nsViewMinYMargin is NSViewMinYMargin: the margin below a view grows,
 // which keeps its distance to the top of an unflipped superview.
@@ -40,10 +47,14 @@ func (s *surface) NewWebView(o *platform.WindowOptions, h platform.WindowHandler
 		send(send(v.clip, "layer"), "setMasksToBounds:", 1)
 		send(v.clip, "setAutoresizingMask:", nsViewMinYMargin)
 		send(v.clip, "setHidden:", 1)
+		v.pane = msgInitRect(send(class("MyGoClipView"), "alloc"), sel("initWithFrame:"), NSRect{})
+		send(v.pane, "setWantsLayer:", 1)
+		send(send(v.pane, "layer"), "setMasksToBounds:", 1)
 		if o.BackgroundColor != nil && !o.Transparent {
 			v.clipBackground(*o.BackgroundColor)
 		}
-		send(v.clip, "addSubview:", uintptr(v.web))
+		send(v.pane, "addSubview:", uintptr(v.web))
+		send(v.clip, "addSubview:", uintptr(v.pane))
 		send(host.view, "addSubview:positioned:relativeTo:", uintptr(v.clip), nsWindowBelow, uintptr(s.view))
 	})
 	b.byDelegate[v.delegate] = v
@@ -55,9 +66,10 @@ func (s *surface) NewWebView(o *platform.WindowOptions, h platform.WindowHandler
 // nsWindowBelow is NSWindowBelow, for addSubview:positioned:relativeTo:.
 const nsWindowBelow = ^uintptr(0)
 
-// clipBackground fills the clip view with c until the page paints.
+// clipBackground fills the pane with c until the page paints, inside the
+// page's corners.
 func (w *window) clipBackground(c platform.Color) {
-	send(send(w.clip, "layer"), "setBackgroundColor:", uintptr(send(nsColor(c), "CGColor")))
+	send(send(w.pane, "layer"), "setBackgroundColor:", uintptr(send(nsColor(c), "CGColor")))
 }
 
 // PlaceWebViews shows the window's web views where the content shows
@@ -77,9 +89,14 @@ func (s *surface) PlaceWebViews(views []platform.WebViewPlacement) {
 				continue
 			}
 			c, f := p.Clip, p.Frame
+			pw, ph := p.Size()
 			msgSetRect(v.clip, sel("setFrame:"), NSRect{Origin: NSPoint{c.X, height - c.Y - c.H}, Size: NSSize{c.W, c.H}})
-			// The clip view is flipped.
-			msgSetRect(v.web, sel("setFrame:"), NSRect{Origin: NSPoint{f.X - c.X, f.Y - c.Y}, Size: NSSize{f.W, f.H}})
+			// The clip view is flipped, and so is the pane, whose bounds
+			// are the page's size, scaled to its frame.
+			msgSetRect(v.pane, sel("setFrame:"), NSRect{Origin: NSPoint{f.X - c.X, f.Y - c.Y}, Size: NSSize{f.W, f.H}})
+			msgSetSize(v.pane, sel("setBoundsSize:"), NSSize{pw, ph})
+			msgSetRect(v.web, sel("setFrame:"), NSRect{Size: NSSize{pw, ph}})
+			v.roundPane(p.Radii, pw, ph)
 			if sendBool(v.clip, "isHidden") {
 				send(v.clip, "setHidden:", 0)
 			}
@@ -96,7 +113,112 @@ func (s *surface) PlaceWebViews(views []platform.WebViewPlacement) {
 			}
 		}
 		s.stackWebViews(shown)
+		if len(s.glassShown) > 0 {
+			s.stackGlass(s.glassShown, true)
+		}
 	})
+}
+
+var (
+	paneOnce        sync.Once
+	msgPointToLayer func(obj id, sel objc.SEL, p NSPoint) NSPoint
+	cgPathCreate    func() uintptr
+	cgPathMoveTo    func(path, transform uintptr, x, y float64)
+	cgPathArcTo     func(path, transform uintptr, x1, y1, x2, y2, radius float64)
+	cgPathClose     func(path uintptr)
+	cgPathRelease   func(path uintptr)
+)
+
+// roundPane cuts the pane of the web view w, its bounds width by height,
+// to corners of radii, in its bounds' units, from the top-left clockwise,
+// as continuous as the content's when they are the same.
+func (w *window) roundPane(radii [4]float64, width, height float64) {
+	paneOnce.Do(func() {
+		purego.RegisterFunc(&msgPointToLayer, msgSendAddr)
+		purego.RegisterLibFunc(&cgPathCreate, libCG, "CGPathCreateMutable")
+		purego.RegisterLibFunc(&cgPathMoveTo, libCG, "CGPathMoveToPoint")
+		purego.RegisterLibFunc(&cgPathArcTo, libCG, "CGPathAddArcToPoint")
+		purego.RegisterLibFunc(&cgPathClose, libCG, "CGPathCloseSubpath")
+		purego.RegisterLibFunc(&cgPathRelease, libCG, "CGPathRelease")
+	})
+	layer := send(w.pane, "layer")
+	if radii == [4]float64{} {
+		msgSetFloat(layer, sel("setCornerRadius:"), 0)
+		w.unmask(layer)
+		return
+	}
+	// The pane's corners in its layer, which AppKit scales and flips as
+	// it does: by the layer's own transform, or its sublayers'.
+	toLayer := func(x, y float64) NSPoint { return msgPointToLayer(w.pane, sel("convertPointToLayer:"), NSPoint{x, y}) }
+	corners := [4]NSPoint{toLayer(0, 0), toLayer(width, 0), toLayer(width, height), toLayer(0, height)}
+	k := math.Abs(corners[1].X-corners[0].X) / width // the layer's units per the bounds'
+	same, r := true, 0.0
+	for _, v := range radii {
+		if v > 0 && r > 0 && v != r {
+			same = false
+		}
+		r = max(r, v)
+	}
+	if same {
+		// kCALayerMinXMinYCorner and the others, for the corners whose
+		// radius is not 0, by where they are in the layer.
+		var mask uint
+		for i, v := range radii {
+			if v <= 0 {
+				continue
+			}
+			p, o := corners[i], corners[(i+2)%4]
+			bit := uint(1)
+			if p.X > o.X {
+				bit <<= 1
+			}
+			if p.Y > o.Y {
+				bit <<= 2
+			}
+			mask |= bit
+		}
+		w.unmask(layer)
+		msgSetFloat(layer, sel("setCornerRadius:"), r*k)
+		send(layer, "setCornerCurve:", uintptr(nsString("continuous")))
+		send(layer, "setMaskedCorners:", uintptr(mask))
+		return
+	}
+	// Corners of different radii, circular: a mask of their path, at the
+	// layer's bounds, which may not start at 0, 0.
+	msgSetFloat(layer, sel("setCornerRadius:"), 0)
+	b := msgRect(layer, sel("bounds"))
+	for i := range corners {
+		corners[i].X -= b.Origin.X
+		corners[i].Y -= b.Origin.Y
+	}
+	path := cgPathCreate()
+	mid := func(a, b NSPoint) NSPoint { return NSPoint{(a.X + b.X) / 2, (a.Y + b.Y) / 2} }
+	start := mid(corners[3], corners[0])
+	cgPathMoveTo(path, 0, start.X, start.Y)
+	for i := range 4 {
+		p, next := corners[i], mid(corners[i], corners[(i+1)%4])
+		cgPathArcTo(path, 0, p.X, p.Y, next.X, next.Y, radii[i]*k)
+	}
+	cgPathClose(path)
+	send(class("CATransaction"), "begin")
+	send(class("CATransaction"), "setDisableActions:", 1)
+	if w.mask == 0 {
+		w.mask = send(send(class("CAShapeLayer"), "alloc"), "init")
+		send(layer, "setMask:", uintptr(w.mask))
+	}
+	msgSetRect(w.mask, sel("setFrame:"), b)
+	send(w.mask, "setPath:", path)
+	send(class("CATransaction"), "commit")
+	cgPathRelease(path)
+}
+
+// unmask takes away the mask of the pane's layer.
+func (w *window) unmask(layer id) {
+	if w.mask != 0 {
+		send(layer, "setMask:", 0)
+		release(w.mask)
+		w.mask = 0
+	}
 }
 
 // stackWebViews puts the clip views of the web views shown in the order
@@ -238,6 +360,9 @@ func (w *window) closeWebView() {
 		}
 		w.stopObserving()
 		send(w.ucc, "removeScriptMessageHandlerForName:", uintptr(nsString("mygo")))
+		if w.opts.PictureInPicture {
+			send(w.ucc, "removeScriptMessageHandlerForName:", uintptr(nsString(pipHandler)))
+		}
 		send(w.ucc, "removeAllUserScripts")
 		send(w.web, "stopLoading")
 		send(w.web, "setNavigationDelegate:", 0)
@@ -249,6 +374,8 @@ func (w *window) closeWebView() {
 		w.lastMouseDown = 0
 		release(w.ucc)
 		release(w.web)
+		release(w.mask)
+		release(w.pane)
 		release(w.clip)
 		// WebKit may still hold the delegate as the page goes.
 		autorelease(w.delegate)
@@ -318,6 +445,18 @@ func webViewMethods() []objc.MethodDef {
 		sendSuper(self, "MyGoWebView", cmd, uintptr(ev))
 	}
 	return []objc.MethodDef{
+		// The first click in a window that is not key is the page's, as it
+		// is native UI's (MyGoSurfaceView): WKWebView answers no, which
+		// spends the click on making the window key.
+		method("acceptsFirstMouse:", func(self id, _ objc.SEL, ev id) bool { return true }),
+		method("scrollWheel:", func(self id, cmd objc.SEL, ev id) {
+			w := theBackend.byWebView[self]
+			if w == nil || w.host == nil || w.host.surface == nil || w.opts == nil || !w.opts.ScrollToContainer {
+				sendSuper(self, "MyGoWebView", cmd, uintptr(ev))
+				return
+			}
+			scrollWheel(w.host.surface, ev)
+		}),
 		method("rightMouseDown:", press(1)),
 		method("otherMouseDown:", press(2)),
 		method("mouseMoved:", moved),
@@ -346,9 +485,72 @@ func webViewMethods() []objc.MethodDef {
 	}
 }
 
+// unhandledKey gives the content a key that the page of the web view in
+// the clip view clip left unhandled, and reports whether it did. WebKit
+// sends such a key on up the responder chain, to the clip view: the
+// surface, a sibling of the clip view, would never get it. Tab stays out
+// of it, as WebKit moves the keyboard with it.
+func unhandledKey(clip, ev id) bool {
+	w := clipWebView(clip)
+	if w == nil {
+		return false
+	}
+	k := eventKey(ev)
+	if k == platform.KeyTab {
+		return false
+	}
+	w.host.surface.send(platform.SurfaceEvent{Kind: platform.WebViewKey, Key: k, PhysicalKey: physicalKey(ev), Mods: eventMods(ev), Repeat: sendBool(ev, "isARepeat"), WebView: w})
+	return true
+}
+
+// unhandledCommand gives the content the key k of a command the page of
+// the web view in the clip view clip left, and reports whether it did.
+func unhandledCommand(clip id, k platform.Key) bool {
+	w := clipWebView(clip)
+	if w == nil {
+		return false
+	}
+	w.host.surface.send(platform.SurfaceEvent{Kind: platform.WebViewKey, Key: k, WebView: w})
+	return true
+}
+
+// clipWebView returns the web view in the clip view clip, or in the pane
+// inside it, which is the web view's next responder, while its window
+// shows native UI.
+func clipWebView(clip id) *window {
+	for _, v := range theBackend.byWebView {
+		if v.clip == clip || v.pane == clip {
+			if v.host == nil || v.host.closed || v.host.surface == nil {
+				return nil
+			}
+			return v
+		}
+	}
+	return nil
+}
+
 func registerClipViewClass() {
 	classDef("MyGoClipView", "NSView", nil, []objc.MethodDef{
 		method("isFlipped", func(self id, _ objc.SEL) bool { return true }),
+		method("keyDown:", func(self id, cmd objc.SEL, ev id) {
+			if !unhandledKey(self, ev) {
+				sendSuper(self, "MyGoClipView", cmd, uintptr(ev))
+			}
+		}),
+		// An Escape (or Cmd+.) the page left comes as the command it stands
+		// for: WebKit sends the commands its web process does not know up
+		// the responder chain first, and resends the key only if no
+		// responder took the command, which a panel, as a flyout's, does.
+		// NSView has no cancelOperation: of its own: a command no web view
+		// takes goes on up the responder chain, as NSResponder's
+		// doCommandBySelector: sends it.
+		method("cancelOperation:", func(self id, cmd objc.SEL, sender id) {
+			if !unhandledCommand(self, platform.KeyEscape) {
+				if next := send(self, "nextResponder"); next != 0 {
+					send(next, "doCommandBySelector:", uintptr(cmd))
+				}
+			}
+		}),
 		// Assistive technology finds the page in the element of the
 		// content showing it, not beside the content.
 		method("accessibilityChildren", func(self id, _ objc.SEL) id { return nsArray() }),

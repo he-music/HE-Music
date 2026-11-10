@@ -267,6 +267,9 @@ func ExtractArchive(r io.Reader, dir string) error {
 				return err
 			}
 			_, err = io.Copy(f, tr)
+			if err == nil {
+				err = f.Chmod(mode)
+			}
 			if cerr := f.Close(); err == nil {
 				err = cerr
 			}

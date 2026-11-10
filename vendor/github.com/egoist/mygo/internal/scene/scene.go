@@ -87,7 +87,12 @@ const (
 	// being its right or bottom edge; nothing outside Src shows.
 	OpImage
 	// OpPushClip clips the following ops to Rect with Radii, intersected
-	// with the clip in effect, until the matching OpPopClip.
+	// with the clip in effect, until the matching OpPopClip. Unless
+	// PaintSolid, the alpha of its Paint, a gradient of Color and Color2
+	// or of Stops as an OpFill's, masks what it clips too, as CSS's
+	// mask-image does; so does, with Image, the alpha of Image's Src
+	// drawn over Rect, as OpImage draws it: a coverage mask, as a path's
+	// (ClipShape.Masks).
 	OpPushClip
 	// OpPopClip restores the clip in effect before the matching OpPushClip.
 	OpPopClip
@@ -200,6 +205,12 @@ const (
 	// CSS's conic-gradient() is; PaintConicOklab mixes them in Oklab.
 	PaintConic
 	PaintConicOklab
+	// PaintRadial is a radial gradient of the op's Stops from (Gradient[0],
+	// Gradient[1]) at 0 to a circle of radius Gradient[2] around it at 1,
+	// mixed in sRGB, as CSS's radial-gradient() is; PaintRadialOklab mixes
+	// them in Oklab.
+	PaintRadial
+	PaintRadialOklab
 )
 
 // Stop is a color of a gradient with stops (Op.Stops), at a place along
@@ -216,7 +227,7 @@ type Stop struct {
 const MaxStops = 32
 
 // HasStops reports whether paint takes its colors from the op's Stops.
-func (p Paint) HasStops() bool { return p >= PaintLinearStops && p <= PaintConicOklab }
+func (p Paint) HasStops() bool { return p >= PaintLinearStops && p <= PaintRadialOklab }
 
 // Uniform returns the widths of a border as wide on every side.
 func Uniform(w float32) [4]float32 { return [4]float32{w, w, w, w} }
@@ -331,13 +342,19 @@ func SubpixelCoverage(a, c [3]float32, contrast, boost float32, g [4]float32) [3
 // Scene is a frame's display list.
 type Scene struct {
 	// Width and Height of the frame in device pixels; Scale is how many
-	// device pixels a DIP is (0 for 1).
+	// device pixels a DIP is (0 for 1). Zoom is how much of Scale the
+	// content's zoom makes (0 for 1): the screen's own scale is
+	// Scale/Zoom.
 	Width, Height int
-	Scale         float32
+	Scale, Zoom   float32
 	// Clear is the color the frame starts with.
-	Clear  Color
-	Ops    []Op
-	Glyphs []Glyph
+	Clear Color
+	// Background is the opaque color the content fills the window with,
+	// or transparent: what the window shows where no frame of its size
+	// shows yet, as while it grows. It draws nothing in the frame.
+	Background Color
+	Ops        []Op
+	Glyphs     []Glyph
 	// Stops holds the stops of gradients (Op.Stops).
 	Stops []Stop
 	// Effects holds the effects of OpEffect operations.
@@ -512,16 +529,21 @@ func (m *Image) Uploaded() {
 // Resize keeps the image's texture-cache identity while changing its size.
 // Renderers replace the backing texture on a size change, so an animated
 // clip does not leave a new texture in the cache on every frame.
+//
+// It reuses the pixels' memory where they fit, unless they take up less
+// than a quarter of it: an image that shrank much doesn't keep its
+// largest size, as a clip mask that turned would (#1407).
 func (m *Image) Resize(w, h int) {
 	m.W, m.H = w, h
+	n := 4 * w * h
 	switch {
 	case m.Scene != nil && m.Pix == nil:
 		// A canvas no renderer drew in memory: its pixels are made when
 		// one does.
-	case cap(m.Pix) >= 4*w*h:
-		m.Pix = m.Pix[:4*w*h]
+	case cap(m.Pix) >= n && n >= cap(m.Pix)/4:
+		m.Pix = m.Pix[:n]
 	default:
-		m.Pix = make([]byte, 4*w*h)
+		m.Pix = make([]byte, n)
 	}
 	m.Changed()
 }

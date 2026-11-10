@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { ensureMpvResources } from "../mpv/resources.mjs";
-export const SDK_VERSION = "v0.6.5-0.20261026063203-07ebe19ac0dc";
+export const SDK_VERSION = "v0.8.3";
 export const SDK_WINDOWS_FILE = "github.com/egoist/mygo/internal/windows/window.go";
 const definitionFile = "patches/mygo/patch.json";
 const lockFile = "patches/mygo/vendor-lock.json";

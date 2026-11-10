@@ -43,9 +43,11 @@ type Differ struct {
 	bounds, next []image.Rectangle
 	// encloses and encloses2 tell, for each clip of the last scene and of
 	// the one Diff was given, that it holds an op drawn under a transform
+	// that does more than move it, or a clip reaching into rounded corners
 	// (see opBounds).
 	encloses, encloses2 []bool
 	pushes              []int
+	corners             ClipCorners
 	versions            []uint64
 	mask, color         atlasMark
 	damage              []image.Rectangle
@@ -235,7 +237,8 @@ func (d *Differ) same(i int, s *Scene, j int, maskRects, colorRects []image.Rect
 		return false
 	}
 	switch b.Kind {
-	case OpImage:
+	case OpImage, OpPushClip:
+		// A clip's image masks it.
 		if b.Image != nil && b.Image.Version() != d.versions[i] {
 			return false
 		}
@@ -337,6 +340,7 @@ func addRect(damage []image.Rectangle, b image.Rectangle) []image.Rectangle {
 func (d *Differ) opBounds(s *Scene, out []image.Rectangle) []image.Rectangle {
 	clip := image.Rect(0, 0, s.Width, s.Height)
 	d.clips, d.pushes = d.clips[:0], d.pushes[:0]
+	d.corners.Reset()
 	d.encloses2 = append(d.encloses2[:0], make([]bool, len(s.Ops))...)
 	reach := func(m Affine) float32 {
 		if m.Set {
@@ -347,6 +351,7 @@ func (d *Differ) opBounds(s *Scene, out []image.Rectangle) []image.Rectangle {
 	for i := range s.Ops {
 		op := &s.Ops[i]
 		var b image.Rectangle
+		corners := false
 		switch op.Kind {
 		case OpFill, OpImage, OpEffect, OpHole:
 			b = outset(op.Transform.Bounds(op.Rect), reach(op.Transform))
@@ -386,21 +391,26 @@ func (d *Differ) opBounds(s *Scene, out []image.Rectangle) []image.Rectangle {
 			d.clips = append(d.clips, clip)
 			d.pushes = append(d.pushes, i)
 			clip = clip.Intersect(b)
+			corners = d.corners.Push(op) >= 0
 		case OpPopClip:
 			if len(d.clips) > 0 {
 				clip = d.clips[len(d.clips)-1]
 				d.clips = d.clips[:len(d.clips)-1]
 				d.pushes = d.pushes[:len(d.pushes)-1]
+				d.corners.Pop()
 			}
 		}
 		// The GPU's renderers cut what a clip holds with a mask once an op
-		// in it is drawn under a transform, and in the shader otherwise,
-		// which differ at its edge by a unit in the last place: a clip
-		// that starts or stops holding one changes all it cuts. A clip
-		// pushed under a transform is one for the clips around it, not
-		// for itself, which it was pushed onto already (as
-		// gpu.Builder.markEnclosing has it).
-		if op.Kind != OpPopClip && d.moved(s, op) {
+		// in it is drawn under a transform that does more than move it
+		// (Reshaped), and in the shader otherwise, which differ at its
+		// edge by a unit in the last place: a clip that starts or stops
+		// holding one changes all it cuts. A clip pushed under such a
+		// transform is one for the clips around it, not for itself, which
+		// it was pushed onto already (as gpu.Builder.markEnclosing has it).
+		// So does a clip that starts or stops holding one that reaches
+		// into its rounded corners, or those of a clip it is in
+		// (ClipCorners).
+		if corners || op.Kind != OpPopClip && Reshaped(s, op) {
 			j := len(d.pushes) - 1
 			if op.Kind == OpPushClip {
 				j--
@@ -424,20 +434,6 @@ func outsetEdges(x0, y0, x1, y1, d float32) image.Rectangle {
 func outset(rc Rect, d float32) image.Rectangle {
 	return image.Rect(int(math.Floor(float64(rc.X-d))), int(math.Floor(float64(rc.Y-d))),
 		int(math.Ceil(float64(rc.X+rc.W+d))), int(math.Ceil(float64(rc.Y+rc.H+d))))
-}
-
-// moved reports whether op of s draws under a transform, which only
-// translating draws without (TranslationFolder), but for clips, effects
-// and holes.
-func (d *Differ) moved(s *Scene, op *Op) bool {
-	if op.Kind == OpGlyphs && op.Start >= 0 && op.Start <= op.End && int(op.End) <= len(s.Glyphs) {
-		for _, g := range s.Glyphs[op.Start:op.End] {
-			if g.Transform.Set {
-				return true
-			}
-		}
-	}
-	return op.Transform.Set && (!folding() || !folds(s, op))
 }
 
 // Remember keeps what Diff needs of s, which Diff was given last, to

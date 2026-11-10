@@ -144,18 +144,71 @@ func (d *localeData) withDates() *localeData {
 // root's last; the nearest wins.
 func (d *localeData) fill(p *pool, starts []uint16) {
 	var set [slotCount]bool
-	for j := d.index; ; j = uint16At(tables.parents, j) {
+	fillSlots(d.index, p, starts, d.v[:], set[:])
+}
+
+// fillSlots sets the slots v of locale i from p as fill does, where set
+// tells which are set.
+func fillSlots(i int, p *pool, starts []uint16, v []string, set []bool) {
+	for j := i; ; j = uint16At(tables.parents, j) {
 		for e := int(starts[j]); e < int(starts[j+1]); e++ {
-			v := uint32(p.entries[3*e])<<16 | uint32(p.entries[3*e+1])<<8 | uint32(p.entries[3*e+2])
-			if s := v >> 15; !set[s] {
+			en := uint32(p.entries[3*e])<<16 | uint32(p.entries[3*e+1])<<8 | uint32(p.entries[3*e+2])
+			if s := en >> 15; !set[s] {
 				set[s] = true
-				d.v[s] = p.at(v & (1<<15 - 1))
+				v[s] = p.at(en & (1<<15 - 1))
 			}
 		}
 		if j == 0 {
 			break
 		}
 	}
+}
+
+// fillRecords sets the slots lo to lo+len(v) of locale i from records
+// (see i18n/internal/gen), whose starts are four bytes each: the locale's
+// runs of slots, then its parents', the root's last; the nearest wins.
+func fillRecords(i int, starts, records string, lo int, v []string) {
+	set := make([]bool, len(v))
+	for j := i; ; j = uint16At(tables.parents, j) {
+		r := records[uint32At(starts, j):uint32At(starts, j+1)]
+		for s := 0; r != ""; {
+			skip, n := uvarint(r)
+			r = r[n:]
+			count, n := uvarint(r)
+			r = r[n:]
+			s += skip
+			for ; count > 0; count-- {
+				end := strings.IndexByte(r, 0)
+				if k := s - lo; k >= 0 && k < len(v) && !set[k] {
+					set[k] = true
+					v[k] = r[:end]
+				}
+				r = r[end+1:]
+				s++
+			}
+		}
+		if j == 0 {
+			break
+		}
+	}
+}
+
+// uint32At returns the big-endian uint32 at index i of a table of them.
+func uint32At(table string, i int) int {
+	return int(table[4*i])<<24 | int(table[4*i+1])<<16 | int(table[4*i+2])<<8 | int(table[4*i+3])
+}
+
+// uvarint returns the uvarint s starts with and its length.
+func uvarint(s string) (x, n int) {
+	for shift := 0; n < len(s); shift += 7 {
+		b := s[n]
+		n++
+		x |= int(b&0x7f) << shift
+		if b < 0x80 {
+			break
+		}
+	}
+	return x, n
 }
 
 // localeKey is how a locale formats: the locale of CLDR whose data it
@@ -166,6 +219,7 @@ type localeKey struct {
 	firstDay  time.Weekday // or -1 for the region's
 	latn      bool         // -u-nu-latn: Latin digits
 	region    string       // the region whose week and time data apply
+	tagRegion string       // the region the tag names, "" for none
 	lang      string       // the language, for the rules of day periods
 }
 
@@ -205,6 +259,9 @@ func makeKey(locale string) *localeKey {
 	// The region: the tag's, else the language's likely one.
 	if r, conf := t.Region(); conf != language.No {
 		k.region = r.String()
+		if conf == language.Exact {
+			k.tagRegion = k.region
+		}
 	}
 	// The tag with the script it is likely written in where it names
 	// none and that differs from its language's: zh-TW is zh-Hant-TW,

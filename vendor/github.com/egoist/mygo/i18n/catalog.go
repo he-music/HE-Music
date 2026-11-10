@@ -89,11 +89,12 @@ type candidates struct {
 // a file that does not, is left out, and its keys fall back as missing ones
 // do: `mygo generate` and `mygo i18n check` report them.
 func NewCatalog(fsys fs.FS, source string) (*Catalog, error) {
-	linkTimes()
+	linkFormats()
 	return newCatalog(fsys, source)
 }
 
-// newCatalog is NewCatalog without linking the formatting of dates.
+// newCatalog is NewCatalog without linking the formatting of dates and
+// amounts.
 func newCatalog(fsys fs.FS, source string) (*Catalog, error) {
 	src := Normalize(source)
 	if src == "" || IsPseudo(src) {
@@ -197,12 +198,13 @@ func (c *Catalog) Add(fsys fs.FS) error {
 // app, then to the library's. A library's catalog is not registered: the
 // languages an app ships are its own.
 func NewLibraryCatalog(fsys fs.FS, source, namespace string) (*Catalog, error) {
-	linkTimes()
+	linkFormats()
 	return newLibraryCatalog(fsys, source, namespace)
 }
 
 // newLibraryCatalog is NewLibraryCatalog without linking the formatting
-// of dates, for MyGo's own strings (internal/i18nlink), which have none.
+// of dates and amounts, for MyGo's own strings (internal/i18nlink), which
+// have none.
 func newLibraryCatalog(fsys fs.FS, source, namespace string) (*Catalog, error) {
 	if namespace == "" || strings.ContainsAny(namespace, ".@ ") {
 		return nil, fmt.Errorf("i18n: %q is not a namespace", namespace)

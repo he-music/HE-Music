@@ -128,6 +128,8 @@ type surface struct {
 	now      bool
 	tracking bool
 	buttons  int
+	// pressure is the last WM_POINTER message's (mouseDevice).
+	pressure float64
 	clicks   platform.ClickCounter
 	cursor   platform.Cursor
 	high     uint16 // a high surrogate of WM_CHAR waiting for its pair
@@ -135,12 +137,23 @@ type surface struct {
 	caret    platform.RectF
 	input    platform.TextInputState
 
+	// pointerAt is where on the screen the last WM_POINTER message's
+	// pointer was, in pixels (pointerMessage).
+	pointerAt point
+	// canceledUp tells that the system took the press of the pen or the
+	// finger (cancelPress): the mouse button's release that follows is
+	// its, and goes nowhere.
+	canceledUp bool
+
 	// keyTaken tells that the content took the key down, whose
 	// WM_SYSCHAR then opens no menu.
 	keyTaken bool
 	// menuRan tells that the key down ran a menu item (menuShortcut): its
 	// character goes nowhere.
 	menuRan bool
+	// held are the keys the content got pressed and not yet released,
+	// whose releases a menu's loop or an input method may take (liftKeys).
+	held platform.HeldKeys
 
 	reconvert  *[2]int // the runes a reconversion replaces
 	dropTarget uintptr // IDropTarget
@@ -154,6 +167,23 @@ type surface struct {
 	// gdiFailed tells that SetDIBitsToDevice refused a frame, which was
 	// logged once.
 	gdiFailed bool
+	// pixels tells that the frames are drawn in memory and copied onto the
+	// window's own pixels with GDI (PresentPixels), rather than presented
+	// by a GPU renderer's swap chain.
+	pixels bool
+	// drawn tells that the content's first frame reached the surface
+	// (FirstFrame), and cloaked that DWM keeps the window out of sight
+	// until a frame shows in it (cloak). hiddenFrame tells that the first
+	// frame of a window hidden, which no WM_PAINT asks for, is posted
+	// (drawHidden).
+	drawn, cloaked, hiddenFrame bool
+
+	// bg is the content's background (SetBackground), and bgBrush a brush
+	// of it while it is opaque, which fills what the window shows beyond
+	// the surface as it grows (fillUncovered), and the window's own pixels
+	// under the surface, which show as it shrinks (fillUnder).
+	bg      platform.Color
+	bgBrush uintptr
 
 	// layer holds the web views under the frames, once there are some
 	// (webview_embed.go): placed are where the content shows them, and
@@ -188,6 +218,7 @@ func newSurface(w *window) *surface {
 		return nil
 	}
 	w.b.surfaces[s.hwnd] = s
+	s.cloak()
 	// Input methods only come to text inputs.
 	procImmAssociateContextEx.Call(s.hwnd, 0, 0)
 	s.acceptFileDrops()
@@ -211,6 +242,7 @@ func (s *surface) toDIP(v int32) float64 { return float64(v) * 96 / float64(s.dp
 // window from then on, and the frames drawn in memory let go of it.
 func (s *surface) Native() platform.SurfaceNative {
 	s.freeComp()
+	s.pixels = false
 	return platform.SurfaceNative{HWND: s.hwnd, Composed: s.viaComposition()}
 }
 
@@ -240,7 +272,88 @@ func (s *surface) Size() (float64, float64, float64) {
 	return s.toDIP(r.Right - r.Left), s.toDIP(r.Bottom - r.Top), float64(s.dpi()) / 96
 }
 
-func (s *surface) RequestFrame() { procInvalidateRectW.Call(s.hwnd, 0, 0) }
+func (s *surface) RequestFrame() {
+	procInvalidateRectW.Call(s.hwnd, 0, 0)
+	if !s.drawn && !s.hiddenFrame && !s.w.IsVisible() {
+		s.hiddenFrame = true
+		s.w.b.post(s.drawHidden)
+	}
+}
+
+// The window of native UI is cloaked, which keeps it out of sight though
+// it is visible to Windows, from its creation until a frame of its content
+// shows in it: shown before, it would show what it holds until then,
+// white, for as long as the GPU renderer takes to start and the first
+// frame to draw (#905). Windows sends a cloaked window WM_PAINT as any
+// visible one, whose frame then shows it (reveal). A window made hidden
+// gets no WM_PAINT: its first frame draws all the same (drawHidden), which
+// makes it ready to show (OnReadyToShow) and shows as the window does,
+// from the swap chain. Should no frame show in a window shown, it shows
+// once timerUncloak fires, uncloakAfter later, which needs the main thread
+// to be idle meanwhile: drawing a frame never lets it fire.
+const (
+	dwmwaCloak   = 13 // DWMWA_CLOAK
+	timerUncloak = 3  // the surface's timer that shows a window still cloaked
+)
+
+var uncloakAfter = time.Second
+
+// cloak keeps the window out of sight until uncloak.
+func (s *surface) cloak() {
+	on := int32(1)
+	hr, _, _ := procDwmSetWindowAttribute.Call(s.w.hwnd, dwmwaCloak, uintptr(unsafe.Pointer(&on)), unsafe.Sizeof(on))
+	s.cloaked = hr == 0
+}
+
+// uncloak shows the window, as Windows shows it.
+func (s *surface) uncloak() {
+	if !s.cloaked {
+		return
+	}
+	s.cloaked = false
+	procKillTimer.Call(s.hwnd, timerUncloak)
+	off := int32(0)
+	procDwmSetWindowAttribute.Call(s.w.hwnd, dwmwaCloak, uintptr(unsafe.Pointer(&off)), unsafe.Sizeof(off))
+}
+
+// showing tells that Windows is about to show the window: while it is
+// cloaked, the timer that shows it should no frame show in it starts.
+func (s *surface) showing() {
+	if s.cloaked {
+		procSetTimer.Call(s.hwnd, timerUncloak, uintptr(uncloakAfter/time.Millisecond), 0)
+	}
+}
+
+// reveal shows the window, cloaked until a frame of the content showed in
+// it, after the WM_PAINT that drew one, or, for a window that drew its
+// first frame while hidden, the first since it is visible. Should DWM show
+// the window a refresh before the frame presented, it shows the window's
+// own pixels under the surface, which hold the content's background
+// (fillUnder): drawn nowhere while the window was hidden, they are drawn
+// now. It does not wait for DWM (DwmFlush), which may wait on the main
+// thread until something else on the screen changes.
+func (s *surface) reveal() {
+	s.fillUnder()
+	procGdiFlush.Call()
+	s.uncloak()
+}
+
+// FirstFrame tells that the content's first frame reached the surface
+// (platform.FirstFrameSurface).
+func (s *surface) FirstFrame() { s.drawn = true }
+
+var _ platform.FirstFrameSurface = (*surface)(nil)
+
+// drawHidden draws the content's first frame in a window hidden, which no
+// WM_PAINT asks for: the window is then ready to show, and shows the frame
+// from the swap chain as it shows. A window shown since gets WM_PAINT.
+func (s *surface) drawHidden() {
+	s.hiddenFrame = false
+	if s.drawn || s.w.closed || s.w.b.surfaces[s.hwnd] != s || s.w.IsVisible() {
+		return
+	}
+	s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})
+}
 
 // FramesAtOnce marks that RequestFrame paints at once, not at the display's
 // next refresh (platform.ImmediateFrameSurface).
@@ -261,6 +374,11 @@ func (s *surface) drawNow() {
 	procRedrawWindow.Call(s.hwnd, 0, 0, rdwInvalidate|rdwUpdateNow)
 	s.now = now
 }
+
+// Occluded reports whether nothing of the window shows on screen: while it
+// is minimized. Windows covered by others, or on another virtual desktop,
+// show.
+func (s *surface) Occluded() bool { return s.w.state == sizeMinimized }
 
 // RefreshRate returns the refresh rate of the monitor showing the window,
 // in its current display mode.
@@ -286,6 +404,90 @@ func (s *surface) AwaitRefresh() { procDwmFlush.Call() }
 
 var _ platform.RefreshSurface = (*surface)(nil)
 
+// SetBackground keeps a brush of the content's background, for the window
+// to show where it grew before the surface's frame of its new size shows
+// (platform.BackgroundSurface).
+func (s *surface) SetBackground(c platform.Color) {
+	if c == s.bg {
+		return
+	}
+	s.bg = c
+	if s.bgBrush != 0 {
+		procDeleteObject.Call(s.bgBrush)
+		s.bgBrush = 0
+	}
+	if c.A == 255 {
+		s.bgBrush, _, _ = procCreateSolidBrush.Call(uintptr(c.R) | uintptr(c.G)<<8 | uintptr(c.B)<<16)
+		s.fillUnder()
+	}
+}
+
+var _ platform.BackgroundSurface = (*surface)(nil)
+
+// fillUncovered paints the part of the window's client area that the
+// surface does not cover yet, as the window has just grown, with the
+// content's background. Windows resizes the window, and DWM may show it at
+// its new size, before WM_SIZE fits the surface to it and the surface
+// presents the frame of that size: until then, DWM would show what the
+// window's redirection bitmap holds there, black, as the window paints no
+// background of its own. Only that part is painted, before the frame of
+// the new size: under the surface, the swap chain shows over what GDI
+// draws, and the frame is not slowed (fillUnder paints there after it).
+func (s *surface) fillUncovered() {
+	if s.bgBrush == 0 || s.w.noRedirect {
+		// A window without a redirection bitmap shows nothing GDI draws:
+		// its material shows there, not black.
+		return
+	}
+	var c, sr rect
+	procGetClientRect.Call(s.w.hwnd, uintptr(unsafe.Pointer(&c)))
+	procGetClientRect.Call(s.hwnd, uintptr(unsafe.Pointer(&sr))) // the surface is at the client area's origin
+	if sr.Right >= c.Right && sr.Bottom >= c.Bottom {
+		return // the window did not grow
+	}
+	dc, _, _ := procGetDC.Call(s.w.hwnd)
+	if dc == 0 {
+		return
+	}
+	procExcludeClipRect.Call(dc, 0, 0, uintptr(sr.Right), uintptr(sr.Bottom))
+	procFillRect.Call(dc, uintptr(unsafe.Pointer(&c)), s.bgBrush)
+	procReleaseDC.Call(s.w.hwnd, dc)
+	procGdiFlush.Call()
+}
+
+// fillUnder paints the window's whole client area with the content's
+// background, under the surface too, once the surface took the window's
+// size, and when the background changes. As the window shrinks, WM_SIZE
+// fits the surface to the new size, and the surface presents the frame of
+// that size, within the window's SetWindowPos, before DWM takes the
+// window's new size: for a refresh, DWM shows the window at its last size
+// around the smaller surface, and there what the window's redirection
+// bitmap holds where the surface was. Nothing painted it there, as the
+// swap chain covered it, so it showed black, as an L along the surface's
+// new right and bottom edges but where an earlier size had left the
+// background. Painting it at each size keeps the background there for the
+// next shrink; the swap chain shows over it meanwhile. Frames copied onto
+// the window with GDI are in those pixels, which keep the last one where
+// the window shrinks: they are left as they are, as in a window without a
+// redirection bitmap, or one composing its frames, where GDI shows nothing.
+func (s *surface) fillUnder() {
+	if s.bgBrush == 0 || s.pixels || s.viaComposition() {
+		return
+	}
+	var c rect
+	procGetClientRect.Call(s.w.hwnd, uintptr(unsafe.Pointer(&c)))
+	// A DC of the window's client area that does not leave out its child
+	// windows, as GetDC does for a window with WS_CLIPCHILDREN.
+	const dcxCache = 0x2
+	dc, _, _ := procGetDCEx.Call(s.w.hwnd, 0, dcxCache)
+	if dc == 0 {
+		return
+	}
+	procFillRect.Call(dc, uintptr(unsafe.Pointer(&c)), s.bgBrush)
+	procReleaseDC.Call(s.w.hwnd, dc)
+	procGdiFlush.Call()
+}
+
 func (s *surface) PresentPixels(pix []byte, stride, width, height int) {
 	if len(pix) < stride*height || width == 0 || height == 0 {
 		return
@@ -304,6 +506,7 @@ func (s *surface) PresentPixels(pix []byte, stride, width, height int) {
 		s.comp.show(px, int32(width), int32(height))
 		return
 	}
+	s.pixels = true
 	dc := s.paintDC
 	if dc == 0 {
 		dc, _, _ = procGetDC.Call(s.hwnd)
@@ -345,10 +548,16 @@ func cursorHandle(c platform.Cursor) uintptr {
 		platform.CursorResizeN: 32645, platform.CursorResizeS: 32645, platform.CursorResizeE: 32644,
 		platform.CursorResizeW: 32644, platform.CursorResizeColumn: 32644, platform.CursorResizeRow: 32645,
 		platform.CursorVerticalText: 32513,
+		platform.CursorProgress:     32650, platform.CursorWait: 32514, platform.CursorHelp: 32651, // IDC_APPSTARTING, IDC_WAIT, IDC_HELP
+		platform.CursorAllScroll: 32646, platform.CursorNoDrop: 32648, // IDC_SIZEALL, IDC_NO
 	}
 	if c == platform.CursorNone {
 		surfaceCursors[c] = 0 // SetCursor(NULL) hides it
 		return 0
+	}
+	if h := drawnCursor(c); h != 0 {
+		surfaceCursors[c] = h
+		return h
 	}
 	id, ok := ids[c]
 	if !ok {
@@ -412,11 +621,20 @@ func (s *surface) send(ev platform.SurfaceEvent) bool {
 	if ev.Kind == platform.PointerDown || ev.Kind == platform.SurfaceBlur {
 		s.clientComposition.Reset()
 	}
+	if !s.held.Track(ev) {
+		return false
+	}
 	if s.w.closed {
 		return false
 	}
 	return s.w.h.SurfaceEvent(ev)
 }
+
+// liftKeys lets go of the keys held, as a menu's loop takes the keyboard,
+// and their releases with it: Alt and a letter opening a menu of the bar,
+// Alt and Space the window's menu, F10 or Alt the bar. The window keeps
+// the focus meanwhile, so no WM_KILLFOCUS lets go of them.
+func (s *surface) liftKeys() { s.held.LiftAll(mods(), s.send) }
 
 // modifierKey is whether the virtual key vk is Shift, Ctrl, Alt or a Windows key.
 func modifierKey(vk uintptr) bool {
@@ -471,7 +689,8 @@ func (s *surface) pointer(kind platform.SurfaceEventKind, lp uintptr, button int
 		w, h := systemMetric(smCxDoubleClk, s.hwnd), systemMetric(smCyDoubleClk, s.hwnd)
 		clicks = s.clicks.Press(button, float64(x), float64(y), uint32(at), platform.DoubleClick{Time: time.Duration(ms) * time.Millisecond, DX: float64(w) / 2, DY: float64(h) / 2})
 	}
-	s.send(platform.SurfaceEvent{Kind: kind, X: s.toDIP(int32(x)), Y: s.toDIP(int32(y)), Button: button, Clicks: clicks, Mods: mods()})
+	pointer, pressure := s.mouseDevice()
+	s.send(platform.SurfaceEvent{Kind: kind, X: s.toDIP(int32(x)), Y: s.toDIP(int32(y)), Button: button, Clicks: clicks, Mods: mods(), Pointer: pointer, Pressure: pressure})
 }
 
 func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool) {
@@ -482,6 +701,10 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 			return 0, true // the web view under the pointer takes it
 		}
 	case wmTimer:
+		if wp == timerUncloak {
+			s.uncloak()
+			return 0, true
+		}
 		if wp == timerWebView {
 			procKillTimer.Call(hwnd, timerWebView)
 			for _, v := range s.w.webViews {
@@ -503,6 +726,9 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame, Paced: !s.now})
 		s.paintDC = 0
 		procEndPaint.Call(hwnd, uintptr(unsafe.Pointer(&ps)))
+		if s.cloaked && s.drawn {
+			s.reveal()
+		}
 		return 0, true
 	case wmEraseBkgnd:
 		return 1, true
@@ -520,6 +746,19 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		// resized.
 		s.drawNow()
 		return 0, true
+	case wmPointerDown, wmPointerUpdate, wmPointerUp:
+		// A pen or a finger, whose mouse messages DefWindowProc makes.
+		s.pointerMessage(m, wp)
+		if m == wmPointerUp && pointerCanceled(wp) && s.buttons != 0 {
+			// The system took the pen or the finger, as for an edge's
+			// gesture: the press ends with no release, and the button
+			// up DefWindowProc may make of it goes nowhere. The capture
+			// goes after the buttons, so that losing it cancels no more.
+			s.cancelPress()
+			s.canceledUp = true
+			procReleaseCapture.Call()
+		}
+		return 0, false
 	case wmMouseMove:
 		if !s.tracking {
 			tme := trackMouseEvent{Flags: tmeLeaveFlag, Track: hwnd}
@@ -552,6 +791,7 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 			procSetCapture.Call(hwnd)
 		}
 		s.buttons |= 1 << button
+		s.canceledUp = false
 		s.pointer(platform.PointerDown, lp, button)
 		return 0, true
 	case wmLButtonUp, wmRButtonUp, wmMButtonUp:
@@ -561,6 +801,12 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 			button = 1
 		case wmMButtonUp:
 			button = 2
+		}
+		if s.canceledUp && s.buttons == 0 {
+			// The release of a press the system took (cancelPress),
+			// which opens no context menu either.
+			s.canceledUp = false
+			return 0, true
 		}
 		s.buttons &^= 1 << button
 		if s.buttons == 0 {
@@ -600,6 +846,14 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		s.send(platform.SurfaceEvent{Kind: platform.KeyReleased, Key: k, Mods: mods()})
 		return 1, true
 	case wmCaptureChanged:
+		// Another window took the mouse while a button was down, as a
+		// menu, or WM_CANCELMODE released it: the press ends with no
+		// release. OLE's drag loop takes it too (StartDataDrag), and
+		// the drag's end ends the press. The capture is gone already:
+		// releasing it would take another window's.
+		if s.buttons != 0 && lp != hwnd && s.dragSource == nil {
+			s.cancelPress()
+		}
 		s.buttons = 0
 		if lp != hwnd {
 			s.webCapture = nil
@@ -610,7 +864,7 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		procScreenToClient.Call(hwnd, uintptr(unsafe.Pointer(&pt)))
 		delta := float64(int16(hiword(wp)))
 		precise := int(delta)%120 != 0
-		if m == wmMouseWheel && precise && loword(wp)&0x0008 != 0 { // MK_CONTROL
+		if pinching(m, wp) {
 			// A touchpad's pinch, which Windows sends as scrolling with
 			// Ctrl held, as it does Ctrl and two fingers: three notches'
 			// worth zoom twice as large.
@@ -655,23 +909,38 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		if s.menuShortcut(wp, false) {
 			return 0, true
 		}
-		if k, physical, ok := keyAndPosition(wp, lp, false, modifiers); ok {
-			s.keyTaken = s.send(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: k, PhysicalKey: physical, Mods: modifiers, Repeat: lp&(1<<30) != 0})
+		rawTaken := false
+		k, physical, ok := keyAndPosition(wp, lp, false, modifiers)
+		if ok {
+			s.keyTaken = s.send(platform.SurfaceEvent{Kind: platform.KeyPressed, Key: k, PhysicalKey: physical, Code: keyCode(wp, lp), Mods: modifiers, Repeat: lp&(1<<30) != 0})
+		} else {
+			rawTaken = s.rawKey(platform.RawKeyPressed, wp, lp, physical, modifiers)
+			s.keyTaken = rawTaken
 		}
 		if !s.keyTaken && s.menuShortcut(wp, true) {
 			return 0, true
 		}
-		// Alt+F4, Alt+Space and F10 keep working.
-		return 0, m == wmKeyDown
+		// Alt+F4, Alt+Space and F10 keep working, and Alt the menu bar, unless
+		// the content took it as a key of its own.
+		return 0, m == wmKeyDown || rawTaken
 	case wmKeyUp, wmSysKeyUp:
 		modifiers := mods()
 		if modifierKey(wp) {
 			s.send(platform.SurfaceEvent{Kind: platform.ModifiersChanged, Mods: modifiers})
 		}
-		if k, physical, ok := keyAndPosition(wp, lp, true, modifiers); ok {
-			s.send(platform.SurfaceEvent{Kind: platform.KeyReleased, Key: k, PhysicalKey: physical, Mods: modifiers})
+		rawTaken := false
+		k, physical, ok := keyAndPosition(wp, lp, true, modifiers)
+		if ok {
+			s.send(platform.SurfaceEvent{Kind: platform.KeyReleased, Key: k, PhysicalKey: physical, Code: keyCode(wp, lp), Mods: modifiers})
+		} else if wp == vkProcessKey && lp&(1<<24) == 0 {
+			// The input method took the release of a key the content got
+			// pressed, as it began composing while the key was held: the
+			// key goes up all the same, by its position.
+			s.held.Lift(platform.KeyUnknown, platform.KeyForScancode(uint16(lp>>16&0xFF)), modifiers, s.send)
+		} else {
+			rawTaken = s.rawKey(platform.RawKeyReleased, wp, lp, physical, modifiers)
 		}
-		return 0, m == wmKeyUp
+		return 0, m == wmKeyUp || rawTaken
 	case wmSysChar:
 		if s.menuRan {
 			return 0, true
@@ -728,6 +997,16 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 			caret := len(utf16.Decode(units[:min(int(pos), len(units))]))
 			s.composed(platform.SurfaceEvent{Kind: platform.TextComposition, Text: text, Caret: caret})
 		}
+		if lp&(gcsResultStr|gcsCompStr) == 0 && imeString(himc, gcsCompStr) == "" {
+			// Microsoft's Japanese IME gives the composition up (Esc) with
+			// neither, rather than with an empty GCS_COMPSTR, before
+			// WM_IME_ENDCOMPOSITION, which would keep the marked text.
+			if c := s.input.Client; c != nil {
+				s.clientComposition.Cancel(c)
+			} else {
+				s.send(platform.SurfaceEvent{Kind: platform.TextComposition})
+			}
+		}
 		procImmReleaseContext.Call(hwnd, himc)
 		s.placeIME()
 		return 0, true
@@ -750,6 +1029,7 @@ func (s *surface) message(hwnd uintptr, m uint32, wp, lp uintptr) (uintptr, bool
 		s.destroyAccess()
 		s.revokeFileDrops()
 		s.freeComp()
+		s.SetBackground(platform.Color{})
 		delete(s.w.b.surfaces, hwnd)
 		return 0, true
 	}
@@ -778,6 +1058,28 @@ func wheelLines() int {
 		}
 	}
 	return surfaceWheelLines
+}
+
+// keyCode returns the key by position of a WM_KEYDOWN or WM_KEYUP, from its
+// scancode: CodeUnknown for what an input method (VK_PROCESSKEY) or injected
+// Unicode text (VK_PACKET) keeps from the application, and for a key the
+// system made with no scancode.
+func keyCode(vk, lp uintptr) platform.KeyCode {
+	if vk == vkProcessKey || vk == vkPacket {
+		return platform.CodeUnknown
+	}
+	return platform.KeyCodeForXT(uint8(lp>>16&0xFF), lp&(1<<24) != 0)
+}
+
+// rawKey sends a key shortcuts have no name for, which keyAndPosition leaves
+// out, by its position, and reports whether the content took it. kind is
+// RawKeyPressed or RawKeyReleased.
+func (s *surface) rawKey(kind platform.SurfaceEventKind, wp, lp uintptr, physical platform.Key, modifiers platform.Modifiers) bool {
+	code := keyCode(wp, lp)
+	if code == platform.CodeUnknown {
+		return false
+	}
+	return s.send(platform.SurfaceEvent{Kind: kind, PhysicalKey: physical, Code: code, Mods: modifiers, Repeat: kind == platform.RawKeyPressed && lp&(1<<30) != 0})
 }
 
 // keyAndPosition returns the key of a WM_KEYDOWN or WM_KEYUP by virtual
@@ -903,6 +1205,11 @@ func (s *surface) menuShortcut(vk uintptr, roles bool) bool {
 	e := w.b.menus.entries[cmd]
 	if e == nil || (e.role != "") != roles {
 		return false
+	}
+	if roles {
+		// The items of edit roles are grayed as the content was when their
+		// menu last opened, not as it is now.
+		w.enableEditItems(e.menu)
 	}
 	if st, _, _ := procGetMenuState.Call(e.menu, uintptr(cmd), mfByCommand); uint32(st) != 0xFFFFFFFF && st&mfGrayed != 0 {
 		return false

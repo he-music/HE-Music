@@ -119,22 +119,46 @@ func restoreWindowState(key string, p *platform.WindowOptions) {
 	if !ok || st.Width <= 0 || st.Height <= 0 {
 		return
 	}
+	restoreWindowStateFrom(st, p, backend())
+}
+
+// restoreWindowStateFrom applies st to p, through b. A backend that
+// places windows in pixels (Windows) restores the state's pixels. It
+// takes X and Y only for a state without pixels while every display has
+// the same scale: where scales differ, DIPs change with them, and
+// earlier versions' were in the scale of the window's display.
+func restoreWindowStateFrom(st WindowState, p *platform.WindowOptions, b platform.Backend) {
 	r := Rectangle{st.X, st.Y, st.Width, st.Height}
-	displays := backend().Screen().Displays()
 	p.UseContentSize = false
 	p.Maximized, p.FullScreen = st.Maximized, st.FullScreen
-	if onDisplay(r, displays) {
-		p.X, p.Y, p.Width, p.Height = r.X, r.Y, r.Width, r.Height
+	p.Width, p.Height = r.Width, r.Height
+	pixels := platform.Rect{X: st.PixelX, Y: st.PixelY, Width: st.PixelWidth, Height: st.PixelHeight}
+	native, inPixels := b.(platform.WindowStateBackend)
+	if inPixels && native.RestoreWindowState(p, pixels) {
+		return
+	}
+	displays := b.Screen().Displays()
+	if onDisplay(r, displays) && (!inPixels || (pixels.Width <= 0 && sameScale(displays))) {
+		p.X, p.Y = r.X, r.Y
 		p.Center = false
 		return
 	}
-	p.Width, p.Height = r.Width, r.Height
 	for _, d := range displays {
 		if d.Primary {
 			p.Width, p.Height = min(r.Width, d.WorkArea.Width), min(r.Height, d.WorkArea.Height)
 		}
 	}
 	p.Center = true
+}
+
+// sameScale reports whether all the displays have the same scale.
+func sameScale(displays []platform.Display) bool {
+	for _, d := range displays {
+		if d.ScaleFactor != displays[0].ScaleFactor {
+			return false
+		}
+	}
+	return true
 }
 
 // onDisplay reports whether enough of r shows on a display to reach it.
@@ -190,13 +214,7 @@ func (w *Window) captureState() {
 		return
 	}
 	loadWindowStates()
-	st := windowStates.byKey[w.stateKey]
-	st.Maximized, st.FullScreen = n.IsMaximized(), n.IsFullScreen()
-	if !st.Maximized && !st.FullScreen && !n.IsMinimized() {
-		if b := n.Bounds(); b.Width > 0 && b.Height > 0 {
-			st.X, st.Y, st.Width, st.Height = b.X, b.Y, b.Width, b.Height
-		}
-	}
+	st := captureWindowState(windowStates.byKey[w.stateKey], n)
 	if st.Width <= 0 || st.Height <= 0 {
 		return
 	}
@@ -204,6 +222,29 @@ func (w *Window) captureState() {
 		windowStates.byKey[w.stateKey] = st
 		windowStates.dirty = true
 	}
+}
+
+// captureWindowState takes the current state from n into st. A maximized,
+// full screen or minimized window keeps st's normal bounds, and so does
+// one whose bounds or pixels the system does not give.
+func captureWindowState(st WindowState, n platform.Window) WindowState {
+	st.Maximized, st.FullScreen = n.IsMaximized(), n.IsFullScreen()
+	if st.Maximized || st.FullScreen || n.IsMinimized() {
+		return st
+	}
+	b := n.Bounds()
+	var px platform.Rect
+	if w, ok := n.(platform.WindowStateWindow); ok {
+		px = w.WindowStateBounds()
+		if px.Width <= 0 || px.Height <= 0 {
+			return st
+		}
+	}
+	if b.Width > 0 && b.Height > 0 {
+		st.X, st.Y, st.Width, st.Height = b.X, b.Y, b.Width, b.Height
+		st.PixelX, st.PixelY, st.PixelWidth, st.PixelHeight = px.X, px.Y, px.Width, px.Height
+	}
+	return st
 }
 
 // closeState captures the state of a closing window for the last time,

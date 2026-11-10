@@ -13,11 +13,12 @@ import (
 // that the WebView2 environment reads its options from as it is created:
 // the language of the browser, which is the language of its own texts (the
 // context menus, the dialogs of pages) and the first of the pages'
-// navigator.languages and Accept-Language. Its other options are those of
-// an environment created without options: no further arguments, no
-// version the runtime must be, no single sign-on. It implements no later
-// version of the interface, which the environment asks for and does
-// without.
+// navigator.languages and Accept-Language, further arguments of the
+// browser (browserArguments) and, when MyGo loads the runtime itself,
+// the arguments of WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS. Its other
+// options are those of an environment created without options: no version
+// the runtime must be, no single sign-on. It implements no later version
+// of the interface, which the environment asks for and does without.
 //
 // The objects share one vtable, whose callbacks are created once; they
 // stay reachable through envOptionsLive until COM releases them.
@@ -25,6 +26,7 @@ type envOptions struct {
 	vtbl     *[11]uintptr
 	refs     int32
 	language []uint16 // NUL-terminated, or nil
+	args     []uint16 // NUL-terminated, or nil
 }
 
 var (
@@ -38,9 +40,9 @@ var (
 
 const ePointer = 0x80004003 // E_POINTER
 
-// newEnvOptions returns an options object of language, holding one
-// reference, which the caller releases.
-func newEnvOptions(language string) uintptr {
+// newEnvOptions returns an options object of language and args, either
+// of which may be "", holding one reference, which the caller releases.
+func newEnvOptions(language, args string) uintptr {
 	envOptionsOnce.Do(func() {
 		str := func(get func(o *envOptions) []uint16) uintptr {
 			return syscall.NewCallback(func(this, out uintptr) uintptr {
@@ -68,7 +70,12 @@ func newEnvOptions(language string) uintptr {
 			}),
 			syscall.NewCallback(func(this uintptr) uintptr { return uintptr(envOptionsRef(this, 1)) }),
 			syscall.NewCallback(func(this uintptr) uintptr { return uintptr(envOptionsRef(this, -1)) }),
-			str(func(*envOptions) []uint16 { return nil }), // get_AdditionalBrowserArguments
+			str(func(o *envOptions) []uint16 { // get_AdditionalBrowserArguments
+				if o == nil {
+					return nil
+				}
+				return o.args
+			}),
 			ignore, // put_AdditionalBrowserArguments
 			str(func(o *envOptions) []uint16 { // get_Language
 				if o == nil {
@@ -96,6 +103,9 @@ func newEnvOptions(language string) uintptr {
 	o := &envOptions{vtbl: &envOptionsVtbl, refs: 1}
 	if language != "" {
 		o.language = utf16z(chromiumLanguage(language))
+	}
+	if args != "" {
+		o.args = utf16z(args)
 	}
 	p := uintptr(unsafe.Pointer(o))
 	envOptionsMu.Lock()

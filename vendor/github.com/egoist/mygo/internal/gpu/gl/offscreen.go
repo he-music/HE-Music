@@ -45,7 +45,7 @@ type Offscreen struct {
 // NewOffscreen makes an OpenGL 3.3 context, or with es an OpenGL ES 3.0
 // one, current on the calling thread, and binds a framebuffer of w×h
 // pixels.
-func NewOffscreen(es bool, w, h int) (o *Offscreen, err error) {
+func NewOffscreen(es bool, w, h int) (_ *Offscreen, err error) {
 	lib, err := purego.Dlopen("libEGL.so.1", purego.RTLD_NOW|purego.RTLD_GLOBAL)
 	if err != nil {
 		return nil, fmt.Errorf("gl: no EGL: %w", err)
@@ -71,16 +71,18 @@ func NewOffscreen(es bool, w, h int) (o *Offscreen, err error) {
 		}
 		purego.RegisterFunc(fn, sym)
 	}
-	o = &Offscreen{w: w, h: h}
+	// A variable of its own, not a named result: returning an error would
+	// set that to nil before the undoing below runs.
+	off := &Offscreen{w: w, h: h}
 	var undo []func()
-	o.release = func() {
+	off.release = func() {
 		for i := len(undo) - 1; i >= 0; i-- {
 			undo[i]()
 		}
 	}
 	defer func() {
 		if err != nil {
-			o.release()
+			off.release()
 		}
 	}()
 	display := getPlatformDisplay(eglPlatformSurfaceless, 0, nil)
@@ -114,22 +116,22 @@ func NewOffscreen(es bool, w, h int) (o *Offscreen, err error) {
 	if err := load(); err != nil {
 		return nil, err
 	}
-	o.tex = newTexture(glRGBA8, glRGBA, w, h, nil, 0)
-	glGenFramebuffers(1, &o.fb)
-	glBindFramebuffer(glFramebuffer, o.fb)
-	glFramebufferTexture2D(glFramebuffer, glColorAttachment0, glTexture2D, o.tex, 0)
+	off.tex = newTexture(glRGBA8, glRGBA, w, h, nil, 0)
+	glGenFramebuffers(1, &off.fb)
+	glBindFramebuffer(glFramebuffer, off.fb)
+	glFramebufferTexture2D(glFramebuffer, glColorAttachment0, glTexture2D, off.tex, 0)
 	undo = append(undo, func() {
-		if o.r != nil {
-			o.r.Release()
+		if off.r != nil {
+			off.r.Release()
 		}
 		glBindFramebuffer(glFramebuffer, 0)
-		glDeleteFramebuffers(1, &o.fb)
-		glDeleteTextures(1, &o.tex)
+		glDeleteFramebuffers(1, &off.fb)
+		glDeleteTextures(1, &off.tex)
 	})
 	if status := glCheckFramebufferState(glFramebuffer); status != glFramebufferDone {
 		return nil, fmt.Errorf("gl: framebuffer incomplete: %#x", status)
 	}
-	return o, nil
+	return off, nil
 }
 
 // Info names the context's version and renderer.

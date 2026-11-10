@@ -153,7 +153,7 @@ pnpm test:desktop:release
 - `verify`：离线检查本次 manifest 和真实 archive／delta 的大小与签名，只需公钥，不调用 Go 或下载。
 - `build`：需要进程环境中的 `MYGO_UPDATER_PRIVATE_KEY`；使用固定官方 CLI 构建后再完成同样验签。该脚本自身不上传、不发布、不安装应用。只有 GitHub tag 工作流另外创建 Release；正式 tag 直接公开，测试 tag 保持草稿。
 
-工具链固定为 `github.com/egoist/mygo v0.6.5-0.20261026063203-07ebe19ac0dc`，并校验 vendor 全树及 Windows 透明补丁；构建设置 `GOTOOLCHAIN=local`、`GOWORK=off`、`GOFLAGS=-mod=vendor`。不使用模块缓存里的私改 SDK，不接受 `--config`、`--upload` 或任意参数透传，也拒绝并行 `mygo.config.ts`。维护方式见 [固定 SDK 说明](../patches/mygo/README.md)。
+工具链固定为 `github.com/egoist/mygo v0.8.3`，并校验 vendor 全树及 Windows 透明补丁；构建设置 `GOTOOLCHAIN=local`、`GOWORK=off`、`GOFLAGS=-mod=vendor`。不使用模块缓存里的私改 SDK，不接受 `--config`、`--upload` 或任意参数透传，也拒绝并行 `mygo.config.ts`。维护方式见 [固定 SDK 说明](../patches/mygo/README.md)。
 
 本地需要签名构建时，由密码管理器向进程环境提供私钥，不要把私钥粘贴到命令行。脚本不转发或落盘下游构建 stdout/stderr，避免 secret 泄露；失败只输出受控错误，输出缓冲超过 16 MiB 也会失败。SDK 的 delta 构建可能下载历史文件，只有 `check`、`verify` 和 fake 测试属于离线操作。
 

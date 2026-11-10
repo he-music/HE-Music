@@ -126,6 +126,10 @@ func (w *window) createWebView() {
 		w.webViewFailed(w.b.envErr)
 		return
 	}
+	if w.opts.DataStore != nil && !w.b.hasProfiles() {
+		w.webViewFailed(errNoProfiles)
+		return
+	}
 	fail := testFailWebViews > 0
 	if fail {
 		testFailWebViews--
@@ -163,7 +167,7 @@ func (w *window) createWebView() {
 		if w.host != nil {
 			return w.createEmbedded(h)
 		}
-		return comCall(w.b.env, envCreateController, w.hwnd, h)
+		return w.b.createController(storeOf(w.opts.DataStore), w.hwnd, false, h)
 	})
 	if failed(hr) {
 		w.creationFailed(hr)
@@ -209,12 +213,25 @@ func (w *window) setUp(controller uintptr) {
 	}
 	comCall(s, setPutAreDefaultContextMenusEnabled, 1)
 	comCall(s, setPutIsZoomControlEnabled, 1)
+	// WebView2 has a touchscreen's pinch zoom and swipe navigation on:
+	// they are off unless the page asks, as in WKWebView.
+	if s5 := queryInterface(s, &iidICoreWebView2Settings5); s5 != 0 {
+		comCall(s5, set5PutIsPinchZoomEnabled, boolArg(o.PinchZoom))
+		release(s5)
+	}
+	if s6 := queryInterface(s, &iidICoreWebView2Settings6); s6 != 0 {
+		comCall(s6, set6PutIsSwipeNavigationEnabled, boolArg(o.SwipeNavigation))
+		release(s6)
+	}
 	if o.UserAgent != "" || o.UserAgentSuffix != "" {
 		w.setUpUserAgent()
 	}
 	w.applyWebViewBackground()
 
 	w.addUserScripts()
+	if w.host != nil {
+		forwardKeys(w)
+	}
 
 	// The add methods write a registration token. Its address is taken in
 	// each call (go:uintptrescapes), as a uintptr saved earlier goes stale
@@ -243,6 +260,8 @@ func (w *window) setUp(controller uintptr) {
 	})
 	add(wvAddNewWindowRequested, w.newWindowRequested)
 	add(wvAddPermissionRequested, w.permissionRequested)
+	w.addAuthHandlers()
+	w.addContextMenuHandler()
 	if wv4 := queryInterface(w.webview, &iidICoreWebView2_4); wv4 != 0 {
 		withHandler(w.downloadStarting, func(h uintptr) uintptr { return comCall(wv4, wv4AddDownloadStarting, h, uintptr(unsafe.Pointer(&tok))) })
 		release(wv4)
@@ -312,7 +331,7 @@ func (w *window) becomeReady() {
 		return
 	}
 	w.ready = true
-	w.b.closeCookieView()
+	w.b.closeCookieView(w.b.cookiesOf(w.opts.DataStore))
 	pending := w.pending
 	w.pending = nil
 	for i, c := range pending {
@@ -610,22 +629,16 @@ func (w *window) acceleratorKeyPressed(_, args uintptr) {
 	w.b.menuCommand(cmd, w)
 }
 
-// pageEditRoles are the roles whose keys a page keeps, as in a browser and
-// in native UI: WebView2 cuts, copies and pastes with the page's own events
-// and every format of the clipboard, where editRole pastes text alone.
-var pageEditRoles = map[string]bool{
-	"undo": true, "redo": true, "cut": true, "copy": true, "paste": true,
-	"pasteAndMatchStyle": true, "delete": true, "selectAll": true,
-}
-
 // pageAccelerator returns the menu command a key pressed in a page runs,
-// if any.
+// if any. A page keeps the keys of the edit roles, as in a browser and in
+// native UI: WebView2 cuts, copies and pastes with the page's own events
+// and every format of the clipboard.
 func (w *window) pageAccelerator(key accelKey) (uint16, bool) {
 	cmd, ok := w.accels[key]
 	if !ok {
 		return 0, false
 	}
-	if e := w.b.menus.entries[cmd]; e != nil && pageEditRoles[e.role] && pageEditKey(key) {
+	if e := w.b.menus.entries[cmd]; e != nil && platform.EditCommands[e.role] && pageEditKey(key) {
 		return 0, false
 	}
 	return cmd, true
@@ -657,7 +670,7 @@ func (w *window) LoadURL(raw string) {
 func (w *window) LoadHTML(html, baseURL string) {
 	w.withWebView(func() {
 		w.programmatic = true
-		if baseURL == "" {
+		if !servedAtBase(baseURL) {
 			comCall(w.webview, wvNavigateToString, uintptr(unsafe.Pointer(u16(html))))
 			return
 		}
@@ -671,6 +684,15 @@ func (w *window) LoadHTML(html, baseURL string) {
 		}
 		comCall(w.webview, wvNavigate, uintptr(unsafe.Pointer(u16(target))))
 	})
+}
+
+// servedAtBase reports whether LoadHTML serves its document at baseURL,
+// answering the navigation's request for it. WebView2 requests no about:
+// URL, about:blank among them, so their documents, as those without a base
+// URL, go through NavigateToString, which shows them at about:blank.
+func servedAtBase(baseURL string) bool {
+	scheme, _, _ := strings.Cut(baseURL, ":")
+	return baseURL != "" && !strings.EqualFold(scheme, "about")
 }
 
 func (w *window) LoadFile(path, _ string) {
@@ -941,6 +963,44 @@ func (w *window) ProcessID() int {
 	return int(pid)
 }
 
+// GPUProcessID returns the GPU process of the web view's environment,
+// which its web views share, from ICoreWebView2Environment8's
+// GetProcessInfos; 0 before the web view is made, on runtimes older than
+// it, and while the environment runs no GPU process.
+func (w *window) GPUProcessID() int {
+	if w.webview == 0 {
+		return 0
+	}
+	env8 := queryInterface(w.b.env, &iidICoreWebView2Environment8)
+	if env8 == 0 {
+		return 0
+	}
+	defer release(env8)
+	var infos uintptr
+	if failed(comCall(env8, env8GetProcessInfos, uintptr(unsafe.Pointer(&infos)))) || infos == 0 {
+		return 0
+	}
+	defer release(infos)
+	var n uint32
+	if failed(comCall(infos, procInfosGetCount, uintptr(unsafe.Pointer(&n)))) {
+		return 0
+	}
+	for i := range n {
+		var info uintptr
+		if failed(comCall(infos, procInfosGetValueAtIndex, uintptr(i), uintptr(unsafe.Pointer(&info)))) || info == 0 {
+			continue
+		}
+		var kind, pid int32
+		ok := !failed(comCall(info, procInfoGetKind, uintptr(unsafe.Pointer(&kind)))) && kind == processKindGPU &&
+			!failed(comCall(info, procInfoGetProcessId, uintptr(unsafe.Pointer(&pid))))
+		release(info)
+		if ok {
+			return int(pid)
+		}
+	}
+	return 0
+}
+
 // webView8 returns the web view's ICoreWebView2_8, which the caller
 // releases, or 0 before the web view is made and on runtimes older than
 // it.
@@ -1026,6 +1086,43 @@ func (w *window) IsAudioMuted() bool {
 	}
 	return w.getBool8(wv8GetIsMuted)
 }
+
+// CaptureState is always CaptureNone: WebView2 tells nothing of a page's
+// capture of the camera, the microphone or the display.
+func (w *window) CaptureState(platform.CaptureKind) platform.CaptureState {
+	return platform.CaptureNone
+}
+
+// SetCaptureState does nothing: WebView2 can't mute or stop a page's
+// capture.
+func (w *window) SetCaptureState(platform.CaptureKind, platform.CaptureState) {}
+
+// TogglePictureInPicture runs platform.TogglePictureInPicture through the
+// DevTools protocol as a user's gesture, which
+// requestPictureInPicture() needs.
+func (w *window) TogglePictureInPicture() {
+	params, _ := json.Marshal(map[string]any{"expression": platform.TogglePictureInPicture, "userGesture": true})
+	w.withWebView(func() { w.devtools("Runtime.evaluate", string(params), nil) })
+}
+
+// PictureInPictureActive asks the page for its
+// document.pictureInPictureElement; false before the web view is made.
+func (w *window) PictureInPictureActive(cb func(bool)) {
+	if !w.ready || w.closed {
+		cb(false)
+		return
+	}
+	w.CallAsyncFunction(platform.PictureInPictureActive, func(s string, err error) {
+		cb(err == nil && s == "true")
+	})
+}
+
+// SessionState is nil: WebView2 has no API for the back/forward list,
+// so the core keeps the page's URL alone.
+func (w *window) SessionState() []byte { return nil }
+
+// RestoreSessionState can't, for the core to load the page's URL.
+func (w *window) RestoreSessionState([]byte) bool { return false }
 
 func (w *window) OpenDevTools() {
 	if !w.opts.DevTools {

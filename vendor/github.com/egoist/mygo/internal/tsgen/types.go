@@ -106,6 +106,7 @@ type field struct {
 	owner    reflect.Type
 	depth    int
 	tagged   bool
+	fallback bool // an embedded map or jsontext.Value, with no member name
 }
 
 type tagOptions []string
@@ -149,6 +150,7 @@ func structFields(t reflect.Type) []field {
 				continue
 			}
 			name, opts := parseTag(tag)
+			fallback := false
 			// Go embedding implies JSON embedding unless the field is named;
 			// the "embed" option requests it explicitly.
 			if (sf.Anonymous && name == "") || opts.has("embed") {
@@ -162,19 +164,21 @@ func structFields(t reflect.Type) []field {
 						continue
 					}
 				}
+				fallback = et == rawV2Type || et.Kind() == reflect.Map && et.Key().Kind() == reflect.String
 			}
 			if !sf.IsExported() {
 				continue
 			}
 			f := field{
-				name:   name,
-				typ:    sf.Type,
-				goName: sf.Name,
-				owner:  t,
-				depth:  depth,
-				tagged: name != "",
+				name:     name,
+				typ:      sf.Type,
+				goName:   sf.Name,
+				owner:    t,
+				depth:    depth,
+				tagged:   name != "",
+				fallback: fallback,
 			}
-			if f.name == "" {
+			if f.name == "" && !fallback {
 				f.name = sf.Name
 			}
 			f.optional = optional || opts.has("omitempty") || opts.has("omitzero")

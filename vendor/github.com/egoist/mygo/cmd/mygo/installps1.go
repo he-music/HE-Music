@@ -47,7 +47,7 @@ func installPS1(c *Config) string {
 		"Title":      title,
 		"Name":       c.windowsName(),
 		"Exe":        c.executableName() + ".exe",
-		"Folder":     fsName(c.Name),
+		"Folder":     c.installDirName(),
 		"Setup":      installerPrefix(c),
 		"Identifier": c.Identifier,
 		"Env":        envName(c.slug()),

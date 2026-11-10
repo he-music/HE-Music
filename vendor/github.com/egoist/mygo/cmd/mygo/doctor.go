@@ -81,7 +81,7 @@ func runDoctor(args []string) error {
 	if compiler := makensis(); compiler != "" || runtime.GOOS != "windows" {
 		optional("makensis", "the Windows installer, https://nsis.sourceforge.io", compiler != "", compiler)
 	} else {
-		fmt.Printf("- %-10s not found (mygo build downloads NSIS %s for the Windows installer)\n", "makensis", nsis.Release.Version)
+		fmt.Printf("- %-10s not found (mygo build downloads NSIS %s for the Windows installer, unless -skip-installer)\n", "makensis", nsis.Release.Version)
 	}
 	if runtime.GOOS == "windows" {
 		st := signtool()

@@ -85,17 +85,26 @@ func (app) SetOpenAtLogin(bool, string, string, string) error { return errUnsupp
 func (app) OpenAtLogin(string, string, string) bool           { return false }
 func (app) OpenedAtLogin() bool                               { return false }
 func (app) SetDockMenu(*platform.Menu)                        {}
-func (app) ClearBrowsingData(done func(error))                { done(errUnsupported) }
-func (app) AddRecentDocument(string) error                    { return errUnsupported }
-func (app) ClearRecentDocuments() error                       { return errUnsupported }
-func (app) SetJumpList(platform.JumpList) error               { return errUnsupported }
+func (app) ClearBrowsingData(_ platform.DataStore, _ platform.SiteData, done func(error)) {
+	done(errUnsupported)
+}
+func (app) NewDataStore(platform.DataStoreOptions) (platform.DataStore, error) {
+	return nil, errUnsupported
+}
+func (app) AddRecentDocument(string) error      { return errUnsupported }
+func (app) ClearRecentDocuments() error         { return errUnsupported }
+func (app) SetJumpList(platform.JumpList) error { return errUnsupported }
 
-func (app) ListCookies(_ string, done func([]platform.Cookie, error)) {
+func (app) ListCookies(_ platform.DataStore, _ string, done func([]platform.Cookie, error)) {
 	done(nil, platform.ErrUnsupported)
 }
-func (app) SetCookie(_ platform.Cookie, done func(error))       { done(platform.ErrUnsupported) }
-func (app) DeleteCookie(_ platform.CookieKey, done func(error)) { done(platform.ErrUnsupported) }
-func (app) ClearCookies(done func(error))                       { done(platform.ErrUnsupported) }
+func (app) SetCookie(_ platform.DataStore, _ platform.Cookie, done func(error)) {
+	done(platform.ErrUnsupported)
+}
+func (app) DeleteCookie(_ platform.DataStore, _ platform.CookieKey, done func(error)) {
+	done(platform.ErrUnsupported)
+}
+func (app) ClearCookies(_ platform.DataStore, done func(error)) { done(platform.ErrUnsupported) }
 func (app) CompileContentRules(_, _, _ string, done func(any, error)) {
 	done(nil, platform.ErrUnsupported)
 }
@@ -139,6 +148,7 @@ func (shell) ShowItemInFolder(string)              {}
 func (shell) TrashItem(string) error               { return errUnsupported }
 func (shell) Beep()                                {}
 func (shell) FileIcon(string, int) ([]byte, error) { return nil, errUnsupported }
+func (shell) TypeIcon(string, int) ([]byte, error) { return nil, errUnsupported }
 func (shell) OpenApplication(string) error         { return errUnsupported }
 
 func (*Backend) Applications() ([]platform.Application, error) { return nil, errUnsupported }

@@ -29,6 +29,31 @@ func (shell) FileIcon(path string, size int) ([]byte, error) {
 	return png, nil
 }
 
+// TypeIcon returns the icon Finder shows for files with the extension ext
+// (NSWorkspace iconForContentType:, or iconForFileType: before macOS 11),
+// drawn as FileIcon draws its icon.
+func (shell) TypeIcon(ext string, size int) ([]byte, error) {
+	var png []byte
+	withPool(func() {
+		var img id
+		if hasClass("UTType") {
+			if t := send(class("UTType"), "typeWithFilenameExtension:", uintptr(nsString(ext))); t != 0 {
+				img = send(workspace(), "iconForContentType:", uintptr(t))
+			}
+		}
+		if img == 0 {
+			img = send(workspace(), "iconForFileType:", uintptr(nsString(ext)))
+		}
+		if img != 0 {
+			png = pngOfImage(img, size)
+		}
+	})
+	if png == nil {
+		return nil, fmt.Errorf("mygo: no icon for files of type %q", ext)
+	}
+	return png, nil
+}
+
 // pngOfImage draws an NSImage into an sRGB bitmap of size by size pixels,
 // one pixel to the point, and encodes it as PNG. It must run in a pool.
 func pngOfImage(img id, size int) []byte {

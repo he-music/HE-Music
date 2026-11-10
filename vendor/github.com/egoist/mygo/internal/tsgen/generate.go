@@ -72,12 +72,20 @@ var runtimeTypes = map[string]string{
 	"github.com/egoist/mygo.ThemePreferences": "ThemePreferences",
 }
 
-// runtimeSentinel holds the names of runtimeTypes in generator.taken, so
-// that types of the app with those names get others.
+// runtimeSentinel reserves imported and built-in type names in
+// generator.taken, so types of the app with those names get others.
 type runtimeSentinel struct{}
 
 // Generate renders the TypeScript client.
 func Generate(m Model) ([]byte, error) {
+	for _, s := range m.Services {
+		if !IsIdentifier(s.Name) || reserved[s.Name] {
+			return nil, fmt.Errorf("service %q is not a TypeScript binding name", s.Name)
+		}
+		if s.Name == "call" || len(m.Events) > 0 && (s.Name == "event" || s.Name == "events") {
+			return nil, fmt.Errorf("service %q conflicts with a generated TypeScript binding", s.Name)
+		}
+	}
 	g := &generator{
 		src:   newSources(),
 		names: map[reflect.Type]string{},
@@ -87,11 +95,14 @@ func Generate(m Model) ([]byte, error) {
 
 		imported: map[string]bool{},
 	}
+	for _, name := range []string{"Promise", "Record"} {
+		g.taken[name] = reflect.TypeFor[runtimeSentinel]()
+	}
 	for _, name := range runtimeTypes {
 		g.taken[name] = reflect.TypeFor[runtimeSentinel]()
 	}
 
-	// Learn package directories first so type docs can be found.
+	// Reserve imported names and learn package directories before declaring types.
 	type methodSrc struct {
 		file string
 		line int
@@ -100,6 +111,10 @@ func Generate(m Model) ([]byte, error) {
 	for si := range m.Services {
 		for mi := range m.Services[si].Methods {
 			meth := &m.Services[si].Methods[mi]
+			// A later method may need Channel after an app type was named.
+			if slices.Contains(meth.Channels, true) {
+				g.taken["Channel"] = reflect.TypeFor[runtimeSentinel]()
+			}
 			file, line := g.src.learnPC(meth.PC)
 			locs[meth] = methodSrc{file, line}
 		}
@@ -118,8 +133,14 @@ func Generate(m Model) ([]byte, error) {
 		}
 		writeDoc(&services, "", g.src.typeDoc(base))
 		fmt.Fprintf(&services, "export const %s = {\n", s.Name)
+		methodNames := map[string]string{}
 		for i := range s.Methods {
 			meth := &s.Methods[i]
+			name := camel(meth.Name)
+			if previous, ok := methodNames[name]; ok {
+				return nil, fmt.Errorf("service %s: methods %s and %s both generate TypeScript name %q", s.Name, previous, meth.Name, name)
+			}
+			methodNames[name] = meth.Name
 			loc := locs[meth]
 			fd := g.src.funcDecl(loc.file, loc.line, meth.Name)
 			var names []string
@@ -134,7 +155,8 @@ func Generate(m Model) ([]byte, error) {
 				}
 			}
 			var params, args []string
-			used := map[string]bool{}
+			// Parameters must not shadow the runtime function called below.
+			used := map[string]bool{"call": true}
 			for pi, pt := range meth.Params {
 				name := ""
 				if pi < len(names) {
@@ -168,7 +190,7 @@ func Generate(m Model) ([]byte, error) {
 				call += ", " + strings.Join(args, ", ")
 			}
 			fmt.Fprintf(&services, "  %s(%s): Promise<%s> {\n    return call(%s);\n  },\n",
-				camel(meth.Name), strings.Join(params, ", "), result, call)
+				name, strings.Join(params, ", "), result, call)
 		}
 		services.WriteString("} as const;\n\n")
 	}
@@ -177,9 +199,15 @@ func Generate(m Model) ([]byte, error) {
 	if len(m.Events) > 0 {
 		events.WriteString("/** Events sent by the Go side. Subscribe with `events.name.on(listener)`. */\n")
 		events.WriteString("export const events = {\n")
+		eventNames := map[string]string{}
 		for _, e := range m.Events {
+			name := eventKey(e.Name)
+			if previous, ok := eventNames[name]; ok {
+				return nil, fmt.Errorf("events %q and %q both generate TypeScript name %s", previous, e.Name, name)
+			}
+			eventNames[name] = e.Name
 			writeDoc(&events, "  ", g.src.valueDoc(e.File, e.Line))
-			fmt.Fprintf(&events, "  %s: event<%s>(%s),\n", eventKey(e.Name), g.ts(e.Type), quote(e.Name))
+			fmt.Fprintf(&events, "  %s: event<%s>(%s),\n", name, g.ts(e.Type), quote(e.Name))
 		}
 		events.WriteString("} as const;\n")
 	}
@@ -423,6 +451,10 @@ func (g *generator) inlineObject(t reflect.Type) string {
 	}
 	parts := make([]string, 0, len(fields))
 	for _, f := range fields {
+		if f.fallback {
+			parts = append(parts, "[key: string]: unknown")
+			continue
+		}
 		typ, opt := g.fieldType(f)
 		parts = append(parts, propertyName(f.name)+opt+": "+typ)
 	}
@@ -431,8 +463,17 @@ func (g *generator) inlineObject(t reflect.Type) string {
 
 func (g *generator) fieldType(f field) (typ, opt string) {
 	typ = g.ts(f.typ)
-	if f.quoted && isNumber(f.typ.Kind()) {
-		typ = "string"
+	if f.quoted {
+		t := f.typ
+		for t.Kind() == reflect.Pointer {
+			t = t.Elem()
+		}
+		if isNumber(t.Kind()) && !implements(t, jsonMarshaler) && !implements(t, jsonMarshalerTo) {
+			typ = "string"
+			if f.typ.Kind() == reflect.Pointer {
+				typ += " | null"
+			}
+		}
 	}
 	if f.optional {
 		// Omitted rather than null.
@@ -450,6 +491,10 @@ func (g *generator) object(t reflect.Type, indent string) string {
 	var b bytes.Buffer
 	b.WriteString("{\n")
 	for _, f := range fields {
+		if f.fallback {
+			fmt.Fprintf(&b, "%s  [key: string]: unknown;\n", indent)
+			continue
+		}
 		typ, opt := g.fieldType(f)
 		writeDoc(&b, indent+"  ", g.src.fieldDoc(f.owner, f.goName))
 		fmt.Fprintf(&b, "%s  %s%s: %s;\n", indent, propertyName(f.name), opt, typ)

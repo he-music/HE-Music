@@ -27,6 +27,13 @@ import (
 // into the popup's grab, and the application's input (gtk_grab_add), and
 // closes as GtkMenu does, on a press outside it, when the grab breaks, or
 // when the compositor dismisses the popup.
+//
+// A window modal to a flyout is transient for it, and GTK's modal grab
+// keeps the input from the flyout, which it keeps open: a tray's does
+// not close as it loses the keyboard to it, and on X11 a popup lets its
+// grab go while the window shows, and takes it again as it hides
+// (enterFlyout, leaveFlyout). On Wayland the compositor decides what
+// becomes of a popup whose grab another window takes.
 
 var (
 	flyoutOnce sync.Once
@@ -170,10 +177,14 @@ func (w *window) showFlyout(grab bool) {
 		w.b.flyouts = append(w.b.flyouts, w)
 	}
 	w.willShow()
-	if !grab {
-		gtkWidgetShow(w.win)
-		return
+	if grab && w.modalChild() == nil {
+		w.grab()
 	}
+	gtkWidgetShow(w.win) // unless the grab's prepare function did
+}
+
+// grab grabs the seat and the application's input for a focusable flyout.
+func (w *window) grab() {
 	gtkWidgetRealize(w.win)
 	seat := gdkDisplayGetDefaultSeat(gdkDisplayGetDefault())
 	// The prepare function shows the window: Wayland maps the popup with
@@ -182,7 +193,42 @@ func (w *window) showFlyout(grab bool) {
 		w.grabbed = true
 		gtkGrabAdd(w.win)
 	}
-	gtkWidgetShow(w.win) // unless the prepare function did
+}
+
+// modalChild returns the window modal to w that shows, or nil.
+func (w *window) modalChild() *window {
+	for _, x := range w.b.windows {
+		if x.opts.Modal && x.opts.Parent == platform.Window(w) && !x.closed && gtkWidgetGetVisible(x.win) {
+			return x
+		}
+	}
+	return nil
+}
+
+// flyoutParent returns the flyout w is modal to, or nil.
+func (w *window) flyoutParent() *window {
+	if p, ok := w.opts.Parent.(*window); ok && p != nil && w.opts.Modal && p.opts.Flyout != nil && !p.closed {
+		return p
+	}
+	return nil
+}
+
+// enterFlyout lets the grab of the popup w is modal to go as w shows, on
+// X11, so that w gets the input the grab would keep.
+func (w *window) enterFlyout() {
+	if p := w.flyoutParent(); p != nil && w.b.onX11 {
+		p.ungrab()
+	}
+}
+
+// leaveFlyout gives the popup w is modal to its grab back, on X11, once w
+// no longer shows.
+func (w *window) leaveFlyout() {
+	p := w.flyoutParent()
+	if p == nil || !w.b.onX11 || p.trayFlyout() || p.grabbed || !p.flyout.Focusable || !gtkWidgetGetVisible(p.win) || p.modalChild() != nil {
+		return
+	}
+	p.grab()
 }
 
 // hideFlyout hides a flyout, and lets the grab of a focusable one go.

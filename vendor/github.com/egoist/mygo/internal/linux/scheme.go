@@ -32,12 +32,13 @@ func init() {
 	})
 }
 
-func (b *Backend) registerScheme(scheme string) {
-	if b.schemes[scheme] {
+// registerScheme registers scheme on the web context ctx, unless
+// registered, the schemes registered on it, has it.
+func (b *Backend) registerScheme(ctx ptr, registered map[string]bool, scheme string) {
+	if registered[scheme] {
 		return
 	}
-	b.schemes[scheme] = true
-	ctx := webkitWebContextGetDefault()
+	registered[scheme] = true
 	webkitWebContextRegisterURIScheme(ctx, cs(scheme), cbScheme, 0, 0)
 	sec := webkitWebContextGetSecurityManager(ctx)
 	webkitSecurityManagerRegisterSecure(sec, cs(scheme))

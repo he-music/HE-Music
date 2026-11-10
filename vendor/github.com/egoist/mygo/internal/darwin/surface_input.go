@@ -136,7 +136,22 @@ func (s *surface) setMarkedText(text string, selected, replacement nsRange) {
 		ev.From, ev.To = s.textRange(replacement)
 	}
 	s.marked, s.markedSel = text, selected
-	s.send(ev)
+	if !s.send(ev) && text != "" {
+		// The content left it, as a terminal does the dead key of a key
+		// it sent as Alt (Option as Alt): given up, rather than composed
+		// with the next key.
+		if s.keyDown {
+			s.refused = true
+		} else {
+			s.discardComposition()
+		}
+	}
+}
+
+// discardComposition has the input method give up its composition.
+func (s *surface) discardComposition() {
+	s.marked = ""
+	send(send(s.view, "inputContext"), "discardMarkedText")
 }
 
 func (s *surface) insertText(text string, replacement nsRange) {
@@ -183,6 +198,13 @@ func (s *surface) unmarkText() {
 		s.marked = ""
 		s.send(platform.SurfaceEvent{Kind: platform.TextComposition})
 	}
+}
+
+// interpretKeys has the input method interpret a key the surface's view
+// got; it answers with the view's NSTextInputClient methods. The GUI tests
+// stand in for an input method here (TestKeyComposing).
+var interpretKeys = func(view, ev id) {
+	send(view, "interpretKeyEvents:", uintptr(nsArray(ev)))
 }
 
 // typedChars returns the text of a key's characters, without the control

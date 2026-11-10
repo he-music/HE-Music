@@ -39,12 +39,24 @@ func (b *Backend) post(fn func()) {
 	b.Signal()
 }
 
+// drainMainQueue runs the functions posted, one at a time, as loop.drain
+// does: one running a loop of its own, as a frame showing a modal dialog
+// does (drawSoon), leaves those behind it to that loop, signaled again.
 func drainMainQueue() {
-	mainQueueMu.Lock()
-	q := mainQueue
-	mainQueue = nil
-	mainQueueMu.Unlock()
-	for _, fn := range q {
+	for {
+		mainQueueMu.Lock()
+		if len(mainQueue) == 0 {
+			mainQueueMu.Unlock()
+			return
+		}
+		fn := mainQueue[0]
+		mainQueue[0] = nil
+		mainQueue = mainQueue[1:]
+		more := len(mainQueue) > 0
+		mainQueueMu.Unlock()
+		if more {
+			theBackend.Signal()
+		}
 		fn()
 	}
 }
@@ -153,6 +165,9 @@ func (b *Backend) addNotification(n *platform.Notification, done func(error)) {
 		}
 		if n.Group != "" {
 			send(content, "setThreadIdentifier:", uintptr(nsString(n.Group)))
+		}
+		if len(n.Image) > 0 && attachNotificationImage != nil {
+			done = attachNotificationImage(content, n.Image, done)
 		}
 		if n.Sender != nil && prepareCommunication != nil && prepareCommunication(b, n, content, done) {
 			return

@@ -24,6 +24,7 @@ var (
 	atkObjectGetRole              func(obj ptr) int32
 	atkRoleGetName                func(role int32) ptr
 	atkObjectGetName              func(obj ptr) ptr
+	atkObjectGetDescription       func(obj ptr) ptr
 	atkObjectRefStateSet          func(obj ptr) ptr
 	atkStateSetContainsState      func(set ptr, state int32) bool
 	atkActionGetNActions          func(obj ptr) int32
@@ -33,6 +34,8 @@ var (
 	atkValueSetValue              func(obj ptr, value float64)
 	atkEditableTextSetTextContent func(obj ptr, text *byte)
 	atkComponentGrabFocus         func(obj ptr) bool
+	atkObjectGetAttributes        func(obj ptr) ptr
+	atkAttributeSetFree           func(set ptr)
 )
 
 func surfaceByHandle(handle uintptr) *surface {
@@ -148,10 +151,18 @@ func TestCancelDataDrag(handle uintptr) {
 func TestDataDragResources() int { return len(gtkDataSources) }
 
 // TestAccessNode is an element of native UI as assistive technology reads
-// it through ATK: the name of its role, its name, and its value.
+// it through ATK: the name of its role, its name, its value, and its
+// description.
 type TestAccessNode struct {
-	Role, Label, Value string
-	obj                ptr
+	Role, Label, Value, Description string
+	// Busy, Active, Selectable, Selected, Multiselectable, Focused and
+	// SupportsAutocompletion are its ATK states of those names,
+	// Attributes its object attributes, and Selection whether it
+	// implements AtkSelection.
+	Busy, Active, Selectable, Selected, Multiselectable, Focused bool
+	SupportsAutocompletion, Selection                            bool
+	Attributes                                                   map[string]string
+	obj                                                          ptr
 }
 
 func loadAccessTests() {
@@ -162,6 +173,7 @@ func loadAccessTests() {
 	mustBind(a, &atkObjectGetRole, "atk_object_get_role")
 	mustBind(a, &atkRoleGetName, "atk_role_get_name")
 	mustBind(a, &atkObjectGetName, "atk_object_get_name")
+	mustBind(a, &atkObjectGetDescription, "atk_object_get_description")
 	mustBind(a, &atkObjectRefStateSet, "atk_object_ref_state_set")
 	mustBind(a, &atkStateSetContainsState, "atk_state_set_contains_state")
 	mustBind(a, &atkActionGetNActions, "atk_action_get_n_actions")
@@ -171,6 +183,8 @@ func loadAccessTests() {
 	mustBind(a, &atkValueSetValue, "atk_value_set_value")
 	mustBind(a, &atkEditableTextSetTextContent, "atk_editable_text_set_text_contents")
 	mustBind(a, &atkComponentGrabFocus, "atk_component_grab_focus")
+	mustBind(a, &atkObjectGetAttributes, "atk_object_get_attributes")
+	mustBind(a, &atkAttributeSetFree, "atk_attribute_set_free")
 }
 
 // TestAccessibility reads the elements of a window showing native UI as
@@ -189,7 +203,8 @@ func TestAccessibility(handle uintptr) ([]TestAccessNode, bool) {
 			if child == 0 {
 				continue
 			}
-			n := TestAccessNode{Role: goStr(atkRoleGetName(atkObjectGetRole(child))), Label: goStr(atkObjectGetName(child)), obj: child}
+			n := TestAccessNode{Role: goStr(atkRoleGetName(atkObjectGetRole(child))), Label: goStr(atkObjectGetName(child)),
+				Description: goStr(atkObjectGetDescription(child)), obj: child}
 			if n.Role == "push button" {
 				n.Role = "button" // as older versions of ATK name it
 			}
@@ -207,7 +222,24 @@ func TestAccessibility(handle uintptr) ([]TestAccessNode, bool) {
 					n.Value = "1"
 				}
 			}
+			n.Busy = atkStateSetContainsState(states, atkStates.busy)
+			n.Active = atkStateSetContainsState(states, atkStates.active)
+			n.Selectable = atkStateSetContainsState(states, atkStates.selectable)
+			n.Selected = atkStateSetContainsState(states, atkStates.selected)
+			n.Multiselectable = atkStateSetContainsState(states, atkStates.multiselectable)
+			n.Selection = gTypeCheckInstanceIsA(child, atkSelectionGetType())
+			n.Focused = atkStateSetContainsState(states, atkStates.focused)
+			n.SupportsAutocompletion = atkStateSetContainsState(states, atkStates.supportsAutocompletion)
 			gObjectUnref(states)
+			if set := atkObjectGetAttributes(child); set != 0 {
+				// A GSList of AtkAttribute: name and value.
+				n.Attributes = map[string]string{}
+				for l := set; l != 0; l = *slot(l, 8) {
+					attr := *slot(l, 0)
+					n.Attributes[goStr(*slot(attr, 0))] = goStr(*slot(attr, 8))
+				}
+				atkAttributeSetFree(set)
+			}
 			nodes = append(nodes, n)
 			walk(child)
 			gObjectUnref(child) // the tree holds the node
@@ -253,4 +285,79 @@ func TestAccessibilityPerform(handle uintptr, label, action, value string) bool 
 		return false
 	}
 	return false
+}
+
+// TestAccessibilityEnabled reports whether the element labeled label is
+// enabled and focusable for assistive technology, as ATK's enabled and
+// focusable states say, and ok false without one.
+func TestAccessibilityEnabled(handle uintptr, label string) (enabled, focusable, ok bool) {
+	nodes, _ := TestAccessibility(handle)
+	for _, n := range nodes {
+		if n.Label == label {
+			states := atkObjectRefStateSet(n.obj)
+			defer gObjectUnref(states)
+			return atkStateSetContainsState(states, atkStates.enabled), atkStateSetContainsState(states, atkStates.focusable), true
+		}
+	}
+	return false, false, false
+}
+
+// What tests read of ATK's states by name and of relations.
+var (
+	accessStateTestsOnce        sync.Once
+	atkStateTypeGetName         func(state int32) ptr
+	atkObjectRefRelationSet     func(obj ptr) ptr
+	atkRelationSetGetNRelations func(set ptr) int32
+	atkRelationSetGetRelation   func(set ptr, i int32) ptr
+	atkRelationGetRelationType  func(relation ptr) int32
+	atkRelationTypeGetName      func(relation int32) ptr
+	atkRelationGetTarget        func(relation ptr) ptr
+	atkStateLastDefined         = int32(64) // more than ATK has
+)
+
+func loadAccessStateTests() {
+	a, _ := open("libatk-1.0.so.0")
+	mustBind(a, &atkStateTypeGetName, "atk_state_type_get_name")
+	mustBind(a, &atkObjectRefRelationSet, "atk_object_ref_relation_set")
+	mustBind(a, &atkRelationSetGetNRelations, "atk_relation_set_get_n_relations")
+	mustBind(a, &atkRelationSetGetRelation, "atk_relation_set_get_relation")
+	mustBind(a, &atkRelationGetRelationType, "atk_relation_get_relation_type")
+	mustBind(a, &atkRelationTypeGetName, "atk_relation_type_get_name")
+	mustBind(a, &atkRelationGetTarget, "atk_relation_get_target")
+}
+
+// TestAccessStatesAndRelations reads the element labeled label of a
+// window showing native UI as assistive technology does: the names of its
+// ATK states, and the labels of the elements each of its relations points
+// to, by the relation's name. ok is false without such an element.
+func TestAccessStatesAndRelations(handle uintptr, label string) (states []string, relations map[string][]string, ok bool) {
+	nodes, _ := TestAccessibility(handle)
+	accessStateTestsOnce.Do(loadAccessStateTests)
+	for _, n := range nodes {
+		if n.Label != label {
+			continue
+		}
+		set := atkObjectRefStateSet(n.obj)
+		for s := int32(1); s < atkStateLastDefined; s++ {
+			if name := goStr(atkStateTypeGetName(s)); name != "" && atkStateSetContainsState(set, s) {
+				states = append(states, name)
+			}
+		}
+		gObjectUnref(set)
+		relations = map[string][]string{}
+		rs := atkObjectRefRelationSet(n.obj)
+		for i := range atkRelationSetGetNRelations(rs) {
+			r := atkRelationSetGetRelation(rs, i)
+			name := goStr(atkRelationTypeGetName(atkRelationGetRelationType(r)))
+			// A GPtrArray: its pointers, and how many.
+			targets := atkRelationGetTarget(r)
+			pdata, count := *slot(targets, 0), uint32(*slot(targets, 8))
+			for j := range uintptr(count) {
+				relations[name] = append(relations[name], goStr(atkObjectGetName(*slot(pdata, j*8))))
+			}
+		}
+		gObjectUnref(rs)
+		return states, relations, true
+	}
+	return nil, nil, false
 }

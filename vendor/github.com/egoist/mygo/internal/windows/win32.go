@@ -171,6 +171,7 @@ var (
 	procInvalidateRectW               = user32.NewProc("InvalidateRect")
 	procUpdateLayeredWindow           = user32.NewProc("UpdateLayeredWindow")
 	procGetDC                         = user32.NewProc("GetDC")
+	procGetDCEx                       = user32.NewProc("GetDCEx")
 	procReleaseDC                     = user32.NewProc("ReleaseDC")
 	procDrawTextW                     = user32.NewProc("DrawTextW")
 	procTrackMouseEvent               = user32.NewProc("TrackMouseEvent")
@@ -209,6 +210,8 @@ var (
 	procShellNotifyIconGetRect      = shell32.NewProc("Shell_NotifyIconGetRect")
 	procSHCreateItemFromParsingName = shell32.NewProc("SHCreateItemFromParsingName")
 	procSHAddToRecentDocs           = shell32.NewProc("SHAddToRecentDocs")
+	procSHSimpleIDListFromPath      = shell32.NewProc("SHSimpleIDListFromPath")
+	procSHCreateItemFromIDList      = shell32.NewProc("SHCreateItemFromIDList")
 
 	// shlwapi
 	procSHCreateMemStream = shlwapi.NewProc("SHCreateMemStream")
@@ -230,6 +233,7 @@ var (
 	procRegSetValueExW   = advapi32.NewProc("RegSetValueExW")
 	procRegDeleteValueW  = advapi32.NewProc("RegDeleteValueW")
 	procRegDeleteTreeW   = advapi32.NewProc("RegDeleteTreeW")
+	procRegEnumKeyExW    = advapi32.NewProc("RegEnumKeyExW")
 
 	// ntdll
 	procRtlGetVersion = ntdll.NewProc("RtlGetVersion")
@@ -252,6 +256,7 @@ const (
 	wmQuit              = 0x0012
 	wmEraseBkgnd        = 0x0014
 	wmEndSession        = 0x0016
+	wmShowWindow        = 0x0018
 	wmSettingChange     = 0x001A
 	wmGetMinMaxInfo     = 0x0024
 	wmWindowPosChanging = 0x0046
@@ -385,11 +390,15 @@ const (
 	mfsChecked    = 0x0008
 	mfsDisabled   = 0x0003
 
-	tpmRightButton = 0x0002
-	tpmRightAlign  = 0x0008
-	tpmReturnCmd   = 0x0100
-	tpmLayoutRTL   = 0x8000
-	mncClose       = 1
+	tpmRightButton  = 0x0002
+	tpmCenterAlign  = 0x0004
+	tpmRightAlign   = 0x0008
+	tpmVCenterAlign = 0x0010
+	tpmBottomAlign  = 0x0020
+	tpmVertical     = 0x0040
+	tpmReturnCmd    = 0x0100
+	tpmLayoutRTL    = 0x8000
+	mncClose        = 1
 
 	monitorDefaultToNull    = 0
 	monitorDefaultToNearest = 2
@@ -421,7 +430,10 @@ const (
 	dwmwaExtendedFrameBounds    = 9
 	dwmwaUseImmersiveDarkMode   = 20
 	dwmwaWindowCornerPreference = 33
+	dwmwaCaptionColor           = 35
 	dwmwaSystemBackdropType     = 38
+
+	dwmColorNone = 0xFFFFFFFE // DWMWA_COLOR_NONE: no color, not the accent
 
 	dwmwcpRound = 2 // DWM_WINDOW_CORNER_PREFERENCE
 

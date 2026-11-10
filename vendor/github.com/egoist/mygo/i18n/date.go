@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -72,6 +73,7 @@ type DateFormatter struct {
 	items   []patItem
 	hasMin  bool
 	hasSec  bool
+	ranges  atomic.Pointer[rangeFormat] // FormatRange's, made as it first formats
 }
 
 type dateFormatterKey struct {
@@ -96,12 +98,7 @@ func NewDateFormatter(locale string, o DateOptions) *DateFormatter {
 	k := keyOf(locale)
 	d := k.dates()
 	f = &DateFormatter{key: k, data: d, sys: d.numbers(k.latn)}
-	f.pattern = datePattern(k, d, o)
-	f.items = parsePattern(f.pattern)
-	for _, it := range f.items {
-		f.hasMin = f.hasMin || it.char == 'm'
-		f.hasSec = f.hasSec || it.char == 's'
-	}
+	f.setPattern(datePattern(k, d, o))
 	dateFormatters.mu.Lock()
 	if dateFormatters.m == nil || len(dateFormatters.m) > 512 {
 		dateFormatters.m = map[dateFormatterKey]*DateFormatter{}
@@ -109,6 +106,17 @@ func NewDateFormatter(locale string, o DateOptions) *DateFormatter {
 	dateFormatters.m[key] = f
 	dateFormatters.mu.Unlock()
 	return f
+}
+
+// setPattern makes the formatter write a pattern.
+func (f *DateFormatter) setPattern(p string) {
+	f.pattern = p
+	f.items = parsePattern(p)
+	f.hasMin, f.hasSec = false, false
+	for _, it := range f.items {
+		f.hasMin = f.hasMin || it.char == 'm'
+		f.hasSec = f.hasSec || it.char == 's'
+	}
 }
 
 // Pattern returns the pattern of CLDR the formatter writes, as "MMM d, y".
@@ -175,15 +183,7 @@ func datePattern(k *localeKey, d *localeData, o DateOptions) string {
 // Format writes t.
 func (f *DateFormatter) Format(t time.Time) string {
 	var b strings.Builder
-	b.Grow(len(f.pattern) + 16)
-	for i := range f.items {
-		it := &f.items[i]
-		if it.char == 0 {
-			b.WriteString(it.text)
-			continue
-		}
-		f.field(&b, it.char, it.n, t)
-	}
+	f.write(&b, t)
 	s := b.String()
 	if strings.Contains(s, "\u202f") {
 		// V8 writes the narrow no-break spaces of CLDR's times (1:07 PM)
@@ -192,6 +192,19 @@ func (f *DateFormatter) Format(t time.Time) string {
 		s = strings.ReplaceAll(s, "\u202f", " ")
 	}
 	return s
+}
+
+// write writes t in the formatter's pattern, with CLDR's spaces.
+func (f *DateFormatter) write(b *strings.Builder, t time.Time) {
+	b.Grow(len(f.pattern) + 16)
+	for i := range f.items {
+		it := &f.items[i]
+		if it.char == 0 {
+			b.WriteString(it.text)
+			continue
+		}
+		f.field(b, it.char, it.n, t)
+	}
 }
 
 // num writes v with at least n digits, in the locale's digits.

@@ -23,6 +23,10 @@ func (w *Window) eval(ctx context.Context, code string) ([]byte, error) { return
 
 func (w *Window) sendTitleBar() {}
 
+func (w *Window) sendActive() {}
+
+func (w *Window) zoomChanged() {}
+
 func (w *Window) handleMessage(msg string) {}
 
 func findScript(text string, opts FindOptions) string { return "" }

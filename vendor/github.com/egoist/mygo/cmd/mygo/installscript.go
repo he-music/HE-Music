@@ -16,8 +16,8 @@ import (
 //	curl -fsSL https://github.com/me/my-app/releases/latest/download/install.sh | sh
 //
 // On Linux it installs the archive of the app in ~/.local/<name>.app, where
-// the app can update itself, with the command of linux.command in
-// ~/.local/bin when there is one (never over a file it did not make), and
+// the app can update itself, with the commands of linux.command in
+// ~/.local/bin (never over a file it did not make), and
 // registers its desktop entry and file types (writeLinuxDesktop) with the
 // paths of the install, as updates do again (update.RefreshDesktopEntry).
 // It warns when WebKitGTK is missing, with the command that installs it,
@@ -62,7 +62,7 @@ func installScript(c *Config) string {
 		"Name":       c.Name,
 		"Title":      strings.Join(strings.Fields(c.Name), " "),
 		"Slug":       c.slug(),
-		"Command":    c.Linux.Command,
+		"Commands":   strings.Join(c.Linux.Command, " "),
 		"Version":    c.Version,
 		"Bundle":     c.executableName() + ".app",
 		"Identifier": c.Identifier,
@@ -103,6 +103,21 @@ func installScript(c *Config) string {
 	return b.String()
 }
 
+// commandsPhrase names the commands of linux.command, separated by spaces
+// in list, as the opening comment of install.sh does: "the my-app command",
+// "the my-app and ma commands".
+func commandsPhrase(list string) string {
+	names := strings.Fields(list)
+	switch n := len(names); n {
+	case 0:
+		return ""
+	case 1:
+		return "the " + names[0] + " command"
+	default:
+		return "the " + strings.Join(names[:n-1], ", ") + " and " + names[n-1] + " commands"
+	}
+}
+
 // envName is the prefix of the environment variables of an install script
 // of the app slug: MY_APP for my-app.
 func envName(slug string) string {
@@ -123,9 +138,9 @@ func shQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
-var installScriptTemplate = template.Must(template.New("").Funcs(template.FuncMap{"q": shQuote}).Parse(`#!/bin/sh
+var installScriptTemplate = template.Must(template.New("").Funcs(template.FuncMap{"q": shQuote, "phrase": commandsPhrase}).Parse(`#!/bin/sh
 # Installs {{.Title}} for the current user, without root. On Linux: the app in
-# ~/.local/{{.Slug}}.app{{with .Command}}, the {{.}} command in ~/.local/bin,{{end}} and its entry
+# ~/.local/{{.Slug}}.app{{with .Commands}}, {{phrase .}} in ~/.local/bin,{{end}} and its entry
 # in the applications menu.{{if .PublicKey}} On macOS: the latest version, its signature
 # checked, in /Applications, or ~/Applications when it cannot write there.{{end}}
 # Made by mygo build.
@@ -139,8 +154,9 @@ set -eu
 
 app_name={{q .Name}}
 name={{q .Slug}}
-# The command in ~/.local/bin that runs the app (linux.command), if any.
-command_name={{q .Command}}
+# The commands in ~/.local/bin that run the app (linux.command), if any,
+# separated by spaces.
+command_names={{q .Commands}}
 version={{q .Version}}
 # Where the manifests of the latest version are, with updates: in the
 # release of the newest tag with the prefix when the repository's releases
@@ -291,25 +307,30 @@ linux() {
 	mv "$staging" "$app_dir"
 
 	mkdir -p "$data_home/applications"
-	# Earlier install scripts linked a command named after the app.
-	if [ "$name" != "$command_name" ] && ours "$bin_dir/$name"; then
-		rm -f "$bin_dir/$name"
-	fi
+	# Earlier install scripts linked a command named after the app. Links of
+	# other names an earlier version had stay, as one the user made would:
+	# --uninstall removes them.
+	case " $command_names " in
+	*" $name "*) ;;
+	*) if ours "$bin_dir/$name"; then rm -f "$bin_dir/$name"; fi ;;
+	esac
 	run=
-	if [ -n "$command_name" ]; then
+	for command_name in $command_names; do
 		bin_link="$bin_dir/$command_name"
 		if { [ -e "$bin_link" ] || [ -L "$bin_link" ]; } && ! ours "$bin_link"; then
 			echo "Leaving $bin_link alone: it is not $app_name's" >&2
 		else
 			mkdir -p "$bin_dir"
 			ln -sf "$app_dir/$name" "$bin_link"
-			if [ "$(command -v "$command_name" || true)" = "$bin_link" ]; then
-				run=$command_name
-			else
+			# The app runs by the first command linked.
+			if [ -z "$run" ]; then
 				run=$bin_link
+				if [ "$(command -v "$command_name" || true)" = "$bin_link" ]; then
+					run=$command_name
+				fi
 			fi
 		fi
-	fi
+	done
 	# The entry of the app, running it and showing its icon by their paths,
 	# which updates of the app register again the same way.
 	if [ -f "$app_dir/$name.desktop" ]; then
@@ -691,8 +712,8 @@ webkit_install_command() {
 uninstall() {
 	[ -d "$app_dir" ] || fail "$app_name is not installed in $app_dir"
 	# Only what install.sh and the app made: a package of the system may
-	# install the same names.
-	for link in "$bin_dir/$name" "$bin_dir/$command_name"; do
+	# install the same names. Links of names the app no longer has go too.
+	for link in "$bin_dir"/*; do
 		if ours "$link"; then
 			rm -f "$link"
 		fi

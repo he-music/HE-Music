@@ -286,7 +286,7 @@ func (b *docBase) windowClosed() {
 	if keep {
 		// Closed without asking (Window.Destroy, a parent closing, a quit
 		// keeping documents): the changes stay in the recovery copy.
-		docWork.Go(b.backup)
+		docWork.Go(func() { b.backup() })
 	} else {
 		docWork.Go(func() { k.recovery.remove(b) })
 	}

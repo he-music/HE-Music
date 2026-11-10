@@ -44,7 +44,7 @@ memory and CPU use.
   Playing and the media keys, the system accent color and accessibility
   settings, watching files, and more.
 - **Ready to ship**: app bundles and disk images, Windows installers, Debian
-  packages and a Linux install script, code signing, notarization, and signed
+  packages, PKGBUILDs for Arch Linux and a Linux install script, code signing, notarization, and signed
   auto-updates with delta updates and an update window in the manner of
   Sparkle.
 

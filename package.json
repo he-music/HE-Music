@@ -1,7 +1,7 @@
 {
   "name": "hemusic",
   "productName": "HE-Music",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "A multi-platform online music player based on SPlayer.",
   "packageManager": "pnpm@10.28.1",
   "author": "he-music",
@@ -85,7 +85,7 @@
     "lodash-es": "^4.18.1",
     "marked": "^16.4.2",
     "md5": "^2.3.0",
-    "mygo-runtime": "0.6.4",
+    "mygo-runtime": "0.8.3",
     "pinia": "^3.0.4",
     "pinia-plugin-persistedstate": "^4.7.1",
     "plyr": "^3.8.5",

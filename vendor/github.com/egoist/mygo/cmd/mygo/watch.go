@@ -55,6 +55,17 @@ func listBuildInputs(c *Config) (*buildInputs, error) {
 		files:     []string{filepath.Join(c.root, jsonConfig), filepath.Join(c.root, tsConfig)},
 		resources: c.path(resourcesDir),
 	}
+	// Workspace selection depends on the app's directory and GOWORK,
+	// so it cannot use the process-wide goEnv cache.
+	var work bytes.Buffer
+	workCmd := goCommand(c.root, nil, "env", "GOWORK")
+	workCmd.Stdout = &work
+	if err := workCmd.Run(); err != nil {
+		return nil, fmt.Errorf("go env GOWORK: %w", err)
+	}
+	if path := strings.TrimSpace(work.String()); path != "" && path != "off" {
+		in.files = append(in.files, path, path+".sum")
+	}
 	if icon := c.devIcon(); icon != "" {
 		in.files = append(in.files, c.path(icon))
 	}

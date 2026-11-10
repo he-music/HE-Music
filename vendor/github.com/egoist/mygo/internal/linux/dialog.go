@@ -5,6 +5,7 @@ package linux
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -49,7 +50,7 @@ func setupChooser(fc ptr, defaultPath string, filters []platform.FileFilter, hid
 		filter := gtkFileFilterNew()
 		name := f.Name
 		if name == "" {
-			name = strings.Join(f.Extensions, ", ")
+			name = strings.Join(append(slices.Clip(f.Extensions), f.MIMETypes...), ", ")
 		}
 		gtkFileFilterSetName(filter, cs(name))
 		for _, e := range f.Extensions {
@@ -62,6 +63,11 @@ func setupChooser(fc ptr, defaultPath string, filters []platform.FileFilter, hid
 			if up := strings.ToUpper(e); up != e {
 				gtkFileFilterAddPattern(filter, cs("*."+up))
 			}
+		}
+		// GTK matches "kind/*" itself, and the portal's file chooser
+		// takes the types as they are.
+		for _, m := range f.MIMETypes {
+			gtkFileFilterAddMimeType(filter, cs(m))
 		}
 		gtkFileChooserAddFilter(fc, filter)
 	}
@@ -137,7 +143,10 @@ func (d dialogs) ShowMessageBox(parent platform.Window, o *platform.MessageBoxOp
 		gtkWindowSetTitle(dlg, cs(o.Title))
 	}
 	for i, label := range o.Buttons {
-		gtkDialogAddButton(dlg, cs(label), int32(i))
+		btn := gtkDialogAddButton(dlg, cs(label), int32(i))
+		if slices.Contains(o.DestructiveIDs, i) {
+			gtkStyleContextAddClass(gtkWidgetGetStyleContext(btn), cs("destructive-action"))
+		}
 	}
 	gtkDialogSetDefaultResponse(dlg, int32(o.DefaultID))
 	var check ptr

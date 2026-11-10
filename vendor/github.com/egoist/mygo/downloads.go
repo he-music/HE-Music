@@ -32,7 +32,8 @@ type Download struct {
 // OnWillDownload is called when a page starts a download: a link with the
 // download attribute, or a response the page cannot show, such as a file
 // sent as an attachment. Without listeners, downloads are saved to the
-// Downloads directory.
+// Downloads directory, and those of an untrusted page
+// (PageOptions.Untrusted) are canceled.
 func (p *Page) OnWillDownload(fn func(e *DownloadEvent)) (off func()) {
 	return p.w.onWillDownload.add(fn, false)
 }
@@ -43,6 +44,9 @@ func (p *Page) OnDownloadDone(fn func(d *Download)) (off func()) {
 }
 
 func (h *windowHandler) DownloadStarted(url, suggested string) string {
+	if h.w.untrusted && h.w.onWillDownload.len() == 0 {
+		return ""
+	}
 	name := filepath.Base(filepath.Clean("/" + strings.ReplaceAll(suggested, `\`, "/")))
 	if name == "/" || name == "." || name == "" {
 		name = "download"

@@ -70,6 +70,16 @@ func (r *renderer) transformed(op *scene.Op, px scene.EffectPixels, b *scene.Bac
 	if !ok || !inset && op.Rect.Empty() || inset && op.Cast.Empty() {
 		return
 	}
+	// An image whose owner dropped its pixels (Bitmap.ReleasePixels) has
+	// them made again here, once for the whole operation, as the op reads
+	// them directly; without them it draws nothing.
+	var image *scene.Image
+	if op.Kind == scene.OpImage {
+		if op.Image == nil || op.Image.W == 0 || op.Image.H == 0 || unflipped(op.Src).Empty() || op.Image.Pixels() == nil {
+			return
+		}
+		image = op.Image
+	}
 	radii := scene.Corners(op.Rect, op.Radii, op.Continuous)
 	outer := newShape(op.Rect, radii)
 	inner := outer
@@ -136,22 +146,25 @@ func (r *renderer) transformed(op *scene.Op, px scene.EffectPixels, b *scene.Bac
 			}
 			switch op.Kind {
 			case scene.OpFill:
+				var fc [4]float32
 				if pt.visible() {
-					blend(p, pt.at(lx, ly), cov*clip)
+					fc = pt.at(lx, ly)
 				}
-				if hasBorder {
-					ic := float32(0)
-					if !inner.r.Empty() {
-						ic = transformedCoverage(&inner, op.Transform, inv, wx, wy)
-					}
-					bc := max(cov-ic, 0)
-					if op.Dashed {
-						bc *= dash(op.Rect, bw, lx, ly)
-					}
-					blend(p, borderAt(bp, border, op.BorderColor, lx, ly), bc*clip)
+				if !hasBorder {
+					blend(p, fc, cov*clip)
+					continue
 				}
+				ic := float32(0)
+				if !inner.r.Empty() {
+					ic = transformedCoverage(&inner, op.Transform, inv, wx, wy)
+				}
+				bc := max(cov-ic, 0)
+				if op.Dashed {
+					bc *= dash(op.Rect, bw, lx, ly)
+				}
+				blendFilled(p, fc, cov, borderAt(bp, border, op.BorderColor, lx, ly), bc, clip)
 			case scene.OpImage:
-				if op.Image == nil || op.Image.W == 0 || op.Image.H == 0 || unflipped(op.Src).Empty() {
+				if image == nil {
 					continue
 				}
 				// How far a pixel of the frame reaches in the image's,

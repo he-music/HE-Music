@@ -872,5 +872,48 @@
   "clipboardReadEmpty": "The clipboard is empty.",
   "@clipboardReadEmpty": {
     "description": "What the terminal's clipboard prompt shows when the clipboard holds no text."
+  },
+  "decimalInvalid": "Enter a number",
+  "@decimalInvalid": {
+    "description": "What a decimal input says of text that is not a number, as \"1,2x\"."
+  },
+  "decimalWhole": "Enter a whole number",
+  "@decimalWhole": {
+    "description": "What a decimal input whose step has no decimals says of a number with some."
+  },
+  "decimalPlaces": "{n, plural, one {Use at most # decimal place} other {Use at most # decimal places}}",
+  "@decimalPlaces": {
+    "description": "What a decimal input says of a number with more decimals than its step has, which it does not round.",
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "decimalAtLeast": "Enter {min} or more",
+  "@decimalAtLeast": {
+    "description": "What a decimal input says of a number below its lowest, as \"Enter 0.00 or more\".",
+    "placeholders": {
+      "min": {
+        "type": "String"
+      }
+    }
+  },
+  "decimalAtMost": "Enter {max} or less",
+  "@decimalAtMost": {
+    "description": "What a decimal input says of a number above its highest, as \"Enter 100.00 or less\".",
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "desktopShortcut": "Create a desktop shortcut",
+  "@desktopShortcut": {
+    "description": "Labels the check box on the finish page of an app's Windows installer, which puts a shortcut to the app on the desktop."
+  },
+  "selected": "selected",
+  "@selected": {
+    "description": "What VoiceOver reads after the name of a cell of a grid that is chosen, as a calendar's day picked, where it reads no chosen state of cells itself."
   }
 }

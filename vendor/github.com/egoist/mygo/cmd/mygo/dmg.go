@@ -44,10 +44,11 @@ func buildDMG(c *Config, app, dir, goarch string, opts buildOptions) (_ string, 
 	defer os.RemoveAll(work)
 
 	// The image starts as a copy of a folder holding all it shows, which
-	// hdiutil sizes: on HFS+ every file takes whole blocks, more than the
-	// sizes add up to. ditto keeps the bundle exactly as signed, and copies
-	// it without cloning: hdiutil counts the blocks a file takes, fewer
-	// than its size in a sparse file, which HFS+ cannot keep sparse.
+	// hdiutil sizes: on HFS+ and APFS every file takes whole blocks, more
+	// than the sizes add up to. ditto keeps the bundle exactly as signed,
+	// and copies it without cloning: hdiutil counts the blocks a file
+	// takes, fewer than its size in a sparse file, which HFS+ cannot keep
+	// sparse.
 	src := filepath.Join(work, "src")
 	appName := filepath.Base(app)
 	if err := os.Mkdir(src, 0o755); err != nil {
@@ -73,7 +74,7 @@ func buildDMG(c *Config, app, dir, goarch string, opts buildOptions) (_ string, 
 		}
 	}
 	rw := filepath.Join(work, "rw.dmg")
-	if err := hdiutilRetrying(hdiutilCreateArgs(c.MacOS.DMGTitle, src, rw)...); err != nil {
+	if err := createDMG(c.MacOS.DMGTitle, src, rw); err != nil {
 		return "", err
 	}
 
@@ -107,7 +108,7 @@ func buildDMG(c *Config, app, dir, goarch string, opts buildOptions) (_ string, 
 	// LZMA gives the smallest images; it needs macOS 10.15, below the
 	// minimum MyGo supports.
 	dmg := filepath.Join(dir, file)
-	if err := command("hdiutil", "convert", rw, "-format", "ULMO", "-ov", "-o", dmg); err != nil {
+	if err := convertDMG(rw, dmg); err != nil {
 		return "", err
 	}
 	if opts.sign != "-" {
@@ -130,18 +131,57 @@ func buildDMG(c *Config, app, dir, goarch string, opts buildOptions) (_ string, 
 	return dmg, nil
 }
 
-// hdiutilCreateArgs creates a writable HFS+ image of src, as large as its
-// contents need. hdiutil runs without -quiet, which would leave out of the
-// error why it failed.
-func hdiutilCreateArgs(volume, src, out string) []string {
-	return []string{
-		"create", "-ov",
-		"-volname", volume,
-		"-srcfolder", src,
-		"-fs", "HFS+", "-fsargs", "-c c=64,a=16,e=16",
-		"-format", "UDRW",
-		out,
+// convertDMG writes rw as a compressed read-only image. macOS 27 fails
+// "hdiutil convert" with "Resource temporarily unavailable", and asks for
+// "diskutil image create from" instead, which overwrites dmg as -ov does;
+// older systems, whose diskutil has no image verb, use hdiutil.
+func convertDMG(rw, dmg string) error {
+	if exec.Command("diskutil", "image", "create", "from", "-h").Run() == nil {
+		return command("diskutil", "image", "create", "from", "--format", "ULMO", rw, dmg)
 	}
+	return command("hdiutil", "convert", rw, "-format", "ULMO", "-ov", "-o", dmg)
+}
+
+// dmgFilesystems are the filesystems createDMG tries, in order. Tests
+// leave out HFS+ to build an image on APFS.
+var dmgFilesystems = []string{"HFS+", "APFS"}
+
+// createDMG creates a writable image of src, on HFS+, or on APFS when
+// HFS+ fails for another reason than a busy resource: on macOS 26.7.1,
+// "hdiutil create -srcfolder" fails on HFS+ with "no mountable file
+// systems" or "Device not configured", and works on APFS (#1352). APFS
+// needs macOS 10.13, and the ULMO image buildDMG converts it to 10.15
+// already. An error says how each filesystem failed.
+func createDMG(volume, src, out string) error {
+	var errs []error
+	for _, fs := range dmgFilesystems {
+		err := hdiutilRetrying(hdiutilCreateArgs(fs, volume, src, out)...)
+		if err == nil {
+			return nil
+		}
+		errs = append(errs, fmt.Errorf("on %s: %w", fs, err))
+		// Still busy after hdiutilRetrying's retries, which wrap the last
+		// attempt's error: another filesystem would wait for the same.
+		last := err
+		if u := errors.Unwrap(err); u != nil {
+			last = u
+		}
+		if hdiutilBusy(last) {
+			break
+		}
+	}
+	return errors.Join(errs...)
+}
+
+// hdiutilCreateArgs creates a writable image of src on the filesystem fs,
+// HFS+ or APFS, as large as its contents need. hdiutil runs without
+// -quiet, which would leave out of the error why it failed.
+func hdiutilCreateArgs(fs, volume, src, out string) []string {
+	args := []string{"create", "-ov", "-volname", volume, "-srcfolder", src, "-fs", fs}
+	if fs == "HFS+" {
+		args = append(args, "-fsargs", "-c c=64,a=16,e=16")
+	}
+	return append(args, "-format", "UDRW", out)
 }
 
 // hdiutilAttach attaches a disk image and returns the device of its whole

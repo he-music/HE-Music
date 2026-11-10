@@ -41,6 +41,21 @@ func comCallFloat(obj uintptr, i int, f float64) uintptr {
 	return m.(func(uintptr, float64) uintptr)(obj, f)
 }
 
+var float32Methods sync.Map // method entry → func(uintptr, float32) uintptr
+
+// comCallFloat32 calls method i of obj, which takes a float, as
+// comCallFloat does.
+func comCallFloat32(obj uintptr, i int, f float32) uintptr {
+	fn := *(*uintptr)(unsafe.Add(native(*(*uintptr)(native(obj))), i*int(unsafe.Sizeof(uintptr(0)))))
+	m, ok := float32Methods.Load(fn)
+	if !ok {
+		var call func(uintptr, float32) uintptr
+		purego.RegisterFunc(&call, fn)
+		m, _ = float32Methods.LoadOrStore(fn, call)
+	}
+	return m.(func(uintptr, float32) uintptr)(obj, f)
+}
+
 func failed(hr uintptr) bool { return int32(uint32(hr)) < 0 }
 
 func hresultError(what string, hr uintptr) error {

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/egoist/mygo/i18n"
+	"github.com/egoist/mygo/internal/l10n"
 )
 
 // The languages a build declares to the systems, which they are in where
@@ -27,13 +28,18 @@ type appLanguage struct {
 	// language, the catalog's mygo.appName and mygo.appDescription, or ""
 	// where it has none.
 	Name, Description string
+	// DesktopShortcut is the catalog's mygo.desktopShortcut, the label of
+	// the Windows installer's check box that creates a desktop shortcut,
+	// or "" where it has none, for MyGo's own string in the language.
+	DesktopShortcut string
 }
 
-// Keys of an app's catalog that name the app and describe it, in the
-// namespace of MyGo's own strings.
+// Keys of an app's catalog used by packaging, in the namespace of MyGo's
+// own strings.
 const (
-	appNameKey        = "mygo.appName"
-	appDescriptionKey = "mygo.appDescription"
+	appNameKey         = "mygo.appName"
+	appDescriptionKey  = "mygo.appDescription"
+	desktopShortcutKey = "mygo.desktopShortcut"
 )
 
 // catalogDir returns the directory of the catalogs of the app's strings
@@ -65,7 +71,8 @@ func (c *Config) languages() ([]appLanguage, error) {
 }
 
 // readLanguages reads the catalogs <tag>.json of dir: the tags of their
-// names, source first, and the app's name and description in each.
+// names, source first, and the app's name, description and installer label
+// in each.
 func readLanguages(dir, source string) ([]appLanguage, error) {
 	if dir == "" {
 		return nil, nil
@@ -94,6 +101,7 @@ func readLanguages(dir, source string) ([]appLanguage, error) {
 		l := appLanguage{Tag: tag}
 		l.Name, _ = catalog[appNameKey].(string)
 		l.Description, _ = catalog[appDescriptionKey].(string)
+		l.DesktopShortcut, _ = catalog[desktopShortcutKey].(string)
 		if strings.EqualFold(i18n.Normalize(tag), i18n.Normalize(source)) {
 			// The app's own name and description are the configuration's.
 			l.Name, l.Description = "", ""
@@ -278,13 +286,17 @@ func nsisLanguage(tag string) (string, bool) {
 }
 
 // nsisLanguageMacros returns the lines that give the Windows installer the
-// languages of the app, a MUI_LANGUAGE each, the app's own first, which
-// the installer falls back to; it picks the one of the system's language.
+// languages of the app, a MUI_LANGUAGE each and the finish page's label in
+// each, the app's own first, which the installer falls back to; it picks
+// the one of the system's language.
 // It is English alone for an app that ships no languages. A language NSIS
 // has no language file of fails the build, as it would fail makensis.
 func nsisLanguageMacros(langs []appLanguage) (string, error) {
+	if len(langs) == 0 {
+		langs = []appLanguage{{Tag: "en"}}
+	}
 	seen := map[string]bool{}
-	var b strings.Builder
+	var b, labels strings.Builder
 	for _, l := range langs {
 		name, ok := nsisLanguage(l.Tag)
 		if !ok {
@@ -295,10 +307,13 @@ func nsisLanguageMacros(langs []appLanguage) (string, error) {
 		}
 		seen[name] = true
 		fmt.Fprintf(&b, "!insertmacro MUI_LANGUAGE %s\n", nsisString(name))
+		label := l.DesktopShortcut
+		if label == "" {
+			label = l10n.Catalog.Format(l.Tag, "desktopShortcut", nil)
+		}
+		fmt.Fprintf(&labels, "LangString MYGO_DESKTOP_SHORTCUT ${LANG_%s} %s\n", strings.ToUpper(name), nsisString(label))
 	}
-	if b.Len() == 0 {
-		return "!insertmacro MUI_LANGUAGE \"English\"\n", nil
-	}
+	b.WriteString(labels.String())
 	return b.String(), nil
 }
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 开发/CI 发布工具；不属于应用运行时。协议来源：mygo 07ebe19ac0dc。
+// 开发/CI 发布工具；不属于应用运行时。协议来源：mygo v0.8.3。
 import { createHash, createPrivateKey, createPublicKey, verify } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, readFile, realpath } from "node:fs/promises";

@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/egoist/mygo/internal/platform"
 )
@@ -26,6 +27,24 @@ const (
 	ActivationPolicyProhibited ActivationPolicy = "prohibited"
 )
 
+// DMABUFRenderer says whether WebKitGTK draws web pages with its DMA-BUF
+// renderer on Linux; see Application.SetDMABUFRenderer.
+type DMABUFRenderer string
+
+// DMA-BUF renderer settings.
+const (
+	// DMABUFRendererOff turns the renderer off, unless the user set
+	// WEBKIT_DISABLE_DMABUF_RENDERER: the default.
+	DMABUFRendererOff DMABUFRenderer = "off"
+	// DMABUFRendererOn leaves the renderer to WebKitGTK, which uses it
+	// wherever it can.
+	DMABUFRendererOn DMABUFRenderer = "on"
+	// DMABUFRendererAuto leaves the renderer on where the host is known to
+	// draw with it: on Wayland, with a GPU of Mesa's, outside containers
+	// and virtual machines. Elsewhere it is off.
+	DMABUFRendererAuto DMABUFRenderer = "auto"
+)
+
 // Application controls the event loop and the lifecycle of the process.
 // Use the App singleton.
 type Application struct {
@@ -33,6 +52,7 @@ type Application struct {
 	name      string
 	version   string
 	policy    ActivationPolicy
+	dmabuf    DMABUFRenderer
 	running   bool
 	ready     bool
 	readyCh   chan struct{}
@@ -46,6 +66,8 @@ type Application struct {
 
 	// quitting is only touched on the main thread.
 	quitting    bool
+	stopping    bool // the quit sequence ran: the event loop is to stop (main thread)
+	ended       bool // the event loop stopped: finish runs (main thread)
 	relaunch    bool // Relaunch: start again once quit (main thread)
 	initialized bool // Run initialized the backend (main thread)
 
@@ -103,12 +125,17 @@ func (a *Application) Run() error {
 	if err := b.Init(appHandler{}, platform.AppOptions{
 		Name:             a.Name(),
 		ActivationPolicy: string(a.ActivationPolicy()),
+		DMABUFRenderer:   string(a.dmabuf),
 	}); err != nil {
 		return err
 	}
 	a.initialized = true
 	// Settings made before Run, which the backend could not take yet.
 	Theme.apply()
+	if load := pendingGTKCSS; load != nil {
+		pendingGTKCSS = nil
+		load()
+	}
 	a.startLocale()
 	if m := a.Dock.Menu(); m != nil {
 		b.App().SetDockMenu(m.snapshot())
@@ -157,10 +184,47 @@ func (a *Application) IsReady() bool {
 // it.
 func (a *Application) Quit() {
 	postMain(func() {
-		if a.prepareQuit() {
+		if a.stopping {
 			backend().Quit()
+			return
+		}
+		if a.prepareQuit() {
+			a.stopLoop()
 		}
 	})
+}
+
+// stopGrace is how long the event loop has to stop once the quit sequence
+// has run, before the app finishes and exits without it; 0 waits on.
+var stopGrace = 3 * time.Second
+
+// stopLoop stops the event loop once the quit sequence has run.
+func (a *Application) stopLoop() {
+	a.loopStopping()
+	backend().Quit()
+}
+
+// loopStopping records that the quit sequence has run. Its windows closed,
+// the app must not stay behind should the event loop go on: AppKit's has
+// been seen to after a relaunch asked for from a daemon's reconnection,
+// when every later quit was taken for one already under way. A later quit
+// asks the loop to stop again (Quit, QuitRequested), and after stopGrace
+// the app finishes and exits anyway.
+func (a *Application) loopStopping() {
+	a.stopping = true
+	if stopGrace > 0 {
+		time.AfterFunc(stopGrace, func() { postMain(a.forceStop) })
+	}
+}
+
+// forceStop finishes the app and exits, should its event loop not have
+// stopped in time.
+func (a *Application) forceStop() {
+	if a.ended {
+		return
+	}
+	a.finish()
+	os.Exit(0)
 }
 
 // Exit terminates the process immediately with the given exit code,
@@ -210,6 +274,7 @@ func (a *Application) prepareQuit() bool {
 // finish runs once after the event loop has stopped.
 func (a *Application) finish() {
 	a.finished.Do(func() {
+		a.ended = true
 		stopNativeCalls()
 		stopFileWatches()
 		clipboardStopped = true
@@ -368,6 +433,21 @@ func (a *Application) SetActivationPolicy(p ActivationPolicy) {
 	}
 }
 
+// SetDMABUFRenderer sets whether WebKitGTK may draw web pages with its
+// DMA-BUF renderer on Linux, which MyGo turns off by default because it
+// shows blank windows on NVIDIA's driver, in virtual machines and in
+// containers. Where it works, pages scroll at several times the frame
+// rate with less CPU. WEBKIT_DISABLE_DMABUF_RENDERER, set by the user,
+// overrides it. Call it before Run; other systems ignore it.
+func (a *Application) SetDMABUFRenderer(r DMABUFRenderer) {
+	if r == DMABUFRendererAuto {
+		linkDMABUFProbe()
+	}
+	a.mu.Lock()
+	a.dmabuf = r
+	a.mu.Unlock()
+}
+
 // Focus brings the application to the foreground.
 func (a *Application) Focus() {
 	needsApp("App.Focus")
@@ -502,14 +582,17 @@ func (a *Application) OnWindowCreated(fn func(w *Window)) (off func()) {
 	return a.onWindowCreated.add(fn, false)
 }
 
-// ClearBrowsingData deletes what the app's pages stored: cookies, local
-// and session storage, IndexedDB, service workers and caches, e.g. when the
-// user signs out. Open pages keep what they hold in memory until they are
-// reloaded.
+// ClearBrowsingData deletes what the app's pages stored in the default
+// session: cookies, local and session storage, IndexedDB, service workers
+// and caches, e.g. when the user signs out. Open pages keep what they hold
+// in memory until they are reloaded. Session.ClearData clears the data of
+// other sessions, or some kinds of data.
 func (a *Application) ClearBrowsingData() error {
 	needsApp("App.ClearBrowsingData")
 	ch := make(chan error, 1)
-	onMain(func() { backend().App().ClearBrowsingData(func(err error) { deliver(ch, err) }) })
+	onMain(func() {
+		backend().App().ClearBrowsingData(nil, platform.SiteDataAll, func(err error) { deliver(ch, err) })
+	})
 	return await(ch)
 }
 
@@ -582,10 +665,21 @@ func (d *Dock) Show() { App.SetActivationPolicy(ActivationPolicyRegular) }
 // appHandler receives application events from the backend.
 type appHandler struct{}
 
-func (appHandler) Ready()              { App.handleReady() }
-func (appHandler) Dispatch()           { loop.drain() }
-func (appHandler) QuitRequested() bool { return App.prepareQuit() }
-func (appHandler) Terminating()        { App.finish() }
+func (appHandler) Ready()    { App.handleReady() }
+func (appHandler) Dispatch() { loop.drain() }
+func (appHandler) QuitRequested() bool {
+	if App.stopping {
+		// The loop goes on although asked to stop: ask again.
+		return true
+	}
+	if !App.prepareQuit() {
+		return false
+	}
+	// The backend stops its loop itself.
+	App.loopStopping()
+	return true
+}
+func (appHandler) Terminating() { App.finish() }
 func (appHandler) Activated(visible bool) {
 	fire1(&App.onActivate, visible)
 }

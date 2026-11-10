@@ -45,6 +45,11 @@ type Backend struct {
 	stepping       int
 	quitAfterModal bool
 
+	// orderingChildren tells that child windows are being ordered above
+	// their parent, or out with it (child_window.go): what AppKit tells
+	// of their ordering then orders nothing more.
+	orderingChildren bool
+
 	dockProgress dockProgress
 	// openedAtLogin records whether the system started the app as a login
 	// item (WasOpenedAtLogin).
@@ -486,14 +491,8 @@ func (a appController) Package() (platform.PackageInfo, bool) {
 	return info, ok
 }
 
-func (a appController) ClearBrowsingData(done func(error)) {
-	withPool(func() {
-		store := send(class("WKWebsiteDataStore"), "defaultDataStore")
-		types := send(class("WKWebsiteDataStore"), "allWebsiteDataTypes")
-		blk := newBlock(func(_ objc.Block) { a.b.runOnMain(func() { done(nil) }) })
-		send(store, "removeDataOfTypes:modifiedSince:completionHandler:", uintptr(types), uintptr(send(class("NSDate"), "distantPast")), uintptr(blk))
-		blk.Release()
-	})
+func (a appController) ClearBrowsingData(store platform.DataStore, types platform.SiteData, done func(error)) {
+	a.removeData(store, types, done)
 }
 
 // AddRecentDocument and ClearRecentDocuments use the shared document

@@ -2677,3 +2677,115 @@ func ClipboardReadEmpty() string { return In(i18n.Locale()).ClipboardReadEmpty()
 func (msgs Messages) ClipboardReadEmpty() string {
 	return Catalog.Format(msgs.locale, "clipboardReadEmpty", nil)
 }
+
+// DecimalInvalid says "Enter a number"
+// in the language the app shows.
+//
+// What a decimal input says of text that is not a number, as "1,2x".
+func DecimalInvalid() string { return In(i18n.Locale()).DecimalInvalid() }
+
+// DecimalInvalid says "Enter a number"
+// in the language of msgs.
+//
+// What a decimal input says of text that is not a number, as "1,2x".
+func (msgs Messages) DecimalInvalid() string {
+	return Catalog.Format(msgs.locale, "decimalInvalid", nil)
+}
+
+// DecimalWhole says "Enter a whole number"
+// in the language the app shows.
+//
+// What a decimal input whose step has no decimals says of a number with
+// some.
+func DecimalWhole() string { return In(i18n.Locale()).DecimalWhole() }
+
+// DecimalWhole says "Enter a whole number"
+// in the language of msgs.
+//
+// What a decimal input whose step has no decimals says of a number with
+// some.
+func (msgs Messages) DecimalWhole() string {
+	return Catalog.Format(msgs.locale, "decimalWhole", nil)
+}
+
+// DecimalPlaces says "{n, plural, one {Use at most # decimal place} other {Use at most # decimal places}}"
+// in the language the app shows.
+//
+// What a decimal input says of a number with more decimals than its step
+// has, which it does not round.
+func DecimalPlaces(n int) string { return In(i18n.Locale()).DecimalPlaces(n) }
+
+// DecimalPlaces says "{n, plural, one {Use at most # decimal place} other {Use at most # decimal places}}"
+// in the language of msgs.
+//
+// What a decimal input says of a number with more decimals than its step
+// has, which it does not round.
+func (msgs Messages) DecimalPlaces(n int) string {
+	return Catalog.Format(msgs.locale, "decimalPlaces", map[string]any{"n": n})
+}
+
+// DecimalAtLeast says "Enter {min} or more"
+// in the language the app shows.
+//
+// What a decimal input says of a number below its lowest, as "Enter 0.00 or
+// more".
+func DecimalAtLeast(min string) string { return In(i18n.Locale()).DecimalAtLeast(min) }
+
+// DecimalAtLeast says "Enter {min} or more"
+// in the language of msgs.
+//
+// What a decimal input says of a number below its lowest, as "Enter 0.00 or
+// more".
+func (msgs Messages) DecimalAtLeast(min string) string {
+	return Catalog.Format(msgs.locale, "decimalAtLeast", map[string]any{"min": min})
+}
+
+// DecimalAtMost says "Enter {max} or less"
+// in the language the app shows.
+//
+// What a decimal input says of a number above its highest, as "Enter 100.00
+// or less".
+func DecimalAtMost(max string) string { return In(i18n.Locale()).DecimalAtMost(max) }
+
+// DecimalAtMost says "Enter {max} or less"
+// in the language of msgs.
+//
+// What a decimal input says of a number above its highest, as "Enter 100.00
+// or less".
+func (msgs Messages) DecimalAtMost(max string) string {
+	return Catalog.Format(msgs.locale, "decimalAtMost", map[string]any{"max": max})
+}
+
+// DesktopShortcut says "Create a desktop shortcut"
+// in the language the app shows.
+//
+// Labels the check box on the finish page of an app's Windows installer,
+// which puts a shortcut to the app on the desktop.
+func DesktopShortcut() string { return In(i18n.Locale()).DesktopShortcut() }
+
+// DesktopShortcut says "Create a desktop shortcut"
+// in the language of msgs.
+//
+// Labels the check box on the finish page of an app's Windows installer,
+// which puts a shortcut to the app on the desktop.
+func (msgs Messages) DesktopShortcut() string {
+	return Catalog.Format(msgs.locale, "desktopShortcut", nil)
+}
+
+// Selected says "selected"
+// in the language the app shows.
+//
+// What VoiceOver reads after the name of a cell of a grid that is chosen,
+// as a calendar's day picked, where it reads no chosen state of cells
+// itself.
+func Selected() string { return In(i18n.Locale()).Selected() }
+
+// Selected says "selected"
+// in the language of msgs.
+//
+// What VoiceOver reads after the name of a cell of a grid that is chosen,
+// as a calendar's day picked, where it reads no chosen state of cells
+// itself.
+func (msgs Messages) Selected() string {
+	return Catalog.Format(msgs.locale, "selected", nil)
+}

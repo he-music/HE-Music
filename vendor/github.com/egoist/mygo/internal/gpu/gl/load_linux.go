@@ -183,6 +183,7 @@ func load() error {
 			errLoad = fmt.Errorf("gl: libepoxy lacks %s", strings.Join(missing, ", "))
 			return
 		}
+		direct(lib)
 		// GDK is loaded in apps, where its context tells when GTK
 		// realized the area again; tests make contexts of their own.
 		if sym, err := purego.Dlsym(purego.RTLD_DEFAULT, "gdk_gl_context_get_current"); err == nil && sym != 0 {
@@ -202,6 +203,65 @@ func load() error {
 		}
 	})
 	return errLoad
+}
+
+// direct calls the GL functions a frame calls for each batch with
+// purego.SyscallN, through libepoxy's pointer to each: a function
+// RegisterFunc made builds its arguments with reflection on every call,
+// which cost more than the call itself, and a frame makes hundreds.
+func direct(lib uintptr) {
+	ptr := func(name string) *uintptr {
+		sym, err := purego.Dlsym(lib, "epoxy_"+name)
+		if err != nil || sym == 0 {
+			return nil
+		}
+		return *(**uintptr)(unsafe.Pointer(&sym))
+	}
+	b := func(v bool) uintptr {
+		if v {
+			return 1
+		}
+		return 0
+	}
+	if p := ptr("glVertexAttribPointer"); p != nil {
+		glVertexAttribPointer = func(index uint32, size int32, typ uint32, normalized bool, stride int32, offset uintptr) {
+			purego.SyscallN(*p, uintptr(index), uintptr(size), uintptr(typ), b(normalized), uintptr(stride), offset)
+		}
+	}
+	if p := ptr("glScissor"); p != nil {
+		glScissor = func(x, y, w, h int32) { purego.SyscallN(*p, uintptr(x), uintptr(y), uintptr(w), uintptr(h)) }
+	}
+	if p := ptr("glDrawArraysInstanced"); p != nil {
+		glDrawArraysInstanced = func(mode uint32, first, count, instances int32) {
+			purego.SyscallN(*p, uintptr(mode), uintptr(first), uintptr(count), uintptr(instances))
+		}
+	}
+	if p := ptr("glActiveTexture"); p != nil {
+		glActiveTexture = func(unit uint32) { purego.SyscallN(*p, uintptr(unit)) }
+	}
+	if p := ptr("glBindTexture"); p != nil {
+		glBindTexture = func(target, texture uint32) { purego.SyscallN(*p, uintptr(target), uintptr(texture)) }
+	}
+	if p := ptr("glUseProgram"); p != nil {
+		glUseProgram = func(program uint32) { purego.SyscallN(*p, uintptr(program)) }
+	}
+	if p := ptr("glBindBuffer"); p != nil {
+		glBindBuffer = func(target, buffer uint32) { purego.SyscallN(*p, uintptr(target), uintptr(buffer)) }
+	}
+	if p := ptr("glEnable"); p != nil {
+		glEnable = func(c uint32) { purego.SyscallN(*p, uintptr(c)) }
+	}
+	if p := ptr("glDisable"); p != nil {
+		glDisable = func(c uint32) { purego.SyscallN(*p, uintptr(c)) }
+	}
+	if p := ptr("glBlendFunc"); p != nil {
+		glBlendFunc = func(src, dst uint32) { purego.SyscallN(*p, uintptr(src), uintptr(dst)) }
+	}
+	if p := ptr("glBlendFuncSeparate"); p != nil {
+		glBlendFuncSeparate = func(srcRGB, dstRGB, srcAlpha, dstAlpha uint32) {
+			purego.SyscallN(*p, uintptr(srcRGB), uintptr(dstRGB), uintptr(srcAlpha), uintptr(dstAlpha))
+		}
+	}
 }
 
 // MakeAreaCurrent makes the context of a GtkGLArea current again, with the

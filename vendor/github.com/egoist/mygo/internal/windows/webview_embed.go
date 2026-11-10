@@ -3,6 +3,7 @@
 package windows
 
 import (
+	"cmp"
 	"math"
 	"slices"
 	"unsafe"
@@ -64,10 +65,21 @@ const (
 	moveFocusNext     = 1
 	moveFocusPrevious = 2
 
-	dcompVisualSetTransform = 8  // IDCompositionVisual: the overload taking a D2D_MATRIX_3X2_F
-	dcompVisualSetClip      = 14 // the overload taking a D2D_RECT_F
-	dcompVisualAddVisual    = 16
-	dcompVisualRemoveVisual = 17
+	dcompVisualSetTransform     = 8  // IDCompositionVisual: the overload taking a D2D_MATRIX_3X2_F
+	dcompVisualSetClipObject    = 13 // the overload taking an IDCompositionClip
+	dcompVisualSetClip          = 14 // the overload taking a D2D_RECT_F
+	dcompVisualAddVisual        = 16
+	dcompVisualRemoveVisual     = 17
+	dcompDevCreateRectangleClip = 24 // IDCompositionDevice
+
+	// IDCompositionRectangleClip: the overloads taking a float, each after
+	// the one taking an animation; the corners' radii, x then y, from the
+	// top-left, then the top-right, the bottom-left and the bottom-right.
+	rectClipSetLeft          = 4
+	rectClipSetTop           = 6
+	rectClipSetRight         = 8
+	rectClipSetBottom        = 10
+	rectClipSetTopLeftRadius = 12
 
 	mouseLeave = 0x02A3 // COREWEBVIEW2_MOUSE_EVENT_KIND_LEAVE, WM_MOUSELEAVE
 )
@@ -119,9 +131,50 @@ func (l *webLayer) free() {
 }
 
 // translate moves a visual by x, y pixels.
-func translate(visual uintptr, x, y float32) {
-	m := [6]float32{1, 0, 0, 1, x, y} // D2D_MATRIX_3X2_F
+func translate(visual uintptr, x, y float32) { place(visual, x, y, 1, 1) }
+
+// place scales a visual by sx, sy, then moves it by x, y pixels.
+func place(visual uintptr, x, y, sx, sy float32) {
+	m := [6]float32{sx, 0, 0, sy, x, y} // D2D_MATRIX_3X2_F
 	comCall(visual, dcompVisualSetTransform, uintptr(unsafe.Pointer(&m)))
+}
+
+// roundCorners cuts the web view w's visual to the rectangle from 0, 0 to
+// width, height pixels, its corners of radii from the top-left clockwise,
+// or takes the cut away without radii.
+func (w *window) roundCorners(l *webLayer, width, height float32, radii [4]float32) {
+	if radii == [4]float32{} {
+		if w.corners != 0 {
+			comCall(w.webVis, dcompVisualSetClipObject, 0)
+			release(w.corners)
+			w.corners = 0
+		}
+		return
+	}
+	if w.corners == 0 {
+		if failed(comCall(l.dcomp, dcompDevCreateRectangleClip, uintptr(unsafe.Pointer(&w.corners)))) {
+			w.corners = 0
+			return
+		}
+		comCall(w.webVis, dcompVisualSetClipObject, w.corners)
+	}
+	c := w.corners
+	comCallFloat32(c, rectClipSetLeft, 0)
+	comCallFloat32(c, rectClipSetTop, 0)
+	comCallFloat32(c, rectClipSetRight, width)
+	comCallFloat32(c, rectClipSetBottom, height)
+	// The setters' order goes around by the bottom-left first.
+	for i, r := range [4]float32{radii[0], radii[1], radii[3], radii[2]} {
+		comCallFloat32(c, rectClipSetTopLeftRadius+4*i, r)   // x
+		comCallFloat32(c, rectClipSetTopLeftRadius+4*i+2, r) // y
+	}
+}
+
+// toPage converts a point of the surface, in pixels, to the web view's,
+// as its composition controller takes them.
+func (w *window) toPage(x, y int32) (int32, int32) {
+	sx, sy := cmp.Or(w.pageScale[0], 1), cmp.Or(w.pageScale[1], 1)
+	return int32(math.Round(float64((float32(x) - w.pageAt[0]) / sx))), int32(math.Round(float64((float32(y) - w.pageAt[1]) / sy)))
 }
 
 // clipVisual clips a visual to its rectangle from 0, 0 to w, h pixels.
@@ -132,7 +185,7 @@ func clipVisual(visual uintptr, w, h float32) {
 
 func (s *surface) NewWebView(o *platform.WindowOptions, h platform.WindowHandler) (platform.WebView, error) {
 	b := s.w.b
-	if err := b.startEnvironment(); err != nil {
+	if err := b.startEnvironment(o); err != nil {
 		return nil, err
 	}
 	if s.layer == nil {
@@ -158,6 +211,8 @@ func (s *surface) NewWebView(o *platform.WindowOptions, h platform.WindowHandler
 		c := *o.BackgroundColor
 		v.bg = &c
 	}
+	// Only apps with web views in native UI link the script of their keys.
+	forwardKeys = (*window).forwardUnhandledKeys
 	v.clipVis, v.webVis = s.layer.visual(), s.layer.visual()
 	comCall(v.clipVis, dcompVisualAddVisual, v.webVis, 1, 0)
 	s.w.webViews = append(s.w.webViews, v)
@@ -168,12 +223,7 @@ func (s *surface) NewWebView(o *platform.WindowOptions, h platform.WindowHandler
 // createEmbedded asks WebView2 for the composition controller of a web
 // view in a window of native UI, through handler.
 func (w *window) createEmbedded(handler uintptr) uintptr {
-	env3 := queryInterface(w.b.env, &iidICoreWebView2Environment3)
-	if env3 == 0 {
-		return 0x80004002 // E_NOINTERFACE: a runtime older than visual hosting
-	}
-	defer release(env3)
-	return comCall(env3, env3CreateCompositionController, w.host.surface.hwnd, handler)
+	return w.b.createController(storeOf(w.opts.DataStore), w.host.surface.hwnd, true, handler)
 }
 
 // setUpEmbedded connects a web view's composition controller to its
@@ -256,9 +306,7 @@ func (w *window) pagePoint(pt uintptr) uintptr {
 	s := w.host.surface
 	p := point{int32(uint32(pt)), int32(uint32(pt >> 32))}
 	procScreenToClient.Call(s.hwnd, uintptr(unsafe.Pointer(&p)))
-	dpi := float64(s.dpi())
-	p.X -= int32(math.Round(w.frame.X * dpi / 96))
-	p.Y -= int32(math.Round(w.frame.Y * dpi / 96))
+	p.X, p.Y = w.toPage(p.X, p.Y)
 	return uintptr(uint32(p.X)) | uintptr(uint32(p.Y))<<32
 }
 
@@ -273,7 +321,8 @@ func (s *surface) PlaceWebViews(views []platform.WebViewPlacement) {
 	var shown []*window
 	for _, p := range views {
 		if v, ok := p.WebView.(*window); ok && v.host == s.w && !v.closed {
-			v.frame, v.clip, v.shown = p.Frame, p.Clip, true
+			v.placement, v.shown = p, true
+			v.placement.Covers = nil
 			shown = append(shown, v)
 		}
 	}
@@ -306,29 +355,47 @@ func (s *surface) PlaceWebViews(views []platform.WebViewPlacement) {
 const dcompVisualRemoveAllVisuals = 18
 
 // placeEmbedded shows a web view where the content last showed it, or
-// hides it, once it has its controller.
+// hides it, once it has its controller. It stays hidden while its host
+// is.
 func (w *window) placeEmbedded() {
 	s := w.host.surface
 	if s == nil {
 		return
 	}
-	dpi := s.dpi()
-	px := func(v float64) float32 { return float32(math.Round(v * float64(dpi) / 96)) }
-	cx, cy := px(w.clip.X), px(w.clip.Y)
-	fx, fy := px(w.frame.X), px(w.frame.Y)
-	clipVisual(w.clipVis, px(w.clip.X+w.clip.W)-cx, px(w.clip.Y+w.clip.H)-cy)
+	k := float64(s.dpi()) / 96
+	px := func(v float64) float32 { return float32(math.Round(v * k)) }
+	f, c := w.placement.Frame, w.placement.Clip
+	cx, cy := px(c.X), px(c.Y)
+	fx, fy := px(f.X), px(f.Y)
+	clipVisual(w.clipVis, px(c.X+c.W)-cx, px(c.Y+c.H)-cy)
 	translate(w.clipVis, cx, cy)
-	// The page draws from its visual's origin; its bounds, in the
-	// surface's pixels, place what WebView2 shows in windows of its own,
-	// as a select's options.
-	translate(w.webVis, fx-cx, fy-cy)
+	// The page lays out at its size, which its visual shows scaled to its
+	// frame, if a transform of the content scales it.
+	width, height := px(f.X+f.W)-fx, px(f.Y+f.H)-fy
+	at, scale := [2]float32{fx, fy}, [2]float32{1, 1}
+	if sx, sy := w.placement.Scale(); sx != 1 || sy != 1 {
+		pw, ph := w.placement.Size()
+		width, height = max(px(pw), 1), max(px(ph), 1)
+		at = [2]float32{float32(f.X * k), float32(f.Y * k)}
+		scale = [2]float32{float32(f.W*k) / width, float32(f.H*k) / height}
+	}
+	w.pageAt, w.pageScale = at, scale
+	// The page draws from its visual's origin.
+	place(w.webVis, at[0]-cx, at[1]-cy, scale[0], scale[1])
+	var radii [4]float32
+	for i, r := range w.placement.Radii {
+		radii[i] = float32(r * k)
+	}
+	w.roundCorners(s.layer, width, height, radii)
 	if w.controller == 0 {
 		return
 	}
 	if w.shown {
-		putBounds(w.controller, rect{int32(fx), int32(fy), int32(px(w.frame.X + w.frame.W)), int32(px(w.frame.Y + w.frame.H))})
+		// Its bounds, in the surface's pixels, place what WebView2 shows
+		// in windows of its own, as a select's options.
+		putBounds(w.controller, rect{int32(fx), int32(fy), int32(fx + width), int32(fy + height)})
 	}
-	comCall(w.controller, ctlPutIsVisible, boolArg(w.shown))
+	comCall(w.controller, ctlPutIsVisible, boolArg(w.shown && !w.host.hidden))
 }
 
 // webViewAt returns the web view that takes the pointer at x, y in the
@@ -347,7 +414,10 @@ func (s *surface) webViewAt(x, y float64) *window {
 // forwardMouse sends a mouse message of the surface on to the web view
 // under the pointer, or that took the press, and reports whether it did:
 // the content then hears only that the pointer moved over it, or that a
-// button went down on it.
+// button went down on it. The wheel over a web view with
+// ScrollToContainer stays the content's, which scrolls as it does over
+// its own elements; a pinch still goes to the page, as on the other
+// platforms.
 func (s *surface) forwardMouse(m uint32, wp, lp uintptr) bool {
 	if s.layer == nil {
 		return false
@@ -369,6 +439,9 @@ func (s *surface) forwardMouse(m uint32, wp, lp uintptr) bool {
 	}
 	if v == nil || v.closed {
 		return false
+	}
+	if (m == wmMouseWheel || m == wmMouseHWheel) && v.opts.ScrollToContainer && !pinching(m, wp) {
+		return false // the content around the web view scrolls
 	}
 	var data uint32
 	keys := uintptr(loword(wp))
@@ -408,9 +481,8 @@ func (s *surface) forwardMouse(m uint32, wp, lp uintptr) bool {
 			v.focusWebView()
 		}
 	}
-	dpi := s.dpi()
-	fx, fy := int32(math.Round(v.frame.X*float64(dpi)/96)), int32(math.Round(v.frame.Y*float64(dpi)/96))
-	local := uintptr(uint32(pt.X-fx)) | uintptr(uint32(pt.Y-fy))<<32
+	lx, ly := v.toPage(pt.X, pt.Y)
+	local := uintptr(uint32(lx)) | uintptr(uint32(ly))<<32
 	comCall(v.comp, compSendMouseInput, uintptr(m), keys, uintptr(data), local)
 	switch m {
 	case wmLButtonUp, wmRButtonUp, wmMButtonUp, wmXButtonUp:
@@ -420,6 +492,12 @@ func (s *surface) forwardMouse(m uint32, wp, lp uintptr) bool {
 		}
 	}
 	return true
+}
+
+// pinching reports whether a wheel message is a touchpad's pinch, which
+// Windows sends as scrolling by less than a notch with Ctrl held.
+func pinching(m uint32, wp uintptr) bool {
+	return m == wmMouseWheel && int16(hiword(wp))%120 != 0 && loword(wp)&0x0008 != 0 // MK_CONTROL
 }
 
 // mouseLeft tells the web view the pointer was over that it left.
@@ -510,9 +588,10 @@ func (w *window) closeWebView() {
 			s.layer.commit()
 		}
 	}
+	release(w.corners)
 	release(w.webVis)
 	release(w.clipVis)
-	w.webVis, w.clipVis = 0, 0
+	w.corners, w.webVis, w.clipVis = 0, 0, 0
 	h.webViews = slices.DeleteFunc(h.webViews, func(v *window) bool { return v == w })
 }
 

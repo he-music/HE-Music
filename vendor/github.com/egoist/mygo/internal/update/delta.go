@@ -86,7 +86,9 @@ func WriteDelta(w io.Writer, from, to, oldDir, newDir string, entries []string) 
 		if err != nil || !d.Type().IsRegular() {
 			return err
 		}
-		if relPath(oldDir, p) == stapledTicket {
+		// The FileList too is included whole: the updater rewrites the
+		// installed app's, which may then differ from the archive's.
+		if rel := relPath(oldDir, p); rel == stapledTicket || rel == FileList {
 			return nil
 		}
 		f, err := os.Open(p)
@@ -323,6 +325,9 @@ func applyFile(e deltaEntry, data *io.SectionReader, oldRoot, newRoot *os.Root) 
 	if err == errDamagedPatch || err == errTooLong || err == nil && (out.n != 0 || hex.EncodeToString(h.Sum(nil)) != e.SHA256) {
 		// Most likely, the app is not the one the delta was made from.
 		return fmt.Errorf("the delta update made %s wrong", e.Path)
+	}
+	if err == nil {
+		err = newRoot.Chmod(filepath.FromSlash(e.Path), fs.FileMode(e.Mode).Perm())
 	}
 	return err
 }

@@ -5,7 +5,7 @@ go 1.27.3
 require (
 	github.com/bmatcuk/doublestar/v4 v4.10.4
 	github.com/ebitengine/purego v0.11.1
-	github.com/egoist/mygo v0.6.5-0.20261026063203-07ebe19ac0dc
+	github.com/egoist/mygo v0.8.3
 	github.com/tommyo123/mtag v1.0.2
 	golang.org/x/crypto v0.57.0
 	golang.org/x/sys v0.49.0

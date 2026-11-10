@@ -770,10 +770,12 @@ func (s *devSession) launch(exe string) (*devProcess, error) {
 		// What the app printed last, as a panic, comes before what mygo
 		// says of its exit, unless processes it started hold its output.
 		timeout := time.After(250 * time.Millisecond)
+	drain:
 		for _, copied := range []<-chan struct{}{outDone, errDone} {
 			select {
 			case <-copied:
 			case <-timeout:
+				break drain
 			}
 		}
 		close(p.done)

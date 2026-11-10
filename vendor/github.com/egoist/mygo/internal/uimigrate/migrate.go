@@ -29,13 +29,20 @@ type migration struct {
 	structs map[string]map[string]string
 	objects map[*ast.Object]string
 	returns map[string][]typeFact
-	notes   []string
+	aliases map[string]string
+	// declared holds the objects whose type is written in their declaration;
+	// an assignment never overrides it.
+	declared map[*ast.Object]bool
+	notes    []string
 }
 
 type typeFact struct{ kind, object string }
 type packageFacts struct {
 	structs map[string]map[string]string
 	returns map[string][]typeFact
+	// aliases maps the package's aliases of UI types, as type E =
+	// *ui.Element, to the kind they stand for.
+	aliases map[string]string
 }
 
 // File transforms one file. Files adds declarations from sibling package files.
@@ -55,6 +62,8 @@ func Files(sources map[string][]byte) (map[string]Result, error) {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	// Aliases of UI types first, as declarations in any file of the
+	// package may name them.
 	for _, name := range names {
 		f, err := parser.ParseFile(fs, name, sources[name], parser.ParseComments)
 		if err != nil {
@@ -64,9 +73,22 @@ func Files(sources map[string][]byte) (map[string]Result, error) {
 		group := filepath.Dir(name) + "\x00" + f.Name.Name
 		facts := groups[group]
 		if facts == nil {
-			facts = &packageFacts{structs: map[string]map[string]string{}, returns: map[string][]typeFact{}}
+			facts = &packageFacts{structs: map[string]map[string]string{}, returns: map[string][]typeFact{}, aliases: map[string]string{}}
 			groups[group] = facts
 		}
+		m := newMigration(importAlias(f), facts)
+		ast.Inspect(f, func(node ast.Node) bool {
+			if n, ok := node.(*ast.TypeSpec); ok && n.Assign.IsValid() {
+				if kind := m.uiType(n.Type); kind != "" {
+					facts.aliases[n.Name.Name] = kind
+				}
+			}
+			return true
+		})
+	}
+	for _, name := range names {
+		f := files[name]
+		facts := groups[filepath.Dir(name)+"\x00"+f.Name.Name]
 		m := newMigration(importAlias(f), facts)
 		ast.Inspect(f, func(node ast.Node) bool {
 			switch n := node.(type) {
@@ -139,7 +161,7 @@ func importAlias(f *ast.File) string {
 	return ""
 }
 func newMigration(alias string, facts *packageFacts) *migration {
-	return &migration{alias: alias, kinds: map[*ast.Object]string{}, objects: map[*ast.Object]string{}, structs: facts.structs, returns: facts.returns}
+	return &migration{alias: alias, kinds: map[*ast.Object]string{}, objects: map[*ast.Object]string{}, declared: map[*ast.Object]bool{}, structs: facts.structs, returns: facts.returns, aliases: facts.aliases}
 }
 func (m *migration) fact(e ast.Expr) typeFact {
 	if kind := m.uiType(e); kind != "" {
@@ -149,6 +171,9 @@ func (m *migration) fact(e ast.Expr) typeFact {
 		e = star.X
 	}
 	if name, ok := e.(*ast.Ident); ok {
+		if kind := m.aliases[name.Name]; kind != "" {
+			return typeFact{kind: kind}
+		}
 		return typeFact{object: name.Name}
 	}
 	return typeFact{}
@@ -172,7 +197,7 @@ func (m *migration) expressionFact(e ast.Expr) typeFact {
 	return typeFact{}
 }
 func (m *migration) remember(object *ast.Object, fact typeFact) {
-	if object == nil {
+	if object == nil || m.declared[object] {
 		return
 	}
 	if fact.kind != "" {
@@ -181,6 +206,15 @@ func (m *migration) remember(object *ast.Object, fact typeFact) {
 	if fact.object != "" {
 		m.objects[object] = fact.object
 	}
+}
+
+// declare records the type written in an object's declaration.
+func (m *migration) declare(object *ast.Object, typ ast.Expr) {
+	if object == nil || typ == nil {
+		return
+	}
+	m.remember(object, m.fact(typ))
+	m.declared[object] = true
 }
 
 func (m *migration) uiType(e ast.Expr) string {
@@ -195,12 +229,7 @@ func (m *migration) uiType(e ast.Expr) string {
 	}
 	if s, ok := e.(*ast.SelectorExpr); ok {
 		if p, ok := s.X.(*ast.Ident); ok && p.Name == m.alias {
-			switch s.Sel.Name {
-			case "Context":
-				return "Context"
-			case "Element":
-				return "Element"
-			case "SelectParts", "ComboboxParts", "TabsParts", "CollapsibleParts", "SegmentedParts", "ToastParts":
+			if s.Sel.Name == "Context" || s.Sel.Name == "Element" || uiParts[s.Sel.Name] {
 				return s.Sel.Name
 			}
 		}
@@ -229,28 +258,12 @@ func (m *migration) collect(f *ast.File) {
 				m.structs[n.Name.Name] = fields
 			}
 		case *ast.Field:
-			k := m.uiType(n.Type)
 			for _, id := range n.Names {
-				if k != "" && id.Obj != nil {
-					m.kinds[id.Obj] = k
-				}
-				typ := n.Type
-				if s, ok := typ.(*ast.StarExpr); ok {
-					typ = s.X
-				}
-				if name, ok := typ.(*ast.Ident); ok && id.Obj != nil {
-					m.objects[id.Obj] = name.Name
-				}
+				m.declare(id.Obj, n.Type)
 			}
 		case *ast.ValueSpec:
-			k := m.uiType(n.Type)
 			for _, id := range n.Names {
-				m.remember(id.Obj, m.fact(n.Type))
-			}
-			for _, id := range n.Names {
-				if k != "" && id.Obj != nil {
-					m.kinds[id.Obj] = k
-				}
+				m.declare(id.Obj, n.Type)
 			}
 		}
 		return true
@@ -273,29 +286,25 @@ func (m *migration) collect(f *ast.File) {
 						}
 					}
 				}
-				for i, lhs := range a.Lhs {
-					if i >= len(a.Rhs) {
-						break
-					}
-					if id, ok := lhs.(*ast.Ident); ok {
-						m.remember(id.Obj, m.expressionFact(a.Rhs[i]))
+				// The variables of a multi-valued call take its results, which
+				// are never the call's single value: only pair equal sides.
+				if len(a.Lhs) == len(a.Rhs) {
+					for i, lhs := range a.Lhs {
+						if id, ok := lhs.(*ast.Ident); ok {
+							m.remember(id.Obj, m.expressionFact(a.Rhs[i]))
+						}
 					}
 				}
 			}
-			if v, ok := node.(*ast.ValueSpec); ok {
+			if v, ok := node.(*ast.ValueSpec); ok && len(v.Names) == len(v.Values) {
 				for i, name := range v.Names {
-					if i < len(v.Values) {
-						m.remember(name.Obj, m.expressionFact(v.Values[i]))
-					}
+					m.remember(name.Obj, m.expressionFact(v.Values[i]))
 				}
 			}
 			return true
 		})
 	}
 }
-
-var queries = map[string]bool{"Clicked": true, "Clicks": true, "Changed": true, "Submitted": true, "Hovered": true, "Pressed": true, "Focused": true, "FocusVisible": true, "FocusWithin": true, "Valid": true, "Shortcut": true, "ID": true, "Bounds": true, "IsDisabled": true, "PointerPosition": true, "Dragged": true, "TextSelection": true, "Composing": true, "DroppedFiles": true, "FileDragOver": true, "Dragging": true, "ClickModifiers": true, "DoubleClicked": true, "RightClicked": true, "PressedOutside": true, "Highlighted": true, "Loop": true, "Animate": true, "AnimateWith": true}
-var nonElements = map[string]bool{"View": true, "NewTester": true, "Render": true, "Local": true, "RGB": true, "RGBA": true, "Hex": true, "LightTheme": true, "DarkTheme": true, "ParseSVG": true, "MustParseSVG": true, "NewBitmap": true, "DecodeBitmap": true, "Shape": true, "ShapeText": true, "ShapeRichText": true, "NewRouter": true, "NewTextBuffer": true, "Fixed": true, "Fr": true, "FitContent": true, "Overlay": true, "Drop": true, "DragOver": true, "DropData": true, "DataDragOver": true, "RegisterFont": true, "AlertDialog": true, "FocusedValue": true}
 
 func (m *migration) kind(e ast.Expr) string {
 	switch e := e.(type) {
@@ -323,13 +332,11 @@ func (m *migration) kind(e ast.Expr) string {
 			fn = ix.X
 		}
 		if s, ok := fn.(*ast.SelectorExpr); ok {
-			if p, ok := s.X.(*ast.Ident); ok && p.Name == m.alias && !nonElements[s.Sel.Name] {
-				if strings.HasSuffix(s.Sel.Name, "Base") && (s.Sel.Name == "SelectBase" || s.Sel.Name == "TabsBase" || s.Sel.Name == "ComboboxBase" || s.Sel.Name == "CollapsibleBase" || s.Sel.Name == "SegmentedBase" || s.Sel.Name == "ToastBase") {
-					return "Parts"
-				}
-				return "Element"
+			// Package ui's signatures decide (uiapi.go).
+			if p, ok := s.X.(*ast.Ident); ok && p.Name == m.alias {
+				return uiResults[s.Sel.Name]
 			}
-			if m.kind(s.X) == "Element" && !queries[s.Sel.Name] {
+			if m.kind(s.X) == "Element" && elementChains[s.Sel.Name] {
 				return "Element"
 			}
 			if m.kind(s.X) == "Context" && s.Sel.Name == "Root" {
@@ -479,33 +486,6 @@ func (v visitor) function(t *ast.FuncType) visitor {
 	return v
 }
 
-func (v visitor) builderCall(call *ast.CallExpr) bool {
-	fn := call.Fun
-	if ix, ok := fn.(*ast.IndexExpr); ok {
-		fn = ix.X
-	}
-	if ix, ok := fn.(*ast.IndexListExpr); ok {
-		fn = ix.X
-	}
-	s, ok := fn.(*ast.SelectorExpr)
-	if !ok {
-		return false
-	}
-	if id, ok := s.X.(*ast.Ident); ok && id.Name == v.m.alias {
-		return !nonElements[s.Sel.Name] || s.Sel.Name == "Overlay" || s.Sel.Name == "View" || s.Sel.Name == "NewTester" || s.Sel.Name == "Render"
-	}
-	switch s.Sel.Name {
-	case "Children", "Rows":
-		return v.m.kind(s.X) == "Element"
-	case "Popup", "Panel":
-		kind := v.m.kind(s.X)
-		return kind == "Parts" || strings.HasSuffix(kind, "Parts")
-	case "View":
-		return len(call.Args) > 0 && v.m.kind(call.Args[0]) == "Context"
-	}
-	return false
-}
-
 func hasFrame(t *ast.FuncType, m *migration) bool {
 	if t.Params != nil {
 		for _, p := range t.Params.List {
@@ -612,7 +592,7 @@ func (m *migration) constructor(e ast.Expr) *ast.CallExpr {
 	if !ok {
 		return nil
 	}
-	if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == m.alias && !nonElements[sel.Sel.Name] {
+	if pkg, ok := sel.X.(*ast.Ident); ok && pkg.Name == m.alias && uiResults[sel.Sel.Name] != "" {
 		return call
 	}
 	return m.constructor(sel.X)

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"slices"
 	"strings"
 	"syscall"
 	"time"
@@ -19,10 +20,37 @@ import (
 
 // TestActivateMenuItem activates an item of a window's menu bar, found by
 // the labels along its path, e.g. TestActivateMenuItem(hwnd, "File", "New").
+// plugins/automation's menu request chooses items with it too.
 func TestActivateMenuItem(hwnd uintptr, path ...string) error {
+	w, cmd, err := menuCommandAt(hwnd, path)
+	if err == nil {
+		theBackend.menuCommand(cmd, w)
+	}
+	return err
+}
+
+// TestMenuItemEnabled reports whether an item of a window's menu bar,
+// found as TestActivateMenuItem finds it, is enabled once its menu opens.
+func TestMenuItemEnabled(hwnd uintptr, path ...string) (bool, error) {
+	_, cmd, err := menuCommandAt(hwnd, path)
+	if err != nil {
+		return false, err
+	}
+	e := theBackend.menus.entries[cmd]
+	procSendMessageW.Call(hwnd, wmInitMenuPopup, e.menu, 0)
+	state, _, _ := procGetMenuState.Call(e.menu, uintptr(cmd), mfByCommand)
+	if uint32(state) == 0xFFFFFFFF {
+		return false, fmt.Errorf("mygo: no state for menu item %q", path[len(path)-1])
+	}
+	return state&mfGrayed == 0, nil
+}
+
+// menuCommandAt finds an item of a window's menu bar by the labels along
+// its path, and returns the window and the item's command.
+func menuCommandAt(hwnd uintptr, path []string) (*window, uint16, error) {
 	w := theBackend.windows[hwnd]
 	if w == nil || w.menu == nil {
-		return fmt.Errorf("mygo: the window has no menu bar")
+		return nil, 0, fmt.Errorf("mygo: the window has no menu bar")
 	}
 	items := w.menu.Items
 	for i, label := range path {
@@ -35,23 +63,29 @@ func TestActivateMenuItem(hwnd uintptr, path ...string) error {
 			if i == len(path)-1 {
 				for cmd, e := range theBackend.menus.entries {
 					if e.uid == it.ID && e.owner == w.owner {
-						theBackend.menuCommand(cmd, w)
-						return nil
+						return w, cmd, nil
 					}
 				}
-				return fmt.Errorf("mygo: menu item %q is not a command", label)
+				return nil, 0, fmt.Errorf("mygo: menu item %q is not a command", label)
 			}
 			if it.Submenu == nil {
-				return fmt.Errorf("mygo: menu %q has no submenu", label)
+				return nil, 0, fmt.Errorf("mygo: menu %q has no submenu", label)
 			}
 			items = it.Submenu.Items
 			break
 		}
 		if !found {
-			return fmt.Errorf("mygo: no menu item %q", label)
+			return nil, 0, fmt.Errorf("mygo: no menu item %q", label)
 		}
 	}
-	return nil
+	return nil, 0, fmt.Errorf("mygo: no menu item")
+}
+
+// TestEditRole runs an edit role, including those the core leaves out of
+// Windows menus, such as pasteAndMatchStyle.
+func TestEditRole(hwnd uintptr, role string) bool {
+	w := theBackend.windows[hwnd]
+	return w != nil && editRole(w, role)
 }
 
 // TestMenuBarShown reports whether a window shows its menu bar.
@@ -232,6 +266,10 @@ func TestComposed(hwnd uintptr) (noRedirect, composed bool) {
 	return w.noRedirect, c != nil && c.comp != nil && c.comp.dev != nil && c.comp.dev == theBackend.comp
 }
 
+// TestCanCompose reports whether DirectComposition is available, which
+// windows without a redirection bitmap need.
+func TestCanCompose() bool { return theBackend.composition() != nil }
+
 // TestLoseComposition takes the DirectComposition device away, as a draw
 // that finds it invalid does, or, with removed, signals that its GPU device
 // was removed. It reports false without a device, or, with removed,
@@ -269,6 +307,16 @@ func TestTopNonClient(hwnd uintptr) (px, want int32) {
 		want = 1
 	}
 	return origin.Y - r.Top, want
+}
+
+// TestFrameExtension returns how far a window's frame extends over the top
+// and the bottom of its client area, -1 for all over.
+func TestFrameExtension(hwnd uintptr) (top, bottom int32) {
+	w := theBackend.windows[hwnd]
+	if w == nil {
+		return 0, 0
+	}
+	return w.glass.Top, w.glass.Bottom
 }
 
 // TestClickSurface clicks (x, y), in DIPs, in a window showing native UI,
@@ -458,6 +506,19 @@ func TestChoosePopupItem(label string) bool {
 	return false
 }
 
+// TestPopupItemEnabled reports whether the item labeled label of a popup
+// menu the main thread shows is enabled, and whether there is one.
+func TestPopupItemEnabled(label string) (enabled, ok bool) {
+	for _, h := range threadPopups() {
+		hmenu, _, _ := procSendMessageW.Call(h, mnGetHMenu, 0, 0)
+		if i := slices.Index(popupLabels(h), label); i >= 0 {
+			state, _, _ := procGetMenuState.Call(hmenu, uintptr(i), mfByPosition)
+			return state&mfGrayed == 0, uint32(state) != 0xFFFFFFFF
+		}
+	}
+	return false, false
+}
+
 const (
 	mnGetHMenu = 0x01E1
 	mfHilite   = 0x0080
@@ -506,6 +567,43 @@ func popupLabels(h uintptr) []string {
 		labels = append(labels, label)
 	}
 	return labels
+}
+
+// PopupItemWidth is how wide an item MyGo draws of a popup menu shows,
+// and how wide it needs to be for all it draws, in pixels.
+type PopupItemWidth struct {
+	Label        string
+	Shown, Needs int32
+}
+
+// TestPopupItemWidths returns the widths of the items MyGo draws of the
+// popup menus the main thread shows for a window, but separators: none
+// where Windows draws them (Windows 10). known is whether MyGo knows,
+// from items drawn, how much Windows widens them at the window's DPI.
+func TestPopupItemWidths(hwnd uintptr) (items []PopupItemWidth, known bool) {
+	getItemInfo := user32.NewProc("GetMenuItemInfoW")
+	getItemRect := user32.NewProc("GetMenuItemRect")
+	dpi := dpiOf(hwnd)
+	for _, h := range threadPopups() {
+		hmenu, _, _ := procSendMessageW.Call(h, mnGetHMenu, 0, 0)
+		n, _, _ := procGetMenuItemCount.Call(hmenu)
+		for i := range int(int32(n)) {
+			mi := menuItemInfo{Mask: miimData}
+			mi.Size = uint32(unsafe.Sizeof(mi))
+			getItemInfo.Call(hmenu, uintptr(i), 1, uintptr(unsafe.Pointer(&mi)))
+			l := theBackend.menus.looks[mi.ItemData]
+			if l == nil || l.separator {
+				continue
+			}
+			var r rect
+			if ok, _, _ := getItemRect.Call(0, hmenu, uintptr(i), uintptr(unsafe.Pointer(&r))); ok == 0 {
+				continue
+			}
+			items = append(items, PopupItemWidth{l.label, r.Right - r.Left, theBackend.itemWidth(l, dpi)})
+		}
+	}
+	_, known = theBackend.menuExtra[dpi]
+	return items, known
 }
 
 var (
@@ -647,6 +745,50 @@ func TestBrowserAcceleratorKeys(hwnd uintptr) (on, ok bool) {
 	return v != 0, true
 }
 
+// TestPageGestures reports whether a swipe navigates and a pinch zooms
+// the page of a window, or with webView 0 or more, of its web view of that
+// index, as its WebView2 settings say. ok is false without that page's web
+// view or a runtime with ICoreWebView2Settings6.
+func TestPageGestures(hwnd uintptr, webView int) (swipe, pinch, ok bool) {
+	w := theBackend.windows[hwnd]
+	if w != nil && webView >= 0 {
+		if webView >= len(w.webViews) {
+			return false, false, false
+		}
+		w = w.webViews[webView]
+	}
+	if w == nil || w.settings == 0 {
+		return false, false, false
+	}
+	s6 := queryInterface(w.settings, &iidICoreWebView2Settings6)
+	if s6 == 0 {
+		return false, false, false
+	}
+	defer release(s6)
+	var sw, pz int32
+	comCall(s6, set6GetIsSwipeNavigationEnabled, uintptr(unsafe.Pointer(&sw)))
+	comCall(s6, set5GetIsPinchZoomEnabled, uintptr(unsafe.Pointer(&pz)))
+	return sw != 0, pz != 0, true
+}
+
+// TestWheelSurface turns a mouse's wheel a notch down at (x, y), in DIPs,
+// in a window showing native UI, with the message Windows sends for it,
+// over whatever shows there: the content, or a web view's page.
+func TestWheelSurface(hwnd uintptr, x, y float64) bool {
+	w := theBackend.windows[hwnd]
+	if w == nil || w.surface == nil {
+		return false
+	}
+	dpi := float64(w.surface.dpi()) / 96
+	pt := point{int32(x * dpi), int32(y * dpi)}
+	procClientToScreen.Call(w.surface.hwnd, uintptr(unsafe.Pointer(&pt)))
+	down := int16(-120) // WHEEL_DELTA, toward the user
+	wp := uintptr(uint16(down)) << 16
+	lp := uintptr(uint16(int16(pt.Y)))<<16 | uintptr(uint16(int16(pt.X)))
+	procSendMessageW.Call(w.surface.hwnd, wmMouseWheel, wp, lp)
+	return true
+}
+
 // TestPinchSurface pinches a touchpad at (x, y), in DIPs, in a window
 // showing native UI, by scale, with the message Windows sends for it: the
 // wheel with Ctrl held, by less than a notch at a time. It reports the
@@ -776,4 +918,68 @@ func TestGDIObjects() int {
 	process, _ := syscall.GetCurrentProcess()
 	n, _, _ := user32.NewProc("GetGuiResources").Call(uintptr(process), grGDIObjects)
 	return int(n)
+}
+
+// TestRightClickPage right-clicks (x, y), in CSS pixels, in the page of a
+// window's web view, with the mouse events of the DevTools protocol, as a
+// mouse does. The page's context menu opens later. It reports false for a
+// window without a web view.
+func TestRightClickPage(hwnd uintptr, x, y float64) bool {
+	w := theBackend.windows[hwnd]
+	if w == nil || w.webview == 0 {
+		return false
+	}
+	for _, typ := range []string{"mousePressed", "mouseReleased"} {
+		w.devtools("Input.dispatchMouseEvent", fmt.Sprintf(`{"type":%q,"x":%g,"y":%g,"button":"right","buttons":2,"clickCount":1}`, typ, x, y), nil)
+	}
+	return true
+}
+
+// TestPageMenu returns the labels of the items of the popup menu the main
+// thread shows, without their mnemonics' ampersands, "-" for separators,
+// and false when it shows none: a page's context menu MyGo draws. The
+// menu WebView2 draws itself is not MyGo's to read.
+func TestPageMenu() ([]string, bool) {
+	popups := threadPopups()
+	if len(popups) == 0 {
+		return nil, false
+	}
+	labels := popupLabels(popups[0])
+	for i, l := range labels {
+		labels[i] = withoutAmpersands(l)
+	}
+	return labels, true
+}
+
+// TestChoosePageMenuItem chooses the item labeled label, without its
+// mnemonic's ampersand, of that menu, and reports whether it has one.
+func TestChoosePageMenuItem(label string) bool {
+	popups := threadPopups()
+	if len(popups) == 0 {
+		return false
+	}
+	for _, l := range popupLabels(popups[0]) {
+		if withoutAmpersands(l) == label {
+			return TestChoosePopupItem(l)
+		}
+	}
+	return false
+}
+
+// TestBackgroundThrottlingOff reports whether the page of a window, or of
+// its first web view, keeps running while it can't be seen: WebView2's
+// browser runs with unthrottledArguments, the one setting, which all
+// pages share.
+func TestBackgroundThrottlingOff(hwnd uintptr, webView bool) (off bool, settings int) {
+	w := theBackend.windows[hwnd]
+	if w != nil && webView {
+		if len(w.webViews) == 0 {
+			return false, 0
+		}
+		w = w.webViews[0]
+	}
+	if w == nil || w.controller == 0 {
+		return false, 0
+	}
+	return theBackend.envUnthrottled, 1
 }

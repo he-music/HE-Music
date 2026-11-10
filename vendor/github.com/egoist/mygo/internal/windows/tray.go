@@ -46,9 +46,10 @@ const (
 	nifInfo    = 0x10
 	nifShowTip = 0x80
 
-	niifNone    = 0x00
-	niifUser    = 0x04
-	niifNoSound = 0x10
+	niifNone      = 0x00
+	niifUser      = 0x04
+	niifNoSound   = 0x10
+	niifLargeIcon = 0x20
 
 	ninBalloonTimeout   = wmUser + 4
 	ninBalloonUserClick = wmUser + 5
@@ -71,6 +72,8 @@ type tray struct {
 	// notification is the id of the notification the icon shows, if any.
 	notification string
 	temporary    bool // added only to show a notification
+	// balloon is the icon of the notification's image, if it has one.
+	balloon uintptr
 	// dark is the taskbar's appearance, as last told.
 	dark bool
 	// image is the PNG the icon shows, and template whether it is black
@@ -239,13 +242,94 @@ func (t *tray) PopUpMenu(m *platform.Menu) {
 	}
 	id := t.b.menus.newOwner()
 	defer t.b.menus.drop(id)
-	var pt point
-	procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+	pt, flags, exclude, ok := t.menuPlacement()
+	if !ok {
+		procGetCursorPos.Call(uintptr(unsafe.Pointer(&pt)))
+		flags, exclude = 0, nil
+	}
 	menu := t.b.buildMenu(m, false, id, nil, monitorDPI(monitorAt(int(pt.X), int(pt.Y))))
 	defer procDestroyMenu.Call(menu)
-	if cmd := t.b.trackPopup(menu, t.b.appHwnd, pt, 0); cmd != 0 {
+	if cmd := t.b.trackPopup(menu, t.b.appHwnd, pt, flags, exclude); cmd != 0 {
 		t.b.menuCommand(cmd, nil)
 	}
+}
+
+// trayMenuGap is how far from the taskbar, in DIPs, Windows 11 opens the
+// menus of the notification area that it and input methods show (WinUI's
+// MenuFlyout): centered on their icons, rather than at the pointer as
+// Win32 menus open.
+const trayMenuGap = 12
+
+// appBarData is APPBARDATA.
+type appBarData struct {
+	Size            uint32
+	Wnd             uintptr
+	CallbackMessage uint32
+	Edge            uint32
+	Rect            rect
+	LParam          uintptr
+}
+
+// tpmParams is TPMPARAMS.
+type tpmParams struct {
+	Size    uint32
+	Exclude rect
+}
+
+const (
+	abmGetTaskbarPos = 5
+	// The edges of a taskbar (ABE_*) besides the bottom, Windows 11's.
+	abeLeft  = 0
+	abeTop   = 1
+	abeRight = 2
+)
+
+var procSHAppBarMessage = shell32.NewProc("SHAppBarMessage")
+
+// menuPlacement returns where the icon's menu opens on Windows 11, as
+// trayMenuAt places it from the icon on the taskbar, or false for the
+// pointer: on Windows 10, whose own menus open there, and for an icon
+// that is not on the taskbar, in its overflow or nowhere.
+func (t *tray) menuPlacement() (pt point, flags uintptr, exclude *rect, ok bool) {
+	if !fluentMenus() {
+		return pt, 0, nil, false
+	}
+	icon, shows := t.rect()
+	if !shows {
+		return pt, 0, nil, false
+	}
+	bar := appBarData{}
+	bar.Size = uint32(unsafe.Sizeof(bar))
+	if r, _, _ := procSHAppBarMessage.Call(abmGetTaskbarPos, uintptr(unsafe.Pointer(&bar))); r == 0 || !overlaps(icon, bar.Rect) {
+		return pt, 0, nil, false
+	}
+	dpi := monitorDPI(monitorAt(int(icon.Left+icon.Right)/2, int(icon.Top+icon.Bottom)/2))
+	pt, flags, ex := trayMenuAt(icon, bar.Rect, bar.Edge, toPx(trayMenuGap, dpi))
+	return pt, flags, &ex, true
+}
+
+// trayMenuAt returns where a menu opens for an icon on a taskbar along an
+// edge of its monitor (ABE_*), as Windows 11 opens its own: centered on
+// the icon along the taskbar, gap pixels away from it. It returns the
+// point, the flags of TrackPopupMenuEx that align the menu to it, and the
+// rectangle the menu keeps out of, the taskbar and the gap, which keeps
+// it on the side of the point it opens to.
+func trayMenuAt(icon, bar rect, edge uint32, gap int32) (point, uintptr, rect) {
+	x, y := (icon.Left+icon.Right)/2, (icon.Top+icon.Bottom)/2
+	switch edge {
+	case abeTop:
+		return point{x, bar.Bottom + gap}, tpmCenterAlign | tpmVertical, rect{bar.Left, bar.Top, bar.Right, bar.Bottom + gap}
+	case abeLeft:
+		return point{bar.Right + gap, y}, tpmVCenterAlign, rect{bar.Left, bar.Top, bar.Right + gap, bar.Bottom}
+	case abeRight:
+		return point{bar.Left - gap, y}, tpmRightAlign | tpmVCenterAlign, rect{bar.Left - gap, bar.Top, bar.Right, bar.Bottom}
+	}
+	return point{x, bar.Top - gap}, tpmCenterAlign | tpmBottomAlign | tpmVertical, rect{bar.Left, bar.Top - gap, bar.Right, bar.Bottom}
+}
+
+// overlaps reports whether two rectangles share pixels.
+func overlaps(a, b rect) bool {
+	return a.Left < b.Right && b.Left < a.Right && a.Top < b.Bottom && b.Top < a.Bottom
 }
 
 func (t *tray) Bounds() platform.Rect {
@@ -253,8 +337,7 @@ func (t *tray) Bounds() platform.Rect {
 	if !ok {
 		return platform.Rect{}
 	}
-	dpi := monitorDPI(monitorAt(int(r.Left), int(r.Top)))
-	return platform.Rect{X: toDIP(r.Left, dpi), Y: toDIP(r.Top, dpi), Width: toDIP(r.Right-r.Left, dpi), Height: toDIP(r.Bottom-r.Top, dpi)}
+	return screenSpace().rectToDIP(pixelRect(r))
 }
 
 // rect returns where the icon is on the screen, in physical pixels.
@@ -290,7 +373,15 @@ func (t *tray) Destroy() {
 		procDestroyIcon.Call(t.icon)
 		t.icon = 0
 	}
+	t.destroyBalloonIcon()
 	delete(t.b.trays, t.id)
+}
+
+func (t *tray) destroyBalloonIcon() {
+	if t.balloon != 0 {
+		procDestroyIcon.Call(t.balloon)
+		t.balloon = 0
+	}
 }
 
 // trayMessage handles the callback message of the notification area.
@@ -350,6 +441,11 @@ func (b *Backend) ShowNotification(n *platform.Notification, done func(error)) {
 }
 
 func (b *Backend) showNotification(n *platform.Notification) error {
+	if old := b.notifications[n.ID]; old != nil {
+		// Shown again under its ID: the notification it replaces gives up
+		// its tray, and its balloon's icon, rather than leaving them.
+		b.finishNotification(old.tray)
+	}
 	var t *tray
 	for _, x := range b.trays {
 		if !x.temporary && x.notification == "" && x.added {
@@ -381,6 +477,12 @@ func (b *Backend) showNotification(n *platform.Notification) error {
 	if n.Silent {
 		d.InfoFlags |= niifNoSound
 	}
+	if len(n.Image) > 0 && notificationIcon != nil {
+		if t.balloon = notificationIcon(n.Image, dpiOf(b.appHwnd)); t.balloon != 0 {
+			d.BalloonIcon = t.balloon
+			d.InfoFlags |= niifLargeIcon
+		}
+	}
 	if r, _, _ := procShellNotifyIconW.Call(nimModify, uintptr(unsafe.Pointer(&d))); r == 0 {
 		b.finishNotification(t)
 		return fmt.Errorf("mygo: cannot show the notification")
@@ -409,6 +511,7 @@ func (b *Backend) finishNotification(t *tray) {
 	}
 	d := t.data(nifInfo) // an empty balloon hides the current one
 	procShellNotifyIconW.Call(nimModify, uintptr(unsafe.Pointer(&d)))
+	t.destroyBalloonIcon()
 }
 
 // Global shortcuts.

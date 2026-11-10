@@ -72,6 +72,9 @@ go run ./examples/markdown-chat            # Markdown replies streaming in (ui/m
 go run ./examples/notes                    # the rich text editor (ui/richtext), in a notes app
 go run ./examples/terminal                 # a terminal (downloads libghostty-vt once)
 go run ./examples/loading                  # loading.dev's 29 indicators (plugins/loading)
+go run ./examples/permissionflow           # the system's permissions, asked for and guided to (plugins/permissionflow)
+go run ./plugins/automation/cmd/mygo-automation skills   # the automation CLI's guide, for agents driving an app
+go run ./examples/sf-symbols               # the system's SF Symbols on macOS (plugins/sfsymbols)
 go generate ./plugins/terminal             # build libghostty-vt for every platform (with Zig), write Ghostty's themes
 go generate ./internal/gpu/d3d11           # recompile the Direct3D shader (on Windows)
 go generate ./internal/gpu/metal           # recompile the Metal shader (on macOS, with Xcode)
@@ -79,7 +82,8 @@ go generate ./cmd/mygo                     # the Mandarin readings of slugs (cmd
 go generate ./internal/l10n                # MyGo's own strings: their functions, and the packages of translations in locales/
 go generate ./plugins/glass                # recompile the glass plugin's shaders (on macOS, and on Windows)
 bun run --cwd website dev                  # the website, with docs/ at /docs (see website/README.md)
-bun scripts/bench.ts run [--e2e]           # benchmarks and app sizes, medians of 6 runs (CI: bench.yml, /benchmarks)
+bun scripts/bench.ts run [--e2e]           # benchmarks and app sizes, medians of 6 runs (CI: bench.yml, /measures)
+go run ./benchmarks/run -out benchmarks/results.json  # MyGo, GPUI, GPUI Fast and egui on the same apps, for /benchmarks (opens windows, on a real Mac)
 go run ./internal/idlemem app...           # apps' memory once idle, with their webviews' processes
 go run ./internal/inputlatency             # native UI's input-to-screen latency on macOS (opens windows)
 ```
@@ -114,6 +118,19 @@ Windows GUI tests need Windows with the WebView2 Runtime (a GitHub Actions
   and `plugins/game/gamepad`, which reads controllers. The loading plugin
   is Go only too, loading.dev's indicators drawn with `ui.Painter` on
   ui's public API: keep them as loading-dev draws them in a browser.
+  The sfsymbols plugin is Go only too: on macOS it rasterizes the system's
+  SF Symbols through purego, and elsewhere it has none (`Image` says so).
+  The automation plugin is Go only too, gated with the inspector
+  (`mygo_noinspector`): a socket (`MYGO_AUTOMATION`) through which
+  other processes drive the app, reaching native UI only through
+  `surface.Automate`, which it sets. Its command line client for agents,
+  `mygo-automation` (`plugins/automation/cmd/mygo-automation`, the code
+  in `internal/automationcli`), uses the socket alone and Go's standard
+  library; keep its embedded `SKILL.md` true to its commands.
+  The permissionflow plugin is Go only too, after PermissionFlow: TCC's
+  permissions through purego on macOS, with a panel of AppKit under
+  System Settings to drag the app from, the consent store on Windows,
+  and errors.ErrUnsupported elsewhere.
 - The `dist/` of npm packages is not committed: run `bun run build` after
   `bun install` (CI and releases do). Commit `internal/bridge/bridge.js`
   whenever its sources change, and keep the generated clients of examples
@@ -136,3 +153,7 @@ Windows GUI tests need Windows with the WebView2 Runtime (a GitHub Actions
   sleeping; measure work by counts, not durations. A test that can time
   out while the code is right has a race to fix, in the test or the
   product, not a timeout to raise or a rerun to hide behind.
+  GUI tests share a process and, on Linux, an X server: what one leaves
+  behind ("What tests leave behind" in the architecture guide) fails it, not
+  the tests after it. Before calling a failure older than a pull request,
+  reproduce it on a new X server, without running the branch's binary on it.

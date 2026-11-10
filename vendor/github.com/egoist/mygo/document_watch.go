@@ -72,7 +72,12 @@ func (b *docBase) watch() {
 func watchDocumentFile(ctx context.Context, path string) {
 	w, err := WatchFiles(ctx, path, FileWatchOptions{Debounce: 100 * time.Millisecond})
 	if err != nil {
-		return // the file is gone: focus checks remain
+		// The file may have gone before the watch started, renamed after
+		// the document read it: nothing would look for it until a focus.
+		for _, b := range documentsAt(path) {
+			go b.checkDisk()
+		}
+		return
 	}
 	defer w.Close()
 	// What changed before the watch started, as after a rename.
@@ -156,12 +161,16 @@ func documentsAt(path string) []*docBase {
 	return at
 }
 
-// checkDisk compares b's file with what b last read or wrote.
+// checkDisk compares b's file with what b last read or wrote. A file gone
+// from its path is looked for in its directory by what b read, as the
+// watch does: this look can come between a rename and the watch's batch
+// (the look when the watch started, or a window focused), and the watch
+// doesn't look for what a document it finds deleted read.
 func (b *docBase) checkDisk() {
 	b.io.Lock()
 	b.mu.Lock()
 	path, known, edited, closed := b.path, b.stamp, b.edited, b.closed
-	wasDeleted := b.deleted
+	wasDeleted, conflict := b.deleted, b.conflict
 	b.mu.Unlock()
 	if path == "" || closed {
 		b.io.Unlock()
@@ -179,12 +188,22 @@ func (b *docBase) checkDisk() {
 	}
 	switch {
 	case !exists:
+		moved := ""
+		if !wasDeleted && !conflict {
+			moved = findRenamed(filepath.Dir(path), []fileWatchGone{known.file})
+		}
 		b.mu.Lock()
-		changed := !b.deleted
-		b.deleted = true
+		// The watch followed the file while this looked.
+		current := b.path == path
+		changed := current && moved == "" && !b.deleted
+		if changed {
+			b.deleted = true
+		}
 		b.mu.Unlock()
 		b.io.Unlock()
-		if changed {
+		if current && moved != "" {
+			b.moved(moved)
+		} else if changed {
 			b.notify()
 		}
 	case now.same(known) && !wasDeleted:

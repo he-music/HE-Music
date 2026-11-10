@@ -2,8 +2,11 @@ package mygo
 
 import (
 	"errors"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -23,13 +26,39 @@ func rename(from, to string) error {
 }
 
 // readAppFile reads a file of the app, retrying while Windows reports it
-// in use.
+// in use, or reports it missing while it is being replaced: Windows can
+// fail to open the name for a moment while a rename replaces the file.
 func readAppFile(path string) (data []byte, err error) {
-	err = retryInUse(func() error {
+	read := func() error {
 		data, err = os.ReadFile(path)
 		return err
-	})
-	return data, err
+	}
+	for i := 1; ; i++ {
+		err = retryInUse(read)
+		if i == 5 || runtime.GOOS != "windows" || !errors.Is(err, fs.ErrNotExist) {
+			return data, err
+		}
+		if !beingReplaced(path) {
+			// A replace that finished since the read left the file in place.
+			err = retryInUse(read)
+			return data, err
+		}
+		time.Sleep(time.Duration(i) * 10 * time.Millisecond)
+	}
+}
+
+// beingReplaced reports whether path is being replaced: writeAppFile's
+// temporary sibling (createSibling) stays in place until its rename is
+// done.
+func beingReplaced(path string) bool {
+	dir, base := filepath.Split(path)
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if name := e.Name(); strings.HasPrefix(name, "."+base+".") && strings.HasSuffix(name, ".tmp") {
+			return true
+		}
+	}
+	return false
 }
 
 func retryInUse(f func() error) error {

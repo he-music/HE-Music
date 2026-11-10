@@ -43,6 +43,15 @@ func FitIcon(w, h, box int) (int, int) {
 	return max(1, (w*box+h/2)/h), box
 }
 
+// LabelWithSubtitle is the label of a backend that can't show the subtitle
+// on a line of its own.
+func (it *MenuItem) LabelWithSubtitle() string {
+	if it.Subtitle == "" {
+		return it.Label
+	}
+	return it.Label + " — " + it.Subtitle
+}
+
 // Apply gives the items of the menu that it is a snapshot of, by ID, its
 // state: a backend that keeps a snapshot to build menus from later (a
 // tray's, the application menu for new windows) keeps it current with the
