@@ -601,6 +601,13 @@
     "netease": "网易云"
   },
   "play": {
+    "mpv_decoder": "mpv 解码器",
+    "local_source": "本地",
+    "local_source_tip": "正在播放本地歌曲",
+    "local_decryption": "本机解密",
+    "local_decryption_tip": "音频由本机解密后播放",
+    "decryption_service": "解密服务",
+    "decryption_service_tip": "音频通过解密服务播放",
     "no_songs": "播放列表暂无歌曲，快去添加吧",
     "unlock_music_tip": "该歌曲暂时无法播放，为您采用其他音源，可能会与原曲存在差别"
   },

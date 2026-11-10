@@ -5,6 +5,8 @@
  */
 
 import {
+  activePlaybackEngine,
+  playbackDecryption,
   audioProcessingAvailable,
   playbackCapabilities,
 } from "@/core/audio-player/playbackCapabilities";
@@ -24,6 +26,7 @@ import {
   type PlayOptions,
   type PlaybackEvent,
 } from "@/core/audio-player/IPlaybackEngine";
+import { getAudioDecryption } from "@/platform/audioSource";
 
 export type { AudioEventType } from "@/core/audio-player/IPlaybackEngine";
 
@@ -56,6 +59,7 @@ export class AudioManager {
       }
       ++this.eventRevision;
       this.unsubscribe();
+      playbackDecryption.value = null;
       await this.engine.clearSource();
       await this.engine.destroy();
       if (id === "mpv") {
@@ -84,6 +88,7 @@ export class AudioManager {
 
   public async destroy(): Promise<void> {
     this.unsubscribe();
+    playbackDecryption.value = null;
     this.offAll();
     this.engineListeners.clear();
     await this.engine.destroy();
@@ -91,6 +96,7 @@ export class AudioManager {
   }
 
   public async play(url?: string, options: PlayOptions = {}): Promise<void> {
+    if (url !== undefined) playbackDecryption.value = getAudioDecryption(url);
     try {
       await this.engine.play(url, options);
     } catch (error) {
@@ -113,6 +119,7 @@ export class AudioManager {
 
   /** 清空已撤销的本地音源，同时释放已缓冲的字节和读取句柄。 */
   public clearSource(): Promise<void> {
+    playbackDecryption.value = null;
     if (this.pendingSwitches) return this.switchTail.then(() => this.engine.clearSource());
     return this.engine.clearSource();
   }
@@ -270,6 +277,7 @@ export class AudioManager {
   }
 
   private syncCapabilities(): void {
+    activePlaybackEngine.value = this.engine.id;
     const next = this.engine.capabilities;
     const current = playbackCapabilities.value;
     if (

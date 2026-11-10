@@ -37,3 +37,20 @@ export function resolveSongAudioSource(source: SongAudioSource): SongAudioSource
   });
   return { url: `${gateway}/__audio?${params}`, format };
 }
+
+export type AudioDecryption = "local" | "server" | null;
+
+/** 识别当前音源的解密路径，普通代理和本地文件不属于解密服务。 */
+export function getAudioDecryption(value: string): AudioDecryption {
+  const gateway = mygoGatewayOrigin();
+  const proxyPrefix = `${gateway}/__proxy/`;
+  const target = gateway && value.startsWith(proxyPrefix) ? value.slice(proxyPrefix.length) : value;
+  try {
+    const url = new URL(target);
+    if (!url.searchParams.get("audio_params")) return null;
+    if (gateway && target.startsWith(`${gateway}/__audio?`)) return "local";
+    return "server";
+  } catch {
+    return null;
+  }
+}

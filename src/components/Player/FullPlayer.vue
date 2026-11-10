@@ -48,7 +48,7 @@
                 <div
                   v-if="!pureLyricMode && settingStore.playerType !== 'fullscreen'"
                   :key="musicStore.playSong.id"
-                  class="content-left"
+                  :class="['content-left', { 'cover-paused': !statusStore.playStatus }]"
                   :style="{
                     width: `50%`,
                     minWidth: `50%`,
@@ -268,6 +268,21 @@ onBeforeUnmount(() => {
         width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
         opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
         transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+      :deep(.player-data.cover) {
+        width: min(70%, 50vh);
+        max-width: none;
+        padding: 0;
+        transition: width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        .name {
+          margin-left: 0;
+        }
+        .play-meta {
+          padding-inline: 0;
+        }
+      }
+      &.cover-paused :deep(.player-data.cover) {
+        width: min(63%, 45vh);
+      }
     }
     .content-right {
       position: absolute;

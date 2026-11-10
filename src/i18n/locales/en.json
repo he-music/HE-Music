@@ -601,6 +601,13 @@
     "netease": "Netease Cloud"
   },
   "play": {
+    "mpv_decoder": "mpv decoder",
+    "local_source": "Local",
+    "local_source_tip": "Playing a local track",
+    "local_decryption": "Local decryption",
+    "local_decryption_tip": "Audio is decrypted on this device",
+    "decryption_service": "Decryption service",
+    "decryption_service_tip": "Audio is played through a decryption service",
     "no_songs": "No tracks in play queue. Add some!",
     "unlock_music_tip": "This track is temporarily unavailable. Using an alternative source which may differ from the original."
   },

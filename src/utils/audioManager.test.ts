@@ -85,6 +85,21 @@ describe.each(["web", "mygo"])("AudioManager %s HTMLAudio path", (kind) => {
     manager = (await import("./audioManager")).default;
   });
 
+  it("音源解密标识在续播时保留，在切换普通音源或清空时重置", async () => {
+    const { playbackDecryption, activePlaybackEngine } =
+      await import("@/core/audio-player/playbackCapabilities");
+    await manager.play("https://decrypt.example/?audio_params=params", { autoPlay: false });
+    expect(playbackDecryption.value).toBe("server");
+    expect(activePlaybackEngine.value).toBe("web-audio");
+    await manager.play();
+    expect(playbackDecryption.value).toBe("server");
+    await manager.play("https://audio.example/direct.mp3", { autoPlay: false });
+    expect(playbackDecryption.value).toBeNull();
+    await manager.play("https://decrypt.example/?audio_params=params", { autoPlay: false });
+    await manager.clearSource();
+    expect(playbackDecryption.value).toBeNull();
+  });
+
   it("preserves typed source admission and its element-less media error through the engine facade", async () => {
     const url = "https://audio.example/container-without-extension";
     const error = vi.fn();

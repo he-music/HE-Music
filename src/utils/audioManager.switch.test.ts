@@ -83,6 +83,11 @@ describe("AudioManager 引擎切换", () => {
     doubles.engines.set("mpv", native.value);
     const { AudioManager } = await import("./audioManager");
     const manager = new AudioManager(old.value);
+    const { activePlaybackEngine, playbackDecryption } =
+      await import("@/core/audio-player/playbackCapabilities");
+    await manager.play("https://decrypt.example/?audio_params=params");
+    expect(activePlaybackEngine.value).toBe("web-audio");
+    expect(playbackDecryption.value).toBe("server");
     const end = vi.fn();
     manager.on("ended", end);
     const delayedEvent = [...old.listeners];
@@ -98,6 +103,8 @@ describe("AudioManager 引擎切换", () => {
     for (const listener of delayedEvent) listener({ type: "ended", sessionId: 1 });
     expect(end).not.toHaveBeenCalled();
     expect(manager.engineId).toBe("mpv");
+    expect(activePlaybackEngine.value).toBe("mpv");
+    expect(playbackDecryption.value).toBeNull();
   });
   it("切换失败仍停留新引擎，不自动回退", async () => {
     const old = engine("web-audio"),

@@ -27,16 +27,8 @@
         size="small"
         align="center"
       >
-        <!--        &lt;!&ndash; 音质 &ndash;&gt;-->
-        <!--        <span class="meta-item">{{-->
-        <!--            statusStore.playUblock || !statusStore.songQuality ? "未知音质" : statusStore.songQuality-->
-        <!--          }}</span>-->
         <!-- 歌词模式 -->
         <span class="meta-item">{{ lyricMode }}</span>
-        <!-- 是否在线 -->
-        <span class="meta-item">
-          {{ musicStore.playSong.path ? "LOCAL" : "ONLINE" }}
-        </span>
       </n-flex>
       <!-- 歌手 -->
       <div class="artists">
@@ -89,6 +81,7 @@
           {{ musicStore.playSong.album || "未知专辑" }}
         </span>
       </div>
+      <PlayerPlaybackMeta v-if="!light" :center="center" />
     </n-flex>
   </div>
 </template>

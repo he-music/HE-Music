@@ -1,9 +1,32 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { audioOutputFormat, resolveSongAudioSource } from "./audioSource";
+import { audioOutputFormat, getAudioDecryption, resolveSongAudioSource } from "./audioSource";
 import { isMygoGatewayResourceUrl, gatewayProxyUrl } from "./gateway";
 
 const gateway = "http://127.0.0.1:49234/session-secret";
 afterEach(() => vi.unstubAllGlobals());
+
+describe("audio decryption metadata", () => {
+  it("区分本机解密、远端解密服务和普通音源", () => {
+    vi.stubGlobal("window", { __HE_MUSIC_GATEWAY_ORIGIN__: gateway });
+    expect(
+      getAudioDecryption(`${gateway}/__audio?audio_params=params&url=https://cdn.example`),
+    ).toBe("local");
+    const service = "https://decrypt.example/?audio_params=params";
+    expect(getAudioDecryption(service)).toBe("server");
+    expect(getAudioDecryption(gatewayProxyUrl(service))).toBe("server");
+    for (const url of [
+      "https://cdn.example/song.flac",
+      gatewayProxyUrl("https://cdn.example/song.flac"),
+      `${gateway}/__local/audio?path=song.flac`,
+      "blob:local-song",
+      "",
+    ]) {
+      expect(getAudioDecryption(url)).toBeNull();
+    }
+    vi.stubGlobal("window", {});
+    expect(getAudioDecryption(service)).toBe("server");
+  });
+});
 
 describe("prepared local audio", () => {
   it.each(["flac", "wav", "m4a"])("透传 %s 输出格式和执行参数", (format) => {
