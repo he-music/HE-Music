@@ -109,6 +109,7 @@ vi.mock("./blob", () => ({ default: {} }));
 vi.mock("@/api/radio", () => ({ listRadioSongs: mocks.radio }));
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
 vi.mock("@/platform/gateway", () => ({
+  mygoGatewayOrigin: () => "",
   gatewayProxyUrl: (url: string) => url,
   isMygoGatewayResourceUrl: () => false,
 }));
