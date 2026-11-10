@@ -1,13 +1,44 @@
 import type { Link, SongInfo } from "@/types/main.hemusic";
-import { cloneDeep } from "lodash-es";
 
 import { getActivePinia } from "pinia";
 import { useSettingStore } from "@/stores/setting";
 import { isMyGo } from "mygo-runtime";
 import type { PlaybackEngineId } from "@/core/audio-player/IPlaybackEngine";
-/** 创建与来源数据隔离的播放歌曲副本。 */
+
+/** 创建与来源数据隔离且可写入 IndexedDB 的播放歌曲副本。 */
 export const createPlaybackSongSnapshot = (song: SongInfo): SongInfo => {
-  return cloneDeep(song);
+  const snapshot: SongInfo = {
+    name: song.name,
+    subtitle: song.subtitle,
+    id: song.id,
+    duration: song.duration,
+    mv_id: song.mv_id,
+    album:
+      typeof song.album === "string"
+        ? song.album
+        : { id: song.album?.id ?? "", name: song.album?.name ?? "" },
+    artists: Array.isArray(song.artists)
+      ? song.artists.map((artist) => ({ id: artist.id, name: artist.name }))
+      : song.artists,
+    links: Array.isArray(song.links)
+      ? song.links.map((link) => ({
+          name: link.name,
+          quality: link.quality,
+          format: link.format,
+          size: link.size,
+          url: link.url,
+        }))
+      : [],
+    platform: song.platform,
+    cover: song.cover,
+  };
+
+  if (song.path !== undefined) snapshot.path = song.path;
+  if (song.size !== undefined) snapshot.size = song.size;
+  if (song.quality !== undefined) snapshot.quality = song.quality;
+  if (song.alias !== undefined) snapshot.alias = song.alias;
+
+  return snapshot;
 };
 
 export const createPlaybackListSnapshot = (songs: SongInfo[]): SongInfo[] => {

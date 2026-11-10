@@ -124,6 +124,20 @@ it.each([
   expect(initialize).not.toHaveBeenCalled();
 });
 
+it("persists a searchable song through the shuffle original-list path", async () => {
+  status.playSongMode = "shuffle";
+  data.originalPlayList = [a, b, c];
+  mocks.write.mockImplementation(async (_name, _key, value) => {
+    structuredClone(value);
+  });
+  const toggle = vi.spyOn(player, "togglePlayIndex").mockResolvedValue();
+
+  await expect(player.addNextSong(song("new"), true)).resolves.toBeUndefined();
+
+  expect(toggle).toHaveBeenCalledOnce();
+  expect(data.originalPlayList.map((item) => item.id)).toEqual(["same", "same", "new", "other"]);
+});
+
 it("同曲筛选播放在随机排序后同时按id与platform定位", async () => {
   data.playList = [b, c, a];
   status.playIndex = 0;

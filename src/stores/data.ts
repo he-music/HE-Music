@@ -244,8 +244,9 @@ export const useDataStore = defineStore("data", {
       const filtered = this.originalPlayList.filter(
         (item) => item.id !== song.id || item.platform !== song.platform,
       );
-      this.originalPlayList = filtered;
-      await musicDB.setItem("originalPlayList", filtered);
+      const snapshot = createPlaybackListSnapshot(filtered);
+      this.originalPlayList = snapshot;
+      await musicDB.setItem("originalPlayList", snapshot);
     },
     // 向原始播放列表中添加歌曲（同步 shuffle 模式下的添加操作）
     async addSongToOriginalList(song: SongInfo, currentSong?: SongInfo): Promise<void> {
@@ -267,16 +268,18 @@ export const useDataStore = defineStore("data", {
       } else {
         filtered.push(songSnapshot);
       }
-      this.originalPlayList = filtered;
-      await musicDB.setItem("originalPlayList", filtered);
+      const snapshot = createPlaybackListSnapshot(filtered);
+      this.originalPlayList = snapshot;
+      await musicDB.setItem("originalPlayList", snapshot);
     },
     // 新增下一首播放歌曲
     async setNextPlaySong(song: SongInfo, index: number): Promise<number> {
       this.playbackRevision = Symbol("playback");
       const songSnapshot = createPlaybackSongSnapshot(song);
       if (this.playList.length === 0) {
-        this.playList = [songSnapshot];
-        await musicDB.setItem("playList", cloneDeep(this.playList));
+        const snapshot = [songSnapshot];
+        this.playList = snapshot;
+        await musicDB.setItem("playList", snapshot);
         return 0;
       }
 
@@ -291,10 +294,11 @@ export const useDataStore = defineStore("data", {
       );
 
       // 更新本地存储
-      this.playList = playList;
-      await musicDB.setItem("playList", cloneDeep(playList));
+      const snapshot = createPlaybackListSnapshot(playList);
+      this.playList = snapshot;
+      await musicDB.setItem("playList", snapshot);
       // 返回刚刚插入的歌曲索引
-      return playList.findIndex(
+      return snapshot.findIndex(
         (item) => item.id === songSnapshot.id && item.platform === songSnapshot.platform,
       );
     },
