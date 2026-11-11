@@ -7,6 +7,29 @@ import Components from "unplugin-vue-components/vite";
 import viteCompression from "vite-plugin-compression";
 import wasm from "vite-plugin-wasm";
 
+const vendorChunks = {
+  "vue-vendor": ["vue", "vue-router", "pinia", "pinia-plugin-persistedstate", "vue-i18n"],
+  "naive-ui": ["naive-ui"],
+  "vendor-utils": ["lodash-es", "@vueuse/core", "axios", "dayjs", "js-cookie", "md5"],
+  "color-theme": [
+    "@material/material-color-utilities",
+    "@imsyy/color-utils",
+    "jss",
+    "jss-preset-default",
+  ],
+  "media-player": ["hls.js", "plyr"],
+  markdown: ["marked", "github-markdown-css"],
+  pixi: [
+    "@pixi/app",
+    "@pixi/core",
+    "@pixi/display",
+    "@pixi/filter-blur",
+    "@pixi/filter-bulge-pinch",
+    "@pixi/filter-color-matrix",
+    "@pixi/sprite",
+  ],
+};
+
 // Web 与 mygo 共用渲染配置。
 export function createFrontendConfig(mode: string, desktop = false): UserConfig {
   const env = loadEnv(mode, process.cwd());
@@ -51,28 +74,15 @@ export function createFrontendConfig(mode: string, desktop = false): UserConfig 
       rollupOptions: {
         input: resolve(import.meta.dirname, "index.html"),
         output: {
-          manualChunks: {
-            "vue-vendor": ["vue", "vue-router", "pinia", "pinia-plugin-persistedstate", "vue-i18n"],
-            "naive-ui": ["naive-ui"],
-            "vendor-utils": ["lodash-es", "@vueuse/core", "axios", "dayjs", "js-cookie", "md5"],
-            "color-theme": [
-              "@material/material-color-utilities",
-              "@imsyy/color-utils",
-              "jss",
-              "jss-preset-default",
-            ],
-            "media-player": ["hls.js", "plyr"],
-            markdown: ["marked", "github-markdown-css"],
-            pixi: [
-              "@pixi/app",
-              "@pixi/core",
-              "@pixi/display",
-              "@pixi/filter-blur",
-              "@pixi/filter-bulge-pinch",
-              "@pixi/filter-color-matrix",
-              "@pixi/sprite",
-            ],
-            stores: ["src/stores/data.ts", "src/stores/index.ts"],
+          onlyExplicitManualChunks: true,
+          // 通用依赖单独共享，避免它们将按需加载的渲染库带入启动入口。
+          manualChunks(id) {
+            for (const [name, packages] of Object.entries(vendorChunks)) {
+              if (packages.some((dependency) => id.includes(`/node_modules/${dependency}/`))) {
+                return name;
+              }
+            }
+            return undefined;
           },
         },
       },

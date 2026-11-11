@@ -82,6 +82,7 @@ import PlayerStylePanel from "../PlayerStylePanel.vue";
 import audioManager from "@/utils/audioManager";
 import { useLyricPlaybackClock } from "@/components/LyricStage/useLyricPlaybackClock";
 
+const AMLyric = defineAsyncComponent(() => import("./AMLyric.vue"));
 const MonetLyric = defineAsyncComponent(() => import("./MonetLyric.vue"));
 const PartitaLyric = defineAsyncComponent(() => import("./PartitaLyric.vue"));
 const KineticLyric = defineAsyncComponent(() => import("./KineticLyric.vue"));

@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick, reactive } from "vue";
 import * as Vue from "vue";
-import { mountProductionSfc } from "@/test/productionSfc";
+import { flushSfcHost, mountProductionSfc } from "@/test/productionSfc";
 import { gatewayProxyUrl } from "@/platform/gateway";
 
 const cleanups: Array<() => void> = [];
@@ -29,10 +29,21 @@ it.each([false, true])("流体背景在 mygo=%s 时仅派生 album 消费地址�
       vue: { ...Vue, Transition: transition },
       "@/stores": { useMusicStore: () => music, useSettingStore: () => settings },
       "@/platform/gateway": { gatewayProxyUrl },
+      "@/components/AMLL/BackgroundRender.vue": {
+        __esModule: true,
+        default: defineComponent({
+          inheritAttrs: false,
+          setup:
+            (_, { attrs }) =>
+            () =>
+              h("BackgroundRender", attrs),
+        }),
+      },
     },
-    ["BackgroundRender", "s-image", "ArtistPhotoBackground"],
+    ["s-image", "ArtistPhotoBackground"],
   );
   cleanups.push(host.close);
+  await flushSfcHost();
   expect(host.all().find((node) => node.tag === "BackgroundRender")?.props.album).toBe(
     gatewayProxyUrl(music.songCover),
   );

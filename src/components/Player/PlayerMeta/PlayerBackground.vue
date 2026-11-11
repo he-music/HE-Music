@@ -31,9 +31,13 @@
 </template>
 
 <script setup lang="ts">
+import { defineAsyncComponent } from "vue";
 import { gatewayProxyUrl } from "@/platform/gateway";
 import { useMusicStore, useSettingStore } from "@/stores";
 
+const BackgroundRender = defineAsyncComponent(
+  () => import("@/components/AMLL/BackgroundRender.vue"),
+);
 const musicStore = useMusicStore();
 const settingStore = useSettingStore();
 </script>

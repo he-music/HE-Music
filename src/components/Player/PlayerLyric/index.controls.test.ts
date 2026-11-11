@@ -19,6 +19,7 @@ it("shows bottom lyric options and the shared play control only at phone/tablet 
       },
       "@/utils/player": { usePlayer: () => ({}) },
       "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
+      "./AMLyric.vue": { __esModule: true, default: { render: () => h("am-lyric") } },
       "./LyricToolbar.vue": { default: { render: () => null } },
       "../PlayerStylePanel.vue": { default: { render: () => null } },
       "../PlayerComponents/MobilePlayButton.vue": {
