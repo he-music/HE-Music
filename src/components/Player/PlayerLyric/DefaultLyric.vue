@@ -591,6 +591,11 @@ watch(scrollTargetIndex, (val, oldVal) => {
   }
 });
 
+// 布局切换复用歌词实例，容器尺寸变化后重新定位当前行。
+useResizeObserver(lyricScrollContainer, () => {
+  lyricsScroll(scrollTargetIndex.value);
+});
+
 onMounted(() => {
   nextTick().then(() => {
     lyricsScroll(scrollTargetIndex.value);

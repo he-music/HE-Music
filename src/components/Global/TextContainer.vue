@@ -1,5 +1,5 @@
 <template>
-  <div ref="textContainerRef" :key="text.length" class="text-container">
+  <div ref="textContainerRef" class="text-container">
     <!-- 空白占位符 -->
     <span class="empty">{{ text }}</span>
     <div ref="scrollWrapperRef" class="scroll-wrapper">

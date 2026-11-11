@@ -137,9 +137,9 @@ const noLrc = computed<boolean>(() => {
 /** 是否处于纯净模式 */
 const pureLyricMode = computed<boolean>(() => statusStore.pureLyricMode && musicStore.isHasLrc);
 
-// 主内容 key
+// 仅在切歌时重置主内容，布局切换复用现有歌词实例。
 const playerContentKey = computed(
-  () => `${musicStore.playSong.id}-${musicStore.playSong.platform}-${statusStore.pureLyricMode}`,
+  () => `${musicStore.playSong.id}-${musicStore.playSong.platform}`,
 );
 
 // 数据是否居中
