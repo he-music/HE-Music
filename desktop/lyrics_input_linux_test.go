@@ -91,20 +91,7 @@ func TestLinuxLyricsInputShapePointerDelivery(t *testing.T) {
 		}
 		return 1
 	})
-	wait := func(description string, condition func() bool) {
-		t.Helper()
-		deadline := time.Now().Add(time.Minute)
-		for !condition() {
-			for pending() != 0 {
-				iterate(0)
-			}
-			iterate(0)
-			if time.Now().After(deadline) {
-				t.Fatalf("GTK input test hung: %s; clicks=%v", description, clicks)
-			}
-			runtime.Gosched()
-		}
-	}
+	wait := linuxInputWaiter(t, pending, iterate, &clicks)
 	create := func(target uintptr) uintptr {
 		win := newWindow(0)
 		decorate(win, 0)
@@ -198,4 +185,21 @@ func TestLinuxLyricsInputShapePointerDelivery(t *testing.T) {
 	}
 	click(2, 160, 160)
 	t.Logf("native GTK input verified: lower window clicks=%d, lyric layer clicks=%d", clicks[1], clicks[2])
+}
+
+func linuxInputWaiter(t *testing.T, pending func() int32, iterate func(int32) int32, clicks *[3]int) func(string, func() bool) {
+	return func(description string, condition func() bool) {
+		t.Helper()
+		deadline := time.Now().Add(time.Minute)
+		for !condition() {
+			for pending() != 0 {
+				iterate(0)
+			}
+			iterate(0)
+			if time.Now().After(deadline) {
+				t.Fatalf("GTK input test hung: %s; clicks=%v", description, *clicks)
+			}
+			runtime.Gosched()
+		}
+	}
 }

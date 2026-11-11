@@ -12,8 +12,9 @@ import (
 )
 
 type linuxGTKList struct {
-	data           uintptr
-	next, previous *linuxGTKList
+	data uintptr
+	next *linuxGTKList
+	_    *linuxGTKList // GList.prev: retain the native ABI layout.
 }
 
 var linuxWebViewPolicy struct {
@@ -37,7 +38,7 @@ func loadLinuxWebViewPolicy() (access nativeWebViewPolicyAccess, err error) {
 	var libraries []uintptr
 	defer func() {
 		if failure := recover(); failure != nil {
-			err = fmt.Errorf("Linux WebKitGTK policy binding: %v", failure)
+			err = fmt.Errorf("linux WebKitGTK policy binding: %v", failure)
 		}
 		if err != nil {
 			for _, library := range libraries {
@@ -54,7 +55,7 @@ func loadLinuxWebViewPolicy() (access nativeWebViewPolicyAccess, err error) {
 				return library, nil
 			}
 		}
-		return 0, errors.New("Linux WebKitGTK policy library is not loaded")
+		return 0, errors.New("linux WebKitGTK policy library is not loaded")
 	}
 	gtk, err := open("libgtk-3.so.0")
 	if err != nil {
@@ -138,7 +139,7 @@ func loadLinuxWebViewPolicy() (access nativeWebViewPolicyAccess, err error) {
 			// WebKitWebViewBase owns a GdkWindow. Clearing the outer GtkWindow
 			// does not clear this widget's drawing destination or child-window clip.
 			if connectSignal(view, "draw", clearBackground, 0, 0, 0) == 0 {
-				return errors.New("Linux transparent WebView draw handler is unavailable")
+				return errors.New("linux transparent WebView draw handler is unavailable")
 			}
 			return nil
 		},

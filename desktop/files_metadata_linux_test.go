@@ -44,30 +44,35 @@ func TestMetadataLinuxAttributes(t *testing.T) {
 		if err := metadataCopyAttributes(source, destination); err != nil {
 			t.Fatal(err)
 		}
-		var before, after syscall.Stat_t
-		if err := syscall.Fstat(int(source.Fd()), &before); err != nil {
-			t.Fatal(err)
-		}
-		if err := syscall.Fstat(int(destination.Fd()), &after); err != nil {
-			t.Fatal(err)
-		}
-		if before.Mode != after.Mode || before.Uid != after.Uid || before.Gid != after.Gid || before.Atim != after.Atim || before.Mtim != after.Mtim {
-			t.Fatalf("attributes differ: source=%+v destination=%+v", before, after)
-		}
-		expected, err := metadataLinuxAttributes(source)
-		if err != nil {
-			t.Fatal(err)
-		}
-		attrs, err := metadataLinuxAttributes(destination)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if !reflect.DeepEqual(attrs, expected) {
-			t.Fatalf("attributes differ: got=%v want=%v", attrs, expected)
-		}
-		if actual, ok := attrs["user.music"]; !ok || !bytes.Equal(actual, value) {
-			t.Fatalf("user.music was not preserved: %v", attrs)
-		}
+		assertMetadataLinuxAttributes(t, source, destination, value)
+	}
+}
+
+func assertMetadataLinuxAttributes(t *testing.T, source, destination *os.File, value []byte) {
+	t.Helper()
+	var before, after syscall.Stat_t
+	if err := syscall.Fstat(int(source.Fd()), &before); err != nil {
+		t.Fatal(err)
+	}
+	if err := syscall.Fstat(int(destination.Fd()), &after); err != nil {
+		t.Fatal(err)
+	}
+	if before.Mode != after.Mode || before.Uid != after.Uid || before.Gid != after.Gid || before.Atim != after.Atim || before.Mtim != after.Mtim {
+		t.Fatalf("attributes differ: source=%+v destination=%+v", before, after)
+	}
+	expected, err := metadataLinuxAttributes(source)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attrs, err := metadataLinuxAttributes(destination)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(attrs, expected) {
+		t.Fatalf("attributes differ: got=%v want=%v", attrs, expected)
+	}
+	if actual, ok := attrs["user.music"]; !ok || !bytes.Equal(actual, value) {
+		t.Fatalf("user.music was not preserved: %v", attrs)
 	}
 }
 

@@ -37,6 +37,9 @@ jobs:
         with:
           node-version-file: .nvmrc
           cache: pnpm
+      - uses: jdx/mise-action@v3
+        with:
+          install: false
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
@@ -47,11 +50,13 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm check:runtime
       - run: pnpm vendor:check
+      - run: pnpm lint:check
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm test:desktop:vendor
       - run: pnpm test:desktop:release
       - run: pnpm test:desktop:mpv
+      - run: pnpm lint:go
       - run: go test ./...
       - run: pnpm build:web
       - uses: actions/upload-artifact@v4

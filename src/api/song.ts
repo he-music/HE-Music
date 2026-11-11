@@ -11,7 +11,7 @@ export const songUrl = async (
   format: string = "mp3",
   options: Pick<HemusicRequestConfig, "skipErrorMessage"> = {},
 ): Promise<SongAudioSource> => {
-  const response: SongAudioSource = await requestHemusic({
+  const response = await requestHemusic<SongAudioSource>({
     ...options,
     url: "/v1/song/url",
     params: {
@@ -48,7 +48,7 @@ export const songLyric = (
   platform: string,
   options: Pick<HemusicRequestConfig, "signal" | "skipErrorMessage"> = {},
 ): Promise<SongLyricResponse> => {
-  return requestHemusic({
+  return requestHemusic<SongLyricResponse>({
     ...options,
     url: "/v1/song/lyric",
     params: {
@@ -132,7 +132,7 @@ export const songDetail = (
   platform: string,
   options: Pick<HemusicRequestConfig, "signal" | "skipErrorMessage"> = {},
 ): Promise<GetSongDetailResponse> => {
-  return requestHemusic({
+  return requestHemusic<GetSongDetailResponse>({
     ...options,
     url: "/v1/song/detail",
     params: { id, platform },

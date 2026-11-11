@@ -536,7 +536,7 @@ const getCommentData = async (id: string, platform: string, clean: boolean = tru
 
     if (request !== commentRequest) return;
     commentPage.value = page + 1;
-    for (let item of result.list) {
+    for (const item of result.list) {
       item.sub_has_more = item.reply_count > 0 && item.reply_count > item.sub_comments.length;
       item.sub_loading = false;
       item.sub_last_id = "";

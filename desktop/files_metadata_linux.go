@@ -44,7 +44,7 @@ func metadataLinuxAttributes(file *os.File) (map[string][]byte, error) {
 		return nil, err
 	}
 	attributes := make(map[string][]byte)
-	for _, raw := range bytes.Split(buffer[:n], []byte{0}) {
+	for raw := range bytes.SplitSeq(buffer[:n], []byte{0}) {
 		if len(raw) == 0 {
 			continue
 		}
@@ -142,6 +142,10 @@ func metadataCopyAttributes(source, destination *os.File) error {
 	if errno != 0 {
 		return errno
 	}
+	return metadataVerifyLinuxAttributes(destination, stat, attributes)
+}
+
+func metadataVerifyLinuxAttributes(destination *os.File, stat unix.Stat_t, attributes map[string][]byte) error {
 	var copied unix.Stat_t
 	if err := unix.Fstat(int(destination.Fd()), &copied); err != nil {
 		return err

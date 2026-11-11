@@ -6,9 +6,7 @@ export interface RetirableScene {
 export function retireKineticScene(scene: RetirableScene, canvas?: HTMLCanvasElement) {
   canvas?.remove();
   let released = false;
-  let firstFrame: number | undefined;
   let secondFrame: number | undefined;
-  let deadline: ReturnType<typeof setTimeout> | undefined;
   const release = () => {
     if (released) return;
     released = true;
@@ -19,9 +17,9 @@ export function retireKineticScene(scene: RetirableScene, canvas?: HTMLCanvasEle
   };
   // The first RAF is before paint. Release on the following RAF, after the
   // browser has had a chance to composite the page without this canvas.
-  firstFrame = requestAnimationFrame(() => {
+  const firstFrame = requestAnimationFrame(() => {
     secondFrame = requestAnimationFrame(release);
   });
   // Hidden documents may not run RAF; resources must still be reclaimed.
-  deadline = setTimeout(release, 200);
+  const deadline = setTimeout(release, 200);
 }

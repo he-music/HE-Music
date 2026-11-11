@@ -38,7 +38,7 @@
             </div>
           </div>
           <div class="menu-tool-item" @click.stop="handleOpenAutoClose">
-            <n-button :focusable="false" :title="t('common.auto_close')" tertiary circle @click="">
+            <n-button :focusable="false" :title="t('common.auto_close')" tertiary circle>
               <template #icon>
                 <SvgIcon name="TimeAuto" :size="24" />
               </template>

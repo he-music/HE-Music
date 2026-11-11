@@ -1,66 +1,49 @@
-import typescriptEslint from "@typescript-eslint/eslint-plugin";
-import { fileURLToPath } from "node:url";
-import { FlatCompat } from "@eslint/eslintrc";
-import vue from "eslint-plugin-vue";
 import js from "@eslint/js";
+import typescriptEslint from "@typescript-eslint/eslint-plugin";
+import typescriptParser from "@typescript-eslint/parser";
+import vue from "eslint-plugin-vue";
 import globals from "globals";
-import path from "node:path";
 import autoEslint from "./auto-eslint.mjs";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-const compat = new FlatCompat({
-  baseDirectory: __dirname,
-  recommendedConfig: js.configs.recommended,
-  allConfig: js.configs.all,
-});
 
 export default [
   {
     ignores: [
-      "**/node_modules",
+      "**/node_modules/**",
       "vendor/**",
-      "**/dist",
-      "**/out",
-      "**/.gitignore",
+      "dist/**",
+      "build/**",
+      "out/**",
       "**/auto-imports.d.ts",
       "**/components.d.ts",
+      "src/platform/mygo.bindings.ts",
     ],
   },
-  ...compat.extends("eslint:recommended", "plugin:@typescript-eslint/recommended"),
+  js.configs.recommended,
+  ...vue.configs["flat/essential"],
   {
-    plugins: {
-      "@typescript-eslint": typescriptEslint,
-      vue,
-    },
-
+    files: ["**/*.{js,mjs,cjs,ts,vue}"],
     languageOptions: {
-      globals: {
-        ...globals.browser,
-        ...globals.node,
-        ...autoEslint.globals,
-      },
-
-      ecmaVersion: "latest",
-      sourceType: "module",
-
-      parserOptions: {
-        parser: "@typescript-eslint/parser",
-      },
+      globals: { ...globals.browser, ...globals.node, ...autoEslint.globals },
+      parserOptions: { ecmaVersion: "latest", sourceType: "module" },
     },
-
+  },
+  {
+    files: ["**/*.{ts,vue}"],
+    plugins: { "@typescript-eslint": typescriptEslint },
+    languageOptions: { parserOptions: { parser: typescriptParser, extraFileExtensions: [".vue"] } },
     rules: {
+      ...typescriptEslint.configs["eslint-recommended"].overrides[0].rules,
+      ...typescriptEslint.configs.recommended.rules,
       "@typescript-eslint/no-explicit-any": "off",
       "vue/multi-word-component-names": "off",
     },
   },
   {
-    files: ["**/.eslintrc.{js,cjs}"],
-
-    languageOptions: {
-      globals: { ...globals.node },
-      ecmaVersion: 5,
-      sourceType: "commonjs",
-    },
+    files: ["**/*.ts"],
+    languageOptions: { parser: typescriptParser },
+  },
+  {
+    files: ["desktop/settings_startup_preload.js"],
+    languageOptions: { globals: { __SETTINGS_STARTUP_ORIGIN__: "readonly" } },
   },
 ];

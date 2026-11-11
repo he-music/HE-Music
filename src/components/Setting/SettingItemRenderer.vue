@@ -15,14 +15,7 @@
       <div class="label">
         <n-text class="name">
           {{ resolve(item.label) }}
-          <n-tag
-            v-if="item.tags"
-            v-for="tag in item.tags"
-            :key="tag.text"
-            :type="tag.type"
-            size="small"
-            round
-          >
+          <n-tag v-for="tag in item.tags" :key="tag.text" :type="tag.type" size="small" round>
             {{ tag.text }}
           </n-tag>
         </n-text>

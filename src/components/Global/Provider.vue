@@ -283,10 +283,11 @@ const getPlayerMainColor = () => {
       return "#EFEFEF";
     case "custom":
       return settingStore.playerMainColorCustom;
-    case "follow-cover":
+    case "follow-cover": {
       const mainColor = statusStore.songCoverTheme?.main;
       if (!mainColor) return "#EFEFEF";
       return rgbToHex(mainColor.r, mainColor.g, mainColor.b);
+    }
     default:
       if (settingStore.themeFollowCover && statusStore.songCoverTheme) {
         const mainColor = statusStore.songCoverTheme?.main;

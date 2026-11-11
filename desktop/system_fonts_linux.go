@@ -73,7 +73,7 @@ func enumerateSystemFontFamilies() ([]string, error) {
 
 type fontconfigFontSet struct {
 	nfont int32
-	sfont int32
+	_     int32 // FcFontSet.sfont: retain the native ABI layout.
 	fonts **fontconfigPattern
 }
 

@@ -55,7 +55,7 @@ const platformChange = (value: string) => {
 };
 
 onBeforeRouteUpdate((to) => {
-  let targetPlatform = to.query.platform as string;
+  const targetPlatform = to.query.platform as string;
   if (
     supportPlatforms.value.length > 0 &&
     !supportPlatforms.value.find((p) => p.id === targetPlatform && p.status === 1)

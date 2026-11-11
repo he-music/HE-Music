@@ -11,7 +11,6 @@
         <n-h3 prefix="bar">
           {{ node.data.title }}
           <n-tag
-            v-if="node.data.tags"
             v-for="tag in node.data.tags"
             :key="tag.text"
             :type="tag.type || 'default'"

@@ -111,6 +111,9 @@ importers:
         specifier: ^11.4.13
         version: 11.4.13(vue@3.5.43(typescript@5.9.3))
     devDependencies:
+      '@eslint/js':
+        specifier: ^9.39.5
+        version: 9.39.5
       '@types/file-saver':
         specifier: ^2.0.7
         version: 2.0.7
@@ -144,6 +147,9 @@ importers:
       fast-glob:
         specifier: ^3.3.3
         version: 3.3.3
+      globals:
+        specifier: ^16.5.0
+        version: 16.5.0
       naive-ui:
         specifier: ^2.45.3
         version: 2.45.3(vue@3.5.43(typescript@5.9.3))
@@ -1652,6 +1658,10 @@ packages:
 
   globals@14.0.0:
     resolution: {integrity: sha512-oahGvuMGQlPw/ivIYBjVSrWAfWLBeku5tpPE2fOPLi+WHffIWbuh2tCjhyQhTBPMf5E9jDEH4FOmTYgYwbKwtQ==}
+    engines: {node: '>=18'}
+
+  globals@16.5.0:
+    resolution: {integrity: sha512-c/c15i26VrJ4IRt5Z89DnIzCGDn9EcebibhAOjw5ibqEHsE1wLUgkPn9RDmNcUKyU87GeaL633nyJ+pplFR2ZQ==}
     engines: {node: '>=18'}
 
   go-captcha-vue@2.0.7:
@@ -3974,6 +3984,8 @@ snapshots:
       is-glob: 4.0.3
 
   globals@14.0.0: {}
+
+  globals@16.5.0: {}
 
   go-captcha-vue@2.0.7(vue@3.5.43(typescript@5.9.3)):
     dependencies:

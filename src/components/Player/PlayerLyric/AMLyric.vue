@@ -102,7 +102,7 @@ const processLyricLanguage = (player = lyricPlayerRef.value) => {
     return;
   }
   // 遍历歌词行
-  for (let e of lyricLineObjects) {
+  for (const e of lyricLineObjects) {
     // 获取歌词行内容 (合并逐字歌词为一句)
     const content = e.lyricLine.words.map((word: any) => word.word).join("");
     // 跳过空行

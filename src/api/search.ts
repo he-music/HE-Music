@@ -18,7 +18,7 @@ export const searchHot = (platform: string) => {
 
 // 搜索建议
 export const searchSuggest = (keywords: string, platform: string): Promise<{ keys: string[] }> => {
-  return requestHemusic({
+  return requestHemusic<{ keys: string[] }>({
     url: `/v1/search/suggest`,
     params: {
       key: keywords,
@@ -39,13 +39,13 @@ export const searchDefault = (platform: string) => {
 
 // 综合搜索
 export const comprehensiveSearch = (key: string, platform: string) => {
-  return requestHemusic({
+  return requestHemusic<ComprehensiveSearchResponse>({
     url: "/v1/search",
     params: {
       key,
       platform,
     },
-  }) as Promise<ComprehensiveSearchResponse>;
+  });
 };
 
 // 搜索歌曲
@@ -56,7 +56,7 @@ export const searchSong = (
   platform: string,
   options: Pick<HemusicRequestConfig, "signal" | "skipErrorMessage"> = {},
 ): Promise<SearchSongResponse> => {
-  return requestHemusic({
+  return requestHemusic<SearchSongResponse>({
     ...options,
     url: "/v1/song/search",
     params: {
@@ -70,10 +70,10 @@ export const searchSong = (
 
 // 根据歌词内容搜索歌曲
 export const searchLyricSong = (params: SearchLyricSongRequest) => {
-  return requestHemusic({
+  return requestHemusic<SearchLyricSongResponse>({
     url: "/v1/song/lyric/search",
     params,
-  }) as Promise<SearchLyricSongResponse>;
+  });
 };
 
 // 搜索结果

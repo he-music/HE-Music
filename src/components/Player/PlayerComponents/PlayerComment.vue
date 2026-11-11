@@ -108,7 +108,7 @@ const getHotCommentData = async () => {
   // 获取评论
   const result = await getComment(songId.value, songPlatform.value, "song", 1, 20, "", true);
 
-  for (let item of result.list) {
+  for (const item of result.list) {
     item.sub_has_more = item.reply_count > item.sub_comments.length;
     item.sub_loading = false;
     item.sub_last_id = "";
@@ -139,7 +139,7 @@ const getAllComment = async () => {
     return;
   }
 
-  for (let item of result.list) {
+  for (const item of result.list) {
     item.sub_has_more = item.reply_count > item.sub_comments.length;
     item.sub_loading = false;
     item.sub_last_id = "";

@@ -25,11 +25,11 @@ export type HemusicRequestConfig = AxiosRequestConfig & {
 let isRefreshing = false;
 let pendingQueue: Array<{
   resolve: (token: string) => void;
-  reject: (error: any) => void;
+  reject: (error: unknown) => void;
 }> = [];
 
 /** 刷新完成后处理等待队列 */
-function processPendingQueue(error: any, token?: string) {
+function processPendingQueue(error: unknown, token?: string) {
   pendingQueue.forEach(({ resolve, reject }) => {
     if (error) reject(error);
     else resolve(token!);
@@ -268,16 +268,15 @@ serverHemusic.interceptors.response.use(
 );
 
 // 请求
-const request = async (config: AxiosRequestConfig): Promise<any> => {
-  // 返回请求数据
-  const { data } = await server.request(config);
-  return data as any;
+const request = async <T = any>(config: AxiosRequestConfig): Promise<T> => {
+  const { data } = await server.request<T>(config);
+  return data;
 };
 
-export const requestHemusic = async (config: HemusicRequestConfig): Promise<any> => {
-  // 返回请求数据
-  const { data } = await serverHemusic.request(config);
-  return data as any;
+/** 已迁移接口显式指定响应类型；默认类型暂时兼容尚未迁移的旧接口。 */
+export const requestHemusic = async <T = any>(config: HemusicRequestConfig): Promise<T> => {
+  const { data } = await serverHemusic.request<T>(config);
+  return data;
 };
 
 export default request;

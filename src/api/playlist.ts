@@ -1,8 +1,17 @@
 import { requestHemusic } from "@/utils/request";
 
+import type { PlaylistInfo, SongInfo } from "@/types/main.hemusic";
+
+export interface PlaylistSongsResponse {
+  list: SongInfo[];
+  has_more: boolean;
+  last_id?: string;
+  page_index?: number;
+  page_size?: number;
+}
 // 获取歌单详情
 export const playlistDetail = (id: string, platform: string) => {
-  return requestHemusic({
+  return requestHemusic<PlaylistInfo>({
     url: "/v1/playlist",
     params: {
       id,
@@ -17,7 +26,7 @@ export const playlistSongs = (
   page_index: number = 1,
   page_size: number = 1000,
 ) => {
-  return requestHemusic({
+  return requestHemusic<PlaylistSongsResponse>({
     url: `/v1/playlist/songs`,
     params: {
       id,

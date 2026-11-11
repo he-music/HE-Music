@@ -20,9 +20,10 @@
   "scripts": {
     "format": "prettier --write .",
     "test": "vitest run",
-    "test:core": "vitest run src/bootstrap src/core/audio-player src/utils/player src/utils/playbackRecovery src/utils/audioManager src/utils/songManager src/platform/localMetadata src/platform/localDownloadSession src/platform/updatesSession src/components/UI/VirtualScroll",
+    "test:core": "vitest run src/bootstrap src/core/audio-player src/utils/player src/utils/playbackRecovery src/utils/audioManager src/utils/songManager src/platform/downloadedPlayback src/platform/librarySync src/platform/localFilesSession src/stores/localPlaylists src/utils/lyricManager src/platform/localMetadata src/platform/localDownloadSession src/platform/updatesSession src/components/UI/VirtualScroll",
     "check:runtime": "node scripts/check-runtime.mjs",
-    "lint": "npx eslint . --fix",
+    "lint": "pnpm exec eslint . --fix",
+    "lint:check": "eslint . --max-warnings 0",
     "lint:go": "mise x golangci-lint@2.15.0 -- golangci-lint run -c .golangci.yml --allow-parallel-runners --timeout=10m",
     "format:go": "mise x golangci-lint@2.15.0 -- golangci-lint fmt -c .golangci.yml",
     "fix:go": "mise x golangci-lint@2.15.0 -- golangci-lint run -c .golangci.yml --allow-parallel-runners --timeout=10m --fix",
@@ -94,6 +95,7 @@
     "vue-i18n": "^11.4.13"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/file-saver": "^2.0.7",
     "@types/js-cookie": "^3.0.6",
     "@types/md5": "^2.3.6",
@@ -105,6 +107,7 @@
     "eslint": "^9.39.5",
     "eslint-plugin-vue": "^10.11.1",
     "fast-glob": "^3.3.3",
+    "globals": "^16.5.0",
     "naive-ui": "^2.45.3",
     "prettier": "^3.9.10",
     "sass": "^1.105.1",
