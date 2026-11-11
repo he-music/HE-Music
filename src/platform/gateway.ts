@@ -15,7 +15,6 @@ declare module "axios" {
 
 export interface GatewayAPIConfig {
   hemusic: string;
-  netease: string;
   unblock: string;
 }
 export interface GatewayProvider {
@@ -39,11 +38,10 @@ function upstreamBase(value: string, fallback?: string): string {
   return url.href.replace(/\/+$/, "");
 }
 
-export function gatewayAPIConfig(hemusic: string, netease: string): GatewayAPIConfig {
+export function gatewayAPIConfig(hemusic: string): GatewayAPIConfig {
   const base = upstreamBase(hemusic);
   return {
     hemusic: base,
-    netease: upstreamBase(netease || "/api/netease", `${base}/`),
     unblock: upstreamBase("/api/unblock", `${base}/`),
   };
 }
@@ -52,11 +50,10 @@ export function gatewayAPIConfig(hemusic: string, netease: string): GatewayAPICo
 export async function initializeGateway(
   provider: GatewayProvider | undefined,
   hemusic: string,
-  netease: string,
 ): Promise<void> {
   if (!mygoGatewayOrigin()) return;
   if (!provider) throw new Error("The mygo network gateway is unavailable");
-  const config = gatewayAPIConfig(hemusic, netease);
+  const config = gatewayAPIConfig(hemusic);
   await provider.configure(config);
   apiBases = config;
 }

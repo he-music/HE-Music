@@ -16,8 +16,4 @@ COPY --from=builder /app/dist/web /usr/share/nginx/html
 
 COPY --from=builder /app/nginx.conf /etc/nginx/conf.d/default.conf
 
-RUN apk add --no-cache npm
-
-RUN npm install -g NeteaseCloudMusicApi
-
-CMD nginx && npx NeteaseCloudMusicApi
+CMD ["nginx", "-g", "daemon off;"]

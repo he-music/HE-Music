@@ -34,11 +34,7 @@ async function start(): Promise<void> {
   const { platform } = await import("@/platform");
   if (platform.kind === "mygo" && !isDesktopLyricsWindow(platform.kind, location.hash)) {
     if (!window.__HE_MUSIC_GATEWAY_ORIGIN__) throw new Error("本机网络网关未启动");
-    await initializeGateway(
-      platform.gateway,
-      String(import.meta.env["VITE_API_URL"]),
-      String(import.meta.env["VITE_NETEASE_API_URL"]),
-    );
+    await initializeGateway(platform.gateway, String(import.meta.env["VITE_API_URL"]));
   }
   await bootstrapWindow(platform.kind, location.hash);
 }

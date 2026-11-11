@@ -20,7 +20,7 @@ func TestGatewayDefaultUserAgentAcrossRoutes(t *testing.T) {
 	}))
 	defer upstream.Close()
 	_, origin := gatewayTestServer(t, gatewayConfig(upstream.URL))
-	for _, route := range []string{"/__api/hemusic/redirect", "/__api/netease/redirect", "/__api/unblock/redirect", "/__proxy/" + upstream.URL + "/redirect"} {
+	for _, route := range []string{"/__api/hemusic/redirect", "/__api/unblock/redirect", "/__proxy/" + upstream.URL + "/redirect"} {
 		for _, agent := range []string{"", "custom-media-client"} {
 			response, data := gatewayRequest(t, http.MethodGet, origin+route, "", map[string]string{"User-Agent": agent})
 			want := agent

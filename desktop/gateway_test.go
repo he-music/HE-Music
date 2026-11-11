@@ -58,7 +58,7 @@ func gatewayRequest(t *testing.T, method, target, body string, headers map[strin
 	}
 	return response, string(data)
 }
-func gatewayConfig(raw string) GatewayAPIConfig { return GatewayAPIConfig{raw, raw, raw} }
+func gatewayConfig(raw string) GatewayAPIConfig { return GatewayAPIConfig{raw, raw} }
 
 func TestGatewayAPIContractCookiesAndReload(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -89,7 +89,6 @@ func TestGatewayAPIContractCookiesAndReload(t *testing.T) {
 	separate := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _, _ = io.WriteString(w, r.Header.Get("Cookie")) }))
 	defer separate.Close()
 	config := gatewayConfig(upstream.URL + "/base?fixed=1")
-	config.Netease = separate.URL
 	g, origin := gatewayTestServer(t, config)
 	response, _ := gatewayRequest(t, "POST", origin+"/__api/hemusic/login?q=2", "payload", map[string]string{"Authorization": "Bearer fixture", "Cookie": "browser=loopback", "Origin": "https://app.example"})
 	if response.Header.Get("Set-Cookie") != "" {
@@ -107,7 +106,6 @@ func TestGatewayAPIContractCookiesAndReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	check("unblock", "session=one")
-	check("netease", "")
 	gatewayRequest(t, "GET", origin+"/__api/hemusic/update", "", nil)
 	check("hemusic", "session=two")
 	gatewayRequest(t, "GET", origin+"/__api/hemusic/logout", "", nil)

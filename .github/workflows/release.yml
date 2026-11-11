@@ -10,7 +10,6 @@ permissions:
 
 env:
   VITE_API_URL: ${{ secrets.VITE_API_URL }}
-  VITE_NETEASE_API_URL: ${{ secrets.VITE_NETEASE_API_URL }}
   CGO_ENABLED: "0"
   PYTHONUTF8: "1"
 

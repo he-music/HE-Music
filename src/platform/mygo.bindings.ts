@@ -137,7 +137,6 @@ export interface FileSession {
 /** Bases include their deployment prefix. Resolve relative bases in the caller. */
 export interface GatewayAPIConfig {
   hemusic: string;
-  netease: string;
   unblock: string;
 }
 

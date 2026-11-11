@@ -7,7 +7,7 @@ async function setup() {
   vi.stubGlobal("window", { __HE_MUSIC_GATEWAY_ORIGIN__: gateway });
   const module = await import("./gateway");
   const configure = vi.fn(async () => {});
-  await module.initializeGateway({ configure }, "https://api.example/music/", "/api/netease");
+  await module.initializeGateway({ configure }, "https://api.example/music/");
   return { ...module, configure };
 }
 
@@ -40,29 +40,27 @@ describe("mygo gateway request boundaries", () => {
   it("keeps standalone Web request configuration and source URLs intact", async () => {
     vi.stubGlobal("window", {});
     const module = await import("./gateway");
-    const config = { url: "/song", baseURL: "/api/netease", params: { id: 1 } };
+    const config = { url: "/song", baseURL: "https://api.example/music", params: { id: 1 } };
     const before = structuredClone(config);
-    expect(module.rewriteRequestToGateway(config, config.baseURL, "netease")).toBe(config);
+    expect(module.rewriteRequestToGateway(config, config.baseURL)).toBe(config);
     expect(config).toEqual(before);
     expect(module.gatewayProxyUrl("https://cdn.example/song.mp3")).toBe(
       "https://cdn.example/song.mp3",
     );
-    await expect(module.initializeGateway(undefined, "", "")).resolves.toBeUndefined();
+    await expect(module.initializeGateway(undefined, "")).resolves.toBeUndefined();
   });
 
   it("configures fixed remote API bases independently of the frontend page origin", async () => {
     const module = await setup();
     expect(module.configure).toHaveBeenCalledExactlyOnceWith({
       hemusic: "https://api.example/music",
-      netease: "https://api.example/api/netease",
       unblock: "https://api.example/api/unblock",
     });
     const config = module.rewriteRequestToGateway(
-      { url: "/song/detail", baseURL: "/api/netease" },
-      "/api/netease",
-      "netease",
+      { url: "/v1/song/detail", baseURL: "https://api.example/music/" },
+      "https://api.example/music/",
     );
-    expect(config.url).toBe(`${gateway}/__api/netease/song/detail`);
+    expect(config.url).toBe(`${gateway}/__api/hemusic/v1/song/detail`);
   });
 
   it("preserves Axios base paths, body, headers, params and a custom serializer", async () => {
@@ -152,12 +150,12 @@ describe("mygo gateway request boundaries", () => {
 
   it("rejects unavailable or invalid mygo setup instead of silently falling back to direct API traffic", async () => {
     const module = await setup();
-    await expect(module.initializeGateway(undefined, "https://api.example", "")).rejects.toThrow();
+    await expect(module.initializeGateway(undefined, "https://api.example")).rejects.toThrow();
     await expect(
-      module.initializeGateway({ configure: vi.fn() }, "file:///tmp/api", ""),
+      module.initializeGateway({ configure: vi.fn() }, "file:///tmp/api"),
     ).rejects.toThrow();
     await expect(
-      module.initializeGateway({ configure: vi.fn() }, "https://user:password@api.example", ""),
+      module.initializeGateway({ configure: vi.fn() }, "https://user:password@api.example"),
     ).rejects.toThrow();
   });
 });

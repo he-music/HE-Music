@@ -9,8 +9,6 @@ on:
     secrets:
       VITE_API_URL:
         required: false
-      VITE_NETEASE_API_URL:
-        required: false
 
 permissions:
   contents: read
@@ -21,7 +19,6 @@ concurrency:
 
 env:
   VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api.example.invalid' }}
-  VITE_NETEASE_API_URL: ${{ secrets.VITE_NETEASE_API_URL || 'https://netease.example.invalid' }}
   CGO_ENABLED: "0"
   PYTHONUTF8: "1"
 

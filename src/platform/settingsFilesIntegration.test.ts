@@ -32,7 +32,9 @@ const host = vi.hoisted(
 );
 vi.mock("@/platform", () => ({ platform: host.platform }));
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", () => ({
+  useI18n: () => ({ t: (key: string) => key, locale: Vue.ref("zh-CN") }),
+}));
 vi.mock("@/utils/player", () => ({ usePlayer: () => ({}) }));
 vi.mock("@/utils/format", () => ({ getSizeCover: vi.fn() }));
 vi.mock("@/utils/blob", () => ({ default: {} }));

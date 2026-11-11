@@ -1,5 +1,4 @@
 import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
-import { isDev } from "@/utils/env";
 import { useDataStore, useSettingStore } from "@/stores";
 import { openCaptcha, openUserLogin } from "@/utils/modal";
 import { refreshTokenApi } from "@/api/auth";
@@ -8,8 +7,6 @@ import { clientInstanceHeader, getClientInstanceID, isHemusicRequest } from "./c
 
 import { gatewayRequestURL, mygoGatewayOrigin, rewriteRequestToGateway } from "@/platform/gateway";
 export const API_URL = String(import.meta.env["VITE_API_URL"]);
-// 全局地址
-const baseURL: string = String(isDev ? "/api/netease" : import.meta.env["VITE_NETEASE_API_URL"]);
 const REFRESH_TOKEN_URL = "/v1/auth/token/refresh";
 type CaptchaRetryConfig = AxiosRequestConfig & { _captchaRetried?: boolean };
 
@@ -59,7 +56,6 @@ function isInvalidRefreshTokenError(error: unknown): boolean {
 
 // 基础配置
 const server: AxiosInstance = axios.create({
-  baseURL,
   // 允许跨域
   withCredentials: true,
   // 超时时间
@@ -80,7 +76,7 @@ const serverHemusic: AxiosInstance = axios.create({
 
 server.interceptors.request.use((request) => {
   request.headers.delete(clientInstanceHeader);
-  return rewriteRequestToGateway(request, baseURL, "netease");
+  return rewriteRequestToGateway(request, undefined);
 });
 
 // 请求拦截器

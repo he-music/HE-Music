@@ -1,4 +1,4 @@
-import request, { requestHemusic } from "@/utils/request";
+import { requestHemusic } from "@/utils/request";
 
 /**
  * 获取用户账号信息
@@ -7,17 +7,6 @@ export const userAccount = () => {
   return requestHemusic({
     url: "/v1/user/info",
     params: {},
-  });
-};
-
-// 获取用户详情
-export const userDetail = (uid: number) => {
-  return request({
-    url: "/user/detail",
-    params: {
-      uid,
-      timestamp: Date.now(),
-    },
   });
 };
 

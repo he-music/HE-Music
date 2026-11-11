@@ -38,7 +38,6 @@ func TestGatewayClientInstanceBoundary(t *testing.T) {
 		{"/__api/hemusic/echo", instanceID},
 		{"/__api/hemusic/same", instanceID},
 		{"/__api/hemusic/cross", ""},
-		{"/__api/netease/echo", ""},
 		{"/__api/unblock/echo", ""},
 		{"/__proxy/" + gatewayTarget(t, upstream.URL+"/echo"), ""},
 	} {

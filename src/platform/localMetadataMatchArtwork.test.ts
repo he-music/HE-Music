@@ -37,11 +37,7 @@ beforeEach(async () => {
   failDecode = false;
   vi.stubGlobal("window", { __HE_MUSIC_GATEWAY_ORIGIN__: "http://127.0.0.1:4444/session" });
   vi.stubGlobal("location", { origin: "https://fixture.invalid" });
-  await initializeGateway(
-    { configure: async () => {} },
-    "http://localhost:9090/api",
-    "https://netease.invalid",
-  );
+  await initializeGateway({ configure: async () => {} }, "http://localhost:9090/api");
   vi.stubGlobal("fetch", fetchMock);
   fetchMock.mockImplementation(async (input) => {
     targets.push(String(input));

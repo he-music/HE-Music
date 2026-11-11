@@ -33,7 +33,6 @@ var (
 // Bases include their deployment prefix. Resolve relative bases in the caller.
 type GatewayAPIConfig struct {
 	Hemusic string `json:"hemusic"`
-	Netease string `json:"netease"`
 	Unblock string `json:"unblock"`
 }
 type gatewayAPI struct {
@@ -57,7 +56,7 @@ func (g *NetworkGateway) Configure(ctx context.Context, config GatewayAPIConfig)
 
 func (g *NetworkGateway) configure(config GatewayAPIConfig) error {
 	bases := map[string]*url.URL{}
-	for name, raw := range map[string]string{"hemusic": config.Hemusic, "netease": config.Netease, "unblock": config.Unblock} {
+	for name, raw := range map[string]string{"hemusic": config.Hemusic, "unblock": config.Unblock} {
 		base, err := parseDesktopGatewayURL(raw)
 		if err != nil {
 			return errors.New("invalid gateway API base: " + name)

@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => {
   });
 
   return {
-    neteaseServer: createServer(),
+    externalServer: createServer(),
     hemusicServer: createServer(),
     axiosCreate: vi.fn(),
     clearUserData: vi.fn(),
@@ -68,10 +68,9 @@ describe("HE Music Token 刷新", () => {
     vi.resetModules();
     vi.clearAllMocks();
     vi.stubEnv("VITE_API_URL", "https://api.fixture.invalid");
-    vi.stubEnv("VITE_NETEASE_API_URL", "/api/netease");
     vi.stubGlobal("window", { $message: { error: mocks.messageError } });
     mocks.axiosCreate
-      .mockReturnValueOnce(mocks.neteaseServer)
+      .mockReturnValueOnce(mocks.externalServer)
       .mockReturnValueOnce(mocks.hemusicServer);
     mocks.clearUserData.mockResolvedValue(undefined);
     mocks.dataStore.userLoginStatus = true;
@@ -113,8 +112,9 @@ describe("HE Music Token 刷新", () => {
     const intercept = mocks.hemusicServer.interceptors.request.use.mock.calls[0][0];
     const config = intercept({ headers: new AxiosHeaders(), url: "/v1/platforms" });
     expect(config.headers.get("Authorization")).toBe("Bearer access-token");
-    const netease = mocks.neteaseServer.interceptors.request.use.mock.calls[0][0];
-    const thirdParty = netease({
+    expect(mocks.axiosCreate.mock.calls[0][0]).not.toHaveProperty("baseURL");
+    const external = mocks.externalServer.interceptors.request.use.mock.calls[0][0];
+    const thirdParty = external({
       headers: new AxiosHeaders({ "X-Client-Instance-ID": "private" }),
       url: "/song",
     });
@@ -251,7 +251,7 @@ describe("HE Music Token 刷新", () => {
     });
     const gateway = await import("@/platform/gateway");
     const { API_URL } = await import("./request");
-    await gateway.initializeGateway({ configure: vi.fn(async () => {}) }, API_URL, "/api/netease");
+    await gateway.initializeGateway({ configure: vi.fn(async () => {}) }, API_URL);
     const headers = new AxiosHeaders({ Authorization: "Bearer access-token" });
     const setHeader = vi.spyOn(headers, "set");
     const error = {
@@ -282,7 +282,7 @@ describe("HE Music Token 刷新", () => {
     });
     const gateway = await import("@/platform/gateway");
     const { API_URL } = await import("./request");
-    await gateway.initializeGateway({ configure: vi.fn(async () => {}) }, API_URL, "/api/netease");
+    await gateway.initializeGateway({ configure: vi.fn(async () => {}) }, API_URL);
     const config = gateway.rewriteRequestToGateway(
       {
         url: "/v1/user/login",

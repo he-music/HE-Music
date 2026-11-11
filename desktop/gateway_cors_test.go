@@ -35,7 +35,6 @@ func TestGatewayCORSCacheVariants(t *testing.T) {
 		{"media", "/__proxy/" + upstream.URL + "/cover.jpg", http.StatusOK},
 		{"manifest", "/__proxy/" + upstream.URL + "/manifest.m3u8", http.StatusOK},
 		{"hemusic", "/__api/hemusic/cover.jpg", http.StatusOK},
-		{"netease", "/__api/netease/cover.jpg", http.StatusOK},
 		{"unblock", "/__api/unblock/cover.jpg", http.StatusOK},
 		{"health", "/__health", http.StatusOK},
 		{"invalid-media", "/__proxy/invalid", http.StatusBadRequest},
@@ -73,7 +72,7 @@ func TestGatewayCORSCacheVariants(t *testing.T) {
 
 func TestGatewayCORSPreflightRoutes(t *testing.T) {
 	_, base := gatewayTestServer(t, GatewayAPIConfig{})
-	for _, route := range []string{"/__proxy/https://media.invalid/cover.jpg", "/__api/hemusic/path", "/__api/netease/path", "/__api/unblock/path", "/__audio", "/__health"} {
+	for _, route := range []string{"/__proxy/https://media.invalid/cover.jpg", "/__api/hemusic/path", "/__api/unblock/path", "/__audio", "/__health"} {
 		t.Run(route, func(t *testing.T) {
 			for _, requestedHeaders := range []string{"authorization, content-type", "range, if-range", "x-client-instance-id"} {
 				response, _ := gatewayRequest(t, http.MethodOptions, base+route, "", map[string]string{

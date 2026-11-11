@@ -55,7 +55,6 @@ JS 正文减少 386,286 B，约 16.4%；共享模块拆分使请求数增加 2 �
 
 ```sh
 VITE_API_URL=http://127.0.0.1:14669 \
-VITE_NETEASE_API_URL=http://127.0.0.1:14669 \
 pnpm exec vite build --config vite.config.ts --manifest
 pnpm exec vite preview --config vite.config.ts --port 14668
 ```
