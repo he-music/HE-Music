@@ -142,9 +142,12 @@ pnpm vendor:check
 
 Go 静态检查使用 `pnpm lint:go`，需安装 mise，由其运行固定版本的 golangci-lint。协作约定和按修改范围选择检查的说明见 [AGENTS.md](AGENTS.md)。
 
+分支推送和 Pull Request 会自动执行类型检查、前端／Go 测试、固定依赖校验及 Web 构建；发布工作流复用同一组检查。Fork 未配置后端地址时使用占位地址完成离线验证，构建产物不具备在线服务能力。
+
 ## 开发与维护文档
 
 - [更新记录](CHANGELOG.md)：版本变更和升级说明。
+- [核心链路验收](docs/core-acceptance.md)：关键场景、自动测试入口及实际平台交互的证据边界。
 - [桌面指南](desktop/README.md)：mygo 原生能力、平台差异和诊断入口。
 - [应用数据与 Electron 导入](docs/mygo-data.md)：备份、恢复与旧版迁移。
 - [GitHub 发布与 mygo 自动更新](docs/mygo-updates.md)：发布准备、签名、更新演练和故障排查。正式 `v*` tag 在工作流校验通过后直接公开 Release 并设为 latest；测试 `mygo-test-v*` tag 生成草稿，手动运行工作流仅生成测试产物。

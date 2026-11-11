@@ -32,6 +32,8 @@ components.d.ts
 .env.production
 /deploy.sh
 /docs/*
+!/docs/core-acceptance.md
+!/docs/frontend-performance.md
 !/docs/plans/
 /docs/plans/*
 !/docs/plans/mygo-migration.md

@@ -1,0 +1,62 @@
+name: 持续集成
+
+on:
+  pull_request:
+  push:
+    branches: ["**"]
+  workflow_dispatch:
+  workflow_call:
+    secrets:
+      VITE_API_URL:
+        required: false
+      VITE_NETEASE_API_URL:
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checks-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  VITE_API_URL: ${{ secrets.VITE_API_URL || 'https://api.example.invalid' }}
+  VITE_NETEASE_API_URL: ${{ secrets.VITE_NETEASE_API_URL || 'https://netease.example.invalid' }}
+  CGO_ENABLED: "0"
+  PYTHONUTF8: "1"
+
+jobs:
+  validate:
+    name: 检查与 Web 构建
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check:runtime
+      - run: pnpm vendor:check
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm test:desktop:vendor
+      - run: pnpm test:desktop:release
+      - run: pnpm test:desktop:mpv
+      - run: go test ./...
+      - run: pnpm build:web
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HE-Music-web
+          path: dist/web/
+          if-no-files-found: error
+          retention-days: 7

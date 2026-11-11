@@ -16,31 +16,8 @@ env:
 
 jobs:
   validate:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm check:runtime
-      - run: pnpm vendor:check
-      - run: pnpm typecheck
-      - run: pnpm test
-      - run: pnpm test:desktop:vendor && pnpm test:desktop:release && pnpm test:desktop:mpv
-      - run: go test ./...
-      - run: pnpm build:web
-      - uses: actions/upload-artifact@v4
-        with:
-          name: HE-Music-web
-          path: dist/web/
-          if-no-files-found: error
+    uses: ./.github/workflows/check.yml
+    secrets: inherit
 
   mpv-resources:
     needs: validate
