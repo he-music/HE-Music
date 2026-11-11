@@ -8,5 +8,5 @@ export async function bootstrapWindow(kind: PlatformKind, hash: string): Promise
     return;
   }
   const { mountMainWindow } = await import("./mainWindow");
-  mountMainWindow();
+  await mountMainWindow();
 }

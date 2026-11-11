@@ -40,6 +40,27 @@ describe("窗口启动角色", () => {
     expect(mounts.lyrics).not.toHaveBeenCalled();
   });
 
+  it("主窗口等待首屏就绪后才完成启动", async () => {
+    let resolveReady: (() => void) | undefined;
+    const ready = new Promise<void>((resolve) => {
+      resolveReady = resolve;
+    });
+    mounts.main.mockReturnValueOnce(ready);
+    const completed = vi.fn();
+    const startup = bootstrapWindow("mygo", "#/").then(completed);
+    await vi.waitFor(() => expect(mounts.main).toHaveBeenCalledOnce());
+    expect(completed).not.toHaveBeenCalled();
+    resolveReady?.();
+    await startup;
+    expect(completed).toHaveBeenCalledOnce();
+  });
+
+  it("异步首屏初始化失败继续交给启动失败入口处理", async () => {
+    mounts.main.mockRejectedValueOnce(new Error("route unavailable"));
+    await expect(bootstrapWindow("mygo", "#/")).rejects.toThrow("route unavailable");
+    expect(mounts.lyrics).not.toHaveBeenCalled();
+  });
+
   it("子页挂载失败不会退回主播放器初始化", async () => {
     mounts.lyrics.mockImplementationOnce(() => {
       throw new Error("synthetic child mount failure");

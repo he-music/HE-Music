@@ -23,6 +23,7 @@ var (
 // Every bound call is checked against both that top-level page and its context.
 type DesktopLifecycle struct {
 	main        *mygo.Window
+	starting    bool
 	state       lifecycleState
 	tray        *mygo.Tray
 	menu        *mygo.Menu
@@ -45,14 +46,28 @@ func (l *DesktopLifecycle) attachMainWindow(win *mygo.Window, enableTray bool) {
 		return
 	}
 	l.main = win
+	// 首次导航也会 revoke，页面就绪前不因此显示隐藏窗口。
+	l.starting = !win.IsVisible()
 	desktopLyrics.attachMainWindow(win)
 	l.listeners = append(l.listeners,
 		win.Page().OnContextMenu(localizeNativeContextMenu),
 		win.OnClose(l.onClose),
 		win.OnClosed(l.cleanup),
+		win.OnReadyToShow(func() {
+			if l.starting {
+				l.starting = false
+				l.show()
+			}
+		}),
 		win.Page().OnDidNavigate(func(string) { l.revoke() }),
-		win.Page().OnDidFailLoad(func(*mygo.LoadError) { l.revoke() }),
-		win.Page().OnRenderProcessGone(func(string) { l.revoke() }),
+		win.Page().OnDidFailLoad(func(*mygo.LoadError) {
+			l.starting = false
+			l.revoke()
+		}),
+		win.Page().OnRenderProcessGone(func(string) {
+			l.starting = false
+			l.revoke()
+		}),
 		mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
 			desktopShortcuts.revoke()
 			desktopProtocols.revoke()
@@ -250,7 +265,7 @@ func (l *DesktopLifecycle) onClose(event *mygo.CloseEvent) {
 }
 
 func (l *DesktopLifecycle) show() {
-	if l.main == nil || l.main.IsDestroyed() || l.state.quitting {
+	if l.main == nil || l.main.IsDestroyed() || l.state.quitting || l.starting {
 		return
 	}
 	if l.main.IsMinimized() {

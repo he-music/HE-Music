@@ -70,6 +70,8 @@ func main() {
 		options.Title, options.Width, options.Height = "HE-Music", 1280, 800
 		options.MinWidth, options.MinHeight = 800, 600
 		options.StateKey = "main"
+		options.Hidden = true
+		options.BackgroundColor = "light-dark(#ffffff, #161616)"
 		if gatewayOrigin != "" {
 			options.Page.PreloadScript = desktopGatewayPreloadScript(gatewayOrigin)
 		}

@@ -1,5 +1,6 @@
 import zh from "@/i18n/locales/startup.zh-CN.json";
 import en from "@/i18n/locales/startup.en.json";
+import { removeStartupLoading } from "./startupLoading";
 import "./startupFailure.css";
 
 interface StartupFailureOptions {
@@ -36,4 +37,5 @@ export function showStartupFailure(options: StartupFailureOptions = {}): void {
   panel.append(retry);
   section.append(panel);
   target.replaceChildren(section);
+  removeStartupLoading();
 }

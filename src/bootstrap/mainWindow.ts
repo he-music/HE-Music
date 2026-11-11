@@ -1,4 +1,4 @@
-import { createApp } from "vue";
+import { createApp, nextTick } from "vue";
 import App from "../App.vue";
 import { createPinia } from "pinia";
 import piniaPluginPersistedstate from "pinia-plugin-persistedstate";
@@ -9,11 +9,12 @@ import router from "@/router";
 import { debounceDirective, throttleDirective, visibleDirective } from "@/utils/instruction";
 import { touchContextMenuDirective } from "@/utils/touchContextMenu";
 import i18n from "@/i18n";
+import { finishStartupLoading } from "./startupLoading";
 import "@/style/main.scss";
 import "@/style/animate.scss";
 
 /** 主窗口保留原有插件和路由初始化顺序。 */
-export function mountMainWindow(): void {
+export async function mountMainWindow(): Promise<void> {
   const app = createApp(App);
   const pinia = createPinia();
   pinia.use(piniaPluginPersistedstate);
@@ -28,4 +29,7 @@ export function mountMainWindow(): void {
   app.directive("visible", visibleDirective);
   app.directive("touch-context-menu", touchContextMenuDirective);
   app.mount("#app");
+  await router.isReady();
+  await nextTick();
+  await finishStartupLoading();
 }
