@@ -30,7 +30,9 @@ vi.mock("@/stores", () => ({
   useSettingStore: () => mocks.setting,
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => mocks.player }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", () => ({
+  useI18n: () => ({ locale: { value: "zh-CN" }, t: (key: string) => key }),
+}));
 import { useDesktopLifecycle } from "@/composables/useDesktopLifecycle";
 const flush = async () => {
   for (let i = 0; i < 40; i++) await Promise.resolve();

@@ -12,6 +12,7 @@ type ShellSessionStub = { start: () => Promise<void>; dispose: () => Promise<voi
 type ArtworkSessionStub = { dispose: () => void };
 const mocks = vi.hoisted(() => ({
   platform: { kind: "mygo", capabilities: { tray: true, windowControls: false }, lifecycle: {} },
+  locale: undefined as Vue.Ref<string> | undefined,
   setting: {} as Record<string, unknown>,
   status: {} as Record<string, unknown>,
   music: {} as Record<string, unknown>,
@@ -32,7 +33,12 @@ vi.mock("@/stores", () => ({
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => mocks.player }));
 vi.mock("@/utils/modal", () => ({ openSetting: mocks.openSetting }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", async () => {
+  const { ref } = await import("vue");
+  const locale = ref("zh-CN");
+  mocks.locale = locale;
+  return { useI18n: () => ({ locale, t: (key: string) => `${locale.value}:${key}` }) };
+});
 vi.mock("@/composables/shellDesktopLyrics", () => ({
   createShellDesktopLyricsSession: () => mocks.lyrics,
 }));
@@ -71,6 +77,7 @@ afterEach(async () => {
 function mountNav(
   options: { mac?: boolean; ready?: Promise<{ trayAvailable: boolean; epoch: number }> } = {},
 ) {
+  if (mocks.locale) mocks.locale.value = "zh-CN";
   mocks.setting = Vue.reactive({
     showCloseAppTip: true,
     closeAppMethod: "exit",
@@ -190,6 +197,42 @@ function mountNav(
 }
 
 describe("Nav native lifecycle setup", () => {
+  it("等翻译语言更新后同步托盘文案，并在卸载后停止同步", async () => {
+    const nav = mountNav();
+    await flush();
+    expect(nav.service.ready).toHaveBeenCalledWith(
+      expect.objectContaining({
+        language: "zh-CN",
+        labels: expect.objectContaining({ play: "zh-CN:common.play" }),
+      }),
+    );
+    for (const language of ["en", "zh-CN"]) {
+      nav.service.syncConfig.mockClear();
+      mocks.setting.language = language;
+      // Provider 的语言监听可能在桌面壳之后执行，先模拟旧翻译仍生效。
+      await Vue.nextTick();
+      expect(nav.service.syncConfig).not.toHaveBeenCalled();
+      if (!mocks.locale) throw new Error("Missing locale fixture");
+      mocks.locale.value = language;
+      await flush();
+      expect(nav.service.syncConfig).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          language,
+          labels: expect.objectContaining({ play: `${language}:common.play` }),
+        }),
+      );
+    }
+    nav.service.syncConfig.mockClear();
+    mocks.status.currentTime = 100;
+    mocks.status.lyricClock = 100;
+    await flush();
+    expect(nav.service.syncConfig).not.toHaveBeenCalled();
+    nav.unmount();
+    await flush();
+    if (mocks.locale) mocks.locale.value = "en";
+    await flush();
+    expect(nav.service.syncConfig).not.toHaveBeenCalled();
+  });
   it("keeps macOS native controls instead of rendering Windows buttons", async () => {
     mocks.platform.capabilities.windowControls = true;
     const nav = mountNav();

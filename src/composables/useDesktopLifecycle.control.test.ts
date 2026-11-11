@@ -55,7 +55,9 @@ vi.mock("@/stores", () => ({
   useMusicStore: () => doubles.music,
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => doubles.player }));
-vi.mock("vue-i18n", () => ({ useI18n: () => ({ t: (key: string) => key }) }));
+vi.mock("vue-i18n", () => ({
+  useI18n: () => ({ locale: { value: "zh-CN" }, t: (key: string) => key }),
+}));
 vi.mock("@/composables/shellShortcuts", () => ({
   createShellShortcutSession: () => doubles.makeSession("shortcuts"),
 }));

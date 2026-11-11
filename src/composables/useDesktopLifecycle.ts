@@ -76,7 +76,7 @@ export function useDesktopLifecycle(ui: {
     },
   });
   const updates = createShellUpdatesSession(() => setting.checkUpdateOnStart);
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   let disposed = false;
   let requestId: number | null = null;
   let acknowledgement: Promise<void> = Promise.resolve();
@@ -98,6 +98,7 @@ export function useDesktopLifecycle(ui: {
   const config = (): LifecycleConfig => ({
     showCloseAppTip: setting.showCloseAppTip,
     closeAppMethod: setting.closeAppMethod === "hide" ? "hide" : "exit",
+    language: locale.value,
     labels: {
       show: t("nav.show_main_window"),
       hide: t("nav.hide_main_window"),
@@ -193,7 +194,7 @@ export function useDesktopLifecycle(ui: {
           .catch((error: unknown) => console.error("桌面歌词会话初始化失败", error));
         stops.push(
           watch(
-            () => [setting.showCloseAppTip, setting.closeAppMethod, setting.language],
+            () => [setting.showCloseAppTip, setting.closeAppMethod, locale.value],
             () => void lifecycle.syncConfig(config()).catch(reportFailure),
           ),
         );

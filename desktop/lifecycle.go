@@ -47,6 +47,7 @@ func (l *DesktopLifecycle) attachMainWindow(win *mygo.Window, enableTray bool) {
 	l.main = win
 	desktopLyrics.attachMainWindow(win)
 	l.listeners = append(l.listeners,
+		win.Page().OnContextMenu(localizeNativeContextMenu),
 		win.OnClose(l.onClose),
 		win.OnClosed(l.cleanup),
 		win.Page().OnDidNavigate(func(string) { l.revoke() }),
@@ -90,6 +91,7 @@ func (l *DesktopLifecycle) Ready(ctx context.Context, config LifecycleConfig) (L
 		status.Epoch = epoch
 		l.state.owner = ctx
 		l.state.config = config
+		syncNativeMenuLanguage(config.Language)
 		l.stopOwner = context.AfterFunc(ctx, func() {
 			mygo.RunOnMain(func() {
 				if l.state.owner == ctx {
@@ -110,6 +112,7 @@ func (l *DesktopLifecycle) SyncConfig(ctx context.Context, config LifecycleConfi
 			return err
 		}
 		l.state.config = config
+		syncNativeMenuLanguage(config.Language)
 		l.updateMenu()
 		return nil
 	})
@@ -193,6 +196,9 @@ func (l *DesktopLifecycle) ResolveClose(ctx context.Context, requestID uint64, r
 func validateLifecycleConfig(config LifecycleConfig) error {
 	if config.CloseAppMethod != CloseAppExit && config.CloseAppMethod != CloseAppHide {
 		return errors.New("closeAppMethod must be exit or hide")
+	}
+	if config.Language != "" && config.Language != "zh-CN" && config.Language != "en" {
+		return errors.New("language must be zh-CN or en")
 	}
 	return nil
 }

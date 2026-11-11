@@ -166,6 +166,7 @@ export interface Info {
 export interface LifecycleConfig {
   showCloseAppTip: boolean;
   closeAppMethod: CloseAppMethod;
+  language?: string;
   labels: LifecycleLabels;
 }
 

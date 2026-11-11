@@ -332,6 +332,7 @@ func (l *DesktopLyrics) createWindow() (err error) {
 	l.state.window.WorkArea = lyricsWorkAreaForBounds(l.state.window.Bounds, areas)
 	navigated := false
 	l.listeners = append(l.listeners,
+		win.Page().OnContextMenu(localizeNativeContextMenu),
 		win.OnReadyToShow(func() {
 			if l.state.current(generation) {
 				l.state.ready = true
