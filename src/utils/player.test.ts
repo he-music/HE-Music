@@ -237,7 +237,6 @@ describe("HTTP playback recovery", () => {
     const oldDialog = dialog;
     // Exercise initPlayer's invalidation before any new URL resolution.
     player.selectPlayQuality = () => null;
-    vi.spyOn(player, "handlePlaybackError").mockResolvedValue(undefined);
     await player.initPlayer();
     expect(destroy).toHaveBeenCalled();
     mocks.audio.play.mockClear();
@@ -248,34 +247,36 @@ describe("HTTP playback recovery", () => {
   });
 
   it("preserves normal recovery for decode errors", async () => {
-    const fallback = vi.spyOn(player, "handlePlaybackError").mockResolvedValue(undefined);
     await failHttp(3);
     expect(mocks.warning).not.toHaveBeenCalled();
-    expect(fallback).toHaveBeenCalledWith(3);
+    expect(window.$message.error).toHaveBeenCalledWith("message.no_playable_song");
   });
 
   it("deduplicates dialogs and resumes recovery on dismissal without prompting the same URL again", async () => {
-    const fallback = vi.spyOn(player, "handlePlaybackError").mockResolvedValue(undefined);
+    const refresh = vi.spyOn(player, "initPlayer").mockResolvedValue(undefined);
+    const now = vi.spyOn(Date, "now").mockReturnValue(1000);
     await failHttp(2);
     mocks.callbacks.get("error")?.({ detail: { errorCode: 2 } });
     expect(mocks.warning).toHaveBeenCalledTimes(1);
     dialog.onClose();
     dialog.onEsc();
-    expect(fallback).toHaveBeenCalledTimes(1);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    now.mockReturnValue(1200);
     await failHttp(2);
     expect(mocks.warning).toHaveBeenCalledTimes(1);
-    expect(fallback).toHaveBeenCalledTimes(2);
+    expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   it("routes HTTPS retry failures through normal error recovery", async () => {
-    const fallback = vi.spyOn(player, "handlePlaybackError").mockResolvedValue(undefined);
     await failHttp();
     mocks.audio.play.mockImplementationOnce(async () => {
       mocks.callbacks.get("error")?.({ detail: { errorCode: 4 } });
       throw new Error("TLS unavailable");
     });
     dialog.onNegativeClick();
-    await vi.waitFor(() => expect(fallback).toHaveBeenCalledWith(4));
+    await vi.waitFor(() =>
+      expect(window.$message.error).toHaveBeenCalledWith("message.no_playable_song"),
+    );
     expect(mocks.warning).toHaveBeenCalledTimes(1);
   });
 

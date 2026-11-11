@@ -1,5 +1,3 @@
-import { h } from "vue";
-import type { DialogReactive } from "naive-ui";
 import { type PlayModeType } from "@/types/main";
 import { cloneDeep } from "lodash-es";
 import { useMusicStore, useStatusStore, useDataStore, useSettingStore } from "@/stores";
@@ -27,6 +25,8 @@ import type { Link, SongInfo } from "@/types/main.hemusic";
 import { AxiosError } from "axios";
 import { createNativePlayModeCoordinator } from "./nativePlayMode";
 
+import { PlaybackRecovery } from "./playbackRecovery";
+
 import { gatewayProxyUrl } from "@/platform/gateway";
 class PlaybackOutputError extends Error {}
 /**
@@ -36,13 +36,6 @@ class PlaybackOutputError extends Error {}
 class Player {
   /** 自动关闭定时器 */
   private autoCloseInterval: ReturnType<typeof setInterval> | undefined;
-  private lastErrorTime = 0;
-  /** 当前曲目重试信息（按歌曲维度计数） */
-  private retryInfo: { songId: string; count: number; total: number } = {
-    songId: "",
-    count: 0,
-    total: 0,
-  };
   /** 存储事件回调函数的引用，用于清理 */
   private eventCallbacks: Map<AudioEventType, (e: Event) => void> = new Map();
   private seekListeners = new Set<() => void>();
@@ -66,18 +59,32 @@ class Player {
   private autoPlayIntent = true;
   private autoPlayOwner?: () => boolean;
   private pendingAutoPlay?: { owner: () => boolean; requestId: number; src?: string };
-  private playbackAttempt?: {
-    src: string;
-    autoPlay: boolean;
-    seek: number;
-    requestId: number;
-    source?: AudioSourceInfo;
-    canAutoPlay?: () => boolean;
-  };
-  private httpPlaybackDialog?: DialogReactive;
-  private mpvPlaybackDialog?: DialogReactive;
-  private mpvRetryRequestId?: number;
-  private lastHttpRetrySrc = "";
+  private recovery = new PlaybackRecovery({
+    audio: audioManager,
+    isMygo: () => isMygo,
+    getRequestId: () => this.playRequestId,
+    hasRadioOperation: () => !!this.radioOperation,
+    clearRadioOperation: () => {
+      this.radioOperation = undefined;
+    },
+    getAutoPlayIntent: () => this.autoPlayIntent,
+    getAutoPlayOwner: () => this.autoPlayOwner,
+    revokeAutoPlay: () => {
+      this.autoPlayIntent = false;
+    },
+    getStatus: () => useStatusStore(),
+    getSong: () => songManager.getPlaySongData(),
+    getPlaylistLength: () => useDataStore().playList.length,
+    getSeek: () => this.getSeek(),
+    getSongLogInfo: () => this.getSongLogInfo(),
+    logError: (message, error) => this.logPlaybackError(message, error),
+    selectMpv: () => {
+      useSettingStore().playbackEngine = "mpv";
+    },
+    initPlayer: (...args) => this.initPlayer(...args),
+    createPlayer: (...args) => this.createPlayer(...args),
+    next: (...args) => this.nextOrPrev("next", ...args),
+  });
 
   private nativeModes?: ReturnType<typeof createNativePlayModeCoordinator>;
 
@@ -96,9 +103,8 @@ class Player {
       )
         return;
       ++this.playRequestId;
-      this.mpvPlaybackDialog?.destroy();
-      this.mpvPlaybackDialog = undefined;
-      this.playbackAttempt = undefined;
+      this.recovery.closeMpvDialog();
+      this.recovery.clearAttempt();
       this.pendingAutoPlay = undefined;
       const released = audioManager.clearSource();
       const status = useStatusStore();
@@ -221,24 +227,7 @@ class Player {
         "❌ song error:",
         `code=${errorCode}; ${reasons[errorCode] || "未知媒体错误"}${errorMessage ? `; ${errorMessage}` : ""}`,
       );
-      if (
-        audioManager.engineId === "mpv" ||
-        audioManager.error?.kind === "device" ||
-        audioManager.error?.kind === "engine"
-      ) {
-        this.autoPlayIntent = false;
-        const status = useStatusStore();
-        status.playStatus = false;
-        status.playLoading = false;
-        void audioManager
-          .pause()
-          .catch((error: unknown) => this.logPlaybackError("暂停失败:", error));
-        window.$message.error(errorMessage || t("message.song_play_fail"));
-        return;
-      }
-      if (this.offerHttpsRetry(errorCode)) return;
-      if (this.offerMpvRetry(errorCode)) return;
-      this.handlePlaybackError(errorCode);
+      this.recovery.handleMediaError(errorCode, errorMessage);
     };
     audioManager.on("error", errorCallback);
     this.eventCallbacks.set("error", errorCallback);
@@ -271,11 +260,7 @@ class Player {
       const statusStore = useStatusStore();
       if (audioManager.paused) statusStore.playLoading = false;
       const playSongData = songManager.getPlaySongData();
-      this.retryInfo = {
-        songId: `${playSongData?.id}-${playSongData?.platform}`,
-        count: 0,
-        total: 0,
-      };
+      this.recovery.onCanPlay(`${playSongData?.id}-${playSongData?.platform}`);
       console.log(`▶️ song canplay: ${this.getSongLogInfo()}`);
       // 恢复均衡器
       if (statusStore.eqEnabled) {
@@ -288,144 +273,6 @@ class Player {
     };
     audioManager.on("canplay", canplayCallback);
     this.eventCallbacks.set("canplay", canplayCallback);
-  }
-  /** 媒体错误只能提示兼容性可能性；由用户决定是否切换原生引擎重试。 */
-  private offerMpvRetry(errorCode: number): boolean {
-    const attempt = this.playbackAttempt;
-    if (
-      !isMygo ||
-      audioManager.engineId !== "web-audio" ||
-      (errorCode !== 3 && errorCode !== 4) ||
-      this.httpPlaybackDialog ||
-      !attempt ||
-      attempt.requestId !== this.playRequestId ||
-      audioManager.error?.kind === "device" ||
-      audioManager.error?.kind === "engine" ||
-      audioManager.error?.kind === "network"
-    ) {
-      return false;
-    }
-    if (this.mpvRetryRequestId === attempt.requestId) return true;
-    this.mpvRetryRequestId = attempt.requestId;
-    const status = useStatusStore();
-    status.playStatus = false;
-    status.playLoading = false;
-    void audioManager.pause().catch((error: unknown) => this.logPlaybackError("暂停失败:", error));
-    let settled = false;
-    const isCurrent = () =>
-      !settled &&
-      attempt.requestId === this.playRequestId &&
-      !this.radioOperation &&
-      audioManager.engineId === "web-audio";
-    const dismiss = () => {
-      if (!isCurrent()) return;
-      settled = true;
-      this.mpvPlaybackDialog = undefined;
-      this.autoPlayIntent = false;
-      attempt.autoPlay = false;
-    };
-    this.mpvPlaybackDialog = window.$dialog.warning({
-      title: t("mygo.audio.compatibility_title"),
-      content: t("mygo.audio.compatibility_hint"),
-      positiveText: t("mygo.audio.switch_to_mpv"),
-      negativeText: t("common.cancel"),
-      onPositiveClick: async () => {
-        if (!isCurrent()) return;
-        settled = true;
-        this.mpvPlaybackDialog = undefined;
-        const seek = Math.max(attempt.seek, this.getSeek());
-        useSettingStore().playbackEngine = "mpv";
-        const requestId = this.playRequestId + 1;
-        try {
-          await this.initPlayer(true, seek, status.playQuality, this.autoPlayOwner, true);
-        } catch (error) {
-          if (requestId !== this.playRequestId) return;
-          this.logPlaybackError("切换 mpv 重试失败:", error);
-          window.$message.error(t("mygo.audio.engine_change_failed"));
-        }
-      },
-      onNegativeClick: dismiss,
-      onClose: dismiss,
-      onMaskClick: dismiss,
-      onEsc: dismiss,
-    });
-    return true;
-  }
-  /** HTTP 地址失败时提供 HTTPS 排查入口；媒体错误码无法判断证书是否有效。 */
-  private offerHttpsRetry(errorCode: number): boolean {
-    const attempt = this.playbackAttempt;
-    if (
-      window.location.protocol !== "https:" ||
-      (errorCode !== 2 && errorCode !== 4) ||
-      !attempt ||
-      attempt.requestId !== this.playRequestId ||
-      !/^http:\/\//i.test(attempt.src)
-    ) {
-      return false;
-    }
-    if (this.httpPlaybackDialog) return true;
-    if (this.lastHttpRetrySrc === attempt.src) return false;
-    this.lastHttpRetrySrc = attempt.src;
-    const httpsUrl = new URL(attempt.src);
-    httpsUrl.protocol = "https:";
-    const statusStore = useStatusStore();
-    const seek = Math.max(attempt.seek, this.getSeek());
-    statusStore.playLoading = false;
-    statusStore.playStatus = false;
-    let settled = false;
-    const isCurrent = () => !settled && attempt.requestId === this.playRequestId;
-    const dismiss = () => {
-      if (!isCurrent()) return;
-      settled = true;
-      this.httpPlaybackDialog = undefined;
-      void this.handlePlaybackError(errorCode);
-    };
-    this.httpPlaybackDialog = window.$dialog.warning({
-      title: "音源 HTTPS 访问失败排查",
-      content: () =>
-        h("div", { style: { lineHeight: "1.6" } }, [
-          h(
-            "p",
-            null,
-            "当前 HTTP 音源加载失败，可能与 HTTPS 页面的安全限制有关，也可能是链接过期、网络或格式问题。",
-          ),
-          h(
-            "p",
-            null,
-            "可打开 HTTPS 地址检查。仅在确认音源可信且浏览器允许时，手动处理证书提示，然后返回重试。服务端不支持 HTTPS 时，此操作无法解决。",
-          ),
-          h("p", null, "关闭此提示将继续原有播放错误处理。"),
-        ]),
-      positiveText: "打开 HTTPS 地址",
-      negativeText: "返回后重试",
-      onPositiveClick: () => {
-        if (!isCurrent()) return;
-        window.open(httpsUrl.href, "_blank", "noopener,noreferrer");
-        return false;
-      },
-      onNegativeClick: () => {
-        if (!isCurrent()) return;
-        this.radioOperation = undefined;
-        settled = true;
-        this.httpPlaybackDialog = undefined;
-        void this.createPlayer(
-          httpsUrl.href,
-          attempt.autoPlay,
-          seek,
-          attempt.canAutoPlay,
-          attempt.source,
-        ).catch((error: unknown) => {
-          if (attempt.requestId !== this.playRequestId) return;
-          this.logPlaybackError("HTTPS 重试播放失败:", error);
-          // 媒体 error 事件负责普通错误；没有媒体错误码时补上恢复逻辑。
-          if (audioManager.getErrorCode() === 0) void this.handlePlaybackError();
-        });
-      },
-      onClose: dismiss,
-      onMaskClick: dismiss,
-      onEsc: dismiss,
-    });
-    return true;
   }
   /**
    * 创建播放器并播放
@@ -452,7 +299,7 @@ class Player {
     await audioManager.setVolume(statusStore.playVolume);
     await audioManager.setRate(statusStore.playRate);
     if (requestId !== this.playRequestId) return;
-    this.playbackAttempt = { src, autoPlay, seek, requestId, canAutoPlay, source };
+    this.recovery.recordAttempt({ src, autoPlay, seek, requestId, canAutoPlay, source });
     const pending = this.pendingAutoPlay;
     if (pending && pending.owner === canAutoPlay && pending.requestId === requestId) {
       pending.src = audioManager.engineId === "mpv" ? (source?.identity ?? src) : src;
@@ -482,7 +329,7 @@ class Player {
       }
     } catch (error) {
       if (requestId !== this.playRequestId) return;
-      if (!this.handlePlayRejection(error)) {
+      if (!this.recovery.handlePlayRejection(error)) {
         this.logPlaybackError("Player create failed:", error);
         throw error;
       }
@@ -499,21 +346,6 @@ class Player {
     if (!path) songManager.getCoverColor(musicStore.songCover);
     // 更新 MediaSession
     if (!path) this.updateMediaSession();
-  }
-  /** 处理播放权限和格式兼容错误，覆盖未派发媒体事件的拒绝。 */
-  private handlePlayRejection(error: unknown): boolean {
-    if (error instanceof Error && error.name === "NotAllowedError") {
-      const statusStore = useStatusStore();
-      statusStore.playLoading = false;
-      statusStore.playStatus = false;
-      window.$message.error(t("message.song_play_fail"));
-      return true;
-    }
-    return this.offerMpvRetry(
-      error instanceof Error && error.name === "NotSupportedError"
-        ? 4
-        : audioManager.getErrorCode(),
-    );
   }
   /**
    * 初始化 MediaSession
@@ -616,47 +448,6 @@ class Player {
     return audioManager.getFrequencyData();
   }
   /**
-   * 集中处理播放错误与重试策略
-   */
-  private async handlePlaybackError(errCode?: number) {
-    // 错误防抖
-    const now = Date.now().valueOf();
-    if (now - this.lastErrorTime < 200) return;
-    this.lastErrorTime = now;
-    const dataStore = useDataStore();
-    const playSongData = songManager.getPlaySongData();
-    const currentSongId = `${playSongData?.id}-${playSongData?.platform}`;
-    // 初始化/切换曲目时重置计数
-    if (!this.retryInfo.songId || this.retryInfo.songId !== currentSongId) {
-      this.retryInfo = { songId: currentSongId, count: 0, total: this.retryInfo.total };
-    }
-    this.retryInfo.count += 1;
-    this.retryInfo.total += 1;
-
-    console.log(
-      `Playback retry: ${this.getSongLogInfo()}; count=${this.retryInfo.count}, total=${this.retryInfo.total}`,
-    );
-    // 错误码 2：资源过期或临时网络错误，允许较少次数的刷新
-    if (errCode === 2 && this.retryInfo.count <= 2) {
-      if (this.autoPlayOwner)
-        await this.initPlayer(this.autoPlayIntent, this.getSeek(), "", this.autoPlayOwner);
-      else await this.initPlayer(this.autoPlayIntent, this.getSeek());
-      return;
-    }
-
-    if (this.retryInfo.count == 4 || this.retryInfo.total >= 15) {
-      window.$message.error("播放错误次数过多，已停止播放");
-      return;
-    }
-    if (dataStore.playList.length > 1) {
-      window.$message.error("当前歌曲播放失败，已跳至下一首");
-      if (this.autoPlayIntent && !this.autoPlayOwner) await this.nextOrPrev("next");
-      else await this.nextOrPrev("next", this.autoPlayIntent, false, this.autoPlayOwner);
-    } else {
-      window.$message.error(t("message.no_playable_song"));
-    }
-  }
-  /**
    * 重置状态
    */
   public resetStatus(isCurrent?: () => boolean) {
@@ -702,11 +493,9 @@ class Player {
     this.pendingAutoPlay = canAutoPlay
       ? { owner: canAutoPlay, requestId: currentRequestId }
       : undefined;
-    this.httpPlaybackDialog?.destroy();
-    this.httpPlaybackDialog = undefined;
-    this.mpvPlaybackDialog?.destroy();
-    this.mpvPlaybackDialog = undefined;
-    this.playbackAttempt = undefined;
+    this.recovery.closeHttpDialog();
+    this.recovery.closeMpvDialog();
+    this.recovery.clearAttempt();
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
     try {
@@ -776,7 +565,7 @@ class Player {
           const errCode = audioManager.getErrorCode();
           if (errCode === 0) {
             // 如果没有错误码，可能是其他类型的错误，触发通用错误处理
-            await this.handlePlaybackError(undefined);
+            await this.recovery.handlePlaybackError(undefined);
           }
         }
       }
@@ -817,7 +606,7 @@ class Player {
             return;
           }
           window.$message.error(t("message.no_song_link"));
-          await this.handlePlaybackError(undefined);
+          await this.recovery.handlePlaybackError(undefined);
           return;
         }
         if (currentRequestId !== this.playRequestId) return;
@@ -840,7 +629,7 @@ class Player {
             const errCode = audioManager.getErrorCode();
             if (errCode === 0) {
               // 如果没有错误码，可能是其他类型的错误，触发通用错误处理
-              await this.handlePlaybackError(undefined);
+              await this.recovery.handlePlaybackError(undefined);
             }
           }
         }
@@ -864,7 +653,7 @@ class Player {
       }
       this.logPlaybackError("❌ 初始化音乐播放器出错：", error);
       window.$message.error(t("message.song_play_fail"));
-      await this.handlePlaybackError(undefined);
+      await this.recovery.handlePlaybackError(undefined);
     }
   }
   /**
@@ -902,10 +691,7 @@ class Player {
     // Direct HTTP resumes enter Driver.prepareOutput too: retain their owner
     // for cancellation, while an ordinary no-argument UI play takes ownership.
     this.pendingAutoPlay = canAutoPlay ? { owner: canAutoPlay, requestId, src } : undefined;
-    if (this.playbackAttempt) {
-      this.playbackAttempt.autoPlay = true;
-      this.playbackAttempt.canAutoPlay = canAutoPlay;
-    }
+    this.recovery.updateAttemptIntent(true, canAutoPlay);
     // 已在播放
     if (!audioManager.paused) {
       statusStore.playStatus = true;
@@ -916,7 +702,7 @@ class Player {
       await audioManager.play(undefined, { fadeIn: !!fadeTime, fadeDuration: fadeTime });
     } catch (error) {
       if (requestId !== this.playRequestId) return;
-      if (!this.handlePlayRejection(error)) throw error;
+      if (!this.recovery.handlePlayRejection(error)) throw error;
     }
   }
   /** Revoke one shell's pending start without pausing an already playing source. */
@@ -930,8 +716,7 @@ class Player {
     )
       return;
     this.autoPlayIntent = false;
-    if (this.playbackAttempt?.requestId === pending.requestId)
-      this.playbackAttempt.autoPlay = false;
+    this.recovery.cancelAttemptAutoplay(pending.requestId);
     if (pending.src && pending.src === audioManager.src && audioManager.paused) {
       // No fade: cancel Driver.prepareOutput/element.play immediately, retaining the preload.
       audioManager.pause();
@@ -946,7 +731,7 @@ class Player {
     const settingStore = useSettingStore();
     if (changeStatus) {
       this.autoPlayIntent = false;
-      if (this.playbackAttempt) this.playbackAttempt.autoPlay = false;
+      this.recovery.updateAttemptIntent(false);
       statusStore.playStatus = false;
     }
     // 淡出
@@ -1421,11 +1206,9 @@ class Player {
     this.radioOperation = undefined;
     ++this.playRequestId;
     await audioManager.clearSource();
-    this.httpPlaybackDialog?.destroy();
-    this.httpPlaybackDialog = undefined;
-    this.mpvPlaybackDialog?.destroy();
-    this.mpvPlaybackDialog = undefined;
-    this.playbackAttempt = undefined;
+    this.recovery.closeHttpDialog();
+    this.recovery.closeMpvDialog();
+    this.recovery.clearAttempt();
     const dataStore = useDataStore();
     const statusStore = useStatusStore();
     await audioManager.stop();
@@ -1590,8 +1373,7 @@ class Player {
   ) {
     const operation = Symbol("radio");
     this.radioOperation = operation;
-    this.mpvPlaybackDialog?.destroy();
-    this.mpvPlaybackDialog = undefined;
+    this.recovery.closeMpvDialog();
     this.autoPlayIntent = autoPlay;
     this.autoPlayOwner = canAutoPlay;
     const requestId = this.playRequestId;
