@@ -295,6 +295,16 @@ export const usePlaySettings = (): SettingConfig => {
         title: t("setting.play.audio_setting"),
         items: [
           {
+            key: "preferDownloaded",
+            label: t("setting.play.prefer_downloaded"),
+            type: "switch",
+            show: isDesktop,
+            value: computed({
+              get: () => settingStore.preferDownloaded,
+              set: (value) => (settingStore.preferDownloaded = value),
+            }),
+          },
+          {
             key: "songLevel",
             label: t("setting.play.online_song_quality"),
             type: "select",

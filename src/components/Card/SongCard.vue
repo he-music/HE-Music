@@ -1,5 +1,5 @@
 <template>
-  <div class="song-card">
+  <div class="song-card" :class="{ unavailable }">
     <div :class="['song-content', { play: songEqual(musicStore.playSong, song) }]">
       <!-- 序号 -->
       <div class="num" @dblclick.stop>
@@ -12,10 +12,17 @@
           :size="28"
           :name="statusStore.playStatus ? 'Pause' : 'Play'"
           class="status"
-          @click.stop="player.playOrPause()"
+          :aria-disabled="unavailable || undefined"
+          @click.stop="!unavailable && player.playOrPause()"
         />
         <!-- 播放 -->
-        <SvgIcon :size="28" name="Play" class="play" @click.stop="player.addNextSong(song, true)" />
+        <SvgIcon
+          :size="28"
+          name="Play"
+          class="play"
+          :aria-disabled="unavailable || undefined"
+          @click.stop="!unavailable && player.addNextSong(song, true)"
+        />
       </div>
       <!-- 标题 -->
       <div class="title">
@@ -191,6 +198,7 @@ const props = defineProps<{
   hiddenAlbum?: boolean;
   hiddenSize?: boolean;
   // 仅用于纯文本展示，不改变歌曲数据结构。
+  unavailable?: boolean;
   highlightKeywords?: string[];
 }>();
 
@@ -273,6 +281,9 @@ const quality = computed(() => getQuality(song.value));
 
 <style lang="scss" scoped>
 .song-card {
+  &.unavailable .name-text {
+    opacity: 0.5;
+  }
   height: 100%;
   cursor: pointer;
   .song-content {

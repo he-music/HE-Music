@@ -11,6 +11,7 @@ import { FeatureSupportFlag } from "@/api/platform";
 import { t } from "@/i18n";
 import { platform } from "@/platform";
 import { openMygoSongInfoEditor, openMygoDownloadSong } from "./mygoFileModals";
+import type { LocalPlaylist } from "@/utils/localPlaylist";
 
 const openedModals = new Set<string>();
 /**
@@ -122,7 +123,9 @@ export const openSongInfoEditor = async (song: SongInfo) => {
 export const openPlaylistAdd = async (data: SongInfo[], isLocal: boolean) => {
   if (!data.length) return window.$message.warning(t("message.please_select_song"));
   if (!isLogin() && !isLocal) return openUserLogin();
-  const { default: PlaylistAdd } = await import("@/components/Modal/PlaylistAdd.vue");
+  const { default: PlaylistAdd } = isLocal
+    ? await import("@/components/Modal/LocalPlaylistAdd.vue")
+    : await import("@/components/Modal/PlaylistAdd.vue");
   const modal = window.$modal.create({
     preset: "card",
     transformOrigin: "center",
@@ -141,9 +144,14 @@ export const openPlaylistAdd = async (data: SongInfo[], isLocal: boolean) => {
  * @param isLocal 是否为本地音乐
  * @param playListId 歌单 id
  */
-export const openBatchList = async (data: SongInfo[], isLocal: boolean, playListId?: string) => {
+export const openBatchList = async (
+  data: SongInfo[],
+  isLocal: boolean,
+  playListId?: string,
+  localPlaylistId?: string,
+) => {
   const { default: BatchList } = await import("@/components/Modal/BatchList.vue");
-  window.$modal.create({
+  const modal = window.$modal.create({
     preset: "card",
     transformOrigin: "center",
     autoFocus: false,
@@ -151,12 +159,13 @@ export const openBatchList = async (data: SongInfo[], isLocal: boolean, playList
       maxWidth: "70vw",
     },
     title: t("common.batch_operation"),
-    content: () => h(BatchList, { data, isLocal, playListId }),
+    content: () =>
+      h(BatchList, { data, isLocal, playListId, localPlaylistId, onClose: () => modal.destroy() }),
   });
 };
 
 // 新建歌单
-export const openCreatePlaylist = async () => {
+export const openCreatePlaylist = async (options: { local?: boolean; songs?: SongInfo[] } = {}) => {
   const { default: CreatePlaylist } = await import("@/components/Modal/CreatePlaylist.vue");
   const modal = window.$modal.create({
     preset: "card",
@@ -165,7 +174,7 @@ export const openCreatePlaylist = async () => {
     style: { width: "600px" },
     title: t("modal.create_playlist"),
     content: () => {
-      return h(CreatePlaylist, { onClose: () => modal.destroy() });
+      return h(CreatePlaylist, { ...options, onClose: () => modal.destroy() });
     },
   });
 };
@@ -197,6 +206,23 @@ export const openUpdatePlaylist = async (
   });
 };
 
+export const openUpdateLocalPlaylist = async (data: LocalPlaylist) => {
+  const { default: UpdatePlaylist } = await import("@/components/Modal/UpdatePlaylist.vue");
+  const modal = window.$modal.create({
+    preset: "card",
+    transformOrigin: "center",
+    autoFocus: false,
+    style: { width: "600px", maxWidth: "calc(100vw - 32px)" },
+    title: t("modal.playlist_edit"),
+    content: () =>
+      h(UpdatePlaylist, {
+        id: data.id,
+        data,
+        local: true,
+        onSuccess: () => modal.destroy(),
+      }),
+  });
+};
 // 下载歌曲
 export const openDownloadSong = async (song: SongInfo) => {
   if (platform.kind === "mygo") return openMygoDownloadSong(song);

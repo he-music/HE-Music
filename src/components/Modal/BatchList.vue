@@ -14,17 +14,13 @@
       <n-flex class="menu">
         <!-- 批量删除 -->
         <n-button
-          v-if="playListId"
-          :disabled="!checkCount"
+          v-if="playListId || localPlaylistId"
+          :disabled="!checkCount || removing"
           type="error"
           strong
           secondary
-          @click="
-            deleteSongs(
-              playListId,
-              checkSongData.map((item) => ({ id: item.id, platform: item.platform })),
-            )
-          "
+          :loading="removing"
+          @click="removeSelected"
         >
           <template #icon>
             <SvgIcon name="Delete" />
@@ -34,7 +30,6 @@
         <!-- 添加到歌单 -->
         <n-button
           :disabled="!checkCount"
-          v-if="!isLocal"
           type="primary"
           strong
           secondary
@@ -55,6 +50,7 @@ import type { DataTableColumns, DataTableRowKey } from "naive-ui";
 import { isArray, isObject } from "lodash-es";
 import { openPlaylistAdd } from "@/utils/modal";
 import { deleteSongs } from "@/utils/auth";
+import { useLocalPlaylistStore } from "@/stores/localPlaylists";
 import type { SongInfo } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
@@ -74,8 +70,33 @@ const props = defineProps<{
   data: SongInfo[];
   isLocal: boolean;
   playListId?: string;
+  localPlaylistId?: string;
 }>();
 
+const emit = defineEmits<{ close: [] }>();
+const removing = ref(false);
+async function removeSelected() {
+  if (removing.value || !checkSongData.value.length) return;
+  removing.value = true;
+  try {
+    if (props.localPlaylistId) {
+      await useLocalPlaylistStore().removeSongs(
+        props.localPlaylistId,
+        checkSongData.value.map((song) => song.id),
+      );
+      emit("close");
+    } else if (props.playListId) {
+      await deleteSongs(
+        props.playListId,
+        checkSongData.value.map(({ id, platform }) => ({ id, platform })),
+      );
+    }
+  } catch {
+    window.$message.error(t("local_playlists.save_failed"));
+  } finally {
+    removing.value = false;
+  }
+}
 // 选中数据
 const checkCount = ref<number>(0);
 const checkSongData = ref<SongInfo[]>([]);

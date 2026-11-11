@@ -282,6 +282,12 @@ const appRoutes: Array<RouteRecordRaw> = [
       },
     ],
   },
+  {
+    path: "/local-playlist",
+    name: "local-playlist",
+    meta: { needApp: true, offline: true },
+    component: () => import("@/views/List/localplaylist.vue"),
+  },
   // 本地歌曲
   {
     path: "/local",
@@ -304,6 +310,12 @@ const appRoutes: Array<RouteRecordRaw> = [
         path: "albums",
         name: "local-albums",
         component: () => import("@/views/Local/albums.vue"),
+      },
+      {
+        path: "playlists",
+        name: "local-playlists",
+        redirect: (to) =>
+          to.query.id ? { name: "local-playlist", query: to.query } : { name: "local" },
       },
     ],
   },

@@ -145,6 +145,7 @@ const settingSchema: Schema<SettingState> = {
   songLevel: string,
   playDevice: string,
   playbackEngine: enumeration("web-audio", "mpv"),
+  preferDownloaded: bool,
   outputDevices: (value) => {
     const input = object(value);
     const device = (value: unknown) =>

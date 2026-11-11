@@ -53,6 +53,10 @@ router.beforeEach((to, from, next) => {
     }
   }
 
+  if (to.name === "local-playlist" && (typeof to.query.id !== "string" || !to.query.id.trim())) {
+    next({ name: "403" });
+    return;
+  }
   // 需要登录
   if (to.meta.needLogin && !isLogin()) {
     if (platform.kind !== "mygo") window.$loadingBar?.error();
@@ -67,7 +71,10 @@ router.beforeEach((to, from, next) => {
   const nativeFilesRoute =
     platform.kind === "mygo" &&
     Boolean(platform.files) &&
-    to.matched.some((route) => route.name === "local" || route.name === "download");
+    to.matched.some(
+      (route) =>
+        route.name === "local" || route.name === "download" || route.name === "local-playlist",
+    );
   if (to.meta.needApp && !nativeFilesRoute) {
     window.$message?.warning(t("message.client_only_function"));
     next("/403");

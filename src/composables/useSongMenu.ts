@@ -21,6 +21,7 @@ import { filesSession } from "@/platform/filesSession";
 import { nativeLocalEntry, localFilesSession } from "@/platform/localFilesSession";
 import { LocalFileActions } from "@/platform/localFileActions";
 import { mygoSongDownload } from "./mygoSongDownload";
+import { useLocalPlaylistStore } from "@/stores/localPlaylists";
 
 /** 歌曲菜单 */
 export const useSongMenu = () => {
@@ -138,10 +139,23 @@ export const useSongMenu = () => {
     const isHasMv = !!song?.mv_id && song.mv_id !== "0";
     const isLocal = !!song?.path;
     const isLoginNormal = isLogin();
+    const unavailable = isLocal && isMygo && !nativeLocalEntry(song.id);
     // 是否当前播放
     const isCurrent = statusStore.playIndex === index;
     // 是否为用户歌单
     const isUserPlaylist = !!(playlist?.id && playlist?.type === "user-playlist");
+    const isLocalPlaylist = !!playlist.id && playlist.type === "local-playlist";
+    const localPlaylists = isLocalPlaylist ? useLocalPlaylistStore() : undefined;
+    const savedSongs =
+      localPlaylists?.playlists.find((item) => item.id === playlist.id)?.songs ?? [];
+    const savedIndex = savedSongs.findIndex((item) => songEqual(item, song));
+    const changeLocalPlaylist = async (action: () => Promise<void>) => {
+      try {
+        await action();
+      } catch {
+        window.$message.error(t("local_playlists.save_failed"));
+      }
+    };
     const nativeDownload = isMygo ? mygoSongDownload(filesSession, song) : undefined;
     const isDownloading = !!nativeDownload && !nativeDownload.task.done;
 
@@ -149,6 +163,7 @@ export const useSongMenu = () => {
       {
         key: "play",
         label: t("menu.play"),
+        disabled: unavailable,
         props: {
           onClick: () => player.addNextSong(song, true),
         },
@@ -157,6 +172,7 @@ export const useSongMenu = () => {
       {
         key: "play-next",
         label: t("menu.play_next"),
+        disabled: unavailable,
         show: !isCurrent && !statusStore.radioMode,
         props: {
           onClick: () => player.addNextSong(song, false),
@@ -166,7 +182,6 @@ export const useSongMenu = () => {
       {
         key: "playlist-add",
         label: t("menu.add_to_playlist"),
-        show: !isLocal,
         props: {
           onClick: () => openPlaylistAdd([song], isLocal),
         },
@@ -314,14 +329,43 @@ export const useSongMenu = () => {
         type: "divider",
       },
       {
-        key: "delete",
-        label: t("menu.delete_from_playlist"),
-        show: isUserPlaylist && isLoginNormal,
+        key: "local-move-up",
+        label: t("local_playlists.move_up"),
+        show: isLocalPlaylist,
+        disabled: savedIndex <= 0,
         props: {
           onClick: () =>
-            deleteSongs(playlist.id, [{ id: song.id, platform: song.platform }], () =>
-              emit("removeSong", [song]),
-            ),
+            localPlaylists &&
+            changeLocalPlaylist(() => localPlaylists.move(playlist.id, song.id, -1)),
+        },
+        icon: renderIcon("Up"),
+      },
+      {
+        key: "local-move-down",
+        label: t("local_playlists.move_down"),
+        show: isLocalPlaylist,
+        disabled: savedIndex < 0 || savedIndex >= savedSongs.length - 1,
+        props: {
+          onClick: () =>
+            localPlaylists &&
+            changeLocalPlaylist(() => localPlaylists.move(playlist.id, song.id, 1)),
+        },
+        icon: renderIcon("Down"),
+      },
+      {
+        key: "delete",
+        label: t("menu.delete_from_playlist"),
+        show: (isUserPlaylist && isLoginNormal) || isLocalPlaylist,
+        props: {
+          onClick: () =>
+            localPlaylists
+              ? changeLocalPlaylist(async () => {
+                  await localPlaylists.removeSongs(playlist.id, [song.id]);
+                  emit("removeSong", [song]);
+                })
+              : deleteSongs(playlist.id, [{ id: song.id, platform: song.platform }], () =>
+                  emit("removeSong", [song]),
+                ),
         },
         icon: renderIcon("Delete"),
       },

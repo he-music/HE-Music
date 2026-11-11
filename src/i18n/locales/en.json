@@ -1,4 +1,23 @@
 {
+  "local_playlists": {
+    "cover": "Playlist cover",
+    "choose_cover": "Choose local image",
+    "cover_link": "Image link",
+    "remove_cover": "Remove cover",
+    "invalid_cover": "Could not read image. Choose a JPG, PNG, GIF or WebP image no larger than 10 MB.",
+    "online": "Online playlist",
+    "local_short": "Local",
+    "not_found": "Playlist not found",
+    "title": "Local playlists",
+    "empty": "No local playlists",
+    "save_failed": "Could not save. Please try again.",
+    "unavailable": "File unavailable",
+    "relink": "Relink",
+    "move_up": "Move up",
+    "move_down": "Move down",
+    "remove": "Remove",
+    "delete_confirm": "Delete playlist “{name}”? Music files will be kept."
+  },
   "lyricToolbar": {
     "label": "Lyric options",
     "shortLabel": "Lyrics",
@@ -1025,6 +1044,7 @@
       "full_player_cache_tip": "Keep player in memory when minimized (increases memory usage)",
       "memory_last_seek": "Remember Last Position",
       "memory_last_seek_tip": "Restore last playback position on startup",
+      "prefer_downloaded": "Prefer downloaded files at the same quality",
       "online_song_quality": "Online Track Quality",
       "output_device": "Audio Output Device",
       "output_device_audio_channel_occupancy": "Audio Channel Occupancy",

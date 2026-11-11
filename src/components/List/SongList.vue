@@ -116,6 +116,7 @@
                 v-touch-context-menu="item.data"
                 :song="item.data"
                 :index="index"
+                :unavailable="unavailableSongIds?.has(item.data.id)"
                 :hiddenCover="hiddenCover"
                 :hiddenAlbum="hiddenAlbum"
                 :hiddenSize="hiddenSize"
@@ -239,6 +240,8 @@ const props = withDefaults(
     highlightKeywords?: string[][];
     /** 单击歌曲卡片时直接播放。 */
     singleClickAction?: boolean;
+    /** 文件失效的歌曲仍显示，但不能加入播放队列。 */
+    unavailableSongIds?: ReadonlySet<string>;
   }>(),
   {
     type: "song",
@@ -274,10 +277,11 @@ const { isSmallScreen } = useMobile();
 
 // 处理歌曲播放
 const handleSongPlay = (song: SongInfo) => {
+  if (props.unavailableSongIds?.has(song.id)) return;
   if (props.doubleClickAction === "add") {
     player.addNextSong(song, true);
   } else {
-    player.updatePlayList(listData.value, song, props.playlist);
+    player.updatePlayList(playableListData.value, song, props.playlist);
   }
 };
 
@@ -366,6 +370,11 @@ const listData = computed<SongInfo[]>(() => {
   });
 });
 
+const playableListData = computed(() =>
+  props.unavailableSongIds?.size
+    ? listData.value.filter((song) => !props.unavailableSongIds?.has(song.id))
+    : listData.value,
+);
 // 虚拟列表项类型
 type VirtualListItem =
   { type: "song"; data: SongInfo; key: string } | { type: "footer"; data: null; key: string };
@@ -449,7 +458,7 @@ const updatePlayListOrder = () => {
       props.playlist?.type || "",
     )
   ) {
-    player.updatePlayList(listData.value, musicStore.playSong, props.playlist, {
+    player.updatePlayList(playableListData.value, musicStore.playSong, props.playlist, {
       showTip: false,
       play: false,
     });

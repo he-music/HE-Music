@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import type { CoverType, UserLikeDataType } from "@/types/main";
+import type { UserLikeDataType } from "@/types/main";
 import { playlistCategories } from "@/api/playlist";
 import { cloneDeep, isEmpty } from "lodash-es";
 import {
@@ -26,7 +26,6 @@ interface ListState {
   playbackRevision: symbol;
   historyList: SongInfo[];
   searchHistory: string[];
-  localPlayList: CoverType[];
   // loginType: LoginType;
   userData: UserInfo;
   // 登录状态
@@ -92,8 +91,6 @@ export const useDataStore = defineStore("data", {
     historyList: [],
     // 搜索历史
     searchHistory: [],
-    // 本地歌单
-    localPlayList: [],
     // 登录状态
     userLoginStatus: false,
     identityRevision: 0,
@@ -141,6 +138,8 @@ export const useDataStore = defineStore("data", {
         await Promise.all(
           musicDataKeys.map(async (key) => {
             const data = await musicDB.getItem(key);
+            // 本地歌单由独立 store 加载和校验，避免与播放队列共同维护。
+            if (key === "localPlayList") return;
             this[key] =
               playbackDataKeys.has(key) && Array.isArray(data)
                 ? createPlaybackListSnapshot(data as SongInfo[])

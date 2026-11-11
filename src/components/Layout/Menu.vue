@@ -29,6 +29,7 @@ import {
 } from "naive-ui";
 import { useMobile } from "@/composables/useMobile";
 import { useDataStore, useSettingStore, useStatusStore } from "@/stores";
+import { useLocalPlaylistStore } from "@/stores/localPlaylists";
 import { RouterLink, useRouter } from "vue-router";
 import { renderIcon } from "@/utils/helper";
 import { platform } from "@/platform";
@@ -44,6 +45,10 @@ const router = useRouter();
 const dataStore = useDataStore();
 const statusStore = useStatusStore();
 const settingStore = useSettingStore();
+const localPlaylists = useLocalPlaylistStore();
+if (platform.capabilities.localMusic) {
+  void localPlaylists.load().catch((error: unknown) => console.error("本地歌单加载失败", error));
+}
 
 const { t } = useI18n();
 const { isDesktop } = useMobile();
@@ -167,26 +172,7 @@ const menuOptions = computed<MenuOption[] | MenuGroupOption[]>(() => {
           type: "divider",
         },
         // 创建的歌单
-        {
-          key: "user-playlist",
-          icon: statusStore.menuCollapsed ? renderIcon("PlaylistAdd") : undefined,
-          label: () =>
-            h("div", { class: "user-list" }, [
-              h(NText, { depth: 3 }, () => [t("nav.created_playlist")]),
-              h(NButton, {
-                type: "tertiary",
-                round: true,
-                strong: true,
-                secondary: true,
-                renderIcon: renderIcon("Add"),
-                onclick: (event: Event) => {
-                  event.stopPropagation();
-                  openCreatePlaylist();
-                },
-              }),
-            ]),
-          children: [...createPlaylist.value],
-        },
+        createdPlaylistsMenu.value,
         // 收藏的歌单
         {
           key: "liked-playlists",
@@ -208,6 +194,7 @@ const menuOptions = computed<MenuOption[] | MenuGroupOption[]>(() => {
             label: t("common.local_music"),
             icon: renderIcon("FolderMusic"),
           },
+          createdPlaylistsMenu.value,
         ]
       : [];
 });
@@ -268,6 +255,51 @@ const createPlaylist = computed<MenuOption[]>(() => {
   return renderUserPlaylist(list, settingStore.menuShowCover);
 });
 
+const localPlaylistOptions = computed<MenuOption[]>(() =>
+  localPlaylists.playlists.map((playlist) => ({
+    key: `local-playlist:${playlist.id}`,
+    id: playlist.id,
+    playlistRoute: "local-playlist",
+    icon: settingStore.menuShowCover ? undefined : renderIcon("FolderMusic"),
+    label: () =>
+      h("div", { class: "pl-cover" }, [
+        settingStore.menuShowCover
+          ? h(NAvatar, {
+              src: gatewayProxyUrl(playlist.cover || "/images/album.jpg?asset"),
+              fallbackSrc: "/images/album.jpg?asset",
+              lazy: true,
+            })
+          : null,
+        h(NEllipsis, null, () => playlist.name),
+        h(NText, { depth: 3, style: { fontSize: "11px", marginLeft: "6px", flexShrink: 0 } }, () =>
+          t("local_playlists.local_short"),
+        ),
+      ]),
+  })),
+);
+const createdPlaylistsMenu = computed<MenuOption>(() => ({
+  key: "user-playlist",
+  icon: statusStore.menuCollapsed ? renderIcon("PlaylistAdd") : undefined,
+  label: () =>
+    h("div", { class: "user-list" }, [
+      h(NText, { depth: 3 }, () => t("nav.created_playlist")),
+      h(NButton, {
+        type: "tertiary",
+        round: true,
+        strong: true,
+        secondary: true,
+        renderIcon: renderIcon("Add"),
+        onClick: (event: Event) => {
+          event.stopPropagation();
+          void openCreatePlaylist({ local: !settingStore.useOnlineService });
+        },
+      }),
+    ]),
+  children: [
+    ...(settingStore.useOnlineService ? createPlaylist.value : []),
+    ...(platform.capabilities.localMusic ? localPlaylistOptions.value : []),
+  ],
+}));
 // 收藏的歌单
 const likedPlaylist = computed<MenuOption[]>(() => {
   return renderPlaylist(dataStore.userLikeData.playlists, settingStore.menuShowCover);
@@ -290,9 +322,9 @@ const menuUpdate = (key: string, item: MenuOption) => {
       name: (item.type as string) || "",
       query: { id: item.id as string, platform: item.platform as string },
     });
-  } else if ((item.type as string) === "user-playlist") {
+  } else if ((item.type as string) === "user-playlist" || item.playlistRoute === "local-playlist") {
     router.push({
-      name: (item.type as string) || "",
+      name: item.playlistRoute === "local-playlist" ? "local-playlist" : "user-playlist",
       query: { id: item.id as string },
     });
   } else {
@@ -315,7 +347,7 @@ const checkMenuItem = () => {
     (router.currentRoute.value?.name as string);
   if (!routerName) return;
   // 处理本地歌曲子路由
-  if (routerName.startsWith("local-")) {
+  if (routerName.startsWith("local-") && routerName !== "local-playlist") {
     routerName = "local";
   }
   // 处理收藏子路由
@@ -352,6 +384,12 @@ const checkMenuItem = () => {
       menuRef.value?.showOption(playlistId);
       break;
     }
+    case "local-playlist": {
+      const id = router.currentRoute.value.query.id;
+      menuActiveKey.value = typeof id === "string" ? `local-playlist:${id}` : "local";
+      menuRef.value?.showOption(menuActiveKey.value);
+      break;
+    }
     default:
       menuActiveKey.value = routerName;
       break;
@@ -364,6 +402,7 @@ watch(
     router.currentRoute.value,
     dataStore.userLikeData.playlists,
     dataStore.userCreatedPlaylist,
+    localPlaylists.playlists,
   ],
   () => checkMenuItem(),
 );

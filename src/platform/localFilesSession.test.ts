@@ -375,4 +375,54 @@ describe("LocalFilesSession", () => {
       "Download directory unavailable",
     );
   });
+  it("自动同步复用未变化条目，仅发布新增、修改或删除", async () => {
+    const f = await fixture();
+    await f.local.scan();
+    const first = f.local.entries.value;
+    await f.local.refreshWhenIdle(new AbortController().signal);
+    expect(f.local.entries.value).toBe(first);
+    expect(f.local.syncing.value).toBe(false);
+    const added = {
+      ...entry(),
+      filename: "added.mp3",
+      relativePath: "added.mp3",
+      ref: { ...entry().ref, fileId: "added", relativePath: "added.mp3" },
+    };
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce(page([entry(), added]));
+    await f.local.refreshWhenIdle(new AbortController().signal);
+    expect(f.local.entries.value).toHaveLength(2);
+    expect(f.local.entries.value[0]).toBe(first[0]);
+    const changed = entry();
+    changed.metadata.Title = "已修改";
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce(page([changed]));
+    await f.local.refreshWhenIdle(new AbortController().signal);
+    expect(f.local.entries.value).not.toBe(first);
+    expect(f.local.entries.value[0].metadata.Title).toBe("已修改");
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce(page([]));
+    await f.local.refreshWhenIdle(new AbortController().signal);
+    expect(f.local.entries.value).toEqual([]);
+  });
+
+  it("取消自动同步不会取消后来发起的手动扫描", async () => {
+    const f = await fixture();
+    const oldPage = deferred<ScanPage>();
+    const manualPage = deferred<ScanPage>();
+    vi.mocked(f.provider.readScanPage!)
+      .mockReturnValueOnce(oldPage.promise)
+      .mockReturnValueOnce(manualPage.promise);
+    const controller = new AbortController();
+    const automatic = f.local.refreshWhenIdle(controller.signal);
+    await flush();
+    expect(f.local.syncing.value).toBe(true);
+    const manual = f.local.scan();
+    await flush();
+    controller.abort();
+    oldPage.resolve(page([]));
+    await automatic;
+    expect(f.local.scanning.value).toBe(true);
+    expect(f.local.syncing.value).toBe(false);
+    manualPage.resolve(page());
+    await manual;
+    expect(f.local.entries.value).toHaveLength(1);
+  });
 });

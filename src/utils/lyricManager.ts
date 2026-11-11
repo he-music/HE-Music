@@ -7,6 +7,7 @@ import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
 import { filesSession } from "@/platform/filesSession";
 import { readLocalLyrics } from "@/platform/localResource";
+import type { ScanEntry } from "@/platform/mygo.bindings";
 
 class LyricManager {
   private lyricRequest = 0;
@@ -46,9 +47,13 @@ class LyricManager {
    * @param path 本地歌词路径
    * @returns 歌词数据
    */
-  private async handleLocalLyric(path: string, songID: string): Promise<SongLyric> {
+  private async handleLocalLyric(
+    path: string,
+    songID: string,
+    downloadedEntry?: ScanEntry,
+  ): Promise<SongLyric> {
     try {
-      const entry = nativeLocalEntry(songID);
+      const entry = downloadedEntry ?? nativeLocalEntry(songID);
       const owner = filesSession.value;
       if (
         !entry ||
@@ -61,7 +66,11 @@ class LyricManager {
       const ref = { ...entry.ref };
       // 扫描字段是最多1024字节的展示预览，播放时通过 HTTP 读取完整歌词。
       const lyric = await readLocalLyrics(entry);
-      const current = nativeLocalEntry(songID);
+      const current = downloadedEntry
+        ? owner.libraryEntries.find(
+            (item) => item.ref.fileId === ref.fileId && item.ref.grantToken === ref.grantToken,
+          )
+        : nativeLocalEntry(songID);
       if (
         filesSession.value !== owner ||
         !owner.ready.value ||
@@ -154,7 +163,12 @@ class LyricManager {
    * @param platform 平台
    * @param path 本地歌词路径（可选）
    */
-  public async handleLyric(id: string, platform: string, path?: string) {
+  public async handleLyric(
+    id: string,
+    platform: string,
+    path?: string,
+    downloadedEntry?: ScanEntry,
+  ) {
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
     const settingStore = useSettingStore();
@@ -163,8 +177,12 @@ class LyricManager {
       // 歌词加载状态
       statusStore.lyricLoading = true;
       let lyricData;
-      if (path) {
-        lyricData = await this.handleLocalLyric(path, id);
+      if (path || downloadedEntry) {
+        lyricData = await this.handleLocalLyric(
+          path || downloadedEntry?.relativePath || "",
+          id,
+          downloadedEntry,
+        );
         // 排除本地歌词内容
         if (settingStore.enableLocalLyricsExclude) {
           lyricData = this.handleLyricExclude(lyricData);

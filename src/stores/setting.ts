@@ -83,6 +83,7 @@ export interface SettingState {
   songLevel: string;
   playDevice: "default" | string;
   playbackEngine: PlaybackEngineId;
+  preferDownloaded: boolean;
   outputDevices: PlaybackOutputDevices;
   autoPlay: boolean;
   songVolumeFade: boolean;
@@ -170,6 +171,7 @@ export const createSettingState = (): SettingState => ({
   songLevel: "320mp3", // 音质
   playDevice: "default", // 播放设备
   playbackEngine: "web-audio",
+  preferDownloaded: true,
   outputDevices: defaultOutputDevices(),
   autoPlay: false, // 自动播放
   songVolumeFade: true, // 渐入渐出

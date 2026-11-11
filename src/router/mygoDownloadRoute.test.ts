@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => {
     files: {},
     capabilities: { localMusic: false },
   };
-  return { platform, electron: false, warning: vi.fn() };
+  return { platform, electron: false, loggedIn: true, warning: vi.fn() };
 });
 vi.mock("vue-router", async (original) => {
   const actual = await original<typeof import("vue-router")>();
@@ -19,7 +19,7 @@ vi.mock("@/utils/env", () => ({
   },
 }));
 vi.mock("@/utils/modal", () => ({ openUserLogin: vi.fn() }));
-vi.mock("@/utils/auth", () => ({ isLogin: () => true }));
+vi.mock("@/utils/auth", () => ({ isLogin: () => mocks.loggedIn }));
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
 vi.mock("@/stores", () => ({
   usePlatformStore: () => ({ platforms: [{}], loadPlatforms: vi.fn() }),
@@ -47,6 +47,12 @@ vi.mock("./routes", () => {
         component,
         children: [{ path: "songs", name: "local-songs", component }],
       },
+      {
+        path: "/local-playlist",
+        name: "local-playlist",
+        meta: { needApp: true, offline: true },
+        component,
+      },
       { path: "/desktop-only", name: "desktop-only", meta: { needApp: true }, component },
     ],
   };
@@ -57,6 +63,7 @@ beforeEach(() => {
   mocks.platform.files = {};
   mocks.platform.capabilities.localMusic = false;
   mocks.electron = false;
+  mocks.loggedIn = true;
   mocks.warning.mockClear();
   vi.stubGlobal("window", { $message: { warning: mocks.warning } });
 });
@@ -89,4 +96,18 @@ it("文件路由例外不放宽Web、无文件provider或其它桌面路由", as
   mocks.platform.kind = "mygo";
   await router.push({ name: "local" });
   expect(router.currentRoute.value.name).toBe("local");
+});
+
+it("本地歌单独立路由不要求登录，并在每次导航校验歌曲列表 ID", async () => {
+  const router = (await import("./index")).default;
+  mocks.loggedIn = false;
+  await router.push({ name: "local-playlist", query: { id: "first" } });
+  expect(router.currentRoute.value.name).toBe("local-playlist");
+  await router.push({ name: "local-playlist", query: { id: "second" } });
+  expect(router.currentRoute.value.query.id).toBe("second");
+  await router.push({ name: "local-playlist", query: {} });
+  expect(router.currentRoute.value.name).toBe("403");
+  mocks.platform.kind = "web";
+  await router.push({ name: "local-playlist", query: { id: "first" } });
+  expect(router.currentRoute.value.name).toBe("403");
 });

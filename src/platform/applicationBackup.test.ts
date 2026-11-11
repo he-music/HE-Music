@@ -133,3 +133,23 @@ it("keeps supported Electron lyric preferences when one old field is unsupported
     desktopLyricStyle: { unplayedColor: "#123456", playedColor: "#fe7971" },
   });
 });
+
+it("本地歌单的导入图片随备份往返，不需要原文件路径或临时地址", async () => {
+  const { parseLocalPlaylists } = await import("@/utils/localPlaylist");
+  const cover = "data:image/jpeg;base64,imported";
+  const record = {
+    namespace: "music-data/music",
+    key: "localPlayList",
+    data: await encodeApplicationValue([
+      { id: "local", name: "本地封面", cover, description: "", songs: [] },
+    ]),
+  };
+  const exported = JSON.stringify({
+    format: "he-music-application-data",
+    version: 1,
+    records: [record],
+  });
+  const restored = parseApplicationBackup(exported);
+  expect(parseLocalPlaylists(JSON.parse(restored.records[0].data.value))[0].cover).toBe(cover);
+  expect(JSON.stringify(restored)).not.toMatch(/blob:|file:\/\/|grantToken/);
+});

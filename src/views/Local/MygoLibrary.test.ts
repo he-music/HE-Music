@@ -11,6 +11,7 @@ import * as recoveryModule from "@/platform/libraryDirectoryRecovery";
 import * as songRowsModule from "@/platform/librarySongRows";
 import * as VueRouter from "vue-router";
 import { useSongSearch } from "@/composables/useSongSearch";
+import { useLibrarySync } from "@/composables/useLibrarySync";
 
 type Element = {
   tag: string;
@@ -66,6 +67,7 @@ async function mount() {
     },
     "vue-router": VueRouter,
     "@/composables/useSongSearch": { useSongSearch },
+    "@/composables/useLibrarySync": { useLibrarySync },
     "@/components/List/SongList.vue": {
       default: Vue.defineComponent({
         props: ["data", "loading", "hiddenCover", "hiddenSize"],

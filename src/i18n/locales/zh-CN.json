@@ -1,4 +1,23 @@
 {
+  "local_playlists": {
+    "cover": "歌单封面",
+    "choose_cover": "选择本地图片",
+    "cover_link": "图片链接",
+    "remove_cover": "移除封面",
+    "invalid_cover": "图片无法读取，请选择不超过 10 MB 的 JPG、PNG、GIF 或 WebP 图片",
+    "online": "在线歌单",
+    "local_short": "本地",
+    "not_found": "歌单不存在",
+    "title": "本地歌单",
+    "empty": "暂无本地歌单",
+    "save_failed": "保存失败，请重试",
+    "unavailable": "文件不可用",
+    "relink": "重新关联",
+    "move_up": "上移",
+    "move_down": "下移",
+    "remove": "移除",
+    "delete_confirm": "删除歌单“{name}”？音乐文件会保留。"
+  },
   "lyricToolbar": {
     "label": "歌词选项",
     "shortLabel": "词",
@@ -1025,6 +1044,7 @@
       "full_player_cache_tip": "在播放器收起时是否销毁，开启将会增大内存占用",
       "memory_last_seek": "记忆上次播放位置",
       "memory_last_seek_tip": "程序启动时恢复上次播放位置",
+      "prefer_downloaded": "优先播放同音质已下载文件",
       "online_song_quality": "在线歌曲音质",
       "output_device": "音频输出设备",
       "output_device_audio_channel_occupancy": "音频通道占用",

@@ -1,10 +1,10 @@
 import { type PlayModeType } from "@/types/main";
 import { cloneDeep } from "lodash-es";
 import { useMusicStore, useStatusStore, useDataStore, useSettingStore } from "@/stores";
-import { calculateProgress, msToS } from "./time";
+import { calculateProgress } from "./time";
 import { shuffleArray } from "./helper";
 import songManager from "./songManager";
-import { hasNativeSystemMedia, isMygo } from "./env";
+import { isMygo } from "./env";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 import { localResourceURL } from "@/platform/localResource";
 import {
@@ -18,7 +18,7 @@ import audioManager, { AudioEventType } from "./audioManager";
 import type { AudioSourceInfo } from "./audioCapability";
 import type { PlaybackEngineId } from "@/core/audio-player/IPlaybackEngine";
 import { filesSession } from "@/platform/filesSession";
-import { getSongCanPlayLinks } from "./song";
+import { selectPlaybackQuality } from "./playbackQuality";
 import { listRadioSongs } from "@/api/radio";
 import { t } from "@/i18n";
 import type { Link, SongInfo } from "@/types/main.hemusic";
@@ -26,14 +26,20 @@ import { AxiosError } from "axios";
 import { createNativePlayModeCoordinator } from "./nativePlayMode";
 
 import { PlaybackRecovery } from "./playbackRecovery";
+import { BrowserMediaSession } from "./browserMediaSession";
+import { resolveDownloadedPlayback, type DownloadedPlayback } from "@/platform/downloadedPlayback";
 
 import { gatewayProxyUrl } from "@/platform/gateway";
+
 class PlaybackOutputError extends Error {}
 /**
  * 播放器核心
  * 基于 AudioManager 实现
  */
 class Player {
+  private readonly mediaSession = new BrowserMediaSession();
+  private downloadedPlayback?: DownloadedPlayback;
+  private readonly failedDownloads = new Set<string>();
   /** 自动关闭定时器 */
   private autoCloseInterval: ReturnType<typeof setInterval> | undefined;
   /** 存储事件回调函数的引用，用于清理 */
@@ -90,8 +96,10 @@ class Player {
 
   constructor() {
     registerLocalAudioStopper((target?: LocalAudioBlockTarget) => {
-      if (!useMusicStore().playSong.path) return;
-      const entry = nativeLocalEntry(useMusicStore().playSong.id);
+      const song = useMusicStore().playSong;
+      if (!song.path && !this.downloadedPlayback) return;
+      const entry =
+        this.downloadedPlayback?.entry ?? (song.path ? nativeLocalEntry(song.id) : undefined);
       if (
         target &&
         (typeof target === "string"
@@ -103,6 +111,7 @@ class Player {
       )
         return;
       ++this.playRequestId;
+      this.downloadedPlayback = undefined;
       this.recovery.closeMpvDialog();
       this.recovery.clearAttempt();
       this.pendingAutoPlay = undefined;
@@ -113,7 +122,7 @@ class Player {
       return released;
     });
     // 初始化媒体会话
-    this.initMediaSession();
+    this.mediaSession.init(this);
     // 绑定音频事件
     this.bindAudioEvents();
   }
@@ -227,6 +236,7 @@ class Player {
         "❌ song error:",
         `code=${errorCode}; ${reasons[errorCode] || "未知媒体错误"}${errorMessage ? `; ${errorMessage}` : ""}`,
       );
+      if (this.retryDownloadedOnline()) return;
       this.recovery.handleMediaError(errorCode, errorMessage);
     };
     audioManager.on("error", errorCallback);
@@ -244,7 +254,7 @@ class Player {
       // 更新状态
       statusStore.$patch({ currentTime, duration, progress, lyricIndex });
       // 更新 MediaSession
-      this.updateMediaSessionState(duration, currentTime);
+      this.mediaSession.updatePosition(duration, currentTime);
     };
     audioManager.on("timeupdate", timeupdateCallback);
     this.eventCallbacks.set("timeupdate", timeupdateCallback);
@@ -339,107 +349,17 @@ class Player {
       }
     }
     // 获取歌词数据
-    lyricManager.handleLyric(id, platform, path);
+    if (this.downloadedPlayback) {
+      lyricManager.handleLyric(id, platform, undefined, this.downloadedPlayback.entry);
+    } else {
+      lyricManager.handleLyric(id, platform, path);
+    }
     // 新增播放历史
     dataStore.setHistory(musicStore.playSong);
     // 获取歌曲封面主色
     if (!path) songManager.getCoverColor(musicStore.songCover);
     // 更新 MediaSession
-    if (!path) this.updateMediaSession();
-  }
-  /**
-   * 初始化 MediaSession
-   */
-  private initMediaSession() {
-    const settingStore = useSettingStore();
-    if (hasNativeSystemMedia || !settingStore.smtcOpen) return;
-    if (!("mediaSession" in navigator)) return;
-    if (typeof navigator.mediaSession.setActionHandler !== "function") return;
-    const setHandler = (action: MediaSessionAction, handler: MediaSessionActionHandler) => {
-      try {
-        navigator.mediaSession.setActionHandler(action, handler);
-      } catch {
-        // 部分宿主只实现了 MediaSession 的部分 action。
-      }
-    };
-    setHandler("play", () => this.play());
-    setHandler("pause", () => this.pause());
-    setHandler("previoustrack", () => this.nextOrPrev("prev"));
-    setHandler("nexttrack", () => this.nextOrPrev("next"));
-    setHandler("seekto", (event) => {
-      const seekTime = Number(event.seekTime) * 1000;
-      if (Number.isFinite(seekTime) && seekTime >= 0) this.setSeek(seekTime);
-    });
-  }
-  /** 更新 MediaSession */
-  private updateMediaSession() {
-    const settingStore = useSettingStore();
-    if (hasNativeSystemMedia || !settingStore.smtcOpen) return;
-    if (!("mediaSession" in navigator)) return;
-    if (typeof window.MediaMetadata !== "function") return;
-    const musicStore = useMusicStore();
-    // 获取播放数据
-    const playSongData = songManager.getPlaySongData();
-    if (!playSongData) return;
-    // 获取数据
-    const metaData: MediaMetadataInit = {
-      title: playSongData.name,
-      artist: Array.isArray(playSongData.artists)
-        ? playSongData.artists.map((item) => item.name).join(" / ")
-        : String(playSongData.artists),
-      album:
-        typeof playSongData.album === "object"
-          ? playSongData.album.name
-          : String(playSongData.album),
-      artwork: [
-        {
-          src: musicStore.getSongCover(1000),
-          sizes: "1000x1000",
-          type: "image/jpeg",
-        },
-        {
-          src: musicStore.getSongCover(700),
-          sizes: "700x700",
-          type: "image/jpeg",
-        },
-        {
-          src: musicStore.getSongCover(500),
-          sizes: "500x500",
-          type: "image/jpeg",
-        },
-      ],
-    };
-    try {
-      navigator.mediaSession.metadata = new window.MediaMetadata(metaData);
-    } catch {
-      // 宿主可能尚未实现 metadata 写入，不能阻断歌曲初始化。
-    }
-  }
-  /**
-   * 实时更新 MediaSession
-   * @param duration 歌曲总时长（毫秒）
-   * @param currentTime 当前播放时间（毫秒）
-   */
-  private updateMediaSessionState(duration: number, currentTime: number) {
-    const settingStore = useSettingStore();
-    if (hasNativeSystemMedia || !settingStore.smtcOpen) return;
-    if (
-      !("mediaSession" in navigator) ||
-      typeof navigator.mediaSession.setPositionState !== "function"
-    ) {
-      return;
-    }
-    const durSec = msToS(duration);
-    const posSec = msToS(currentTime);
-    if (!Number.isFinite(durSec) || durSec <= 0 || !Number.isFinite(posSec) || posSec < 0) return;
-    try {
-      navigator.mediaSession.setPositionState({
-        duration: durSec,
-        position: Math.min(posSec, durSec),
-      });
-    } catch {
-      // 忽略部分平台或过渡状态下的 MediaSession 临时异常
-    }
+    if (!path) this.mediaSession.updateMetadata();
   }
   /**
    * 获取频谱数据
@@ -470,6 +390,29 @@ class Player {
     if (isCurrent && !isCurrent()) return;
     musicStore.resetMusicData();
     if (isCurrent && !isCurrent()) return;
+  }
+  /** 本地副本读取或解码失败时只回退一次，保留歌曲身份、位置及最新播放意图。 */
+  private retryDownloadedOnline(): boolean {
+    const downloaded = this.downloadedPlayback;
+    if (!downloaded || ["device", "engine"].includes(audioManager.error?.kind ?? "")) return false;
+    this.downloadedPlayback = undefined;
+    this.failedDownloads.add(downloaded.key);
+    if (this.failedDownloads.size > 32) {
+      const oldest = this.failedDownloads.values().next().value;
+      if (oldest) this.failedDownloads.delete(oldest);
+    }
+    const seek = this.getSeek();
+    void this.initPlayer(
+      this.autoPlayIntent,
+      seek,
+      useStatusStore().playQuality,
+      this.autoPlayOwner,
+      true,
+    ).catch((error: unknown) => {
+      this.logPlaybackError("已下载文件回退在线失败:", error);
+      window.$message.error(t("message.song_play_fail"));
+    });
+    return true;
   }
   /**
    * 初始化播放器
@@ -504,11 +447,13 @@ class Player {
         engine === "mpv" ||
         audioManager.engineId === "mpv" ||
         preserveIntent ||
-        useMusicStore().playSong.path
+        useMusicStore().playSong.path ||
+        this.downloadedPlayback
       ) {
         await audioManager.clearSource();
         if (currentRequestId !== this.playRequestId) return;
       }
+      this.downloadedPlayback = undefined;
       if (engine === "mpv" || (audioManager.engineId && audioManager.engineId !== engine))
         await audioManager.setEngine(engine);
       if (currentRequestId !== this.playRequestId) return;
@@ -578,6 +523,36 @@ class Player {
         // 获取歌曲 URL 单独 try-catch
         try {
           const link = this.selectPlayQuality(playSongData, quality);
+          if (isMygo && useSettingStore().preferDownloaded && !localAudioBlocked()) {
+            const owner = filesSession.value;
+            const downloaded = await resolveDownloadedPlayback(
+              playSongData,
+              link?.name || quality || statusStore.selectedQuality,
+              engine,
+              owner,
+              () => currentRequestId === this.playRequestId && filesSession.value === owner,
+              this.failedDownloads,
+            );
+            if (currentRequestId !== this.playRequestId) return;
+            if (downloaded) {
+              this.downloadedPlayback = downloaded;
+              statusStore.playQuality = link?.name || quality || statusStore.selectedQuality;
+              try {
+                await this.createPlayer(
+                  downloaded.url,
+                  autoPlay,
+                  seek,
+                  this.autoPlayOwner,
+                  downloaded.source,
+                );
+              } catch (error) {
+                if (currentRequestId !== this.playRequestId) return;
+                if (error instanceof PlaybackOutputError || !this.retryDownloadedOnline())
+                  throw error;
+              }
+              return;
+            }
+          }
           if (!link) throw new Error("Get song link error");
           statusStore.playQuality = link.name;
           console.log(`Getting online song url: ${this.getSongLogInfo()}; quality=${link.name}`);
@@ -1332,32 +1307,13 @@ class Player {
   selectPlayQuality(songInfo: SongInfo, quality: string): Link | null {
     const statusStore = useStatusStore();
     const settingStore = useSettingStore();
-    const currentQuality = statusStore.playQuality;
-    const songLevel = settingStore.songLevel;
-    const selectedQuality = statusStore.selectedQuality;
-
-    const links = getSongCanPlayLinks(songInfo, isMygo ? settingStore.playbackEngine : "web-audio");
-    if (links?.length == 0) {
-      return null;
-    }
-
-    // 如果有quality 说明是切换音质
-    let link = links.find((item) => item.name === quality);
-    if (link) {
-      return link;
-    }
-
-    const qualityList = (
-      songLevel === "auto" ? [selectedQuality, "hires", "flac", "320mp3", "128mp3"] : []
-    ).concat([songLevel, currentQuality, selectedQuality]);
-    for (const quality of qualityList) {
-      link = links.find((item) => item.name === quality);
-      if (link) {
-        return link;
-      }
-    }
-    // 默认返回第一个
-    return links[0];
+    return selectPlaybackQuality(songInfo, {
+      engine: isMygo ? settingStore.playbackEngine : "web-audio",
+      requested: quality,
+      configured: settingStore.songLevel,
+      current: statusStore.playQuality,
+      selected: statusStore.selectedQuality,
+    });
   }
 
   /**

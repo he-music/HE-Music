@@ -106,12 +106,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, KeepAlive, shallowRef, watch } from "vue";
+import { computed, shallowRef, watch } from "vue";
 import LocalScanIssues from "@/components/Local/LocalScanIssues.vue";
 import { RouterView, useRoute, useRouter } from "vue-router";
 import type { DropdownOption } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import { useSongSearch } from "@/composables/useSongSearch";
+import { useLibrarySync } from "@/composables/useLibrarySync";
 import { filesSession } from "@/platform/filesSession";
 import { localFilesSession } from "@/platform/localFilesSession";
 import { createLibrarySongRows } from "@/platform/librarySongRows";
@@ -120,6 +121,7 @@ import { renderIcon } from "@/utils/helper";
 import { usePlayer } from "@/utils/player";
 import { useSettingStore } from "@/stores";
 
+useLibrarySync();
 const { t } = useI18n();
 const router = useRouter();
 const route = useRoute();
@@ -128,7 +130,9 @@ const session = localFilesSession;
 const settingStore = useSettingStore();
 const ready = computed(() => filesSession.value?.ready.value ?? false);
 const grantCount = computed(() => filesSession.value?.directories.value.length ?? 0);
-const scanning = computed(() => session.value?.scanning.value ?? false);
+const scanning = computed(
+  () => (session.value?.scanning.value && !session.value.syncing.value) ?? false,
+);
 const localType = computed(() => String(route.name ?? "local-songs"));
 const query = shallowRef("");
 const defaultMusicPath = shallowRef("");
