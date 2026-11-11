@@ -22,6 +22,7 @@
     "test": "vitest run",
     "test:core": "vitest run src/bootstrap src/core/audio-player src/utils/player src/utils/playbackRecovery src/utils/audioManager src/utils/songManager src/platform/downloadedPlayback src/platform/librarySync src/platform/localFilesSession src/stores/localPlaylists src/utils/lyricManager src/platform/localMetadata src/platform/localDownloadSession src/platform/updatesSession src/components/UI/VirtualScroll",
     "check:runtime": "node scripts/check-runtime.mjs",
+    "check:ci": "pnpm check:runtime && pnpm vendor:check && pnpm lint:check && pnpm typecheck && pnpm test && pnpm test:desktop:vendor && pnpm test:desktop:release && pnpm test:desktop:mpv && pnpm lint:go && go test ./... && pnpm build:web",
     "lint": "pnpm exec eslint . --fix",
     "lint:check": "eslint . --max-warnings 0",
     "lint:go": "mise x golangci-lint@2.15.0 -- golangci-lint run -c .golangci.yml --allow-parallel-runners --timeout=10m",
