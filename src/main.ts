@@ -14,6 +14,7 @@ import {
 import { bootstrapWindow } from "./bootstrap/window";
 import { isDesktopLyricsWindow } from "./bootstrap/windowRole";
 import { initializeGateway } from "@/platform/gateway";
+import { showStartupFailure } from "./bootstrap/startupFailure";
 
 async function start(): Promise<void> {
   if (isMyGo() && !isDesktopLyricsWindow("mygo", location.hash)) {
@@ -44,7 +45,11 @@ async function start(): Promise<void> {
 
 void start().catch((error: unknown) => {
   console.error("应用初始化失败", error);
-  if (error instanceof PreferencesResetRecoveryError) showPreferencesResetRecoveryFailure(error);
-  if (error instanceof ApplicationStorageRecoveryError)
+  if (error instanceof PreferencesResetRecoveryError) {
+    showPreferencesResetRecoveryFailure(error);
+  } else if (error instanceof ApplicationStorageRecoveryError) {
     showApplicationStorageRecoveryFailure(error);
+  } else {
+    showStartupFailure();
+  }
 });

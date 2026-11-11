@@ -1,4 +1,5 @@
 import { dropApplicationDatabase, flushApplicationWrites } from "./applicationStorage";
+import { showStartupFailure } from "@/bootstrap/startupFailure";
 import zh from "@/i18n/locales/mygo/preferencesReset.zh-CN.json";
 import en from "@/i18n/locales/mygo/preferencesReset.en.json";
 
@@ -60,14 +61,8 @@ export async function recoverPreferencesResetBeforeMount(
 
 /** A failed recovery must remain outside the normal application/store tree. */
 export function showPreferencesResetRecoveryFailure(error: PreferencesResetRecoveryError): void {
-  const target = document.getElementById("app");
-  if (!target) return;
-  const message = document.createElement("p");
-  message.textContent = error.message;
-  const reason = document.createElement("p");
-  reason.textContent = error.cause instanceof Error ? error.cause.message : "";
-  const retry = document.createElement("button");
-  retry.textContent = recoveryText().reset_recovery_retry;
-  retry.onclick = () => window.location.reload();
-  target.replaceChildren(message, reason, retry);
+  showStartupFailure({
+    message: error.message,
+    detail: error.cause instanceof Error ? error.cause.message : undefined,
+  });
 }
