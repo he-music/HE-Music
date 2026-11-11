@@ -19,6 +19,7 @@ import { type DropdownOption, NFlex, NText } from "naive-ui";
 import type { SongInfo } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
 import { useSongMenu } from "@/composables/useSongMenu";
+import { useLocalArtwork } from "@/composables/useLocalArtwork";
 import SImage from "@/components/UI/s-image.vue";
 import songManager from "@/utils/songManager";
 import { getSizeCover } from "@/utils/format";
@@ -32,6 +33,13 @@ const dropdownX = ref<number>(0);
 const dropdownY = ref<number>(0);
 const dropdownShow = ref<boolean>(false);
 const dropdownOptions = ref<DropdownOption[]>([]);
+const currentSong = shallowRef<SongInfo | null>(null);
+const { url: localArtworkURL } = useLocalArtwork(currentSong, dropdownShow);
+const coverURL = computed(() => {
+  const song = currentSong.value;
+  if (!song) return undefined;
+  return song.path ? localArtworkURL.value || song.cover : getSizeCover(song);
+});
 
 const { getMenuOptions } = useSongMenu();
 
@@ -55,6 +63,7 @@ const openDropdown = (
     e.preventDefault();
     dropdownShow.value = false;
     // 当前歌曲信息
+    currentSong.value = song;
     const songData = songManager.getPlayerInfoObj(song);
     const baseOptions = getMenuOptions(song, index, playlist, (event, args) => emit(event, args));
     // 头部信息
@@ -71,7 +80,7 @@ const openDropdown = (
           },
           {
             default: () => [
-              h(SImage, { src: getSizeCover(song) }),
+              h(SImage, { src: coverURL.value }),
               h(
                 NFlex,
                 { vertical: true, size: 0 },
