@@ -448,41 +448,14 @@ const refreshMeasurements = () => {
 
 defineExpose({ refreshMeasurements });
 
-// 更新列表播放顺序
-const updatePlayListOrder = () => {
-  // 更新列表
-  if (
-    musicStore.isPlayingPlaylist(
-      props.playlist?.id || "",
-      props.playlist?.platform || "",
-      props.playlist?.type || "",
-    )
-  ) {
-    player.updatePlayList(playableListData.value, musicStore.playSong, props.playlist, {
-      showTip: false,
-      play: false,
-    });
-  }
-  // 滚动到当前播放歌曲或顶部
-  nextTick(() => {
-    if (hasPlaySong.value >= 0) {
-      listRef.value?.scrollToIndex(hasPlaySong.value);
-    } else {
-      listRef.value?.scrollToIndex(0);
-    }
-  });
-};
-
 // 排序更改
 const handleSortFieldChange = (val: SortField) => {
   statusStore.listSortField = val;
-  updatePlayListOrder();
 };
 
 const handleSortOrderChange = (val: SortOrder) => {
   if (statusStore.listSortField === "default") return;
   statusStore.listSortOrder = val;
-  updatePlayListOrder();
 };
 
 // 删除指定索引
