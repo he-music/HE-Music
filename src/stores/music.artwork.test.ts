@@ -4,7 +4,7 @@ import { createRenderer, defineComponent, nextTick, shallowRef } from "vue";
 import persist from "pinia-plugin-persistedstate";
 import { installLocalArtworkReader } from "@/platform/localArtwork";
 
-vi.mock("@/utils/format", () => ({ getSizeCover: (song: { cover: string }) => song.cover }));
+vi.mock("@/utils/songCover", () => ({ getSizeCover: (song: { cover: string }) => song.cover }));
 vi.mock("@/utils/env", () => ({ isElectron: false }));
 vi.mock("@/utils/blob", () => ({ default: { revokeBlobURL: vi.fn() } }));
 vi.mock("@/api/artist", () => ({ artistPhotos: vi.fn() }));

@@ -9,7 +9,7 @@ import { useSettingStore } from "./setting";
 import { persistStatus } from "./persistStatus";
 import songManager from "@/utils/songManager";
 
-vi.mock("@/utils/format", () => ({ getSizeCover: (song: SongInfo) => song.cover }));
+vi.mock("@/utils/songCover", () => ({ getSizeCover: (song: SongInfo) => song.cover }));
 vi.mock("@/utils/blob", () => ({ default: { revokeBlobURL: vi.fn() } }));
 vi.mock("@/utils/helper", () => ({ shuffleArray: <T>(values: T[]) => values }));
 vi.mock("@/api/artist", () => ({ artistPhotos: vi.fn() }));

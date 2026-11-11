@@ -110,7 +110,8 @@
 
 <script setup lang="ts">
 import { albumDetail } from "@/api/album";
-import { useMusicStore, useStatusStore } from "@/stores";
+import { useStatusStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import { debounce } from "lodash-es";
 import CoverMenu from "@/components/Menu/CoverMenu.vue";
 import { usePlayer } from "@/utils/player";

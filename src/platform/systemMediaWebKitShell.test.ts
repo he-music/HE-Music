@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock("@/platform", () => ({ platform: mocks.platform }));
 vi.mock("@/utils/env", () => ({ isElectron: false }));
-vi.mock("@/utils/format", () => ({ getSizeCover: (song: { cover: string }) => song.cover }));
+vi.mock("@/utils/songCover", () => ({ getSizeCover: (song: { cover: string }) => song.cover }));
 vi.mock("@/utils/blob", () => ({ default: {} }));
 vi.mock("@/api/artist", () => ({ artistPhotos: vi.fn() }));
 vi.mock("@/utils/helper", () => ({ shuffleArray: vi.fn() }));

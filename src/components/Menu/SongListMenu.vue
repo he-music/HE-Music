@@ -22,7 +22,7 @@ import { useSongMenu } from "@/composables/useSongMenu";
 import { useLocalArtwork } from "@/composables/useLocalArtwork";
 import SImage from "@/components/UI/s-image.vue";
 import songManager from "@/utils/songManager";
-import { getSizeCover } from "@/utils/format";
+import { getSizeCover } from "@/utils/songCover";
 import { shouldIgnoreTouchContextMenuOutside } from "@/utils/touchContextMenu";
 const { t } = useI18n();
 

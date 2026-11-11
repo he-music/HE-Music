@@ -188,7 +188,7 @@ import { useMygoDownloadedSongs } from "@/composables/mygoDownloadedSongs";
 import { localFilesSession, nativeLocalEntry } from "@/platform/localFilesSession";
 import { LocalFileActions } from "@/platform/localFileActions";
 import type { LocalDownloadTask } from "@/platform/localDownloadSession";
-import { useMusicStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import { usePlayer } from "@/utils/player";
 import { isWin } from "@/utils/env";
 

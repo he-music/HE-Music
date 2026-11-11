@@ -69,7 +69,7 @@ import { usePlayer } from "@/utils/player";
 import { toLikeSong } from "@/utils/auth";
 import { buildSourceUrl } from "@/api/source";
 import { copyData, getShareUrl, renderIcon } from "@/utils/helper";
-import { getSizeCover } from "@/utils/format";
+import { getSizeCover } from "@/utils/songCover";
 import { openDownloadSong, openPlaylistAdd } from "@/utils/modal";
 import { useI18n } from "vue-i18n";
 

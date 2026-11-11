@@ -39,7 +39,7 @@ import SImage from "@/components/UI/s-image.vue";
 import { SongInfo } from "@/types/main.hemusic";
 import songManager from "@/utils/songManager";
 import { useSongMenu } from "@/composables/useSongMenu";
-import { getSizeCover } from "@/utils/format";
+import { getSizeCover } from "@/utils/songCover";
 
 const emit = defineEmits<{ removeSong: [index: SongInfo[]] }>();
 

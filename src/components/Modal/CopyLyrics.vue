@@ -39,7 +39,7 @@
 </template>
 
 <script setup lang="ts">
-import { useMusicStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import { copyData } from "@/utils/helper";
 
 const props = defineProps<{ onClose: () => void }>();

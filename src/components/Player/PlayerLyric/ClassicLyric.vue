@@ -34,7 +34,8 @@
 <script setup lang="ts">
 import { computed, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
-import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
+import { useSettingStore, useStatusStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import { usePlayer } from "@/utils/player";
 import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
 import { adaptClassicLines, lyricSeekTime } from "@/components/Classic/model";

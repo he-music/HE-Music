@@ -1,7 +1,7 @@
 import { applicationStorage } from "@/platform/applicationStorage";
 import { defineStore } from "pinia";
 import type { SongInfo } from "@/types/main.hemusic";
-import { getSizeCover } from "@/utils/format";
+import { getSizeCover } from "@/utils/songCover";
 import { SongLyric } from "@/types/lyric";
 import blob from "@/utils/blob";
 import { artistPhotos } from "@/api/artist";

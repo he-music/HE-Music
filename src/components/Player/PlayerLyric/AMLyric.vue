@@ -47,7 +47,8 @@
 
 <script setup lang="ts">
 import { LyricLineMouseEvent, type LyricLine } from "@applemusic-like-lyrics/core";
-import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
+import { useSettingStore, useStatusStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import { getLyricLanguage } from "@/utils/format";
 import { usePlayer } from "@/utils/player";
 import { cloneDeep } from "lodash-es";

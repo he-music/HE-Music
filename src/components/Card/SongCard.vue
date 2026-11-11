@@ -169,7 +169,8 @@
 </template>
 
 <script setup lang="ts">
-import { useDataStore, useMusicStore, usePlatformStore, useStatusStore } from "@/stores";
+import { useDataStore, usePlatformStore, useStatusStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import { formatFileSize } from "@/utils/helper";
 import { openJumpArtist } from "@/utils/modal";
 import { toLikeSong } from "@/utils/auth";
@@ -177,7 +178,7 @@ import { isObject } from "lodash-es";
 import { secondsToTime } from "@/utils/time";
 import { usePlayer } from "@/utils/player";
 import type { SongInfo } from "@/types/main.hemusic";
-import { getSizeCover } from "@/utils/format";
+import { getSizeCover } from "@/utils/songCover";
 import type { TagProps } from "naive-ui";
 import { IsValidId, songEqual } from "@/utils/song";
 import { FeatureSupportFlag } from "@/api/platform";

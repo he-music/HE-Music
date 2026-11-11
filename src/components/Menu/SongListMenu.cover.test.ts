@@ -42,7 +42,7 @@ function fixture() {
         getPlayerInfoObj: (song: SongInfo) => ({ name: song.name, artist: song.artists }),
       },
     },
-    "@/utils/format": { getSizeCover },
+    "@/utils/songCover": { getSizeCover },
     "@/utils/touchContextMenu": { shouldIgnoreTouchContextMenuOutside: () => false },
   };
   const { descriptor } = parse(

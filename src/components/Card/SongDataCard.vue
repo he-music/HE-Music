@@ -64,7 +64,7 @@ import { gatewayProxyUrl } from "@/platform/gateway";
 import { FeatureSupportFlag } from "@/api/platform";
 import { coverLoaded } from "@/utils/helper";
 import { isObject } from "lodash-es";
-import { getSizeCover } from "@/utils/format";
+import { getSizeCover } from "@/utils/songCover";
 import type { SongInfo } from "@/types/main.hemusic";
 import { openJumpArtist } from "@/utils/modal";
 import { IsValidId } from "@/utils/song";

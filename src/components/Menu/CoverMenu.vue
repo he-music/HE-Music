@@ -15,7 +15,8 @@
 <script setup lang="ts">
 import type { DropdownOption } from "naive-ui";
 import { copyData, renderIcon } from "@/utils/helper";
-import { useMusicStore, useStatusStore } from "@/stores";
+import { useStatusStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import type { CoverType } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
 import { shouldIgnoreTouchContextMenuOutside } from "@/utils/touchContextMenu";

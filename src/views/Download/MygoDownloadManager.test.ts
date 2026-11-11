@@ -137,7 +137,7 @@ function setup(
           entries.value.find((item) => id === `mygo-local:${item.ref.fileId}`),
       },
       "@/platform/localFileActions": { LocalFileActions },
-      "@/stores": { useMusicStore: () => music },
+      "@/stores/music": { useMusicStore: () => music },
       "@/utils/player": { usePlayer: () => ({ updatePlayList: play, addNextSong: playOne }) },
       "vue-router": { useRoute: () => route, useRouter: () => ({ push: navigate }) },
       "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },

@@ -36,7 +36,8 @@
 <script setup lang="ts">
 import SImage from "@/components/UI/s-image.vue";
 import SvgIcon from "@/components/Global/SvgIcon.vue";
-import { useMusicStore, useStatusStore } from "@/stores";
+import { useStatusStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import { PageEntryTargetType, type PageEntry } from "@/types/page";
 import { resolvePageEntryAction } from "@/utils/pageEntry";
 import { usePlayer } from "@/utils/player";

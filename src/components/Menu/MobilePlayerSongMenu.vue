@@ -80,7 +80,7 @@ import SImage from "@/components/UI/s-image.vue";
 import { SongInfo } from "@/types/main.hemusic";
 import songManager from "@/utils/songManager";
 import { useSongMenu } from "@/composables/useSongMenu";
-import { getSizeCover } from "@/utils/format";
+import { getSizeCover } from "@/utils/songCover";
 import { useStatusStore } from "@/stores";
 import { useI18n } from "vue-i18n";
 import { openAutoClose, openChangeRate, openPlaylistAdd } from "@/utils/modal";

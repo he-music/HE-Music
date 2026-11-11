@@ -49,7 +49,7 @@ vi.mock("@/utils/env", () => ({
 }));
 vi.mock("./helper", () => ({ shuffleArray: <T>(items: T[]) => [...items].reverse() }));
 vi.mock("./blob", () => ({ default: {} }));
-vi.mock("@/utils/format", () => ({ getSizeCover: (value: string) => value }));
+vi.mock("@/utils/songCover", () => ({ getSizeCover: (value: string) => value }));
 vi.mock("./audioManager", () => ({ default: { on: vi.fn(), off: vi.fn() } }));
 vi.mock("./songManager", () => ({ default: {} }));
 vi.mock("./lyricManager", () => ({ default: {} }));

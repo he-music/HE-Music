@@ -263,7 +263,8 @@
 </template>
 
 <script setup lang="ts">
-import { useMusicStore, useSettingStore, useStatusStore, useDataStore } from "@/stores";
+import { useSettingStore, useStatusStore, useDataStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import { isEmpty, snakeCase } from "lodash-es";
 import themeColor from "@/assets/data/themeColor.json";
 import { getCoverColor, getCoverColorData } from "@/utils/color";

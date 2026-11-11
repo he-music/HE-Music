@@ -185,7 +185,8 @@
 
 <script setup lang="ts">
 import type { SortField, SortOrder } from "@/types/main";
-import { useMusicStore, useStatusStore } from "@/stores";
+import { useStatusStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import { isEmpty } from "lodash-es";
 import { sortFieldOptions, sortOrderOptions } from "@/utils/meta";
 import { useMobile } from "@/composables/useMobile";

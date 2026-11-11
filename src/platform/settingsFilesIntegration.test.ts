@@ -36,7 +36,7 @@ vi.mock("vue-i18n", () => ({
   useI18n: () => ({ t: (key: string) => key, locale: Vue.ref("zh-CN") }),
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => ({}) }));
-vi.mock("@/utils/format", () => ({ getSizeCover: vi.fn() }));
+vi.mock("@/utils/songCover", () => ({ getSizeCover: vi.fn() }));
 vi.mock("@/utils/blob", () => ({ default: {} }));
 vi.mock("@/api/artist", () => ({ artistPhotos: vi.fn() }));
 vi.mock("@/utils/helper", () => ({ shuffleArray: vi.fn() }));

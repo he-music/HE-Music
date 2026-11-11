@@ -15,7 +15,7 @@ import type { SongInfo } from "@/types/main.hemusic";
 import { songEqual } from "@/utils/song";
 import { usePlayer } from "@/utils/player";
 import songManager from "@/utils/songManager";
-import { getSizeCover } from "@/utils/format";
+import { getSizeCover } from "@/utils/songCover";
 import { isMygo } from "@/utils/env";
 import { filesSession } from "@/platform/filesSession";
 import { nativeLocalEntry, localFilesSession } from "@/platform/localFilesSession";

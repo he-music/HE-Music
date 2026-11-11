@@ -53,7 +53,8 @@
 
 <script setup lang="ts">
 import { gatewayProxyUrl } from "@/platform/gateway";
-import { useMusicStore, useStatusStore } from "@/stores";
+import { useStatusStore } from "@/stores";
+import { useMusicStore } from "@/stores/music";
 import CommentResult from "@/views/Comment/CommentResult.vue";
 import { coverLoaded } from "@/utils/helper";
 import { CommentConfig } from "@/types/main.hemusic";

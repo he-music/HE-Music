@@ -1,9 +1,6 @@
 import type { SongType, CoverType, ArtistType, CommentType, MetaData, CatType } from "@/types/main";
 import { msToTime } from "./time";
 import { flatMap, isArray, uniqBy } from "lodash-es";
-import type { SongInfo } from "@/types/main.hemusic";
-import { getCoverUrlStr } from "@/api/song";
-import { useDataStore, usePlatformStore } from "@/stores";
 
 type CoverDataType = {
   cover: string;
@@ -240,33 +237,6 @@ const getCoverSizeUrl = (url: string, size: number | null = null) => {
     console.error("图片链接处理出错：", error);
     return "/images/song.jpg?asset";
   }
-};
-
-export const getSizeCover = (song: SongInfo | null, size = 300) => {
-  if (!song) {
-    return "/images/song.jpg?asset";
-  }
-
-  const platformStore = usePlatformStore();
-
-  const platformInfo = platformStore.getPlatformInfo(song.platform);
-  const image_sizes = platformInfo?.image_sizes || [];
-  if (image_sizes.length > 0) {
-    // 如果传的小数 说明要最大的
-    if (size < 0) {
-      size = image_sizes[image_sizes.length - 1];
-    } else {
-      size = image_sizes.find((item) => item >= size) || image_sizes[image_sizes.length - 1];
-    }
-  }
-  if (size === 0) size = 300;
-  if (size < 0) size = 1000;
-  const { cover = "", platform, id } = song;
-  if (cover) {
-    return cover.replaceAll("{x}", size.toString()).replaceAll("{y}", size.toString());
-  }
-  const dataStore = useDataStore();
-  return getCoverUrlStr(platform, id, size, true, dataStore.token);
 };
 
 export { getLyricLanguage } from "./lyric/language";
