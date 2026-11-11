@@ -1,4 +1,4 @@
-import { requestHemusic } from "@/utils/request";
+import { requestHemusic, type HemusicRequestConfig } from "@/utils/request";
 import type {
   ComprehensiveSearchResponse,
   SearchLyricSongRequest,
@@ -54,8 +54,10 @@ export const searchSong = (
   page_size: number = 30,
   page_index: number = 1,
   platform: string,
-) => {
+  options: Pick<HemusicRequestConfig, "signal" | "skipErrorMessage"> = {},
+): Promise<SearchSongResponse> => {
   return requestHemusic({
+    ...options,
     url: "/v1/song/search",
     params: {
       key,
@@ -63,7 +65,7 @@ export const searchSong = (
       page_index,
       platform,
     },
-  }) as Promise<SearchSongResponse>;
+  });
 };
 
 // 根据歌词内容搜索歌曲

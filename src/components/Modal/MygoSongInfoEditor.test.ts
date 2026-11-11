@@ -5,15 +5,23 @@ import * as Vue from "vue";
 import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 import { LocalMetadataSession } from "@/platform/localMetadataSession";
-import { LocalMetadataMatch, type MetadataMatchAPI } from "@/platform/localMetadataMatch";
+import {
+  LocalMetadataMatch,
+  type MetadataMatchAPI,
+  type MetadataMatchResourceLoader,
+} from "@/platform/localMetadataMatch";
 import { createMetadataMatchAPI } from "@/platform/localMetadataMatchAPI";
+import { createMetadataMatchResourceLoader } from "@/platform/localMetadataMatchResources";
+import { FeatureSupportFlag } from "@/api/platform";
 import type { MetadataResult, ScanEntry } from "@/platform/mygo.bindings";
 
 const matchRequests = vi.hoisted(() => vi.fn());
 vi.mock("@/utils/request", () => ({
-  default: matchRequests,
+  default: vi.fn(() => {
+    throw new Error("Legacy API must not be used");
+  }),
   API_URL: "",
-  requestHemusic: vi.fn(),
+  requestHemusic: matchRequests,
 }));
 vi.mock("@/utils/env", () => ({ isElectron: false }));
 
@@ -84,7 +92,10 @@ const readResult = {
   info: entry.metadata,
 };
 
-function mount(session: object, api?: MetadataMatchAPI) {
+function mount(
+  session: object,
+  api?: MetadataMatchAPI & { loadResources: MetadataMatchResourceLoader },
+) {
   vi.stubGlobal("Document", class {});
   vi.stubGlobal("ShadowRoot", class {});
   const source = readFileSync(resolve(__dirname, "MygoSongInfoEditor.vue"), "utf8");
@@ -93,6 +104,17 @@ function mount(session: object, api?: MetadataMatchAPI) {
   const compiled = ts.transpileModule(script.content, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
+  const platforms = Vue.reactive({
+    options: [
+      { id: "a", shortname: "A", status: 1 },
+      { id: "b", shortname: "B", status: 1 },
+    ],
+    loaded: true,
+    loading: false,
+    loginRequired: false,
+    featureSupportList: () => platforms.options,
+    loadPlatforms: vi.fn(async () => {}),
+  });
   const modules: Record<string, unknown> = {
     vue: Vue,
     "@/utils/helper": { copyData: vi.fn() },
@@ -101,9 +123,14 @@ function mount(session: object, api?: MetadataMatchAPI) {
     },
     "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
     "@/platform/localMetadataSession": {},
-    "@/stores": { useSettingStore: () => ({}) },
+    "@/stores": { useSettingStore: () => ({}), useDataStore: () => ({ token: "" }) },
+    "@/stores/platform": { usePlatformStore: () => platforms },
+    "@/api/platform": { FeatureSupportFlag },
     "@/platform/localMetadataMatch": { LocalMetadataMatch },
     "@/platform/localMetadataMatchAPI": { createMetadataMatchAPI: () => api },
+    "@/platform/localMetadataMatchResources": {
+      createMetadataMatchResourceLoader: () => api?.loadResources,
+    },
     "@/platform/mygo.bindings": {},
   };
   const exports: { default?: Vue.Component } = {};
@@ -190,6 +217,7 @@ function mount(session: object, api?: MetadataMatchAPI) {
     "NTabPane",
     "NFlex",
     "NText",
+    "NSelect",
     "NList",
     "NListItem",
     "NScrollbar",
@@ -238,6 +266,7 @@ function mount(session: object, api?: MetadataMatchAPI) {
   };
   cleanups.push(close);
   return {
+    platforms,
     onClose,
     validate,
     root,
@@ -773,15 +802,15 @@ it.each([false, true])(
 );
 
 const matchOption = {
-  id: 42,
+  id: "song:42",
+  platform: "a",
   title: "matched title",
   artists: ["matched artist"],
   album: "matched album",
   comment: "alias",
   cover: "",
 };
-const matchDraft = {
-  ...matchOption,
+const matchResources = {
   lyrics: "matched lyric",
   picture: { MIME: "image/png", Type: 3, Description: "", Data: "aW1hZ2U=" },
 };
@@ -789,7 +818,7 @@ function matchSession() {
   return Vue.reactive({
     operation: undefined,
     ownsReference: vi.fn(() => true),
-    read: vi.fn(async () => readResult),
+    read: vi.fn(async () => ({ ...readResult, md5: "" })),
     save: vi.fn(async () => ({ code: "ok", committed: false, refresh: "not_required" })),
     reconcile: vi.fn(),
   });
@@ -809,45 +838,75 @@ function click(ui: ReturnType<typeof mount>, label: string) {
 function titleValue(ui: ReturnType<typeof mount>) {
   return ui.all().find((item) => item.tag === "input" && item.props["onUpdate:modelValue"])?.value;
 }
+function changePlatform(ui: ReturnType<typeof mount>, platform: string) {
+  const control = ui.all().find((item) => item.props["aria-label"] === "common.platform");
+  const update = control?.props["onUpdate:value"];
+  if (typeof update !== "function") throw new Error("Missing platform select");
+  update(platform);
+}
 
 describe("MygoSongInfoEditor online selection", () => {
-  it("keeps selection editable and saves only through the original SHA transaction", async () => {
+  it("requires manual candidate selection, keeps it editable, and saves through the SHA transaction", async () => {
     const session = matchSession();
+    const second = { ...matchOption, id: "other", title: "second candidate" };
     const api = {
-      search: vi.fn(async () => [matchOption]),
-      details: vi.fn(async () => matchDraft),
+      search: vi.fn(async () => [matchOption, second]),
+      loadResources: vi.fn(async () => matchResources),
     };
     const ui = mount(session, api);
-    vi.stubGlobal("window", { confirm: vi.fn(() => true) });
     await flush();
     await click(ui, "modal.auto_match_tag");
     await flush();
-    expect(api.details).toHaveBeenCalledExactlyOnceWith(matchOption, expect.any(AbortSignal));
-    expect(titleValue(ui)).toBe("matched title");
+    expect(api.loadResources).not.toHaveBeenCalled();
+    expect(titleValue(ui)).toBe("old");
+    expect(ui.text(ui.root)).toContain("second candidate");
+    await click(ui, "second candidate");
+    await flush();
+    expect(api.loadResources).toHaveBeenCalledExactlyOnceWith(second, expect.any(AbortSignal));
+    expect(titleValue(ui)).toBe(second.title);
     expect(session.save).not.toHaveBeenCalled();
-    const input = ui
-      .all()
-      .find((item) => item.tag === "input" && item.props["onUpdate:modelValue"]);
-    (input?.props["onUpdate:modelValue"] as (value: string) => void)("user corrected");
-    const form = ui.all().find((item) => item.tag === "form");
-    await (form?.props.onSubmit as (event: { preventDefault(): void }) => Promise<void>)({
-      preventDefault() {},
-    });
+    edit(ui, "user corrected");
+    await submit(ui);
     expect(session.save).toHaveBeenCalledWith(
       entry.ref,
       "sha",
       expect.objectContaining({
         Title: "user corrected",
         Lyrics: "matched lyric",
-        Pictures: [matchDraft.picture],
+        Pictures: [matchResources.picture],
       }),
     );
+  });
+
+  it("dismisses search results without modifying the form or saving", async () => {
+    const session = matchSession();
+    const api = {
+      search: vi.fn(async () => [matchOption]),
+      loadResources: vi.fn(async () => matchResources),
+    };
+    const ui = mount(session, api);
+    await flush();
+    await click(ui, "modal.auto_match_tag");
+    await flush();
+    const close = ui.all().find((item) => item.props["aria-label"] === "common.close");
+    expect(close?.props.type).toBe("button");
+    const dismiss = close?.props.onClick;
+    if (typeof dismiss !== "function") throw new Error("Missing search result close button");
+    dismiss();
+    await flush();
+    expect(ui.all().some((item) => item.props.class === "match-results")).toBe(false);
+    expect(titleValue(ui)).toBe("old");
+    expect(api.loadResources).not.toHaveBeenCalled();
+    expect(session.save).not.toHaveBeenCalled();
   });
 
   it("cancels pending search without applying or saving and prevents duplicate clicks", async () => {
     const gate = deferredMatch<(typeof matchOption)[]>();
     const session = matchSession();
-    const api = { search: vi.fn(() => gate.promise), details: vi.fn(async () => matchDraft) };
+    const api = {
+      search: vi.fn(() => gate.promise),
+      loadResources: vi.fn(async () => matchResources),
+    };
     const ui = mount(session, api);
     await flush();
     const pending = click(ui, "modal.auto_match_tag");
@@ -857,29 +916,35 @@ describe("MygoSongInfoEditor online selection", () => {
     await pending;
     await flush();
     expect(api.search).toHaveBeenCalledTimes(1);
-    expect(api.details).not.toHaveBeenCalled();
+    expect(api.loadResources).not.toHaveBeenCalled();
     expect(titleValue(ui)).toBe("old");
     expect(session.save).not.toHaveBeenCalled();
     expect(ui.text(ui.root)).not.toContain("matched title");
   });
 
-  it.each(["owner", "entry", "ref", "grant", "close"])(
-    "rejects detail response after %s changes",
+  it.each(["owner", "entry", "ref", "grant", "close", "platform"])(
+    "rejects resource response after %s changes",
     async (kind) => {
-      const gate = deferredMatch<typeof matchDraft>();
+      const gate = deferredMatch<typeof matchResources>();
       const session = matchSession();
-      const api = { search: vi.fn(async () => [matchOption]), details: vi.fn(() => gate.promise) };
+      const api = {
+        search: vi.fn(async () => [matchOption]),
+        loadResources: vi.fn(() => gate.promise),
+      };
       const ui = mount(session, api);
       await flush();
-      const pending = click(ui, "modal.auto_match_tag");
+      await click(ui, "modal.auto_match_tag");
+      await flush();
+      const pending = click(ui, "matched title");
       await flush();
       if (kind === "owner") ui.setSession(matchSession());
       if (kind === "entry") ui.setEntry({ ...entry });
       if (kind === "ref") ui.setEntry({ ...entry, ref: { ...entry.ref, version: "two" } });
       if (kind === "grant") session.ownsReference.mockReturnValue(false);
       if (kind === "close") await click(ui, "common.cancel");
+      if (kind === "platform") changePlatform(ui, "b");
       await flush();
-      gate.resolve(matchDraft);
+      gate.resolve(matchResources);
       await pending;
       await flush();
       expect(titleValue(ui)).toBe("old");
@@ -887,66 +952,150 @@ describe("MygoSongInfoEditor online selection", () => {
     },
   );
 
+  it("aborts a platform search, clears candidates and ignores its late reply", async () => {
+    const gate = deferredMatch<(typeof matchOption)[]>();
+    const api = {
+      search: vi.fn<MetadataMatchAPI["search"]>(() => gate.promise),
+      loadResources: vi.fn(async () => matchResources),
+    };
+    const ui = mount(matchSession(), api);
+    await flush();
+    const pending = click(ui, "modal.auto_match_tag");
+    changePlatform(ui, "b");
+    expect(api.search.mock.calls[0][1].aborted).toBe(true);
+    gate.resolve([matchOption]);
+    await pending;
+    await flush();
+    expect(ui.text(ui.root)).not.toContain("matched title");
+    expect(api.loadResources).not.toHaveBeenCalled();
+  });
+
   it("keeps existing form and cover when detail request fails", async () => {
     const session = matchSession();
     const api = {
       search: vi.fn(async () => [matchOption]),
-      details: vi.fn(async () => {
+      loadResources: vi.fn(async () => {
         throw new Error("cover failed");
       }),
     };
     const ui = mount(session, api);
     await flush();
+    edit(ui, "user edit");
     await click(ui, "modal.auto_match_tag");
     await flush();
-    expect(titleValue(ui)).toBe("old");
+    await click(ui, "matched title");
+    await flush();
+    expect(titleValue(ui)).toBe("user edit");
+    expect(ui.all().find((item) => item.tag === "img")?.props.src).toBe("/images/song.jpg?asset");
     expect(ui.text(ui.root)).toContain("message.match_fail");
     expect(session.save).not.toHaveBeenCalled();
+  });
+
+  it("preserves existing optional fields when the selected platform lacks them", async () => {
+    const session = matchSession();
+    session.read.mockResolvedValueOnce({
+      ...readResult,
+      md5: "",
+      info: { ...entry.metadata, Comment: "local comment", Lyrics: "local lyrics" },
+    });
+    const ui = mount(session, {
+      search: async () => [
+        { ...matchOption, title: "selected", artists: [], album: "", comment: undefined },
+      ],
+      loadResources: async () => ({}),
+    });
+    await flush();
+    await click(ui, "modal.auto_match_tag");
+    await flush();
+    await click(ui, "selected");
+    await submit(ui);
+    expect(session.save).toHaveBeenCalledWith(
+      entry.ref,
+      "sha",
+      expect.objectContaining({
+        Title: "selected",
+        Comment: null,
+        Lyrics: null,
+        Pictures: null,
+      }),
+    );
+  });
+
+  it("disables matching with no accessible platform and displays login feedback", async () => {
+    const api = { search: vi.fn(async () => []), loadResources: vi.fn(async () => matchResources) };
+    const ui = mount(matchSession(), api);
+    ui.platforms.options = [];
+    ui.platforms.loginRequired = true;
+    await flush();
+    const button = ui
+      .all()
+      .find((item) => item.tag === "button" && ui.text(item).includes("modal.auto_match_tag"));
+    expect(button?.props.disabled).toBe(true);
+    expect(ui.text(ui.root)).toContain("message.login_required");
+    await click(ui, "modal.auto_match_tag");
+    expect(api.search).not.toHaveBeenCalled();
   });
 });
 
 it.each([
-  { input: { name: "solo artist" }, expected: ["solo artist"] },
   { input: "solo artist", expected: ["solo artist"] },
+  { input: "one / two", expected: ["one / two"] },
   {
-    input: [{ name: "first artist" }, "second artist"],
+    input: [
+      { id: "first", name: "first artist" },
+      { id: "second", name: "second artist" },
+    ],
     expected: ["first artist", "second artist"],
   },
 ])(
-  "preserves normalized artist $input through API selection and save patch",
+  "preserves normalized artist $input through HE-Music selection and save patch",
   async ({ input, expected }) => {
     matchRequests.mockReset();
     matchRequests.mockImplementation(async (request: { url: string }) => {
-      if (request.url === "/search/match")
+      if (request.url === "/v1/song/search")
         return {
-          result: {
-            songs: [{ id: 42, name: "selected song", artist: input, album: "matched album" }],
-          },
+          list: [
+            {
+              song: {
+                id: "song:42",
+                platform: "a",
+                name: "selected song",
+                artists: input,
+                album: "matched album",
+              },
+            },
+          ],
         };
-      if (request.url === "/lyric/new") return { lrc: { lyric: "selected lyric" } };
+      if (request.url === "/v1/song/lyric") return { lyric: "selected lyric" };
       throw new Error(`Unexpected route ${request.url}`);
     });
     const session = matchSession();
-    const ui = mount(
-      session,
-      createMetadataMatchAPI(() => ({
-        downloadLyric: false,
-        downloadLyricTran: false,
-        downloadLyricRoma: false,
-      })),
-    );
-    vi.stubGlobal("window", { confirm: vi.fn(() => true) });
+    const ui = mount(session, {
+      ...createMetadataMatchAPI(),
+      loadResources: createMetadataMatchResourceLoader(
+        () => ({
+          downloadLyric: false,
+          downloadLyricTran: false,
+          downloadLyricRoma: false,
+        }),
+        {
+          platform: () => ({
+            feature_support_flag: FeatureSupportFlag.GetSongLyric,
+            image_sizes: [],
+          }),
+          token: () => "",
+        },
+      ),
+    });
     await flush();
     await click(ui, "modal.auto_match_tag");
     await flush();
     expect(session.save).not.toHaveBeenCalled();
-    expect(session.save).not.toHaveBeenCalled();
+    await click(ui, "selected song");
+    await flush();
     const artistInput = ui.all().filter((item) => item.tag === "input")[2];
     expect(artistInput.value).toBe(expected.join(", "));
-    const form = ui.all().find((item) => item.tag === "form");
-    await (form?.props.onSubmit as (event: { preventDefault(): void }) => Promise<void>)({
-      preventDefault() {},
-    });
+    await submit(ui);
     expect(session.save).toHaveBeenCalledExactlyOnceWith(
       entry.ref,
       "sha",

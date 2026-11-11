@@ -1,31 +1,37 @@
 import type { Info, Picture } from "./mygo.bindings";
 
-export interface MetadataMatchCandidate {
-  id: number;
+export interface MetadataMatchIdentity {
+  id: string;
+  platform: string;
+}
+export interface MetadataMatchCandidate extends MetadataMatchIdentity {
   title: string;
   artists: string[];
   album: string;
-  comment: string;
+  comment?: string;
   cover: string;
 }
 export interface MetadataMatchQuery {
   title: string;
   artist: string;
-  album: string;
-  duration: number;
-  md5: string;
+  platform: string;
 }
-export interface MetadataMatchDraft {
-  title: string;
-  artists: string[];
-  album: string;
-  comment: string;
-  lyrics: string;
+export interface MetadataMatchResources {
+  lyrics?: string;
   picture?: Picture;
 }
+export type MetadataMatchResourceLoader = (
+  candidate: MetadataMatchCandidate,
+  signal: AbortSignal,
+) => Promise<MetadataMatchResources>;
+export interface MetadataMatchDraft extends MetadataMatchResources {
+  title: string;
+  artists?: string[];
+  album?: string;
+  comment?: string;
+}
 export interface MetadataMatchAPI {
-  search(query: MetadataMatchQuery): Promise<MetadataMatchCandidate[]>;
-  details(candidate: MetadataMatchCandidate, signal: AbortSignal): Promise<MetadataMatchDraft>;
+  search(query: MetadataMatchQuery, signal: AbortSignal): Promise<MetadataMatchCandidate[]>;
 }
 
 /** A modal owns this request scope. Replies never write metadata or mutate a form. */
@@ -38,6 +44,7 @@ export class LocalMetadataMatch {
   constructor(
     private readonly api: MetadataMatchAPI,
     private readonly current: () => boolean,
+    private readonly loadResources: MetadataMatchResourceLoader,
   ) {}
 
   isCurrent(): boolean {
@@ -56,42 +63,52 @@ export class LocalMetadataMatch {
     this.pending = false;
   }
 
-  async search(info: Info, md5: string): Promise<MetadataMatchCandidate[] | undefined> {
+  async search(info: Info, platform: string): Promise<MetadataMatchCandidate[] | undefined> {
     if (this.pending || !this.current()) return;
-    if (!/^[a-f0-9]{32}$/.test(md5)) throw new Error("Missing native match digest");
+    if (!platform || !info.Title.trim()) throw new Error("Missing match platform or title");
     this.cancel();
     const revision = this.revision;
+    const controller = new AbortController();
+    this.controller = controller;
     this.pending = true;
     try {
-      const options = await this.api.search({
-        title: info.Title,
-        artist: info.Artists.join(" / "),
-        album: info.Album,
-        duration: info.DurationSeconds,
-        md5,
-      });
-      if (revision !== this.revision || !this.current()) return;
+      const options = await this.api.search(
+        { title: info.Title, artist: info.Artists.join(" / "), platform },
+        controller.signal,
+      );
+      if (revision !== this.revision || controller.signal.aborted || !this.current()) return;
       this.options = options.map((item) => ({ ...item, artists: [...item.artists] }));
       return this.options.map((item) => ({ ...item, artists: [...item.artists] }));
     } catch (error) {
-      if (revision === this.revision && this.current()) throw error;
+      if (revision === this.revision && this.current() && !controller.signal.aborted) throw error;
       return undefined;
     } finally {
-      if (revision === this.revision) this.pending = false;
+      if (revision === this.revision) {
+        this.pending = false;
+        this.controller = undefined;
+      }
     }
   }
 
-  async choose(id: number): Promise<MetadataMatchDraft | undefined> {
+  async choose(identity: MetadataMatchIdentity): Promise<MetadataMatchDraft | undefined> {
     if (this.pending || !this.current()) return;
-    const candidate = this.options.find((item) => item.id === id);
+    const candidate = this.options.find(
+      (item) => item.id === identity.id && item.platform === identity.platform,
+    );
     if (!candidate) return;
     const revision = this.revision;
     const controller = new AbortController();
     this.controller = controller;
     this.pending = true;
     try {
-      const draft = await this.api.details(candidate, controller.signal);
+      const resources = await this.loadResources(candidate, controller.signal);
       if (revision !== this.revision || controller.signal.aborted || !this.current()) return;
+      const draft: MetadataMatchDraft = { title: candidate.title };
+      if (candidate.artists.length) draft.artists = [...candidate.artists];
+      if (candidate.album) draft.album = candidate.album;
+      if (candidate.comment) draft.comment = candidate.comment;
+      if (resources.lyrics !== undefined) draft.lyrics = resources.lyrics;
+      if (resources.picture) draft.picture = resources.picture;
       this.options = [];
       return draft;
     } catch (error) {

@@ -14,22 +14,82 @@
     </n-alert>
     <n-tabs type="segment" animated>
       <n-tab-pane name="info" :tab="t('common.info')" display-directive="show">
-        <!-- 在线匹配服务停用，暂时隐藏入口，保留手动编辑。 -->
-        <n-flex class="match" style="display: none" justify="space-between" align="center">
-          <n-text>{{ t("modal.auto_match_tag_tip") }}</n-text>
+        <div class="match">
+          <n-select
+            v-model:value="matchPlatform"
+            class="match-platform"
+            :aria-label="t('common.platform')"
+            :options="platformOptions"
+            :loading="platformStore.loading"
+            :disabled="busy || !!session.operation"
+          />
           <n-button
+            class="match-search"
             type="primary"
             strong
             secondary
             :loading="matching"
-            :disabled="busy || matching || !!session.operation || !loaded || !baselineMD5"
+            :disabled="
+              busy ||
+              matching ||
+              !!session.operation ||
+              !loaded ||
+              !matchPlatform ||
+              !form.title.trim()
+            "
             @click="onlineMatch"
           >
             <template #icon><SvgIcon name="AutoFix" /></template>
             {{ t("modal.auto_match_tag") }}
           </n-button>
-        </n-flex>
+          <div v-if="!platformOptions.length && !platformStore.loading" class="match-feedback">
+            <n-text>{{
+              t(platformStore.loginRequired ? "message.login_required" : "page_section.no_platform")
+            }}</n-text>
+            <n-button v-if="!platformStore.loaded" @click="loadMatchPlatforms">
+              {{ t("page_section.retry") }}
+            </n-button>
+          </div>
+        </div>
         <n-scrollbar class="scrollbar">
+          <section v-if="matchCandidates.length" class="match-results">
+            <div class="match-results-header">
+              <n-text>{{ t("search.search_result") }}</n-text>
+              <button
+                type="button"
+                class="match-results-close"
+                :aria-label="t('common.close')"
+                @click="cancelMatch"
+              >
+                <SvgIcon name="Close" :size="18" />
+              </button>
+            </div>
+            <ul class="match-candidates">
+              <li
+                v-for="candidate in matchCandidates"
+                :key="JSON.stringify([candidate.platform, candidate.id])"
+              >
+                <button
+                  type="button"
+                  class="match-candidate"
+                  :disabled="busy || matching || !!session.operation"
+                  @click="chooseMatch(candidate)"
+                >
+                  <span class="match-candidate-title">{{ candidate.title }}</span>
+                  <span
+                    v-if="candidate.artists.length || candidate.album"
+                    class="match-candidate-meta"
+                  >
+                    <span v-if="candidate.artists.length">{{ candidate.artists.join(" / ") }}</span>
+                    <span v-if="candidate.artists.length && candidate.album" aria-hidden="true"
+                      >·</span
+                    >
+                    <span v-if="candidate.album">{{ candidate.album }}</span>
+                  </span>
+                </button>
+              </li>
+            </ul>
+          </section>
           <n-form
             ref="formRef"
             :model="form"
@@ -180,9 +240,16 @@ import type {
   MetadataSessionResult,
 } from "@/platform/localMetadataSession";
 import type { LocalFileRef, Patch, Picture, ScanEntry } from "@/platform/mygo.bindings";
-import { useSettingStore } from "@/stores";
-import { LocalMetadataMatch } from "@/platform/localMetadataMatch";
+import { useDataStore, useSettingStore } from "@/stores";
+import { usePlatformStore } from "@/stores/platform";
+import { FeatureSupportFlag } from "@/api/platform";
+import {
+  LocalMetadataMatch,
+  type MetadataMatchCandidate,
+  type MetadataMatchDraft,
+} from "@/platform/localMetadataMatch";
 import { createMetadataMatchAPI } from "@/platform/localMetadataMatchAPI";
+import { createMetadataMatchResourceLoader } from "@/platform/localMetadataMatchResources";
 
 const MAX_PICTURE_BYTES = 4 * 1024 * 1024;
 const MAX_PICTURE_TOTAL = 8 * 1024 * 1024;
@@ -195,6 +262,16 @@ const props = defineProps<{
 }>();
 const emit = defineEmits<{ close: [] }>();
 const settingStore = useSettingStore();
+const dataStore = useDataStore();
+const platformStore = usePlatformStore();
+const matchPlatform = ref("");
+const matchCandidates = ref<MetadataMatchCandidate[]>([]);
+const platformOptions = computed(() =>
+  platformStore
+    .featureSupportList(FeatureSupportFlag.SearchSong)
+    .filter((platform) => platform.status === 1)
+    .map((platform) => ({ label: platform.shortname, value: platform.id })),
+);
 const baselineMD5 = ref("");
 const matching = ref(false);
 let matchScope: LocalMetadataMatch | undefined;
@@ -247,25 +324,42 @@ function applyInfo(info: Info, sha256: string | undefined): void {
 function cancelMatch(): void {
   matchScope?.cancel();
   matchScope = undefined;
+  matchCandidates.value = [];
   matching.value = false;
 }
+async function loadMatchPlatforms(): Promise<void> {
+  try {
+    await platformStore.loadPlatforms();
+  } catch {
+    if (mounted.value) error.value = t("message.match_fail");
+  }
+}
+watch(
+  platformOptions,
+  (options) => {
+    if (!options.some((option) => option.value === matchPlatform.value))
+      matchPlatform.value = options[0]?.value ?? "";
+  },
+  { immediate: true, flush: "sync" },
+);
+watch(
+  matchPlatform,
+  () => {
+    cancelMatch();
+    message.value = "";
+  },
+  { flush: "sync" },
+);
 function closeEditor(): void {
   cancelMatch();
   emit("close");
 }
-function applyMatch(draft: {
-  title: string;
-  artists: string[];
-  album: string;
-  comment: string;
-  lyrics: string;
-  picture?: Picture;
-}): void {
+function applyMatch(draft: MetadataMatchDraft): void {
   form.title = draft.title;
-  form.artists = [...draft.artists];
-  form.album = draft.album;
-  form.comment = draft.comment;
-  form.lyrics = draft.lyrics;
+  if (draft.artists !== undefined) form.artists = [...draft.artists];
+  if (draft.album !== undefined) form.album = draft.album;
+  if (draft.comment !== undefined) form.comment = draft.comment;
+  if (draft.lyrics !== undefined) form.lyrics = draft.lyrics;
   if (draft.picture) {
     fileGeneration.value++;
     pictures.value = [{ ...draft.picture }];
@@ -280,7 +374,8 @@ async function onlineMatch(): Promise<void> {
     props.session.operation ||
     !loaded.value ||
     !baseline.value ||
-    !baselineMD5.value
+    !matchPlatform.value ||
+    !form.title.trim()
   )
     return;
   cancelMatch();
@@ -288,35 +383,52 @@ async function onlineMatch(): Promise<void> {
   const openedEntry = props.entry;
   const expected = refKey(props.entry);
   const generation = viewGeneration.value;
+  const platform = matchPlatform.value;
   const capturedRef = { ...props.entry.ref };
   const scope = new LocalMetadataMatch(
-    createMetadataMatchAPI(() => settingStore),
+    createMetadataMatchAPI(),
     () =>
       mounted.value &&
       props.session === owner &&
       props.entry === openedEntry &&
       generation === viewGeneration.value &&
+      platform === matchPlatform.value &&
       expected === refKey(props.entry) &&
       !owner.operation &&
       owner.ownsReference(capturedRef),
+    createMetadataMatchResourceLoader(() => settingStore, {
+      platform: (id) => platformStore.getPlatformInfo(id),
+      token: () => dataStore.token,
+    }),
   );
   matchScope = scope;
   matching.value = true;
   error.value = "";
+  message.value = "";
   try {
     const options = await scope.search(
       { ...baseline.value, Title: form.title, Artists: [...form.artists], Album: form.album },
-      baselineMD5.value,
+      platform,
     );
     if (matchScope !== scope || !scope.isCurrent()) return;
-    const first = options?.[0];
-    if (!first) {
-      error.value = t("message.match_fail");
-      return;
-    }
-    const draft = await scope.choose(first.id);
+    matchCandidates.value = options ?? [];
+    if (!options?.length) error.value = t("message.match_fail");
+  } catch {
+    if (matchScope === scope && scope.isCurrent()) error.value = t("message.match_fail");
+  } finally {
+    if (matchScope === scope) matching.value = false;
+  }
+}
+async function chooseMatch(candidate: MetadataMatchCandidate): Promise<void> {
+  const scope = matchScope;
+  if (!scope || busy.value || matching.value || !scope.isCurrent()) return;
+  matching.value = true;
+  error.value = "";
+  try {
+    const draft = await scope.choose(candidate);
     if (!draft || matchScope !== scope || !scope.isCurrent()) return;
     applyMatch(draft);
+    matchCandidates.value = [];
     message.value = t("message.match_success");
   } catch {
     if (matchScope === scope && scope.isCurrent()) error.value = t("message.match_fail");
@@ -524,6 +636,7 @@ watch(() => [props.session, props.entry, refKey(props.entry)], load, { flush: "s
 watch(
   () => [props.session.operation, viewGeneration.value] as const,
   ([operation, generation]) => {
+    if (operation) cancelMatch();
     if (!operation || !sameTarget(operation.ref, props.entry.ref)) return;
     const owner = props.session;
     const expected = refKey(props.entry);
@@ -544,6 +657,7 @@ watch(
 onMounted(() => {
   mounted.value = true;
   void load();
+  void loadMatchPlatforms();
 });
 onUnmounted(() => {
   cancelMatch();
@@ -559,11 +673,105 @@ onUnmounted(() => {
     max-height: 60vh;
   }
   .match {
-    margin-bottom: 12px;
-    border: 1px solid rgba(var(--primary), 0.26);
-    border-radius: 8px;
-    padding: 12px 16px;
-    background-color: rgba(var(--primary), 0.08);
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+  }
+  .match-platform {
+    min-width: 0;
+  }
+  .match-feedback {
+    grid-column: 1 / -1;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .match-results {
+    margin-bottom: 20px;
+    border: 1px solid rgba(var(--primary), 0.16);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .match-results-header {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid rgba(var(--primary), 0.1);
+    padding: 6px 14px;
+    font-size: 13px;
+  }
+  .match-results-close {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    &:hover,
+    &:focus-visible {
+      background: rgba(var(--primary), 0.08);
+    }
+    &:focus-visible {
+      outline: 2px solid rgb(var(--primary));
+      outline-offset: -2px;
+    }
+  }
+  .match-candidates {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    li + li {
+      border-top: 1px solid rgba(var(--primary), 0.1);
+    }
+  }
+  .match-candidate {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+    min-height: 64px;
+    border: 0;
+    padding: 12px 14px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    &:hover:not(:disabled),
+    &:focus-visible {
+      background: rgba(var(--primary), 0.08);
+    }
+    &:focus-visible {
+      outline: 2px solid rgb(var(--primary));
+      outline-offset: -2px;
+    }
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+  }
+  .match-candidate-title,
+  .match-candidate-meta {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+  }
+  .match-candidate-title {
+    font-weight: 500;
+  }
+  .match-candidate-meta {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 6px;
+    font-size: 12px;
+    opacity: 0.65;
   }
   .feedback {
     margin-bottom: 12px;

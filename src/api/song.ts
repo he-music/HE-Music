@@ -1,7 +1,7 @@
 import request, { API_URL, requestHemusic, type HemusicRequestConfig } from "@/utils/request";
 import { gatewayProxyUrl, mygoGatewayOrigin } from "@/platform/gateway";
 import { resolveSongAudioSource, type SongAudioSource } from "@/platform/audioSource";
-import type { GetSongDetailResponse } from "@/types/main.hemusic";
+import type { GetSongDetailResponse, LyricInfo } from "@/types/main.hemusic";
 
 // 获取歌曲 URL
 export const songUrl = async (
@@ -39,9 +39,17 @@ export const unlockSongUrl = (
   });
 };
 
+// 部分音乐平台只提供原文，其余歌词字段及身份字段可缺省。
+export type SongLyricResponse = Pick<LyricInfo, "lyric"> & Partial<LyricInfo>;
+
 // 获取歌曲歌词
-export const songLyric = (id: string, platform: string) => {
+export const songLyric = (
+  id: string,
+  platform: string,
+  options: Pick<HemusicRequestConfig, "signal" | "skipErrorMessage"> = {},
+): Promise<SongLyricResponse> => {
   return requestHemusic({
+    ...options,
     url: "/v1/song/lyric",
     params: {
       id,
@@ -119,8 +127,13 @@ export const songInfo = (platform: string, id: string) => {
 };
 
 // 获取歌曲详情
-export const songDetail = (id: string, platform: string): Promise<GetSongDetailResponse> => {
+export const songDetail = (
+  id: string,
+  platform: string,
+  options: Pick<HemusicRequestConfig, "signal" | "skipErrorMessage"> = {},
+): Promise<GetSongDetailResponse> => {
   return requestHemusic({
+    ...options,
     url: "/v1/song/detail",
     params: { id, platform },
   });
