@@ -18,6 +18,23 @@ func TestNormalizeSystemFontFamilies(t *testing.T) {
 	}
 }
 
+func TestNormalizeSystemFonts(t *testing.T) {
+	got := normalizeSystemFonts([]SystemFont{
+		{Family: " Noto Sans ", FullName: "Noto Sans Bold", PostScriptName: "Noto-Sans-Bold", Weight: 700, Style: "normal"},
+		{Family: "Noto Sans", FullName: "Duplicate", PostScriptName: "Noto-Sans-Bold", Weight: 400, Style: "italic"},
+		{Family: "Noto Sans", FullName: "Noto Sans Regular", Weight: 0, Style: "unknown"},
+	})
+	if len(got) != 2 {
+		t.Fatalf("got %d fonts, want 2: %v", len(got), got)
+	}
+	if got[0].PostScriptName != "Noto-Sans-Bold" || got[0].Weight != 700 {
+		t.Fatalf("got bold face %v", got[0])
+	}
+	if got[1].PostScriptName != "Noto Sans Regular" || got[1].Weight != 400 || got[1].Style != "normal" {
+		t.Fatalf("got fallback face %v", got[1])
+	}
+}
+
 func TestNormalizeSystemFontFamiliesBounds(t *testing.T) {
 	input := make([]string, maxSystemFontCount+1)
 	for i := range input {

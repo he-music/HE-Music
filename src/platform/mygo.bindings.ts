@@ -596,6 +596,15 @@ export interface StorageValue {
   mediaType: string;
 }
 
+/** SystemFont describes one installed font face rather than only a family. */
+export interface SystemFont {
+  family: string;
+  fullName: string;
+  postScriptName: string;
+  weight: number;
+  style: string;
+}
+
 export interface SystemMediaCommand {
   generation: number;
   revision: number;
@@ -1137,11 +1146,11 @@ export const DesktopStorage = {
 } as const;
 
 /**
- * SystemFonts exposes bounded family names to the renderer. Enumeration runs on
+ * SystemFonts exposes bounded font faces to the renderer. Enumeration runs on
  * the lifecycle main owner so a lyrics child cannot read the system list.
  */
 export const SystemFonts = {
-  list(): Promise<string[]> {
+  list(): Promise<SystemFont[]> {
     return call("SystemFonts.List");
   },
 } as const;

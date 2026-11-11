@@ -6,6 +6,6 @@ import "errors"
 
 var errSystemFontsUnsupported = errors.New("system font enumeration is unsupported on this platform")
 
-func enumerateSystemFontFamilies() ([]string, error) {
+func enumerateSystemFonts() ([]SystemFont, error) {
 	return nil, errSystemFontsUnsupported
 }

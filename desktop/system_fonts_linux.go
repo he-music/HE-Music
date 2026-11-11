@@ -4,6 +4,7 @@ package main
 
 import (
 	"errors"
+	"strings"
 	"sync"
 	"unsafe"
 
@@ -14,6 +15,16 @@ const (
 	fontconfigRTLDNow     = 0x2
 	fontconfigResultMatch = 0
 	fontconfigSystemSet   = 0
+
+	fontconfigFamilyKey         = "family\x00"
+	fontconfigFullNameKey       = "fullname\x00"
+	fontconfigPostScriptNameKey = "postscriptname\x00"
+	fontconfigStyleKey          = "style\x00"
+	fontconfigWeightKey         = "weight\x00"
+	fontconfigSlantKey          = "slant\x00"
+
+	fontconfigSlantItalic  = 100
+	fontconfigSlantOblique = 110
 )
 
 type fontconfigBindings struct {
@@ -22,6 +33,7 @@ type fontconfigBindings struct {
 	config      func() uintptr
 	configFonts func(uintptr, int32) *fontconfigFontSet
 	getString   func(*fontconfigPattern, *byte, int32, **byte) int32
+	getInteger  func(*fontconfigPattern, *byte, int32, *int32) int32
 	init        func() int32
 }
 
@@ -40,6 +52,7 @@ func (b *fontconfigBindings) initialize() {
 		purego.RegisterLibFunc(&b.config, library, "FcConfigGetCurrent")
 		purego.RegisterLibFunc(&b.configFonts, library, "FcConfigGetFonts")
 		purego.RegisterLibFunc(&b.getString, library, "FcPatternGetString")
+		purego.RegisterLibFunc(&b.getInteger, library, "FcPatternGetInteger")
 		purego.RegisterLibFunc(&b.init, library, "FcInit")
 		if b.init() == 0 {
 			b.err = errors.New("fontconfig initialization failed")
@@ -47,7 +60,7 @@ func (b *fontconfigBindings) initialize() {
 	})
 }
 
-func enumerateSystemFontFamilies() ([]string, error) {
+func enumerateSystemFonts() ([]SystemFont, error) {
 	cachedFontconfig.initialize()
 	if cachedFontconfig.err != nil {
 		return nil, cachedFontconfig.err
@@ -62,13 +75,12 @@ func enumerateSystemFontFamilies() ([]string, error) {
 		return nil, errors.New("fontconfig returned an invalid font count")
 	}
 	collector := newSystemFontCollector()
-	familyKey := []byte("family\x00")
 	for _, pattern := range unsafe.Slice(set.fonts, int(set.nfont)) {
-		if pattern == nil || !collector.collect(fontconfigFamily(pattern, familyKey)) {
+		if pattern == nil || !collector.collectFont(fontconfigFace(pattern)) {
 			break
 		}
 	}
-	return collector.families, nil
+	return collector.fonts, nil
 }
 
 type fontconfigFontSet struct {
@@ -79,12 +91,75 @@ type fontconfigFontSet struct {
 
 type fontconfigPattern struct{}
 
-func fontconfigFamily(pattern *fontconfigPattern, key []byte) string {
+func fontconfigFace(pattern *fontconfigPattern) SystemFont {
+	styleName := fontconfigString(pattern, fontconfigStyleKey)
+	style := "normal"
+	var slant int32
+	if fontconfigInteger(pattern, fontconfigSlantKey, &slant) {
+		switch slant {
+		case fontconfigSlantItalic:
+			style = "italic"
+		case fontconfigSlantOblique:
+			style = "oblique"
+		}
+	} else {
+		lower := strings.ToLower(styleName)
+		if strings.Contains(lower, "italic") {
+			style = "italic"
+		} else if strings.Contains(lower, "oblique") {
+			style = "oblique"
+		}
+	}
+
+	var nativeWeight int32
+	weight := 400
+	if fontconfigInteger(pattern, fontconfigWeightKey, &nativeWeight) {
+		weight = fontconfigWeight(nativeWeight)
+	}
+	return SystemFont{
+		Family:         fontconfigString(pattern, fontconfigFamilyKey),
+		FullName:       fontconfigString(pattern, fontconfigFullNameKey),
+		PostScriptName: fontconfigString(pattern, fontconfigPostScriptNameKey),
+		Weight:         weight,
+		Style:          style,
+	}
+}
+
+func fontconfigString(pattern *fontconfigPattern, key string) string {
+	keyBytes := []byte(key)
 	var value *byte
-	if cachedFontconfig.getString(pattern, &key[0], 0, &value) != fontconfigResultMatch {
+	if cachedFontconfig.getString(pattern, &keyBytes[0], 0, &value) != fontconfigResultMatch {
 		return ""
 	}
 	return boundedFontconfigString(value)
+}
+
+func fontconfigInteger(pattern *fontconfigPattern, key string, value *int32) bool {
+	keyBytes := []byte(key)
+	return cachedFontconfig.getInteger(pattern, &keyBytes[0], 0, value) == fontconfigResultMatch
+}
+
+func fontconfigWeight(weight int32) int {
+	switch {
+	case weight <= 0:
+		return 100
+	case weight <= 40:
+		return 200
+	case weight <= 55:
+		return 300
+	case weight <= 80:
+		return 400
+	case weight <= 100:
+		return 500
+	case weight <= 180:
+		return 600
+	case weight <= 200:
+		return 700
+	case weight <= 205:
+		return 800
+	default:
+		return 900
+	}
 }
 
 func boundedFontconfigString(value *byte) string {

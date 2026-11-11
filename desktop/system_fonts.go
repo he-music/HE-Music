@@ -1,8 +1,9 @@
 package main
 
 import (
+	"cmp"
 	"context"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -16,7 +17,16 @@ const (
 	maxSystemFontScan  = maxSystemFontCount * 4
 )
 
-// SystemFonts exposes bounded family names to the renderer. Enumeration runs on
+// SystemFont describes one installed font face rather than only a family.
+type SystemFont struct {
+	Family         string `json:"family"`
+	FullName       string `json:"fullName"`
+	PostScriptName string `json:"postScriptName"`
+	Weight         int    `json:"weight"`
+	Style          string `json:"style"`
+}
+
+// SystemFonts exposes bounded font faces to the renderer. Enumeration runs on
 // the lifecycle main owner so a lyrics child cannot read the system list.
 type SystemFonts struct{}
 
@@ -24,40 +34,51 @@ func init() {
 	mygo.Bind(&SystemFonts{})
 }
 
-func (s *SystemFonts) List(ctx context.Context) ([]string, error) {
-	var fonts []string
+func (s *SystemFonts) List(ctx context.Context) ([]SystemFont, error) {
+	var fonts []SystemFont
 	err := desktopLifecycle.call(ctx, true, func() error {
 		var err error
-		fonts, err = enumerateSystemFontFamilies()
+		fonts, err = enumerateSystemFonts()
 		return err
 	})
 	if err != nil {
 		return nil, err
 	}
-	return normalizeSystemFontFamilies(fonts), nil
+	return normalizeSystemFonts(fonts), nil
 }
 
 type systemFontCollector struct {
 	families []string
+	fonts    []SystemFont
 	scanned  int
 	stopped  bool
 }
 
 func newSystemFontCollector() *systemFontCollector {
-	return &systemFontCollector{families: make([]string, 0, maxSystemFontCount)}
+	return &systemFontCollector{
+		families: make([]string, 0, maxSystemFontCount),
+		fonts:    make([]SystemFont, 0, maxSystemFontCount),
+	}
 }
 
-// collect returns whether the native enumeration may continue. Both the scan
-// budget and result limit are enforced while the native callback is running.
+// collect returns whether the native enumeration may continue. It remains a
+// family-only adapter for platform callbacks and existing collector tests.
 func (c *systemFontCollector) collect(name string) bool {
+	return c.collectFont(SystemFont{Family: name})
+}
+
+// collectFont enforces both the native scan budget and result limit while a
+// platform callback is still running.
+func (c *systemFontCollector) collectFont(font SystemFont) bool {
 	if c.stopped {
 		return false
 	}
 	c.scanned++
-	if name != "" && len(c.families) < maxSystemFontCount {
-		c.families = append(c.families, name)
+	if font.Family != "" && len(c.fonts) < maxSystemFontCount {
+		c.families = append(c.families, font.Family)
+		c.fonts = append(c.fonts, font)
 	}
-	if len(c.families) >= maxSystemFontCount || c.scanned >= maxSystemFontScan {
+	if len(c.fonts) >= maxSystemFontCount || c.scanned >= maxSystemFontScan {
 		c.stopped = true
 	}
 	return !c.stopped
@@ -99,31 +120,66 @@ func (r *systemFontCollectorRouter) collect(id uintptr, name string) bool {
 	return keepGoing
 }
 
-func normalizeSystemFontFamilies(fonts []string) []string {
-	capacity := boundedMin(len(fonts), maxSystemFontCount)
+func normalizeSystemFonts(fonts []SystemFont) []SystemFont {
+	capacity := min(len(fonts), maxSystemFontCount)
 	seen := make(map[string]struct{}, capacity)
-	result := make([]string, 0, capacity)
-	for _, raw := range fonts {
-		name := strings.TrimSpace(raw)
-		if name == "" || len(name) > maxSystemFontName || strings.HasPrefix(name, ".") || strings.ContainsRune(name, '\x00') {
+	result := make([]SystemFont, 0, capacity)
+	for _, font := range fonts {
+		font.Family = strings.TrimSpace(font.Family)
+		font.FullName = strings.TrimSpace(font.FullName)
+		font.PostScriptName = strings.TrimSpace(font.PostScriptName)
+		if font.Family == "" || len(font.Family) > maxSystemFontName || strings.HasPrefix(font.Family, ".") || strings.ContainsRune(font.Family, '\x00') {
 			continue
 		}
-		if _, ok := seen[name]; ok {
+		if font.FullName == "" {
+			font.FullName = font.Family
+		}
+		if font.PostScriptName == "" {
+			font.PostScriptName = font.FullName
+		}
+		if len(font.FullName) > maxSystemFontName || len(font.PostScriptName) > maxSystemFontName ||
+			strings.ContainsRune(font.FullName, '\x00') || strings.ContainsRune(font.PostScriptName, '\x00') {
 			continue
 		}
-		seen[name] = struct{}{}
-		result = append(result, name)
+		if font.Weight < 100 || font.Weight > 900 || font.Weight%100 != 0 {
+			font.Weight = 400
+		}
+		if font.Style != "normal" && font.Style != "italic" && font.Style != "oblique" {
+			font.Style = "normal"
+		}
+		if _, ok := seen[font.PostScriptName]; ok {
+			continue
+		}
+		seen[font.PostScriptName] = struct{}{}
+		result = append(result, font)
 		if len(result) == maxSystemFontCount {
 			break
 		}
 	}
-	sort.Strings(result)
+	slices.SortFunc(result, func(left, right SystemFont) int {
+		return cmp.Or(
+			strings.Compare(left.FullName, right.FullName),
+			strings.Compare(left.PostScriptName, right.PostScriptName),
+		)
+	})
 	return result
 }
 
-func boundedMin(a, b int) int {
-	if a < b {
-		return a
+func normalizeSystemFontFamilies(fonts []string) []string {
+	faces := make([]SystemFont, 0, len(fonts))
+	for _, family := range fonts {
+		faces = append(faces, SystemFont{Family: family})
 	}
-	return b
+	result := normalizeSystemFonts(faces)
+	families := make([]string, 0, len(result))
+	seen := make(map[string]struct{}, len(result))
+	for _, font := range result {
+		if _, ok := seen[font.Family]; ok {
+			continue
+		}
+		seen[font.Family] = struct{}{}
+		families = append(families, font.Family)
+	}
+	slices.Sort(families)
+	return families
 }

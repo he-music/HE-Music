@@ -209,17 +209,21 @@ const getAllSystemFonts = async () => {
       window.$message.error(t("mygo.fonts.load_failed"));
       return;
     }
-    systemFonts.value = nativeFonts.fonts.value.map((family) => {
+    systemFonts.value = nativeFonts.fonts.value.map((font) => {
       const selection: FontStyleSelection = {
-        family,
-        weight: 400,
-        style: "normal",
-        postscriptName: family,
+        family: font.family,
+        weight: font.weight,
+        style: font.style,
+        postscriptName: font.postScriptName,
       };
       return {
-        label: family,
-        value: family,
-        style: { fontFamily: family, fontWeight: 400, fontStyle: "normal" },
+        label: font.fullName,
+        value: font.postScriptName,
+        style: {
+          fontFamily: font.family,
+          fontWeight: font.weight,
+          fontStyle: font.style,
+        },
         fontStyleSelection: selection,
       };
     });
@@ -267,7 +271,7 @@ const getDesktopLyricConfig = async () => {
       family: font.family,
       weight: font.weight,
       style: font.style,
-      postScriptName: font.family,
+      postScriptName: font.postScriptName,
     });
     return;
   }

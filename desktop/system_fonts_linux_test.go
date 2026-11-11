@@ -9,7 +9,7 @@ import (
 )
 
 func TestEnumerateSystemFontFamiliesLinux(t *testing.T) {
-	fonts, err := enumerateSystemFontFamilies()
+	fonts, err := enumerateSystemFonts()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -20,7 +20,7 @@ func TestEnumerateSystemFontFamiliesLinux(t *testing.T) {
 		t.Fatalf("fontconfig returned %d families, limit is %d", len(fonts), maxSystemFontCount)
 	}
 	for _, font := range fonts {
-		if font == "" {
+		if font.Family == "" {
 			t.Fatal("fontconfig returned an empty family")
 		}
 	}

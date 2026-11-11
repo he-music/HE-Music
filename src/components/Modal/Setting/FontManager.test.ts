@@ -62,6 +62,7 @@ afterEach(() => {
 
 it("the production font selectors use native families and save global and desktop lyric choices", async () => {
   settings.desktopLyricOptions.font.family = "Existing Family";
+  settings.desktopLyricOptions.font.postScriptName = "Existing-Family";
   const previous = structuredClone(toRaw(settings.desktopLyricOptions));
   const host = mount();
   await flushSfcHost();
@@ -73,7 +74,7 @@ it("the production font selectors use native families and save global and deskto
       expect.objectContaining({ label: "Demo Family", value: "Demo Family" }),
     ]),
   );
-  expect(selects[1].props.value).toBe("Existing Family");
+  expect(selects[1].props.value).toBe("Existing-Family");
   const selected = {
     family: "Demo Family",
     weight: 400,

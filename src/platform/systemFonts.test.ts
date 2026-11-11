@@ -3,6 +3,7 @@ import {
   createSystemFontsProvider,
   createSystemFontsSession,
   normalizeSystemFontFamilies,
+  normalizeSystemFonts,
 } from "./systemFonts";
 
 describe("system font provider", () => {
@@ -10,6 +11,28 @@ describe("system font provider", () => {
     expect(
       normalizeSystemFontFamilies(["  Inter ", "Inter", "", ".private", null, "Arial\0x", "Arial"]),
     ).toEqual(["Arial", "Inter"]);
+  });
+
+  it("preserves native font face metadata", () => {
+    expect(
+      normalizeSystemFonts([
+        {
+          family: "Noto Sans",
+          fullName: "Noto Sans Bold Italic",
+          postScriptName: "Noto-Sans-BoldItalic",
+          weight: 700,
+          style: "italic",
+        },
+      ]),
+    ).toEqual([
+      {
+        family: "Noto Sans",
+        fullName: "Noto Sans Bold Italic",
+        postScriptName: "Noto-Sans-BoldItalic",
+        weight: 700,
+        style: "italic",
+      },
+    ]);
   });
 
   it("does not commit a result after disposal", async () => {
@@ -31,6 +54,14 @@ describe("system font provider", () => {
     const list = vi.fn().mockReturnValueOnce(first).mockReturnValueOnce(second);
     const session = createSystemFontsSession(createSystemFontsProvider({ list }));
     await Promise.all([session.load(), session.load()]);
-    expect(session.fonts.value).toEqual(["Second"]);
+    expect(session.fonts.value).toEqual([
+      {
+        family: "Second",
+        fullName: "Second",
+        postScriptName: "Second",
+        weight: 400,
+        style: "normal",
+      },
+    ]);
   });
 });
