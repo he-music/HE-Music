@@ -6,7 +6,7 @@ HE-Music 是一个支持在线音乐与本地播放的跨平台音乐播放器�
 
 项目源自 [SPlayer](https://github.com/SPlayer-Dev/SPlayer)，现独立维护。SPlayer 已归档，HE-Music 保留原始项目的版权与许可信息，在此基础上持续开发。桌面端自 2.0 起使用 Go + [mygo](https://github.com/egoist/mygo)，通过系统 WebView 运行 Vue 界面。
 
-[下载客户端](https://github.com/he-music/HE-Music/releases/latest) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/he-music/HE-Music/issues) · [Android 版本（Flutter）](https://github.com/he-music/HE-Music-Flutter)
+[下载客户端](https://github.com/he-music/HE-Music/releases/latest) · [更新记录](CHANGELOG.md) · [问题反馈](https://github.com/he-music/HE-Music/issues) · [Android / iOS 版本（Flutter）](https://github.com/he-music/HE-Music-Flutter)
 
 > [!IMPORTANT]
 > **在线功能需登录并连接配套后端服务。** 本仓库包含 Web 界面与桌面端原生服务，不包含配套在线服务端，与 SPlayer 的接口不兼容。
@@ -36,7 +36,7 @@ HE-Music 是一个支持在线音乐与本地播放的跨平台音乐播放器�
 - **播放引擎**：默认使用 Web Audio；桌面端可切换到 mpv，运行库随安装包提供，无需另行安装。mpv 支持 APE、DSF、DFF（含 DST 压缩）等格式。
 - **数据与更新**：桌面端支持应用数据备份与恢复、旧 Electron 版数据导入，以及带签名校验的应用内更新。
 
-桌面原生功能由 mygo 提供，网页端受浏览器能力限制。移动浏览器仅做基础适配；Android 应用请参见独立的 [HE-Music-Flutter](https://github.com/he-music/HE-Music-Flutter) 项目。
+桌面原生功能由 mygo 提供，网页端受浏览器能力限制。移动浏览器仅做基础适配；Android 和 iOS 应用请参见独立的 [HE-Music-Flutter](https://github.com/he-music/HE-Music-Flutter) 项目。
 
 ## 客户端安装
 
