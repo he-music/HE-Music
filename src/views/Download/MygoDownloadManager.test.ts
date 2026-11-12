@@ -120,6 +120,15 @@ function setup(
     new URL("./MygoDownloadManager.vue", import.meta.url),
     {
       "@/platform/filesSession": { filesSession: owner },
+      "@/components/Menu/ContextMenu.vue": {
+        default: Vue.defineComponent({
+          inheritAttrs: false,
+          setup:
+            (_props, { attrs }) =>
+            () =>
+              Vue.h(Vue.resolveComponent("NDropdown"), attrs),
+        }),
+      },
       "@/components/Local/LocalScanIssues.vue": {
         default: Vue.defineComponent({ render: () => null }),
       },
