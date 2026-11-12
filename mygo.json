@@ -2,7 +2,7 @@
   "name": "HE-Music",
   "slug": "he-music",
   "identifier": "com.hemusic.music",
-  "version": "2.0.2",
+  "version": "2.0.3",
   "publisher": "he-music",
   "icon": "public/icons/favicon-1024x1024.png",
   "main": "./desktop",
