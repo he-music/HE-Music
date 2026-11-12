@@ -73,148 +73,62 @@
 
 <script setup lang="ts">
 import { gatewayProxyUrl } from "@/platform/gateway";
-import { useMusicStore, useStatusStore } from "@/stores";
-import { getComment, getSubComment } from "@/api/comment";
-import { isEmpty } from "lodash-es";
-import type { CommentInfo } from "@/types/main.hemusic";
+import { useMusicStore, usePlatformStore, useStatusStore } from "@/stores";
+import { FeatureSupportFlag } from "@/api/platform";
+import { useComments } from "@/composables/useComments";
 import { NScrollbar } from "naive-ui";
 import { coverLoaded } from "@/utils/helper";
 import { useI18n } from "vue-i18n";
-const { t } = useI18n();
 
+const { t } = useI18n();
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
-
+const platformStore = usePlatformStore();
 const commentScroll = ref<InstanceType<typeof NScrollbar> | null>(null);
+const isShowComment = computed(() => statusStore.showPlayerComment);
+const songId = computed(() => musicStore.playSong.id);
+const songPlatform = computed(() => musicStore.playSong.platform);
+const identity = computed(() => JSON.stringify([songId.value, songPlatform.value]));
+const requestedIdentity = ref("");
 
-// 是否展示
-const isShowComment = computed<boolean>(() => statusStore.showPlayerComment);
-
-// 歌曲 id
-const songId = computed<string>(() => musicStore.playSong.id);
-const songPlatform = computed<string>(() => musicStore.playSong.platform);
-
-// 评论数据
-const commentLoading = ref<boolean>(true);
-const commentData = ref<CommentInfo[]>([]);
-const commentHotData = ref<CommentInfo[] | null>([]);
-const commentPage = ref<number>(1);
-const commentHasMore = ref<boolean>(true);
-const commentLastId = ref<string>("");
-
-// 获取热门评论
-const getHotCommentData = async () => {
-  if (!songId.value || !songPlatform.value) return;
-  // 获取评论
-  const result = await getComment(songId.value, songPlatform.value, "song", 1, 20, "", true);
-
-  for (const item of result.list) {
-    item.sub_has_more = item.reply_count > item.sub_comments.length;
-    item.sub_loading = false;
-    item.sub_last_id = "";
-    item.sub_page_index = 1;
-  }
-
-  commentHotData.value = result.list?.length > 0 ? result.list : null;
-  // 滚动到顶部
-  commentScroll.value?.scrollTo({ top: 0, behavior: "smooth" });
-};
-
-// 获取歌曲评论
-const getAllComment = async () => {
-  if (!songId.value || !songPlatform.value) return;
-  commentLoading.value = true;
-  // 获取评论
-  const result = await getComment(
-    songId.value,
-    songPlatform.value,
-    "song",
-    commentPage.value,
-    20,
-    commentLastId.value,
-  );
-  if (isEmpty(result.list)) {
-    commentHasMore.value = false;
-    commentLoading.value = false;
-    return;
-  }
-
-  for (const item of result.list) {
-    item.sub_has_more = item.reply_count > item.sub_comments.length;
-    item.sub_loading = false;
-    item.sub_last_id = "";
-    item.sub_page_index = 1;
-  }
-
-  commentData.value = commentData.value.concat(result.list);
-  // 是否还有
-  commentHasMore.value = result.has_more;
-  commentLoading.value = false;
-  commentLastId.value = result.last_id;
-};
-
-// 加载更多
-const loadMoreComment = () => {
-  commentPage.value += 1;
-  getAllComment();
-};
-
-const loadSubMore = async (item: CommentInfo) => {
-  item.sub_loading = true;
-  try {
-    const result = await getSubComment(
-      songId.value,
-      songPlatform.value,
-      item.id,
-      "song",
-      item.sub_page_index,
-      15,
-      item.sub_last_id,
-    );
-    if (item.sub_page_index === 1) {
-      item.sub_comments = result.list;
-    } else {
-      item.sub_comments = item.sub_comments.concat(result.list);
-    }
-    item.sub_has_more = result.has_more;
-    item.sub_last_id = result.last_id;
-    item.sub_page_index++;
-  } finally {
-    item.sub_loading = false;
-  }
-};
-
-// 歌曲id变化
+// 关闭后保留当前歌曲评论，隐藏期间切歌则等待再次打开。
 watch(
-  () => songId.value,
-  () => {
-    commentData.value = [];
-    commentHotData.value = [];
-    commentPage.value = 1;
-    commentHasMore.value = true;
-    if (!isShowComment.value) return;
-    getHotCommentData();
-    getAllComment();
+  [isShowComment, songId, songPlatform],
+  ([show]) => {
+    if (show) requestedIdentity.value = identity.value;
   },
+  { immediate: true, flush: "sync" },
+);
+const commentQuery = () => ({
+  id: songId.value,
+  platform: songPlatform.value,
+  resourceType: "song" as const,
+  enabled:
+    requestedIdentity.value === identity.value &&
+    platformStore.isFeatureSupport(songPlatform.value, FeatureSupportFlag.GetCommentList),
+});
+const {
+  data: commentData,
+  loading: commentLoading,
+  hasMore: commentHasMore,
+  retry: loadMoreComment,
+  failed: commentFailed,
+  loadSubMore,
+} = useComments(commentQuery);
+const hotComments = useComments(() => ({ ...commentQuery(), hot: true }));
+const commentHotData = computed(() =>
+  hotComments.loading.value ? [] : hotComments.data.value.length ? hotComments.data.value : null,
 );
 
-// 是否展示
-watch(
-  () => isShowComment.value,
-  (newVal) => {
-    if (!newVal) return;
-    // 若不存在数据，重新获取
-    if (!commentData.value?.length) {
-      getHotCommentData();
-      getAllComment();
-    }
-  },
-);
-
-onMounted(() => {
-  if (!isShowComment.value) return;
-  getHotCommentData();
-  getAllComment();
+watch(isShowComment, (show) => {
+  if (!show) return;
+  if (commentFailed.value) void loadMoreComment();
+  if (hotComments.failed.value) void hotComments.retry();
+});
+watch(hotComments.loading, (loading) => {
+  if (!loading && isShowComment.value) {
+    commentScroll.value?.scrollTo({ top: 0, behavior: "smooth" });
+  }
 });
 </script>
 

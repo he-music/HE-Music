@@ -199,7 +199,7 @@
         :total="commentTotalCount"
         :sort="commentType"
         @sort="changeCommentType"
-        @retry="getCommentData(videoId, videoPlatform, false)"
+        @retry="retryComments"
         @more="loadMoreComment"
         @sub="loadSubMore"
       />
@@ -219,7 +219,7 @@
             :total="commentTotalCount"
             :sort="commentType"
             @sort="changeCommentType"
-            @retry="getCommentData(videoId, videoPlatform, false)"
+            @retry="retryComments"
             @more="loadMoreComment"
             @sub="loadSubMore"
           />
@@ -232,12 +232,12 @@
 <script setup lang="ts">
 import { useDataStore, usePlatformStore, useStatusStore } from "@/stores";
 import { getMVUrlStr, mvFeeds, videoDetail } from "@/api/video";
-import { getComment, getSubComment } from "@/api/comment";
+import { useComments } from "@/composables/useComments";
 import { usePlayer } from "@/utils/player";
 // Plyr
 import type Plyr from "plyr";
 import "plyr/dist/plyr.css";
-import type { CommentInfo, MVInfo } from "@/types/main.hemusic";
+import type { MVInfo } from "@/types/main.hemusic";
 import { FeatureSupportFlag } from "@/api/platform";
 import { useI18n } from "vue-i18n";
 import { useVideoFeed } from "@/composables/useVideoFeed";
@@ -264,15 +264,8 @@ const playerHost = ref<HTMLDivElement | null>(null);
 const videoData = ref<MVInfo | null>(null);
 
 // 评论数据
-const commentLoading = ref<boolean>(true);
-const commentData = ref<CommentInfo[]>([]);
 const commentType = ref<"hot" | "new">("hot");
-const commentPage = ref<number>(1);
-const commentHasMore = ref<boolean>(true);
-const commentFailed = ref(false);
-let commentRequest = 0;
-const commentLastId = ref<string>("");
-const commentTotalCount = ref<number>(0);
+const commentReady = ref("");
 
 const canLoadFeeds = computed(() =>
   platformStore.isFeatureSupport(videoPlatform.value, FeatureSupportFlag.ListMVFeeds),
@@ -357,6 +350,24 @@ const modeButton = ref<{ $el: HTMLButtonElement } | null>(null);
 const supportsComments = computed(() =>
   platformStore.isFeatureSupport(videoPlatform.value, FeatureSupportFlag.GetCommentList),
 );
+const {
+  data: commentData,
+  loading: commentLoading,
+  failed: commentFailed,
+  hasMore: commentHasMore,
+  total: commentTotalCount,
+  loadMore: loadMoreComment,
+  retry: retryComments,
+  loadSubMore,
+} = useComments(() => ({
+  id: videoId.value,
+  platform: videoPlatform.value,
+  resourceType: "mv",
+  hot: commentType.value === "hot",
+  enabled:
+    supportsComments.value &&
+    commentReady.value === JSON.stringify([videoId.value, videoPlatform.value]),
+}));
 const navigating = ref(false);
 const navigationMessage = ref("");
 const currentIndex = computed(() =>
@@ -458,14 +469,7 @@ watch([immersive, currentIndex, () => feedItems.value.length], () => {
 const getVideoData = async (id: string, platform: string) => {
   if (!id || !platform || !playerHost.value) return;
   const request = ++videoRequest;
-  commentRequest++;
-  commentData.value = [];
-  commentPage.value = 1;
-  commentLastId.value = "";
-  commentTotalCount.value = 0;
-  commentLoading.value = false;
-  commentFailed.value = false;
-  commentHasMore.value = false;
+  commentReady.value = "";
   navigationMessage.value = "";
   playback?.pause();
   videoLoading.value = true;
@@ -494,9 +498,7 @@ const getVideoData = async (id: string, platform: string) => {
       },
     );
     playback.setSource(sources, result.name, result.cover);
-    if (platformStore.isFeatureSupport(platform, FeatureSupportFlag.GetCommentList)) {
-      void getCommentData(id, platform);
-    }
+    commentReady.value = JSON.stringify([id, platform]);
   } catch (error) {
     if (request !== videoRequest) return;
     if (request === videoRequest) {
@@ -509,86 +511,6 @@ const getVideoData = async (id: string, platform: string) => {
   }
 };
 
-// 获取评论数据
-const getCommentData = async (id: string, platform: string, clean: boolean = true) => {
-  if (commentLoading.value && !clean) return;
-  const request = ++commentRequest;
-  const page = clean ? 1 : commentPage.value;
-  try {
-    if (!id || !platform) return;
-    commentLoading.value = true;
-    commentFailed.value = false;
-    if (clean) {
-      commentData.value = [];
-      commentPage.value = 1;
-      commentLastId.value = "";
-    }
-    // 获取评论
-    const result = await getComment(
-      id,
-      platform,
-      "mv",
-      page,
-      20,
-      commentLastId.value,
-      commentType.value === "hot",
-    );
-
-    if (request !== commentRequest) return;
-    commentPage.value = page + 1;
-    for (const item of result.list) {
-      item.sub_has_more = item.reply_count > 0 && item.reply_count > item.sub_comments.length;
-      item.sub_loading = false;
-      item.sub_last_id = "";
-      item.sub_page_index = 1;
-    }
-
-    // 处理数据
-    commentData.value = commentData.value.concat(result.list);
-    // 是否还有
-    commentHasMore.value = result.has_more;
-    commentTotalCount.value = result.total_count;
-    commentLastId.value = result.last_id;
-    commentLoading.value = false;
-  } catch (error) {
-    if (request !== commentRequest) return;
-    commentFailed.value = true;
-    console.error("Error getting comment data:", error);
-  } finally {
-    if (request === commentRequest) commentLoading.value = false;
-  }
-};
-
-// 加载更多评论
-const loadMoreComment = () => {
-  if (commentHasMore.value) getCommentData(videoId.value, videoPlatform.value, false);
-};
-
-const loadSubMore = async (item: CommentInfo) => {
-  item.sub_loading = true;
-  try {
-    const result = await getSubComment(
-      videoId.value,
-      videoPlatform.value,
-      item.id,
-      "mv",
-      item.sub_page_index,
-      15,
-      item.sub_last_id,
-    );
-    if (item.sub_page_index === 1) {
-      item.sub_comments = result.list;
-    } else {
-      item.sub_comments = item.sub_comments.concat(result.list);
-    }
-    item.sub_has_more = result.has_more;
-    item.sub_last_id = result.last_id;
-    item.sub_page_index++;
-  } finally {
-    item.sub_loading = false;
-  }
-};
-
 // 关闭音乐播放
 const closeMusic = (close: boolean = true) => {
   statusStore.showPlayBar = !close;
@@ -598,7 +520,6 @@ const closeMusic = (close: boolean = true) => {
 const changeCommentType = (type: "hot" | "new") => {
   if (type === commentType.value) return;
   commentType.value = type;
-  getCommentData(videoId.value, videoPlatform.value, true);
 };
 
 watch([videoId, videoPlatform], ([id, platform], previous) => {
@@ -610,7 +531,6 @@ watch([videoId, videoPlatform], ([id, platform], previous) => {
 onUnmounted(() => {
   closeMusic(false);
   videoRequest++;
-  commentRequest++;
   detailCache.clear();
   playback?.destroy();
 });
