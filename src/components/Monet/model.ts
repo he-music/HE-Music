@@ -1,5 +1,6 @@
 import type { LyricLine } from "@applemusic-like-lyrics/lyric";
 import { insertInterludes } from "../LyricStage/interludes";
+import { buildNextLaterStarts } from "../LyricStage/timeline";
 
 // src/components/Monet/model.ts — AMLL 毫秒时间轴到 Monet 歌词轨道的适配。
 export interface MonetGlyph {
@@ -27,6 +28,7 @@ export interface MonetLine {
 export type LineStatus = "active" | "waiting" | "passed";
 const segmenter = new Intl.Segmenter(undefined, { granularity: "grapheme" });
 const finite = (value: number, fallback: number) => (Number.isFinite(value) ? value : fallback);
+const normalizeStart = (start: number) => Math.max(0, finite(start, 0));
 
 /** 保留空白、和声和对唱；只将真实逐字时间拆到字形，普通 LRC 不生成扫光时间。 */
 export function adaptMonetLines(input: LyricLine[], wordTimed: boolean, duration = 0): MonetLine[] {
@@ -34,10 +36,13 @@ export function adaptMonetLines(input: LyricLine[], wordTimed: boolean, duration
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.words?.some((word) => word.word?.trim()))
     .sort((a, b) => a.line.startTime - b.line.startTime);
+  const nextStarts = buildNextLaterStarts(
+    sorted.map(({ line }) => line.startTime),
+    normalizeStart,
+  );
   const adapted: MonetLine[] = sorted.map(({ line, index }, position) => {
-    const start = Math.max(0, finite(line.startTime, 0));
-    const nextStart = sorted.slice(position + 1).find((item) => item.line.startTime > start)
-      ?.line.startTime;
+    const start = normalizeStart(line.startTime);
+    const nextStart = nextStarts[position];
     const wordEnd = Math.max(start, ...line.words.map((word) => finite(word.endTime, start)));
     const explicitEnd = Math.max(finite(line.endTime, start), wordTimed ? wordEnd : start);
     const end =

@@ -1,8 +1,10 @@
 // Adapted from Folia (chthollyphile), AGPL-3.0: VisualizerPartita / graphemeTiming.
 // https://github.com/chthollyphile/folia-major
 
+import type { LyricLine } from "@applemusic-like-lyrics/lyric";
 import type { PartitaWordToken } from "./cjkSemanticLayout";
 import { insertInterludes } from "../LyricStage/interludes";
+import { buildNextLaterStarts } from "../LyricStage/timeline";
 
 export interface PartitaGraphemeTiming {
   char: string;
@@ -28,6 +30,9 @@ export interface PartitaLine {
   isChorus?: boolean;
   isInterlude?: boolean;
 }
+
+type PartitaLyricInput = Pick<LyricLine, "startTime" | "endTime" | "words"> &
+  Partial<Pick<LyricLine, "translatedLyric" | "romanLyric" | "isBG" | "isDuet">>;
 
 export type WordPlayStatus = "waiting" | "active" | "passed";
 export type LinePlayStatus = "waiting" | "active" | "passed";
@@ -63,18 +68,26 @@ export const buildWordGraphemeTimings = (
 };
 
 const finite = (value: number, fallback: number) => (Number.isFinite(value) ? value : fallback);
+const normalizeStart = (start: number) => Math.max(0, finite(start, 0));
 
 /** 将 AMLL 格式歌词转换为 Partita 行数据模型（时间统一为毫秒） */
-export function adaptPartitaLines(input: any[], wordTimed: boolean, duration = 0): PartitaLine[] {
+export function adaptPartitaLines(
+  input: PartitaLyricInput[],
+  wordTimed: boolean,
+  duration = 0,
+): PartitaLine[] {
   const sorted = input
     .map((line, index) => ({ line, index }))
     .filter(({ line }) => line.words?.some((word) => word.word?.trim()))
     .sort((a, b) => a.line.startTime - b.line.startTime);
+  const nextStarts = buildNextLaterStarts(
+    sorted.map(({ line }) => line.startTime),
+    normalizeStart,
+  );
 
   const adapted: PartitaLine[] = sorted.map(({ line, index }, position) => {
-    const start = Math.max(0, finite(line.startTime, 0));
-    const nextStart = sorted.slice(position + 1).find((item) => item.line.startTime > start)
-      ?.line.startTime;
+    const start = normalizeStart(line.startTime);
+    const nextStart = nextStarts[position];
 
     const wordEnd = Math.max(start, ...line.words.map((w) => finite(w.endTime, start)));
     const explicitEnd = Math.max(finite(line.endTime, start), wordTimed ? wordEnd : start);

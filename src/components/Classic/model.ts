@@ -2,6 +2,7 @@
 // Adapted from Folia (chthollyphile, AGPL-3.0) Visualizer.tsx & graphemeTiming.ts.
 
 import { insertInterludes } from "../LyricStage/interludes";
+import { buildNextLaterStarts } from "../LyricStage/timeline";
 import {
   buildPostLyricLayoutUnits,
   buildDisplayWordsFromLayoutUnits,
@@ -208,6 +209,8 @@ export function resolveUpcomingLine(
   return upcoming.find((line) => !line.isInterlude) ?? null;
 }
 
+const normalizeStart = (start: number) => Math.max(0, start);
+
 /**
  * 将 HE-Music 原始歌词数据转换为 Classic 标准模型
  * 兼容 AMLL (LyricLine: words[].word, translatedLyric) 和标准网易云/QQ 歌词
@@ -234,14 +237,15 @@ export function adaptClassicLines(
     );
 
   if (!sorted.length) return [];
+  const nextStarts = buildNextLaterStarts(
+    sorted.map(({ line }) => line.startTime ?? line.time ?? 0),
+    normalizeStart,
+  );
 
   const adapted: ClassicLine[] = sorted
     .map(({ line, index }, position) => {
-      const start = Math.max(0, line.startTime ?? line.time ?? 0);
-      const nextLine = sorted
-        .slice(position + 1)
-        .find((item) => (item.line.startTime ?? item.line.time ?? 0) > start)?.line;
-      const nextStart = nextLine?.startTime ?? nextLine?.time;
+      const start = normalizeStart(line.startTime ?? line.time ?? 0);
+      const nextStart = nextStarts[position];
 
       // 计算行结束时间
       const rawWords = Array.isArray(line.words) ? line.words : [];
