@@ -49,7 +49,7 @@
 import { LyricLineMouseEvent, type LyricLine } from "@applemusic-like-lyrics/core";
 import { useSettingStore, useStatusStore } from "@/stores";
 import { useMusicStore } from "@/stores/music";
-import { getLyricLanguage } from "@/utils/format";
+import { getLyricLanguage } from "@/utils/lyric/language";
 import { usePlayer } from "@/utils/player";
 import { cloneDeep } from "lodash-es";
 import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";

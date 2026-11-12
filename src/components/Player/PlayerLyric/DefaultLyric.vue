@@ -117,7 +117,7 @@
 <script setup lang="ts">
 import { type LyricWord, type LyricLine } from "@applemusic-like-lyrics/lyric";
 import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
-import { getLyricLanguage } from "@/utils/format";
+import { getLyricLanguage } from "@/utils/lyric/language";
 import { usePlayer } from "@/utils/player";
 import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
 import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";

@@ -47,7 +47,7 @@
 
 <script setup lang="ts">
 import type { DataTableColumns, DataTableRowKey } from "naive-ui";
-import { isArray, isObject } from "lodash-es";
+import { isObject } from "lodash-es";
 import { openPlaylistAdd } from "@/utils/modal";
 import { deleteSongs } from "@/utils/auth";
 import { useLocalPlaylistStore } from "@/stores/localPlaylists";
@@ -144,7 +144,7 @@ const tableData = computed<DataType[]>(() =>
     id: song?.id,
     platform: song?.platform,
     name: song?.name,
-    artists: isArray(song?.artists)
+    artists: Array.isArray(song?.artists)
       ? // 拼接歌手
         song?.artists.map((ar: { name: string }) => ar.name).join(" / ")
       : song?.artists || t("common.unknown_artist"),

@@ -1,6 +1,4 @@
-import type { SongLevelType } from "@/types/main";
 import type { ImageRenderToolbarProps } from "naive-ui";
-import { compact, findKey, keys, pick, takeWhile } from "lodash-es";
 
 // 音质数据
 export const songLevelData = {
@@ -41,24 +39,6 @@ export const songLevelData = {
     name: "超清母带",
   },
 };
-
-/**
- * 根据传入的 level，筛选出包含该 level 及之前的音质数据
- * @param level 音质等级名称
- * @returns 包含指定 level 及之前音质数据的部分 songLevelData
- */
-export function getLevelsUpTo(level: string): Partial<typeof songLevelData> {
-  // 从数组中取出符合条件的所有元素
-  const resultKeys = takeWhile(
-    keys(songLevelData),
-    (key) => songLevelData[key as SongLevelType].level !== level,
-  );
-  // 包含传入的 level
-  const levelKey = findKey(songLevelData, { level });
-  if (levelKey) resultKeys.push(levelKey);
-  // 过滤空值
-  return pick(songLevelData, compact(resultKeys));
-}
 
 // 自定义图片工具栏
 export const renderToolbar = ({ nodes }: ImageRenderToolbarProps) => {
