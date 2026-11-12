@@ -1,13 +1,11 @@
 <!-- 歌曲列表 - 右键菜单 -->
 <template>
-  <n-dropdown
+  <ContextMenu
     :x="dropdownX"
     :y="dropdownY"
     :show="dropdownShow"
     :options="dropdownOptions"
     class="song-list-menu"
-    placement="bottom-start"
-    trigger="manual"
     size="large"
     @select="dropdownShow = false"
     @clickoutside="!shouldIgnoreTouchContextMenuOutside($event) && (dropdownShow = false)"
@@ -16,6 +14,7 @@
 
 <script setup lang="ts">
 import { type DropdownOption, NFlex, NText } from "naive-ui";
+import ContextMenu from "./ContextMenu.vue";
 import type { SongInfo } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
 import { useSongMenu } from "@/composables/useSongMenu";

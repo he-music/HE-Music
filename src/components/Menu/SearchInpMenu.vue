@@ -1,12 +1,10 @@
 <template>
-  <n-dropdown
+  <ContextMenu
     :x="dropdownX"
     :y="dropdownY"
     :show="dropdownShow"
     :options="dropdownOptions"
     class="search-inp-menu"
-    placement="bottom-start"
-    trigger="manual"
     @select="dropdownShow = false"
     @clickoutside="dropdownShow = false"
   />
@@ -14,6 +12,7 @@
 
 <script setup lang="ts">
 import type { DropdownOption } from "naive-ui";
+import ContextMenu from "./ContextMenu.vue";
 import { renderIcon, copyData, getClipboardData } from "@/utils/helper";
 import { useStatusStore } from "@/stores";
 

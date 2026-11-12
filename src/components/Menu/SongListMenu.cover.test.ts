@@ -33,6 +33,7 @@ function fixture() {
   const modules: Record<string, unknown> = {
     vue: Vue,
     "naive-ui": { NFlex: Vue.defineComponent({}), NText: Vue.defineComponent({}) },
+    "./ContextMenu.vue": { default: Vue.defineComponent({}) },
     "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
     "@/composables/useSongMenu": { useSongMenu: () => ({ getMenuOptions: () => [] }) },
     "@/composables/useLocalArtwork": { useLocalArtwork },

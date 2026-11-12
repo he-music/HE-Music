@@ -163,8 +163,7 @@
       </n-scrollbar>
     </div>
     <n-empty v-else :description="t('common.list_empty')" class="empty" role="status" />
-    <n-dropdown
-      trigger="manual"
+    <ContextMenu
       :show="menuOpen && !!menuTask"
       :x="menuX"
       :y="menuY"
@@ -179,6 +178,7 @@
 import { computed, onScopeDispose, shallowRef, watch } from "vue";
 import LocalScanIssues from "@/components/Local/LocalScanIssues.vue";
 import DownloadedArtwork from "@/components/Local/DownloadedArtwork.vue";
+import ContextMenu from "@/components/Menu/ContextMenu.vue";
 import type { DropdownOption } from "naive-ui";
 import { useI18n } from "vue-i18n";
 import { useRoute, useRouter } from "vue-router";

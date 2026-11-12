@@ -1,12 +1,10 @@
 <template>
-  <n-dropdown
+  <ContextMenu
     :x="dropdownX"
     :y="dropdownY"
     :show="dropdownShow"
     :options="dropdownOptions"
     class="search-inp-menu"
-    placement="bottom-start"
-    trigger="manual"
     @select="dropdownShow = false"
     @clickoutside="!shouldIgnoreTouchContextMenuOutside($event) && (dropdownShow = false)"
   />
@@ -14,6 +12,7 @@
 
 <script setup lang="ts">
 import type { DropdownOption } from "naive-ui";
+import ContextMenu from "./ContextMenu.vue";
 import { copyData, renderIcon } from "@/utils/helper";
 import { useStatusStore } from "@/stores";
 import { useMusicStore } from "@/stores/music";
