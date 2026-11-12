@@ -291,16 +291,17 @@ onBeforeUnmount(() => {
       height: 100%;
       display: flex;
       flex-direction: column;
-      transition:
-        width 0.5s cubic-bezier(0.34, 1.56, 0.64, 1),
-        opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
-      transition-delay: 0.5s;
+      // 布局宽度立即切换，避免歌词在封面进入时仍占据整行。
+      transition: opacity 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
       .player-data {
         margin-top: 0;
         margin-bottom: 26px;
       }
     }
     &.pure {
+      .content-left {
+        visibility: hidden;
+      }
       .content-right {
         align-items: center;
         width: 100% !important;
