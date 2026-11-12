@@ -42,9 +42,9 @@ const getAccentColor = (argb: number) => {
 /**
  * 生成主题配色方案
  * @param theme Material Theme 对象
- * @param variant 变体名称，默认为 'secondary'
+ * @param variant 变体名称，默认为 'primary'
  */
-const getThemeSchema = (theme: Theme, variant: keyof Theme["palettes"] = "secondary") => {
+const getThemeSchema = (theme: Theme, variant: keyof Theme["palettes"] = "primary") => {
   const { hue, chroma } = theme.palettes[variant];
   const getColor = (tone: number) => getAccentColor(Hct.from(hue, chroma, tone).toInt());
 
@@ -52,11 +52,14 @@ const getThemeSchema = (theme: Theme, variant: keyof Theme["palettes"] = "second
     main: getColor(90),
     light: {
       primary: getColor(10),
+      // 局部着色单独从调色板取色，避免从接近黑白的颜色反推时损失色度。
+      accent: getColor(40),
       background: getColor(94),
       "surface-container": getColor(90),
     },
     dark: {
       primary: getColor(90),
+      accent: getColor(80),
       background: getColor(20),
       "surface-container": getColor(16),
     },
@@ -68,7 +71,7 @@ const getThemeSchema = (theme: Theme, variant: keyof Theme["palettes"] = "second
  * @param color 颜色 Hex
  * @param variant 变体名称
  */
-const getThemeFromColor = (color: string, variant: keyof Theme["palettes"] = "secondary") => {
+const getThemeFromColor = (color: string, variant: keyof Theme["palettes"] = "primary") => {
   const argb = argbFromHex(color);
   const theme = themeFromSourceColor(argb);
   return getThemeSchema(theme, variant);
@@ -94,10 +97,20 @@ export const setColorSchemes = (
     typeof color === "string" ? getThemeFromColor(color, settingStore.themeVariant) : color;
   if (!colorData) throw new Error("Color data not found");
   // 指定模式颜色数据
-  const colorModeData = colorData[mode];
+  const { accent, ...colorModeData } = colorData[mode] ?? {};
   const modifiedColorModeData: { [key: string]: string } = {};
   // 是否全局应用
-  if (!settingStore.themeGlobalColor && colorModeData) {
+  if (!settingStore.themeGlobalColor && !useStatusStore().isCustomBackground) {
+    // 局部强调色使用更容易辨识的明暗，纯色预设保留黑白主色。
+    const primary = colorModeData.primary;
+    if (accent) {
+      colorModeData.primary = accent;
+    } else if (primary && (primary.r !== primary.g || primary.g !== primary.b)) {
+      const { hue, chroma } = Hct.fromInt(argbFromHex(rgbToHex(primary.r, primary.g, primary.b)));
+      colorModeData.primary = getAccentColor(
+        Hct.from(hue, chroma, mode === "dark" ? 80 : 40).toInt(),
+      );
+    }
     // 修改关键颜色
     colorModeData.background =
       mode === "dark" ? { r: 16, g: 16, b: 20 } : { r: 246, g: 246, b: 246 };

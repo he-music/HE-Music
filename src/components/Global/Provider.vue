@@ -50,6 +50,10 @@ const { locale, t } = useI18n();
 
 const statusStore = useStatusStore();
 const settingStore = useSettingStore();
+// 自定义背景临时启用全局着色，保留用户在颜色模式下的偏好。
+const isGlobalColor = computed(
+  () => statusStore.isCustomBackground || settingStore.themeGlobalColor,
+);
 
 // 操作系统主题
 const osTheme = useOsTheme();
@@ -115,7 +119,7 @@ const changeGlobalTheme = () => {
     }
     // 构造主题缓存 Key
     const themeModeLabel = theme.value ? "dark" : "light";
-    const themeCacheKey = `${themeModeLabel}|${settingStore.themeGlobalColor ? 1 : 0}|${JSON.stringify(settingStore.globalFont)}|${colorSchemes.primary}|${colorSchemes.background}|${colorSchemes["surface-container"]}`;
+    const themeCacheKey = `${themeModeLabel}|${isGlobalColor.value ? 1 : 0}|${JSON.stringify(settingStore.globalFont)}|${colorSchemes.primary}|${colorSchemes.background}|${colorSchemes["surface-container"]}`;
     if (lastThemeCacheKey === themeCacheKey) return;
     lastThemeCacheKey = themeCacheKey;
 
@@ -226,9 +230,9 @@ const changeGlobalTheme = () => {
     });
 
     // 获取组件样式
-    const specificStyles = getComponentStyles(settingStore.themeGlobalColor);
+    const specificStyles = getComponentStyles(isGlobalColor.value);
 
-    if (settingStore.themeGlobalColor) {
+    if (isGlobalColor.value) {
       themeOverrides.value = {
         common: {
           ...commonBase,
@@ -346,6 +350,7 @@ watch(
 watch(
   () => [
     settingStore.themeColorType,
+    settingStore.themeVariant,
     settingStore.themeFollowCover,
     settingStore.themeGlobalColor,
     settingStore.globalFont,

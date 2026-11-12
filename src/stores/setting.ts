@@ -146,7 +146,7 @@ export const createSettingState = (): SettingState => ({
   themeCustomColor: "#fe7971", // 主题自定义颜色
   themeFollowCover: false, // 主题跟随歌曲封面
   themeGlobalColor: false, // 全局着色
-  themeVariant: "secondary",
+  themeVariant: "primary",
   globalFont: "default", // 全局字体
   lyricFont: "follow", // 歌词区域字体
   japaneseLyricFont: "follow",

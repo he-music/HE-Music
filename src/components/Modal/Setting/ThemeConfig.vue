@@ -14,7 +14,7 @@
           <n-text class="tip" :depth="3">{{ t("setting.general.theme_global_color_tip") }}</n-text>
         </div>
         <n-switch
-          v-model:value="settingStore.themeGlobalColor"
+          v-model:value="globalColor"
           class="set"
           :round="false"
           :disabled="isCustomBackground"
@@ -284,6 +284,14 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 // 是否为自定义背景模式
 const isCustomBackground = computed(() => statusStore.isCustomBackground);
 
+// 背景模式只覆盖当前显示效果，不改写用户保存的着色偏好。
+const globalColor = computed({
+  get: () => isCustomBackground.value || settingStore.themeGlobalColor,
+  set: (value: boolean) => {
+    settingStore.themeGlobalColor = value;
+  },
+});
+
 // 主题颜色变体选项
 const variantOptions = [
   { label: t("setting.general.theme_variant_value_primary"), value: "primary" },
@@ -361,7 +369,6 @@ const handleFileSelect = async (event: Event) => {
     // 切换模式
     statusStore.backgroundImageUrl = url;
     settingStore.themeFollowCover = false;
-    settingStore.themeGlobalColor = true;
     window.$message.success("背景设置成功");
   } catch (error) {
     console.error("Error setting background:", error);
