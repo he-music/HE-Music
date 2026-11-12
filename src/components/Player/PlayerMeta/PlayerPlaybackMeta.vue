@@ -7,7 +7,7 @@
           <span>{{ badge.label }}</span>
         </span>
       </template>
-      {{ badge.tip }}
+      <span class="playback-tip">{{ badge.tip }}</span>
     </n-tooltip>
   </div>
 </template>
@@ -72,5 +72,8 @@ const badges = computed(() => {
       outline-offset: 2px;
     }
   }
+}
+.playback-tip {
+  color: rgb(var(--main-cover-color));
 }
 </style>
