@@ -24,58 +24,13 @@
 
 <script setup lang="ts">
 import AsyncContent from "@/components/Page/AsyncContent.vue";
-import { useAsyncRequest } from "@/composables/useAsyncRequest";
-import type { TabInfo } from "@/types/main.hemusic";
-
+import { usePlatformTabs } from "@/composables/usePlatformTabs";
 import { newSongTabs } from "@/api/song";
-import { usePlatformStore } from "@/stores";
 import NewSongResult from "@/views/NewSong/NewSongResult.vue";
 
-const router = useRouter();
-const platformStore = usePlatformStore();
-
-const tab_id = ref<string>(router.currentRoute.value.query?.tab_id as string);
-const platform = ref<string>(router.currentRoute.value.query?.platform as string);
-
-const tagChange = (tab_id: string) => {
-  router.replace({
-    name: "new-song",
-    query: {
-      tab_id: tab_id,
-      platform: platform.value,
-    },
-  });
-};
-const {
-  data: tabs,
-  loading,
-  failed,
-  retry,
-  reset: getTabList,
-} = useAsyncRequest<TabInfo[]>(async () => {
-  const result = await newSongTabs(platform.value);
-  return result.list;
-});
-watch(tabs, (items) => {
-  if (!items?.some((item) => item.id === tab_id.value)) tab_id.value = items?.[0]?.id || "";
-});
-
-// 参数变化
-onBeforeRouteUpdate((to) => {
-  if (to.name !== "new-song") return;
-  tab_id.value = to.query.tab_id as string;
-});
-
-watch(
-  () => platformStore.platforms,
-  (platforms) => {
-    if (!platforms.length) return;
-    if (!platforms.some((item) => item.id === platform.value)) {
-      platform.value = platforms[0].id;
-    }
-    void getTabList();
-  },
-  { immediate: true },
+const { tab_id, tabs, loading, failed, retry, tagChange } = usePlatformTabs(
+  "new-song",
+  newSongTabs,
 );
 </script>
 
