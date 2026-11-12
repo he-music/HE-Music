@@ -123,11 +123,20 @@ export const useDataStore = defineStore("data", {
     downloadingSongs: [],
   }),
   getters: {
+    likedSongIndex(state): ReadonlyMap<string, ReadonlySet<string>> {
+      const index = new Map<string, Set<string>>();
+      for (const { id, platform } of state.userLikeData.songs) {
+        let ids = index.get(platform);
+        if (!ids) index.set(platform, (ids = new Set()));
+        ids.add(id);
+      }
+      return index;
+    },
     // 是否为喜欢歌曲
-    isLikeSong:
-      (state) =>
-      ({ id, platform }: { id: string; platform: string } = { id: "", platform: "" }) =>
-        state.userLikeData.songs.some((item) => item.id === id && item.platform === platform),
+    isLikeSong() {
+      return ({ id, platform }: { id: string; platform: string } = { id: "", platform: "" }) =>
+        this.likedSongIndex.get(platform)?.has(id) ?? false;
+    },
   },
   actions: {
     async loadData() {
