@@ -38,15 +38,9 @@
         <div class="info">
           <!-- 名称 -->
           <div class="name">
-            <n-ellipsis
-              :line-clamp="1"
-              :tooltip="{
-                placement: 'top',
-                width: 'trigger',
-              }"
-              class="name-text"
-            >
+            <n-ellipsis :tooltip="overflowTooltip" class="name-text">
               <n-highlight :text="song.name" :patterns="highlightKeywords || []" />
+              <template #tooltip>{{ song.name }}</template>
             </n-ellipsis>
           </div>
           <n-flex :size="4" :wrap="false" class="desc" align="center">
@@ -71,30 +65,23 @@
               MV
             </n-tag>
             <!-- 歌手 -->
-            <div v-if="Array.isArray(song.artists)" class="artists text-hidden">
-              <n-text
-                v-for="ar in song.artists"
-                :key="ar.id"
-                class="ar"
-                @click.stop="openJumpArtist(song.platform, song.artists)"
-              >
-                <n-highlight :text="ar.name" :patterns="highlightKeywords || []" />
-              </n-text>
-            </div>
-            <!--          <div v-else-if="song.type === 'radio'" class="artists">-->
-            <!--            <n-text class="ar"> 电台节目 </n-text>-->
-            <!--          </div>-->
-            <div
-              v-else
-              class="artists text-hidden"
-              @click.stop="openJumpArtist(song.platform, song.artists)"
-            >
-              <n-text class="ar">
-                <n-highlight
-                  :text="song.artists || t('common.unknown_artist')"
-                  :patterns="highlightKeywords || []"
-                />
-              </n-text>
+            <div class="artists">
+              <n-ellipsis :tooltip="overflowTooltip">
+                <template v-if="Array.isArray(song.artists)">
+                  <n-text
+                    v-for="ar in song.artists"
+                    :key="ar.id"
+                    class="ar"
+                    @click.stop="openJumpArtist(song.platform, song.artists)"
+                  >
+                    <n-highlight :text="ar.name" :patterns="highlightKeywords || []" />
+                  </n-text>
+                </template>
+                <n-text v-else class="ar" @click.stop="openJumpArtist(song.platform, song.artists)">
+                  <n-highlight :text="artistNames" :patterns="highlightKeywords || []" />
+                </n-text>
+                <template #tooltip>{{ artistNames }}</template>
+              </n-ellipsis>
             </div>
           </n-flex>
           <!--别名-->
@@ -107,24 +94,27 @@
         </div>
       </div>
       <!-- 专辑 -->
-      <div v-if="!hiddenAlbum && !isSmallScreen" class="album text-hidden">
-        <n-text
-          v-if="isObject(song.album)"
-          class="album-text"
-          @click.stop="
-            IsValidId(song.album?.id) &&
-            platformStore.isFeatureSupport(song.platform, FeatureSupportFlag.GetAlbumInfo) &&
-            router.push({
-              name: 'album',
-              query: { id: song.album?.id, platform: song.platform },
-            })
-          "
-        >
-          {{ song.album?.name || "-" }}
-        </n-text>
-        <n-text v-else class="album-text">
-          {{ song.album || "-" }}
-        </n-text>
+      <div v-if="!hiddenAlbum && !isSmallScreen" class="album">
+        <n-ellipsis :line-clamp="2" :tooltip="overflowTooltip">
+          <n-text
+            v-if="isObject(song.album)"
+            class="album-text"
+            @click.stop="
+              IsValidId(song.album?.id) &&
+              platformStore.isFeatureSupport(song.platform, FeatureSupportFlag.GetAlbumInfo) &&
+              router.push({
+                name: 'album',
+                query: { id: song.album?.id, platform: song.platform },
+              })
+            "
+          >
+            {{ albumName }}
+          </n-text>
+          <n-text v-else class="album-text">
+            {{ albumName }}
+          </n-text>
+          <template #tooltip>{{ albumName }}</template>
+        </n-ellipsis>
       </div>
       <!-- 操作 -->
       <div class="actions" @click.stop @dblclick.stop>
@@ -179,7 +169,7 @@ import { secondsToTime } from "@/utils/time";
 import { usePlayer } from "@/utils/player";
 import type { SongInfo } from "@/types/main.hemusic";
 import { getSizeCover } from "@/utils/songCover";
-import type { TagProps } from "naive-ui";
+import type { EllipsisProps, TagProps } from "naive-ui";
 import { IsValidId, songEqual } from "@/utils/song";
 import { FeatureSupportFlag } from "@/api/platform";
 import { useI18n } from "vue-i18n";
@@ -212,6 +202,18 @@ const platformStore = usePlatformStore();
 
 // 歌曲数据
 const song = toRef(props, "song");
+const overflowTooltip: EllipsisProps["tooltip"] = {
+  placement: "top",
+  contentStyle: { maxWidth: "min(480px, calc(50vw - 32px))" },
+};
+const artistNames = computed(() =>
+  Array.isArray(song.value.artists)
+    ? song.value.artists.map((artist) => artist.name).join(" / ")
+    : song.value.artists || t("common.unknown_artist"),
+);
+const albumName = computed(() =>
+  isObject(song.value.album) ? song.value.album.name || "-" : song.value.album || "-",
+);
 const artworkSettings = useSettingStore();
 const localArtworkVisible = ref(false);
 const localArtworkEnabled = computed(
@@ -411,6 +413,7 @@ const quality = computed(() => getQuality(song.value));
           pointer-events: auto;
         }
         .artists {
+          min-width: 0;
           font-size: 13px;
           .ar {
             display: inline-flex;
@@ -455,8 +458,8 @@ const quality = computed(() => getQuality(song.value));
   }
   .album {
     flex: 1;
-    line-clamp: 2;
-    -webkit-line-clamp: 2;
+    min-width: 0;
+    word-break: break-all;
     padding-right: 20px;
     &:hover {
       .album-text {
