@@ -44,11 +44,13 @@ func TestPreferencesResetOldWritersThenFreshStores(t *testing.T) {
 	requireTestNoError(t, dirs.update(music, true))
 	savedLibraryIndex.Lock()
 	oldPath, oldEntries, oldErr := savedLibraryIndex.path, savedLibraryIndex.entries, savedLibraryIndex.err
+	oldDirty := savedLibraryIndex.dirty
 	savedLibraryIndex.Unlock()
 	t.Cleanup(func() {
 		savedLibraryIndex.Lock()
 		defer savedLibraryIndex.Unlock()
 		savedLibraryIndex.path, savedLibraryIndex.entries, savedLibraryIndex.err = oldPath, oldEntries, oldErr
+		savedLibraryIndex.dirty = oldDirty
 	})
 	if err := prepareLibraryIndex(directory); err != nil {
 		t.Fatal(err)

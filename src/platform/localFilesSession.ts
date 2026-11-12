@@ -1,4 +1,5 @@
 import { computed, shallowRef, watch, type Ref } from "vue";
+import { isEqual } from "lodash-es";
 import type { FileScanAccess, FilesSession } from "./filesSession";
 import type { ScanEntry, ScanIssue } from "./mygo.bindings";
 
@@ -32,10 +33,7 @@ export function localSongID(entry: ScanEntry): string {
 }
 export function nativeLocalEntry(songID: string): ScanEntry | undefined {
   if (!songID.startsWith("mygo-local:")) return undefined;
-  const fileID = songID.slice("mygo-local:".length);
-  return activeSession.value?.entries.value.find(
-    (entry) => entry.ref.fileId === fileID || localSongID(entry) === songID,
-  );
+  return activeSession.value?.findEntry(songID);
 }
 
 /** Transient scan results only: file capabilities never enter persisted song data. */
@@ -59,6 +57,29 @@ export class LocalFilesSession {
   private downloadRevision = 0;
   private readonly downloadTokens = new Set<string>();
   private refreshAllDownloads = false;
+
+  private readonly directoryPaths = computed(
+    () =>
+      new Map(
+        this.source.value?.directories.value.map((grant) => [grant.token, grant.displayPath]),
+      ),
+  );
+  private readonly entryIndex = computed(() => {
+    const index = new Map<string, ScanEntry>();
+    for (const entry of this.results.value) {
+      const directory = this.directoryPaths.value.get(entry.ref.grantToken);
+      const ids = [`mygo-local:${entry.ref.fileId}`];
+      if (directory) {
+        ids.push(
+          `mygo-local:path:${encodeURIComponent(directory)}/${encodeURIComponent(entry.relativePath)}`,
+        );
+      }
+      for (const id of ids) {
+        if (!index.has(id)) index.set(id, entry);
+      }
+    }
+    return index;
+  });
 
   constructor(private readonly source: Readonly<Ref<FilesSession | undefined>>) {
     activeSession.value = this;
@@ -104,8 +125,12 @@ export class LocalFilesSession {
     ];
   }
 
+  findEntry(songID: string): ScanEntry | undefined {
+    return this.entryIndex.value.get(songID);
+  }
+
   directoryPath(token: string): string | undefined {
-    return this.source.value?.directories.value.find((grant) => grant.token === token)?.displayPath;
+    return this.directoryPaths.value.get(token);
   }
   cancel(): void {
     this.revision++;
@@ -210,7 +235,7 @@ export class LocalFilesSession {
     const next = preserveUnchanged
       ? entries.map((entry) => {
           const saved = byPath.get(entry.relativePath);
-          return saved && JSON.stringify(saved) === JSON.stringify(entry) ? saved : entry;
+          return saved && isEqual(saved, entry) ? saved : entry;
         })
       : entries;
     if (

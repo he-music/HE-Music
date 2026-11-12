@@ -8,6 +8,7 @@ import {
   BackgroundRender as CoreBackgroundRender,
   MeshGradientRenderer,
 } from "@applemusic-like-lyrics/core";
+import { useDocumentVisibility } from "@vueuse/core";
 
 export interface BackgroundRenderProps {
   /** 设置背景专辑资源 (图片URL、Image对象或Video对象) */
@@ -50,6 +51,8 @@ const wrapperRef = useTemplateRef<HTMLDivElement>("wrapper-ref");
 
 // 外部类实例
 const bgRenderRef = shallowRef<AbstractBaseRenderer>();
+const documentVisibility = useDocumentVisibility();
+const shouldAnimate = computed(() => props.playing && documentVisibility.value === "visible");
 
 /**
  * 统一更新状态
@@ -69,7 +72,7 @@ const updateRendererState = () => {
   renderer.setLowFreqVolume(props.lowFreqVolume);
   renderer.setHasLyric(props.hasLyric);
   // 播放状态
-  if (props.playing) {
+  if (shouldAnimate.value) {
     renderer.resume();
   } else {
     renderer.pause();
@@ -90,25 +93,12 @@ onMounted(() => {
   }
 });
 
-let disposeTimer: ReturnType<typeof setTimeout> | null = null;
-
 onBeforeUnmount(() => {
   const renderer = bgRenderRef.value;
+  bgRenderRef.value = undefined;
   if (renderer) {
     renderer.pause();
-    bgRenderRef.value = undefined;
-    // 延迟销毁
-    disposeTimer = setTimeout(() => {
-      renderer.dispose();
-      disposeTimer = null;
-    }, 500);
-  }
-});
-
-onUnmounted(() => {
-  if (disposeTimer) {
-    clearTimeout(disposeTimer);
-    disposeTimer = null;
+    renderer.dispose();
   }
 });
 
@@ -128,16 +118,13 @@ watch(
   },
 );
 
-watch(
-  () => props.playing,
-  (isPlaying) => {
-    if (isPlaying) {
-      bgRenderRef.value?.resume();
-    } else {
-      bgRenderRef.value?.pause();
-    }
-  },
-);
+watch(shouldAnimate, (isPlaying) => {
+  if (isPlaying) {
+    bgRenderRef.value?.resume();
+  } else {
+    bgRenderRef.value?.pause();
+  }
+});
 
 watch(
   () => props.flowSpeed,

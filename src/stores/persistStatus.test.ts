@@ -119,37 +119,51 @@ it("恢复原有存储键和字段，忽略非持久化字段且不在初始化�
   expect(storage.setItem).not.toHaveBeenCalled();
 });
 
-it("同一秒内不重复保存，跨秒和回拖保存最新进度并可在重启后恢复", async () => {
+it("十秒检查点保存毫秒位置，同一周期不重复序列化，显式跳转后可恢复", async () => {
   const { store, storage, values } = await fixture();
   const serialize = vi.spyOn(JSON, "stringify");
-  store.currentTime = 9123;
+  for (const currentTime of [250, 1000, 5000, 9999]) {
+    store.currentTime = currentTime;
+    await nextTick();
+  }
+  expect(storage.setItem).not.toHaveBeenCalled();
+  expect(serialize).not.toHaveBeenCalled();
+  store.currentTime = 10123;
   await nextTick();
   expect(storage.setItem).toHaveBeenCalledTimes(1);
-  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(9123);
-
-  for (const currentTime of [9250, 9500, 9750, 9999]) {
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(10123);
+  for (const currentTime of [11000, 15000, 19999]) {
     store.currentTime = currentTime;
     await nextTick();
   }
   expect(storage.setItem).toHaveBeenCalledTimes(1);
   expect(serialize).toHaveBeenCalledTimes(1);
-
-  store.currentTime = 10001;
+  store.currentTime = 20001;
   await nextTick();
   expect(storage.setItem).toHaveBeenCalledTimes(2);
-  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(10001);
-
-  store.currentTime = 9876;
+  store.currentTime = 19876;
+  store.$persist();
   await nextTick();
   expect(storage.setItem).toHaveBeenCalledTimes(3);
-  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(9876);
-
   const saved = values.get("status-store");
   store.$dispose();
   const restored = await fixture(saved);
   await nextTick();
-  expect(restored.store.currentTime).toBe(9876);
+  expect(restored.store.currentTime).toBe(19876);
   expect(restored.storage.setItem).not.toHaveBeenCalled();
+});
+
+it("模拟连续播放一分钟只写入六次进度检查点", async () => {
+  const { store, storage } = await fixture();
+  store.playStatus = true;
+  await nextTick();
+  const serialize = vi.spyOn(JSON, "stringify");
+  for (let currentTime = 250; currentTime <= 60000; currentTime += 250) {
+    store.currentTime = currentTime;
+    await nextTick();
+  }
+  expect(storage.setItem).toHaveBeenCalledTimes(6);
+  expect(serialize).toHaveBeenCalledTimes(6);
 });
 
 it("关闭记忆位置时不恢复旧进度，进度变化不序列化或写入，其他设置照常保存", async () => {
@@ -178,10 +192,10 @@ it("关闭记忆位置时不恢复旧进度，进度变化不序列化或写入�
   expect(JSON.parse(values.get("status-store")!)).not.toHaveProperty("currentTime");
 });
 
-it("切换记忆位置开关会更新快照，重新开启后按秒保存当前进度", async () => {
+it("切换记忆位置开关会更新快照，重新开启后按十秒检查点保存当前进度", async () => {
   const { store, settingStore, storage, values } = await fixture();
   const statusWrites = () => storage.setItem.mock.calls.filter(([key]) => key === "status-store");
-  store.currentTime = 9123;
+  store.currentTime = 10123;
   await nextTick();
   expect(statusWrites()).toHaveLength(1);
 
@@ -202,10 +216,10 @@ it("切换记忆位置开关会更新快照，重新开启后按秒保存当前�
   store.currentTime = 15999;
   await nextTick();
   expect(statusWrites()).toHaveLength(3);
-  store.currentTime = 16000;
+  store.currentTime = 20000;
   await nextTick();
   expect(statusWrites()).toHaveLength(4);
-  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(16000);
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(20000);
 });
 
 it("业务字段、嵌套对象和数组变化各保存一次，同步批量修改合并保存", async () => {
@@ -249,6 +263,40 @@ it("清空存储后可显式保存，显式恢复和重置仍然正常", async (
   await nextTick();
   expect(JSON.parse(values.get("status-store")!).playVolume).toBe(0.7);
   expect(storage.setItem).toHaveBeenCalledTimes(4);
+});
+
+it("暂停、退出落盘和隐藏页面保存检查点之间的最新位置，释放 store 后撤销订阅", async () => {
+  const windowEvents = new EventTarget();
+  const documentEvents = Object.assign(new EventTarget(), { visibilityState: "visible" });
+  vi.stubGlobal("window", windowEvents);
+  vi.stubGlobal("document", documentEvents);
+  const { store, storage, values } = await fixture();
+  const { flushApplicationWrites } = await import("@/platform/applicationStorage");
+  store.playStatus = true;
+  store.currentTime = 1234;
+  await nextTick();
+  expect(storage.setItem).not.toHaveBeenCalled();
+  store.playStatus = false;
+  await nextTick();
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(1234);
+  store.currentTime = 2345;
+  await flushApplicationWrites();
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(2345);
+  store.currentTime = 3456;
+  documentEvents.visibilityState = "hidden";
+  documentEvents.dispatchEvent(new Event("visibilitychange"));
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(3456);
+  store.currentTime = 4567;
+  windowEvents.dispatchEvent(new Event("pagehide"));
+  expect(JSON.parse(values.get("status-store")!).currentTime).toBe(4567);
+  await nextTick();
+  store.$dispose();
+  storage.setItem.mockClear();
+  store.currentTime = 5678;
+  windowEvents.dispatchEvent(new Event("pagehide"));
+  documentEvents.dispatchEvent(new Event("visibilitychange"));
+  await flushApplicationWrites();
+  expect(storage.setItem).not.toHaveBeenCalled();
 });
 
 it("释放 store 后停止监听，其他 store 仍由原插件持久化", async () => {

@@ -1,5 +1,8 @@
-import { applicationStorage } from "@/platform/applicationStorage";
-import { computed, watch } from "vue";
+import {
+  applicationStorage,
+  registerApplicationWriteCheckpoint,
+} from "@/platform/applicationStorage";
+import { computed, onScopeDispose, watch } from "vue";
 import type { PiniaPluginContext } from "pinia";
 import type { StatusState } from "./status";
 import { useSettingStore } from "./setting";
@@ -30,7 +33,7 @@ const persistedKeys = [
   "commentConfig",
 ] as const satisfies readonly (keyof StatusState)[];
 
-/** status 按字段持久化，播放进度仅在秒数变化时触发保存，其余 store 仍使用原插件。 */
+/** 设置按字段保存，连续播放位置每十秒保存；暂停、跳转及退出时保存最新位置。 */
 export function persistStatus({ store, pinia }: PiniaPluginContext) {
   if (store.$id !== "status") return;
   const storage = applicationStorage;
@@ -44,12 +47,14 @@ export function persistStatus({ store, pinia }: PiniaPluginContext) {
       : persistedKeys.filter((field) => field !== "currentTime"),
   );
 
+  let savedTime: number;
   store.$persist = () => {
     try {
       const snapshot = Object.fromEntries(
         activeKeys.value.map((field) => [field, store.$state[field]]),
       );
       storage.setItem(key, JSON.stringify(snapshot));
+      savedTime = store.$state.currentTime;
     } catch (error) {
       console.warn("保存播放器设置失败", error);
     }
@@ -80,15 +85,42 @@ export function persistStatus({ store, pinia }: PiniaPluginContext) {
 
   // 沿用原存储键与字段，恢复已有设置后才开始监听，避免初始化时覆盖旧数据。
   store.$hydrate();
-  // 保持运行时和快照的毫秒精度，仅将监听粒度降为秒；同一秒内 computed 值不变。
-  const currentTimeSeconds = computed(() => Math.floor(store.$state.currentTime / 1000));
+  savedTime = store.$state.currentTime;
   watch(
     () =>
-      activeKeys.value.map((field) =>
-        field === "currentTime" ? currentTimeSeconds.value : store.$state[field],
-      ),
+      persistedKeys.filter((field) => field !== "currentTime").map((field) => store.$state[field]),
     () => store.$persist(),
-    // 仅遍历选定字段的嵌套数据；watch 随 Pinia store 的作用域一同释放。
     { deep: true },
   );
+  // 记忆开关本身不属于 status；变化时仍需移除或恢复快照中的位置。
+  watch(
+    () => settingStore.memoryLastSeek,
+    () => store.$persist(),
+  );
+  const checkpoint = () => {
+    if (settingStore.memoryLastSeek && store.$state.currentTime !== savedTime) store.$persist();
+  };
+  const positionCheckpoint = computed(() =>
+    settingStore.memoryLastSeek ? Math.floor(store.$state.currentTime / 10_000) : 0,
+  );
+  watch(positionCheckpoint, checkpoint);
+  watch(
+    () => store.$state.playStatus,
+    (playing, wasPlaying) => {
+      if (!playing && wasPlaying) checkpoint();
+    },
+  );
+  const stopCheckpoint = registerApplicationWriteCheckpoint(checkpoint);
+  const onVisibility = () => {
+    if (document.visibilityState === "hidden") checkpoint();
+  };
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("pagehide", checkpoint);
+    onScopeDispose(() => window.removeEventListener("pagehide", checkpoint));
+  }
+  if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+    document.addEventListener("visibilitychange", onVisibility);
+    onScopeDispose(() => document.removeEventListener("visibilitychange", onVisibility));
+  }
+  onScopeDispose(stopCheckpoint);
 }

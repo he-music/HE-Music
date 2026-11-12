@@ -27,6 +27,7 @@ const mocks = vi.hoisted(() => ({
     progress: 0,
     lyricIndex: 0,
     $patch: vi.fn(),
+    $persist: vi.fn(),
   },
   song: {
     id: "a",
@@ -250,6 +251,7 @@ describe("Player HTMLAudio compatibility", () => {
     player.setSeek(0);
     expect(mocks.audio.seek).toHaveBeenCalledWith(0);
     expect(notify).toHaveBeenCalledOnce();
+    expect(mocks.status.$persist).toHaveBeenCalledOnce();
     mocks.callbacks.get("timeupdate")?.(new Event("timeupdate"));
     expect(notify).toHaveBeenCalledOnce();
     off();

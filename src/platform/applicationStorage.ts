@@ -161,7 +161,16 @@ export const applicationStorage: Storage = {
   clear: () => (nativeRenderer ?? browserRendererStorage()).clear(),
 };
 
+const writeCheckpoints = new Set<() => void>();
+
+/** 在退出、重载和导出等待原生写入前，提交尚未到周期的内存状态。 */
+export function registerApplicationWriteCheckpoint(checkpoint: () => void): () => void {
+  writeCheckpoints.add(checkpoint);
+  return () => writeCheckpoints.delete(checkpoint);
+}
+
 export async function flushApplicationWrites(): Promise<void> {
+  for (const checkpoint of writeCheckpoints) checkpoint();
   await nativeRenderer?.flush();
   await databaseWrites.catch(() => {});
   for (const [identity, write] of [...failedDatabaseWrites]) {

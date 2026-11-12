@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { shallowRef } from "vue";
 import { FilesSession } from "./filesSession";
-import { LocalFilesSession } from "./localFilesSession";
+import { LocalFilesSession, localSongID, nativeLocalEntry } from "./localFilesSession";
 import type { PlatformFiles } from "./files";
 import type { ScanEntry, ScanPage } from "./mygo.bindings";
 
@@ -401,6 +401,53 @@ describe("LocalFilesSession", () => {
     vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce(page([]));
     await f.local.refreshWhenIdle(new AbortController().signal);
     expect(f.local.entries.value).toEqual([]);
+  });
+
+  it.each([1000, 10000, 50000])("%i 首无变化复扫不序列化或发布新列表", async (count) => {
+    const f = await fixture();
+    const songs = Array.from({ length: count }, (_, index) => ({
+      ...entry(),
+      relativePath: `${index}.mp3`,
+      filename: `${index}.mp3`,
+      ref: { ...entry().ref, fileId: `file-${index}`, relativePath: `${index}.mp3` },
+    }));
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce(page(songs));
+    await f.local.scan();
+    const previous = f.local.entries.value;
+    const next = songs.map((song) => ({
+      ...song,
+      ref: { ...song.ref },
+      metadata: { ...song.metadata, Artists: [...song.metadata.Artists] },
+    }));
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce(page(next));
+    const serialize = vi.spyOn(JSON, "stringify");
+    try {
+      await f.local.refreshWhenIdle(new AbortController().signal);
+      expect(f.local.entries.value).toBe(previous);
+      expect(serialize).not.toHaveBeenCalled();
+    } finally {
+      serialize.mockRestore();
+    }
+    expect(nativeLocalEntry(localSongID(songs[count - 1]))).toBe(previous[count - 1]);
+    expect(nativeLocalEntry(`mygo-local:file-${count - 1}`)).toBe(previous[count - 1]);
+  });
+
+  it("查询索引在原生引用更新、下载发布和目录撤销后立即更新", async () => {
+    const f = await fixture();
+    await f.local.scan();
+    const id = localSongID(f.local.entries.value[0]);
+    const old = nativeLocalEntry(id);
+    const updated = { ...entry(), ref: { ...entry().ref, fileId: "new-file", version: "new" } };
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce(page([updated]));
+    await f.local.refreshWhenIdle(new AbortController().signal);
+    expect(nativeLocalEntry(id)).toBe(updated);
+    expect(nativeLocalEntry(id)).not.toBe(old);
+    expect(nativeLocalEntry("mygo-local:file")).toBeUndefined();
+    f.local.publishDownloadedFile(entry());
+    expect(nativeLocalEntry(id)).toEqual(entry());
+    await f.shell.revokeDirectory("grant");
+    expect(nativeLocalEntry(id)).toBeUndefined();
+    expect(nativeLocalEntry("mygo-local:file")).toBeUndefined();
   });
 
   it("取消自动同步不会取消后来发起的手动扫描", async () => {

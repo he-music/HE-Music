@@ -309,6 +309,6 @@ export const useStatusStore = defineStore("status", {
       return state.themeBackgroundMode === "image" || state.themeBackgroundMode === "video";
     },
   },
-  // 由 persistStatus 插件按字段监听，播放进度按秒保存，避免毫秒变化触发重复写入。
+  // 由 persistStatus 插件按字段监听，播放进度按十秒检查点保存，避免毫秒变化触发重复写入。
   persist: false,
 });

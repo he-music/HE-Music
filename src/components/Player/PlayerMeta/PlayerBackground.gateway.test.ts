@@ -17,6 +17,7 @@ it.each([false, true])("流体背景在 mygo=%s 时仅派生 album 消费地址�
   );
   const music = reactive({ songCover: "https://images.invalid/one.jpg", isHasLrc: true });
   const settings = reactive({ playerBackgroundType: "animation" });
+  const status = reactive({ playStatus: false });
   const transition = defineComponent({
     setup:
       (_, { slots }) =>
@@ -27,7 +28,11 @@ it.each([false, true])("流体背景在 mygo=%s 时仅派生 album 消费地址�
     new URL("./PlayerBackground.vue", import.meta.url),
     {
       vue: { ...Vue, Transition: transition },
-      "@/stores": { useMusicStore: () => music, useSettingStore: () => settings },
+      "@/stores": {
+        useMusicStore: () => music,
+        useSettingStore: () => settings,
+        useStatusStore: () => status,
+      },
       "@/platform/gateway": { gatewayProxyUrl },
       "@/components/AMLL/BackgroundRender.vue": {
         __esModule: true,
@@ -48,9 +53,12 @@ it.each([false, true])("流体背景在 mygo=%s 时仅派生 album 消费地址�
     gatewayProxyUrl(music.songCover),
   );
   music.songCover = "https://images.invalid/two.jpg";
+  expect(host.all().find((node) => node.tag === "BackgroundRender")?.props.playing).toBe(false);
+  status.playStatus = true;
   await nextTick();
   expect(host.all().find((node) => node.tag === "BackgroundRender")?.props.album).toBe(
     gatewayProxyUrl(music.songCover),
   );
+  expect(host.all().find((node) => node.tag === "BackgroundRender")?.props.playing).toBe(true);
   expect(music.songCover).toBe("https://images.invalid/two.jpg");
 });

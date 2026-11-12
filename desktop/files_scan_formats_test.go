@@ -24,10 +24,12 @@ func TestScanFiltersNonAudioNamesBeforeParsingAndCache(t *testing.T) {
 
 	savedLibraryIndex.Lock()
 	oldPath, oldEntries, oldErr := savedLibraryIndex.path, savedLibraryIndex.entries, savedLibraryIndex.err
+	oldDirty := savedLibraryIndex.dirty
 	savedLibraryIndex.Unlock()
 	t.Cleanup(func() {
 		savedLibraryIndex.Lock()
 		savedLibraryIndex.path, savedLibraryIndex.entries, savedLibraryIndex.err = oldPath, oldEntries, oldErr
+		savedLibraryIndex.dirty = oldDirty
 		savedLibraryIndex.Unlock()
 	})
 	if err := prepareLibraryIndex(t.TempDir()); err != nil {

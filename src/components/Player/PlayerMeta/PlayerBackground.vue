@@ -21,6 +21,7 @@
       <BackgroundRender
         v-else-if="settingStore.playerBackgroundType === 'animation'"
         :album="gatewayProxyUrl(musicStore.songCover)"
+        :playing="statusStore.playStatus"
         :fps="settingStore.playerBackgroundFps ?? 60"
         :flowSpeed="settingStore.playerBackgroundFlowSpeed ?? 4"
         :hasLyric="musicStore.isHasLrc"
@@ -33,13 +34,14 @@
 <script setup lang="ts">
 import { defineAsyncComponent } from "vue";
 import { gatewayProxyUrl } from "@/platform/gateway";
-import { useMusicStore, useSettingStore } from "@/stores";
+import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 
 const BackgroundRender = defineAsyncComponent(
   () => import("@/components/AMLL/BackgroundRender.vue"),
 );
 const musicStore = useMusicStore();
 const settingStore = useSettingStore();
+const statusStore = useStatusStore();
 </script>
 
 <style lang="scss" scoped>

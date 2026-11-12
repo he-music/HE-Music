@@ -919,6 +919,7 @@ class Player {
     }
     audioManager.seek(time / 1000);
     statusStore.currentTime = time;
+    statusStore.$persist?.();
     this.notifySeek();
   }
   /**

@@ -28,6 +28,7 @@ type libraryIndexStore struct {
 	path    string
 	entries map[string]libraryIndexEntry
 	err     error
+	dirty   bool
 }
 
 var savedLibraryIndex libraryIndexStore
@@ -44,6 +45,7 @@ func prepareLibraryIndex(directory string) error {
 	store.path = filepath.Join(directory, "local-library-index.json")
 	store.entries = make(map[string]libraryIndexEntry)
 	store.err = nil
+	store.dirty = false
 	file, err := os.Open(store.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
@@ -92,12 +94,17 @@ func rememberLibraryMetadata(directory, relative string, info os.FileInfo, value
 	store.entries[libraryIndexKey(directory, relative)] = libraryIndexEntry{
 		Directory: directory, Relative: relative, Size: info.Size(), Modified: info.ModTime().UnixNano(), Metadata: boundedScanInfo(value),
 	}
+	store.dirty = true
 }
 
 func invalidateLibraryMetadata(directory, relative string) {
 	savedLibraryIndex.Lock()
 	defer savedLibraryIndex.Unlock()
-	delete(savedLibraryIndex.entries, libraryIndexKey(directory, relative))
+	key := libraryIndexKey(directory, relative)
+	if _, found := savedLibraryIndex.entries[key]; found {
+		delete(savedLibraryIndex.entries, key)
+		savedLibraryIndex.dirty = true
+	}
 }
 
 // Persist display metadata only. Every scan reopens the authorized file and
@@ -112,6 +119,9 @@ func flushLibraryIndex() error {
 	if store.err != nil {
 		return store.err
 	}
+	if !store.dirty {
+		return nil
+	}
 	doc := libraryIndexDocument{Version: 1, Entries: make([]libraryIndexEntry, 0, len(store.entries))}
 	for _, entry := range store.entries {
 		doc.Entries = append(doc.Entries, entry)
@@ -125,5 +135,9 @@ func flushLibraryIndex() error {
 		return err
 	}
 	defer save.cleanup()
-	return save.replace()
+	if err := save.replace(); err != nil {
+		return err
+	}
+	store.dirty = false
+	return nil
 }
