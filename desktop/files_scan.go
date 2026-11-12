@@ -382,22 +382,6 @@ func (j *fileScan) scanEntry(relative string, depth int, entry os.DirEntry, item
 	return j.scanFile(rel, entry.Name(), bytes)
 }
 
-type scanReaderAt struct {
-	ctx  context.Context
-	file *os.File
-}
-
-func (r scanReaderAt) ReadAt(p []byte, offset int64) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	n, err := r.file.ReadAt(p, offset)
-	if r.ctx.Err() != nil {
-		return n, r.ctx.Err()
-	}
-	return n, err
-}
-
 func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 	// Match the Electron audio glob before parsing or consulting a legacy index.
 	// Traversal remains bound to the authorized directory lease.
@@ -413,7 +397,7 @@ func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 	info, cached := cachedLibraryMetadata(j.lease.handle.canonical, relative, before)
 	var parseErr error
 	if !cached {
-		info, parseErr = metadata.ParseScan(scanReaderAt{j.ctx, file}, before.Size())
+		info, parseErr = metadata.ParseScan(contextReaderAt{j.ctx, file}, before.Size())
 	}
 	after, statErr := file.Stat()
 	file.Close()

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"io"
@@ -163,38 +162,15 @@ func metadataCode(err error) string {
 }
 
 func metadataHash(ctx context.Context, f *os.File) (string, error) {
-	info, err := f.Stat()
-	if err != nil {
-		return "", err
-	}
-	if info.Size() <= 0 {
+	digest, err := metadatadigest.SHA256(ctx, f)
+	switch {
+	case errors.Is(err, metadatadigest.ErrEmpty):
 		return "", errMetadataLimit
-	}
-	h := sha256.New()
-	buf := make([]byte, 32<<10)
-	for off := int64(0); off < info.Size(); {
-		if err := ctx.Err(); err != nil {
-			return "", err
-		}
-		n := min(int64(len(buf)), info.Size()-off)
-		read, err := f.ReadAt(buf[:n], off)
-		if read != int(n) {
-			return "", io.ErrUnexpectedEOF
-		}
-		if err != nil && err != io.EOF {
-			return "", err
-		}
-		h.Write(buf[:n])
-		off += n
-	}
-	after, err := f.Stat()
-	if err != nil {
-		return "", err
-	}
-	if !sameLocalFileInfo(info, after) {
+	case errors.Is(err, metadatadigest.ErrChanged):
 		return "", errFilesChanged
+	default:
+		return digest, err
 	}
-	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 var (
@@ -236,7 +212,7 @@ func (f *NativeFiles) ReadMetadata(ctx context.Context, epoch uint64, ref LocalF
 		}
 		return MetadataResult{Code: metadataCode(err)}
 	}
-	parsed, err := metadata.Parse(metadataReader{op, source}, info.Size())
+	parsed, err := metadata.Parse(contextReaderAt{op, source}, info.Size())
 	if err != nil {
 		return MetadataResult{Code: metadataCode(err)}
 	}
@@ -522,22 +498,6 @@ func metadataPatchWithinLimit(p metadata.Patch) bool {
 		}
 	}
 	return true
-}
-
-type metadataReader struct {
-	ctx  context.Context
-	file *os.File
-}
-
-func (r metadataReader) ReadAt(p []byte, off int64) (int, error) {
-	if err := r.ctx.Err(); err != nil {
-		return 0, err
-	}
-	n, err := r.file.ReadAt(p, off)
-	if cancelled := r.ctx.Err(); cancelled != nil {
-		return n, cancelled
-	}
-	return n, err
 }
 
 // register runs actor -> coordinator only. Session validation and registry

@@ -144,7 +144,7 @@ func (t *downloadTransfer) receive(resp *http.Response, file *os.File) error {
 
 func (t *downloadTransfer) validateAudio(file *os.File, target string) error {
 	t.stage = "parse_audio"
-	reader := metadataReader{ctx: t.job.ctx, file: file}
+	reader := contextReaderAt{ctx: t.job.ctx, reader: file}
 	info, err := metadata.ParseScan(reader, t.out.Received)
 	if err != nil {
 		t.out.Code = "payload_rejected"
@@ -156,7 +156,7 @@ func (t *downloadTransfer) validateAudio(file *os.File, target string) error {
 	}
 	// Discard parsed tags: cached results contain no pictures or unbounded strings.
 	t.stage = "validate_audio"
-	if err := metadata.CompareAudioPayload(t.job.ctx, reader, t.out.Received, reader, t.out.Received); err != nil {
+	if err := metadata.ValidateAudioPayload(t.job.ctx, reader, t.out.Received); err != nil {
 		t.out.Code = "payload_rejected"
 		return err
 	}
