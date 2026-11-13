@@ -155,7 +155,7 @@ watch(lyricPlayerRef, (player) => {
       padding-left: var(--lyric-toolbar-space, 80px);
       padding-right: var(--amll-lyric-right-padding, 10px);
 
-      @media (max-width: 990px) {
+      :global(.player-lyric.compact) & {
         padding: 0;
         margin-right: -20px;
       }

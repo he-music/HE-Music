@@ -182,7 +182,7 @@ function mountNav() {
     "@/utils/modal": {},
     "@/constants/links": {},
     "@/composables/useMobile": {
-      useMobile: () => ({ isDesktop: Vue.ref(true), isSmallScreen: Vue.ref(false) }),
+      useMobile: () => ({ isDesktopLayout: Vue.ref(true), isSmallScreen: Vue.ref(false) }),
     },
     "@/composables/useDesktopLifecycle": { useDesktopLifecycle },
     "@/platform/windowAppearance": { windowAppearanceSession },

@@ -6,7 +6,7 @@
     :class="{ cover: settingStore.menuShowCover }"
     :indent="0"
     :root-indent="26"
-    :collapsed="statusStore.menuCollapsed && isDesktop"
+    :collapsed="collapsed"
     :collapsed-width="64"
     :collapsed-icon-size="22"
     :default-expand-all="true"
@@ -27,8 +27,7 @@ import {
   NEllipsis,
   NText,
 } from "naive-ui";
-import { useMobile } from "@/composables/useMobile";
-import { useDataStore, useSettingStore, useStatusStore } from "@/stores";
+import { useDataStore, useSettingStore } from "@/stores";
 import { useLocalPlaylistStore } from "@/stores/localPlaylists";
 import { RouterLink, useRouter } from "vue-router";
 import { renderIcon } from "@/utils/helper";
@@ -43,7 +42,6 @@ import type {
 
 const router = useRouter();
 const dataStore = useDataStore();
-const statusStore = useStatusStore();
 const settingStore = useSettingStore();
 const localPlaylists = useLocalPlaylistStore();
 if (platform.capabilities.localMusic) {
@@ -51,7 +49,7 @@ if (platform.capabilities.localMusic) {
 }
 
 const { t } = useI18n();
-const { isDesktop } = useMobile();
+const props = withDefaults(defineProps<{ collapsed?: boolean }>(), { collapsed: false });
 
 const emit = defineEmits<{ (e: "menu-click", key: string): void }>();
 // 菜单数据
@@ -176,7 +174,7 @@ const menuOptions = computed<MenuOption[] | MenuGroupOption[]>(() => {
         // 收藏的歌单
         {
           key: "liked-playlists",
-          icon: statusStore.menuCollapsed ? renderIcon("PlaylistAddCheck") : undefined,
+          icon: props.collapsed ? renderIcon("PlaylistAddCheck") : undefined,
           label: () =>
             h(
               "div",
@@ -279,7 +277,7 @@ const localPlaylistOptions = computed<MenuOption[]>(() =>
 );
 const createdPlaylistsMenu = computed<MenuOption>(() => ({
   key: "user-playlist",
-  icon: statusStore.menuCollapsed ? renderIcon("PlaylistAdd") : undefined,
+  icon: props.collapsed ? renderIcon("PlaylistAdd") : undefined,
   label: () =>
     h("div", { class: "user-list" }, [
       h(NText, { depth: 3 }, () => t("nav.created_playlist")),

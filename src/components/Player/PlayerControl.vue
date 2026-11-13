@@ -168,6 +168,19 @@ const platformStore = usePlatformStore();
       }
     }
   }
+  .right {
+    padding-inline: 12px;
+    :deep(.desktop-lyrics-toggle) {
+      color: rgb(var(--main-cover-color));
+      &.active {
+        background-color: rgba(var(--main-cover-color), 0.14);
+      }
+    }
+    :deep(.right-menu) {
+      column-gap: 4px !important;
+      flex-wrap: nowrap !important;
+    }
+  }
   .center {
     height: 100%;
     max-height: 80px;

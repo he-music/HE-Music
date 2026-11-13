@@ -6,13 +6,16 @@
         :style="{
           cursor: statusStore.playerMetaShow || isShowComment ? 'auto' : 'none',
         }"
-        :class="['full-player', { 'show-comment': isShowComment }]"
+        :class="[
+          'full-player',
+          { 'show-comment': isShowComment, 'desktop-player': platform.kind === 'mygo' },
+        ]"
         @mouseleave="playerLeave"
       >
         <!-- 背景 -->
         <PlayerBackground />
         <!-- 移动端 -->
-        <FullPlayerMobile v-if="isTablet" />
+        <FullPlayerMobile v-if="isMobilePlayer" />
         <!-- 桌面端 -->
         <template v-else>
           <!-- 独立歌词 -->
@@ -103,6 +106,7 @@
 
 <script setup lang="ts">
 import { useMobile } from "@/composables/useMobile";
+import { platform } from "@/platform";
 import { useStatusStore, useMusicStore, useSettingStore, usePlatformStore } from "@/stores";
 import { FeatureSupportFlag } from "@/api/platform";
 import { playbackCapabilities } from "@/utils/audioManager";
@@ -112,7 +116,7 @@ const statusStore = useStatusStore();
 const settingStore = useSettingStore();
 const platformStore = usePlatformStore();
 
-const { isTablet } = useMobile();
+const { isMobilePlayer } = useMobile();
 
 /** 封面主颜色 */
 const mainCoverColor = useCssVar("--main-cover-color", document.documentElement);
@@ -226,6 +230,27 @@ onBeforeUnmount(() => {
   backdrop-filter: blur(80px);
   overflow: hidden;
   z-index: 1000;
+  &.desktop-player {
+    // 从可用高度中为长歌名、歌曲信息及上下控制区预留空间。
+    --desktop-cover-size: min(50vh, calc(100vh - 360px));
+    .player-content .content-left {
+      :deep(.player-cover) {
+        width: min(70%, var(--desktop-cover-size));
+        flex-shrink: 0;
+        &.record .cover-img {
+          width: 100%;
+          height: 100%;
+          min-width: 0;
+        }
+      }
+      :deep(.player-data.cover) {
+        width: min(70%, var(--desktop-cover-size));
+      }
+      &.cover-paused :deep(.player-data.cover) {
+        width: min(63%, calc(var(--desktop-cover-size) * 0.9));
+      }
+    }
+  }
   .lrc-instant {
     position: absolute;
     top: 0;

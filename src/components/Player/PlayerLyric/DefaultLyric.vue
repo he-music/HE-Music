@@ -643,7 +643,7 @@ onBeforeUnmount(() => {
     &::-webkit-scrollbar {
       display: none;
     }
-    @media (max-width: 990px) {
+    :global(.player-lyric.compact) & {
       padding-right: var(--lyric-toolbar-space, 20px);
     }
   }

@@ -145,7 +145,7 @@ const { t } = useI18n();
 
 const router = useRouter();
 const settingStore = useSettingStore();
-const { isDesktop, isSmallScreen } = useMobile();
+const { isDesktopLayout: isDesktop, isSmallScreen } = useMobile();
 
 const showCloseModal = ref(false);
 // 是否记住

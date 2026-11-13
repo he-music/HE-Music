@@ -1,18 +1,18 @@
 <template>
-  <n-flex :size="8" align="center" class="right-menu">
-    <n-badge
+  <n-flex :size="8" align="center" :class="['right-menu', { 'mobile-menu': isMobilePlayBar }]">
+    <button
       v-if="platform.capabilities.desktopLyrics"
-      value="ON"
-      :show="statusStore.showDesktopLyric"
+      type="button"
+      class="menu-icon hidden desktop-lyrics-toggle"
+      :class="{ active: statusStore.showDesktopLyric }"
+      :disabled="desktopLyricsUnavailable"
+      :aria-pressed="statusStore.showDesktopLyric"
+      :aria-label="t('common.toggle_desktop_lyric')"
+      :title="desktopLyricsTitle"
+      @click.stop="player.toggleDesktopLyric()"
     >
-      <div
-        class="menu-icon hidden"
-        :aria-disabled="desktopLyricsUnavailable"
-        @click.stop="!desktopLyricsUnavailable && player.toggleDesktopLyric()"
-      >
-        <SvgIcon name="DesktopLyric2" :depth="statusStore.showDesktopLyric ? 1 : 3" />
-      </div>
-    </n-badge>
+      <SvgIcon name="DesktopLyric2" :depth="statusStore.showDesktopLyric ? 1 : 3" />
+    </button>
     <!-- 音质切换 -->
     <n-dropdown
       :options="getQualityMenuOptions(musicStore.playSong)"
@@ -100,6 +100,7 @@ import { useI18n } from "vue-i18n";
 import { useSongMenu } from "@/composables/useSongMenu";
 import { platform } from "@/platform";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
+import { useMobile } from "@/composables/useMobile";
 
 const { t } = useI18n();
 
@@ -108,6 +109,7 @@ const statusStore = useStatusStore();
 const settingStore = useSettingStore();
 const musicStore = useMusicStore();
 const player = usePlayer();
+const { isMobilePlayBar } = useMobile();
 
 const currentQuality = computed(() =>
   musicStore.isLocalSong
@@ -115,6 +117,9 @@ const currentQuality = computed(() =>
     : statusStore.playQuality,
 );
 
+const desktopLyricsTitle = computed(() =>
+  t(statusStore.showDesktopLyric ? "nav.hide_desktop_lyrics" : "nav.show_desktop_lyrics"),
+);
 const desktopLyricsUnavailable = computed(
   () =>
     !desktopLyricsSession.value?.ready.value ||
@@ -198,6 +203,28 @@ const handleControls = (key: string) => {
       transform: scale(1);
     }
   }
+  .desktop-lyrics-toggle {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: var(--primary-hex);
+    font: inherit;
+    &.active {
+      background-color: rgba(var(--primary), 0.14);
+    }
+    &:focus-visible {
+      outline: 2px solid currentColor;
+      outline-offset: 2px;
+    }
+    &:disabled {
+      cursor: default;
+      opacity: 0.45;
+      transform: none;
+      &:not(.active) {
+        background: transparent;
+      }
+    }
+  }
   :deep(.n-badge-sup) {
     background-color: rgba(var(--primary), 0.28);
     backdrop-filter: blur(20px);
@@ -219,10 +246,8 @@ const handleControls = (key: string) => {
   .play-pause {
     display: none;
   }
-  @media (max-width: 810px) {
-    .hidden {
-      display: none;
-    }
+  &.mobile-menu .hidden {
+    display: none;
   }
 }
 .volume-change {

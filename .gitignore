@@ -35,6 +35,7 @@ components.d.ts
 !/docs/core-acceptance.md
 !/docs/frontend-performance.md
 !/docs/runtime-performance.md
+!/docs/responsive-layout.md
 !/docs/local-library.md
 !/docs/plans/
 /docs/plans/*

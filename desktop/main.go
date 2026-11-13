@@ -68,7 +68,8 @@ func main() {
 		}
 		options := WindowAppearanceOptions(appearance)
 		options.Title, options.Width, options.Height = "HE-Music", 1280, 800
-		options.MinWidth, options.MinHeight = 800, 600
+		// 最小宽度保留桌面双栏播放器与核心控制；窄窗口收起次要操作。
+		options.MinWidth, options.MinHeight = 960, 600
 		options.StateKey = "main"
 		options.Hidden = true
 		options.BackgroundColor = "light-dark(#ffffff, #161616)"
@@ -76,6 +77,10 @@ func main() {
 			options.Page.PreloadScript = desktopGatewayPreloadScript(gatewayOrigin)
 		}
 		win := mygo.NewWindow(options)
+		// 旧版本保存的窗口尺寸可能小于新的下限，首次恢复时一并修正。
+		if width, height := win.Size(); width < options.MinWidth || height < options.MinHeight {
+			win.SetSize(max(width, options.MinWidth), max(height, options.MinHeight))
+		}
 		if mygo.IsDev() {
 			win.SetAutoHideMenuBar(true)
 			win.SetMenu(mygo.NewMenu([]*mygo.MenuItem{{Role: mygo.RoleViewMenu}}))

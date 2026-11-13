@@ -1,29 +1,22 @@
-import { useBreakpoints, breakpointsTailwind } from "@vueuse/core";
+import { computed } from "vue";
+import { useBreakpoints } from "@vueuse/core";
+import { screenBreakpoints, layoutBreakpoints } from "@/constants/layout";
+import { platform } from "@/platform";
 
-/**
- * 移动端适配 composable
- * 基于 Tailwind 断点判断当前是否为移动端
- */
+/** 视口宽度与布局策略分别暴露；mygo 始终保留桌面交互。 */
 export const useMobile = () => {
-  const breakpoints = useBreakpoints(breakpointsTailwind);
-
-  // 小于 lg (512px) 为小屏
-  const isSmall = useMediaQuery("(max-width: 511.98px)");
-
-  // 小于 sm (640px) 为移动端
+  const breakpoints = useBreakpoints(screenBreakpoints);
+  const layouts = useBreakpoints(layoutBreakpoints);
+  const isSmall = layouts.smaller("small");
   const isMobile = breakpoints.smaller("sm");
-
-  // 小于 md (768px) 为小屏设备
   const isSmallScreen = breakpoints.smaller("md");
-
-  // 小于 lg (990px) 为中等屏幕
-  const isTablet = useMediaQuery("(max-width: 989.98px)");
-
-  // 大于等于 lg (1024px) 为桌面端
+  const isTablet = layouts.smaller("mobilePlayer");
   const isDesktop = breakpoints.greaterOrEqual("lg");
-
-  // 大于等于 xl (1280px) 为大桌面端
   const isLargeDesktop = breakpoints.greaterOrEqual("xl");
+  const belowMobilePlayBar = layouts.smaller("mobilePlayBar");
+  const isMobilePlayBar = computed(() => platform.kind !== "mygo" && belowMobilePlayBar.value);
+  const isDesktopLayout = computed(() => platform.kind === "mygo" || isDesktop.value);
+  const isMobilePlayer = computed(() => platform.kind !== "mygo" && isTablet.value);
 
   return {
     /** 是否为小屏 (< 512px) */
@@ -38,6 +31,12 @@ export const useMobile = () => {
     isDesktop,
     /** 是否为大桌面端 (>= 1280px) */
     isLargeDesktop,
+    /** 是否采用桌面导航布局（mygo 不随宽度切换为抽屉导航） */
+    isDesktopLayout,
+    /** 是否采用移动端播放器及歌词工具栏 */
+    isMobilePlayer,
+    /** 网页端窄屏播放条，mygo 保留上一曲和下一曲 */
+    isMobilePlayBar,
     /** 断点实例 */
     breakpoints,
   };

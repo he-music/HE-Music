@@ -6,7 +6,7 @@
       :class="[
         'logo',
         {
-          collapsed: statusStore.menuCollapsed,
+          collapsed,
           'mac-traffic-light-safe': isMac && platform.kind === 'mygo',
         },
       ]"
@@ -20,7 +20,7 @@
         maxHeight: `calc(100vh - ${musicStore.isHasPlayer && statusStore.showPlayBar ? 150 : 70}px)`,
       }"
     >
-      <Menu />
+      <Menu :collapsed="collapsed" />
     </n-scrollbar>
   </div>
 </template>
@@ -34,6 +34,7 @@ import Logo from "@/components/Layout/Logo.vue";
 const router = useRouter();
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
+withDefaults(defineProps<{ collapsed?: boolean }>(), { collapsed: false });
 </script>
 
 <style lang="scss" scoped>
@@ -67,6 +68,12 @@ const statusStore = useStatusStore();
         width 0.3s,
         opacity 0.3s,
         margin 0.3s;
+    }
+    &.collapsed.mac-traffic-light-safe {
+      pointer-events: none;
+      img {
+        visibility: hidden;
+      }
     }
     &.collapsed {
       justify-content: center;

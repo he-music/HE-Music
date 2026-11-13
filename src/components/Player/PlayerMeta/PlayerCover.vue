@@ -1,7 +1,7 @@
 <template>
   <!-- 全屏封面 -->
   <div
-    v-if="settingStore.playerType === 'fullscreen' && !isTablet"
+    v-if="settingStore.playerType === 'fullscreen' && !isMobilePlayer"
     class="full-screen"
     :style="{ '--gradient-percent': '15%' }"
   >
@@ -42,7 +42,7 @@ import { useSettingStore, useStatusStore, useMusicStore } from "@/stores";
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
 const settingStore = useSettingStore();
-const { isTablet } = useMobile();
+const { isMobilePlayer } = useMobile();
 </script>
 
 <style lang="scss" scoped>

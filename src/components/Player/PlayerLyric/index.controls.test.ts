@@ -12,6 +12,9 @@ it("shows bottom lyric options and the shared play control only at phone/tablet 
   const host = mountProductionSfc(
     new URL("./index.vue", import.meta.url),
     {
+      "@/composables/useMobile": {
+        useMobile: () => ({ isMobilePlayer: compact }),
+      },
       "@/stores": {
         useMusicStore: () => ({ playSong: { id: 1, platform: "test" } }),
         useSettingStore: () => ({ lyricRenderer: "amll" }),

@@ -83,7 +83,7 @@ function seek(time: number) {
     padding: 0 var(--lyric-toolbar-space, 48px);
   }
 
-  @media (max-width: 990px) {
+  :global(.player-lyric.compact) & {
     &,
     &.pure {
       padding: 0;

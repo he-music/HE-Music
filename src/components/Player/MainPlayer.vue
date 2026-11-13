@@ -4,6 +4,8 @@
       'main-player',
       {
         show: musicStore.isHasPlayer && statusStore.showPlayBar,
+        'mobile-layout': isMobilePlayBar,
+        compact: !isDesktop,
       },
     ]"
   >
@@ -227,7 +229,7 @@ const settingStore = useSettingStore();
 const platformStore = usePlatformStore();
 
 const playerRef = ref<HTMLElement | null>(null);
-const { isSmallScreen } = useMobile();
+const { isSmallScreen, isMobilePlayBar, isDesktop } = useMobile();
 
 // 触摸滑动切换歌曲
 const { direction } = useSwipe(playerRef, {
@@ -369,7 +371,7 @@ const jumpRadioList = () => {
   background-color: var(--surface-container-hex);
   // background-color: rgba(var(--surface-container), 0.28);
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   align-items: center;
   z-index: 10;
   transition: bottom 0.3s;
@@ -600,14 +602,14 @@ const jumpRadioList = () => {
       }
     }
   }
-  @media (max-width: 1024px) {
+  &.compact {
     .play-menu {
       .time-container {
         display: none !important;
       }
     }
   }
-  @media (max-width: 810px) {
+  &.mobile-layout {
     grid-template-columns: 1fr auto auto;
     .play-control {
       margin: 0 0 0 12px;

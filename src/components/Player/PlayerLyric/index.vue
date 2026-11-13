@@ -73,6 +73,7 @@
 </template>
 
 <script setup lang="ts">
+import { useMobile } from "@/composables/useMobile";
 import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { usePlayer } from "@/utils/player";
 import { useI18n } from "vue-i18n";
@@ -93,7 +94,7 @@ const settingStore = useSettingStore();
 const statusStore = useStatusStore();
 const player = usePlayer();
 const { t } = useI18n();
-const compactToolbar = useMediaQuery("(max-width: 989.98px)");
+const { isMobilePlayer: compactToolbar } = useMobile();
 const toolbarShow = ref(false);
 const toolbarView = ref<"tools" | "style">("tools");
 watch(toolbarShow, (show) => {

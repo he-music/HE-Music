@@ -114,7 +114,7 @@ function seek(time: number) {
     z-index: 1;
   }
 
-  @media (max-width: 990px) {
+  :global(.player-lyric.compact) & {
     &,
     &.pure {
       padding: 0;

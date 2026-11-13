@@ -73,7 +73,7 @@
         @collapse="statusStore.menuCollapsed = true"
         @expand="statusStore.menuCollapsed = false"
       >
-        <Sider />
+        <Sider :collapsed="statusStore.menuCollapsed" />
       </n-layout-sider>
       <n-layout id="main-layout">
         <!-- 导航栏 -->
@@ -139,7 +139,7 @@ const statusStore = useStatusStore();
 const settingStore = useSettingStore();
 const dataStore = useDataStore();
 
-const { isDesktop, isMobile, isSmallScreen } = useMobile();
+const { isDesktopLayout: isDesktop, isMobile, isSmallScreen } = useMobile();
 
 // 主内容
 const contentRef = ref<HTMLElement | null>(null);
