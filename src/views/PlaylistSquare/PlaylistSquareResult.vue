@@ -6,7 +6,7 @@
     :has-data="!!playlistData.length"
     @retry="retry"
   >
-    <n-flex justify="space-between" align="center" class="menu">
+    <n-flex justify="space-between" align="center" class="menu page-filters">
       <!-- 分类 -->
       <n-button
         :focusable="false"
@@ -151,7 +151,7 @@ watch(() => [props.platform, props.category_id], reset, { immediate: true });
 <style lang="scss" scoped>
 .discover-playlists {
   .menu {
-    margin-top: 20px;
+    padding: 12px 0;
     .n-button {
       height: 40px;
     }

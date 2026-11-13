@@ -1,11 +1,8 @@
 <template>
-  <div class="home-page">
-    <n-tabs
+  <div class="home-page platform-page">
+    <PagePlatformTabs
       v-if="availablePlatforms.length"
       :value="platform"
-      class="tabs"
-      type="bar"
-      animated
       @update:value="platformChange"
     >
       <n-tab-pane
@@ -18,13 +15,14 @@
       >
         <RecommendOnline :platform="item.id" />
       </n-tab-pane>
-    </n-tabs>
+    </PagePlatformTabs>
     <PageSectionSkeleton v-else-if="platformStore.loading" />
     <PlatformAccessEmpty v-else />
   </div>
 </template>
 
 <script setup lang="ts">
+import PagePlatformTabs from "@/components/Page/PagePlatformTabs.vue";
 import { FeatureSupportFlag } from "@/api/platform";
 import { usePlatformStore } from "@/stores";
 import type { PlatformInfo } from "@/types/main.hemusic";
@@ -48,23 +46,12 @@ const platform = computed<string>(() => {
   return String(currentRoute.query.platform || "");
 });
 
-const scrollToTop = () => {
-  nextTick(() => {
-    document.querySelector<HTMLElement>("#main-content .n-scrollbar-container")?.scrollTo({
-      top: 0,
-      behavior: "auto",
-    });
-  });
-};
-
 const platformChange = (value: string) => {
   if (value === platform.value) return;
-  router
-    .replace({
-      name: "home",
-      query: { platform: value },
-    })
-    .then(scrollToTop);
+  router.replace({
+    name: "home",
+    query: { platform: value },
+  });
 };
 
 watch(
@@ -83,15 +70,6 @@ watch(
 .home-page {
   width: 100%;
   margin: 0 auto;
-
-  .tabs {
-    width: 100%;
-    overflow: hidden;
-
-    :deep(.n-tabs-pane-wrapper) {
-      overflow: hidden;
-    }
-  }
 
   > .n-empty {
     margin-top: 72px;

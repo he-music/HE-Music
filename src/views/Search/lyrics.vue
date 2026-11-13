@@ -11,7 +11,7 @@
       :data="searchResultData"
       :keyword="keyword"
       :loading="loading"
-      :height="songListHeight"
+      height="auto"
       :show-header="!isSmall"
       allow-full-lyric
       :load-more="hasMore && !failed"
@@ -36,7 +36,6 @@ import AsyncContent from "@/components/Page/AsyncContent.vue";
 import { usePagedRequest } from "@/composables/usePagedRequest";
 import { searchLyricSong } from "@/api/search";
 import SearchSongList from "@/components/List/SearchSongList.vue";
-import { useStatusStore } from "@/stores";
 import type { SearchSongInfo } from "@/types/main.hemusic";
 import { useMobile } from "@/composables/useMobile";
 import { useI18n } from "vue-i18n";
@@ -48,7 +47,6 @@ const props = defineProps<{
 
 const { t } = useI18n();
 const { isSmall } = useMobile();
-const statusStore = useStatusStore();
 const {
   data: searchResultData,
   loading,
@@ -66,6 +64,4 @@ const {
   }),
 );
 watch(() => [props.keyword, props.platform], reset, { immediate: true });
-
-const songListHeight = computed(() => statusStore.mainContentHeight - 175);
 </script>

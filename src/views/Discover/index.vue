@@ -1,11 +1,8 @@
 <template>
-  <div class="discover-page">
-    <n-tabs
+  <div class="discover-page platform-page">
+    <PagePlatformTabs
       v-if="availablePlatforms.length"
       :value="platform"
-      class="tabs"
-      type="bar"
-      animated
       @update:value="platformChange"
     >
       <n-tab-pane
@@ -18,13 +15,14 @@
       >
         <DiscoverOnline :platform="platform.id" />
       </n-tab-pane>
-    </n-tabs>
+    </PagePlatformTabs>
     <PageSectionSkeleton v-else-if="platformStore.loading" />
     <PlatformAccessEmpty v-else />
   </div>
 </template>
 
 <script setup lang="ts">
+import PagePlatformTabs from "@/components/Page/PagePlatformTabs.vue";
 import { FeatureSupportFlag } from "@/api/platform";
 import { usePlatformStore } from "@/stores";
 import type { PlatformInfo } from "@/types/main.hemusic";
@@ -72,15 +70,6 @@ watch(
 .discover-page {
   width: 100%;
   margin: 0 auto;
-
-  .tabs {
-    width: 100%;
-    overflow: hidden;
-
-    :deep(.n-tabs-pane-wrapper) {
-      overflow: hidden;
-    }
-  }
 
   > .n-empty {
     margin-top: 72px;

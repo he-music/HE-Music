@@ -1,12 +1,6 @@
 <template>
-  <div class="artists">
-    <n-tabs
-      v-model:value="platform"
-      class="tabs"
-      type="bar"
-      animated
-      @update:value="platformChange"
-    >
+  <div class="artists platform-page">
+    <PagePlatformTabs :value="platform" @update:value="platformChange">
       <n-tab-pane
         v-for="platform in supportPlatforms"
         :key="`artists-${platform.id}`"
@@ -17,11 +11,12 @@
       >
         <ArtistsResult :platform="platform.id" />
       </n-tab-pane>
-    </n-tabs>
+    </PagePlatformTabs>
   </div>
 </template>
 
 <script setup lang="ts">
+import PagePlatformTabs from "@/components/Page/PagePlatformTabs.vue";
 import { usePlatformStore } from "@/stores";
 import { onBeforeRouteUpdate } from "vue-router";
 import { computed, onActivated, watch } from "vue";
@@ -89,12 +84,5 @@ const watcher = watch(
 .artists {
   display: flex;
   flex-direction: column;
-  .tabs {
-    width: 100%;
-    overflow: hidden;
-    :deep(.n-tabs-pane-wrapper) {
-      overflow: hidden;
-    }
-  }
 }
 </style>

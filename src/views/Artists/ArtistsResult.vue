@@ -91,7 +91,7 @@ watch(
 <style lang="scss" scoped>
 .discover-artists {
   .menu {
-    margin-top: 5px;
+    padding: 8px 0;
     .category {
       margin-top: 5px;
     }

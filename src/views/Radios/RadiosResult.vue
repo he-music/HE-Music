@@ -1,6 +1,6 @@
 <template>
   <AsyncContent class="radio" :failed="failed" :loading="loading" @retry="retry">
-    <n-tabs v-if="!loading" v-model:value="tabValue" class="tabs" type="card" animated>
+    <n-tabs v-if="!loading" v-model:value="tabValue" class="tabs page-secondary-tabs" type="card">
       <n-tab-pane
         v-for="tab in radioListData"
         :key="`radio-group-${props.platform}-${tab.name}`"
@@ -12,7 +12,7 @@
       </n-tab-pane>
     </n-tabs>
     <div v-else class="skeleton-container" aria-hidden="true" inert>
-      <n-tabs :value="0" class="tabs" type="card">
+      <n-tabs :value="0" class="tabs page-secondary-tabs" type="card">
         <n-tab-pane
           v-for="(width, index) in categorySkeletonWidths"
           :key="index"

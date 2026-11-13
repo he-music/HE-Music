@@ -1,212 +1,36 @@
 <template>
-  <div :key="searchKeyword" class="search">
-    <div class="title">
-      <n-text class="keyword">
-        {{ searchKeyword }}
-      </n-text>
-      <n-text depth="3">
-        {{ t("search.search_result") }}
-      </n-text>
-    </div>
-    <!-- 标签页 -->
-    <n-tabs
-      v-if="!platformStore.loginRequired"
-      :value="searchType"
-      class="tabs"
-      type="segment"
-      animated
-      default-value="song"
-      @update:value="tabChange"
-    >
-      <!--      <n-tab name="search-songs"> 单曲 </n-tab>-->
-      <!--      <n-tab name="search-playlists"> 歌单 </n-tab>-->
-      <!--      <n-tab name="search-artists"> 歌手 </n-tab>-->
-      <!--      <n-tab name="search-albums"> 专辑 </n-tab>-->
-      <!--      <n-tab name="search-videos"> 视频 </n-tab>-->
-      <!--      -->
-
-      <!--      <n-tab name="search-radios"> 播客 </n-tab>-->
-
-      <n-tab-pane
-        name="comprehensive"
-        :tab="t('common.comprehensive')"
-        display-directive="show:lazy"
-      >
-        <n-tabs
-          class="tabs"
-          type="bar"
-          animated
-          :value="searchPlatform"
-          @update:value="platformChange"
-        >
-          <n-tab-pane
-            v-for="platform in getSupportedPlatforms('comprehensive')"
-            :key="`search-comprehensive-${platform.id}`"
-            :name="platform.id"
-            :tab="platform.shortname"
-            :disabled="platform.status !== 1"
-            display-directive="show:lazy"
-          >
-            <Comprehensive :keyword="searchKeyword" :platform="platform.id" />
-          </n-tab-pane>
+  <div :key="searchKeyword" ref="searchPageRef" class="search">
+    <template v-if="!platformStore.loginRequired">
+      <div class="search-filters">
+        <n-tabs :value="searchType" class="tabs" type="segment" @update:value="tabChange">
+          <n-tab v-for="tab in searchTabs" :key="tab.type" :name="tab.type">
+            {{ t(tab.label) }}
+          </n-tab>
         </n-tabs>
-      </n-tab-pane>
-      <n-tab-pane name="song" :tab="t('common.songs')" display-directive="show:lazy">
-        <n-tabs
-          class="tabs"
-          type="bar"
-          animated
-          :value="searchPlatform"
-          @update:value="platformChange"
-        >
-          <n-tab-pane
-            v-for="platform in getSupportedPlatforms('song')"
-            :key="`search-song-${platform.id}`"
+        <n-tabs :value="searchPlatform" class="tabs" type="bar" @update:value="platformChange">
+          <n-tab
+            v-for="platform in supportedPlatforms"
+            :key="platform.id"
             :name="platform.id"
-            :tab="platform.shortname"
             :disabled="platform.status !== 1"
-            display-directive="show:lazy"
           >
-            <Songs :keyword="searchKeyword" :platform="platform.id" />
-          </n-tab-pane>
+            {{ platform.shortname }}
+          </n-tab>
         </n-tabs>
-      </n-tab-pane>
-      <n-tab-pane name="playlist" :tab="t('common.playlists')" display-directive="show:lazy">
-        <n-tabs
-          class="tabs"
-          type="bar"
-          animated
-          :value="searchPlatform"
-          @update:value="platformChange"
-        >
-          <n-tab-pane
-            v-for="platform in getSupportedPlatforms('playlist')"
-            :key="`search-playlist-${platform.id}`"
-            :name="platform.id"
-            :tab="platform.shortname"
-            :disabled="platform.status !== 1"
-            display-directive="show:lazy"
-          >
-            <Playlists :keyword="searchKeyword" :platform="platform.id" />
-          </n-tab-pane>
-        </n-tabs>
-      </n-tab-pane>
-      <n-tab-pane name="album" :tab="t('common.albums')" display-directive="show:lazy">
-        <n-tabs
-          class="tabs"
-          type="bar"
-          animated
-          :value="searchPlatform"
-          @update:value="platformChange"
-        >
-          <n-tab-pane
-            v-for="platform in getSupportedPlatforms('album')"
-            :key="`search-album-${platform.id}`"
-            :name="platform.id"
-            :tab="platform.shortname"
-            :disabled="platform.status !== 1"
-            display-directive="show:lazy"
-          >
-            <Albums :keyword="searchKeyword" :platform="platform.id" />
-          </n-tab-pane>
-        </n-tabs>
-      </n-tab-pane>
-      <n-tab-pane name="audiobook" :tab="t('common.audiobooks')" display-directive="show:lazy">
-        <n-tabs
-          class="tabs"
-          type="bar"
-          animated
-          :value="searchPlatform"
-          @update:value="platformChange"
-        >
-          <n-tab-pane
-            v-for="platform in getSupportedPlatforms('audiobook')"
-            :key="`search-audiobook-${platform.id}`"
-            :name="platform.id"
-            :tab="platform.shortname"
-            :disabled="platform.status !== 1"
-            display-directive="show:lazy"
-          >
-            <Audiobook :keyword="searchKeyword" :platform="platform.id" />
-          </n-tab-pane>
-        </n-tabs>
-      </n-tab-pane>
-      <n-tab-pane name="artist" :tab="t('common.artists')" display-directive="show:lazy">
-        <n-tabs
-          class="tabs"
-          type="bar"
-          animated
-          :value="searchPlatform"
-          @update:value="platformChange"
-        >
-          <n-tab-pane
-            v-for="platform in getSupportedPlatforms('artist')"
-            :key="`search-artist-${platform.id}`"
-            :name="platform.id"
-            :tab="platform.shortname"
-            :disabled="platform.status !== 1"
-            display-directive="show:lazy"
-          >
-            <Artists :keyword="searchKeyword" :platform="platform.id" />
-          </n-tab-pane>
-        </n-tabs>
-      </n-tab-pane>
-      <n-tab-pane name="video" :tab="t('common.videos')" display-directive="show:lazy">
-        <n-tabs
-          class="tabs"
-          type="bar"
-          animated
-          :value="searchPlatform"
-          @update:value="platformChange"
-        >
-          <n-tab-pane
-            v-for="platform in getSupportedPlatforms('video')"
-            :key="`search-video-${platform.id}`"
-            :name="platform.id"
-            :tab="platform.shortname"
-            :disabled="platform.status !== 1"
-            display-directive="show:lazy"
-          >
-            <Videos :keyword="searchKeyword" :platform="platform.id" />
-          </n-tab-pane>
-        </n-tabs>
-      </n-tab-pane>
-      <n-tab-pane
-        v-if="getSupportedPlatforms('lyric').length"
-        name="lyric"
-        :tab="t('common.lyrics')"
-        display-directive="show:lazy"
-      >
-        <n-tabs
-          class="tabs"
-          type="bar"
-          animated
-          :value="searchPlatform"
-          @update:value="platformChange"
-        >
-          <n-tab-pane
-            v-for="platform in getSupportedPlatforms('lyric')"
-            :key="`search-lyric-${platform.id}`"
-            :name="platform.id"
-            :tab="platform.shortname"
-            :disabled="platform.status !== 1"
-            display-directive="show:lazy"
-          >
-            <Lyrics :keyword="searchKeyword" :platform="platform.id" />
-          </n-tab-pane>
-        </n-tabs>
-      </n-tab-pane>
-    </n-tabs>
+      </div>
+      <div class="search-results">
+        <KeepAlive>
+          <component
+            :is="searchComponent"
+            v-if="searchComponent && searchPlatform"
+            :key="`${searchType}:${searchPlatform}`"
+            :keyword="searchKeyword"
+            :platform="searchPlatform"
+          />
+        </KeepAlive>
+      </div>
+    </template>
     <PlatformAccessEmpty v-else />
-
-    <!-- 路由 -->
-    <!--    <RouterView v-slot="{ Component }">-->
-    <!--      <Transition :name="`router-${settingStore.routeAnimation}`" mode="out-in">-->
-    <!--        <KeepAlive>-->
-    <!--          <component :is="Component" :keyword="searchKeyword" class="router-view" />-->
-    <!--        </KeepAlive>-->
-    <!--      </Transition>-->
-    <!--    </RouterView>-->
   </div>
 </template>
 
@@ -230,6 +54,8 @@ const router = useRouter();
 
 const platformStore = usePlatformStore();
 
+const searchPageRef = ref<HTMLElement | null>(null);
+
 // 搜索关键词（从路由派生，响应式）
 const searchKeyword = computed(() => router.currentRoute.value.query.keyword as string);
 
@@ -238,6 +64,16 @@ const searchType = computed(
   () => (router.currentRoute.value.query.type as string) || "comprehensive",
 );
 const searchPlatform = computed(() => (router.currentRoute.value.query.platform as string) || "");
+
+// 切换搜索条件后从新结果顶部开始。
+watch(
+  [searchKeyword, searchType, searchPlatform],
+  () => {
+    if (router.currentRoute.value.name !== "search") return;
+    searchPageRef.value?.closest<HTMLElement>(".n-scrollbar-container")?.scrollTo({ top: 0 });
+  },
+  { flush: "post" },
+);
 
 // 搜索类型 → FeatureSupportFlag 映射
 const typeToFlagMap: Record<string, bigint> = {
@@ -257,6 +93,24 @@ const getSupportedPlatforms = (type: string): PlatformInfo[] => {
   if (!flag) return [];
   return platformStore.featureSupportList(flag);
 };
+
+const searchViews = [
+  { type: "comprehensive", label: "common.comprehensive", component: Comprehensive },
+  { type: "song", label: "common.songs", component: Songs },
+  { type: "playlist", label: "common.playlists", component: Playlists },
+  { type: "album", label: "common.albums", component: Albums },
+  { type: "audiobook", label: "common.audiobooks", component: Audiobook },
+  { type: "artist", label: "common.artists", component: Artists },
+  { type: "video", label: "common.videos", component: Videos },
+  { type: "lyric", label: "common.lyrics", component: Lyrics },
+];
+const searchTabs = computed(() =>
+  searchViews.filter((tab) => tab.type !== "lyric" || getSupportedPlatforms("lyric").length),
+);
+const supportedPlatforms = computed(() => getSupportedPlatforms(searchType.value));
+const searchComponent = computed(
+  () => searchViews.find((tab) => tab.type === searchType.value)?.component,
+);
 
 // 校验并修正平台：不合法时回退到第一个可用平台，返回修正后的值
 const getValidPlatform = (type: string, platform: string): string => {
@@ -318,47 +172,21 @@ watch(
 
 <style lang="scss" scoped>
 .search {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
   width: 100%;
-  overflow: hidden;
-  .title {
-    margin-top: 12px;
-    margin-bottom: 12px;
-    font-size: 22px;
-    .keyword {
-      font-size: 36px;
-      font-weight: bold;
-      margin-right: 8px;
-      line-height: normal;
-      word-break: break-all;
-    }
-    .n-text {
-      display: inline-block;
-    }
-
-    @media (max-width: 512px) {
-      margin-top: 5px;
-      margin-bottom: 5px;
-      .n-text {
-        font-size: 16px;
-      }
-      .keyword {
-        font-size: 24px;
-      }
-    }
+  .search-filters {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    padding-top: 8px;
+    background: var(--sticky-surface-background, rgb(var(--background)));
+    backdrop-filter: var(--sticky-surface-filter, none);
   }
   .tabs {
     width: 100%;
-    overflow: hidden;
-    :deep(.n-tabs-pane-wrapper) {
-      overflow: hidden;
-    }
   }
-  .router-view {
-    flex: 1;
-    overflow: hidden;
+  .search-results {
+    padding-top: 12px;
+    padding-bottom: 16px;
   }
 }
 </style>

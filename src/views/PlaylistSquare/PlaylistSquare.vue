@@ -1,12 +1,6 @@
 <template>
-  <div class="playlist-square">
-    <n-tabs
-      v-model:value="platform"
-      class="tabs"
-      type="bar"
-      animated
-      @update:value="platformChange"
-    >
+  <div class="playlist-square platform-page">
+    <PagePlatformTabs :value="platform" @update:value="platformChange">
       <n-tab-pane
         v-for="platform in supportPlatforms"
         :key="`playlist-square-${platform.id}`"
@@ -21,11 +15,12 @@
           @change="tagChange"
         />
       </n-tab-pane>
-    </n-tabs>
+    </PagePlatformTabs>
   </div>
 </template>
 
 <script setup lang="ts">
+import PagePlatformTabs from "@/components/Page/PagePlatformTabs.vue";
 import { usePlatformStore } from "@/stores";
 import { onBeforeRouteUpdate } from "vue-router";
 import PlaylistSquareResult from "@/views/PlaylistSquare/PlaylistSquareResult.vue";
@@ -106,13 +101,9 @@ const watcher = watch(
   display: flex;
   flex-direction: column;
   width: 100%;
-  overflow: hidden;
-  .tabs {
-    width: 100%;
-    overflow: hidden;
-    :deep(.n-tabs-pane-wrapper) {
-      overflow: hidden;
-    }
+
+  :deep(.page-platform-tabs > .n-tabs > .n-tab-pane) {
+    padding-top: 0;
   }
 }
 </style>

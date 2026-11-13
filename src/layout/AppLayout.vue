@@ -228,6 +228,10 @@ onMounted(() => {
     .router-view {
       position: relative;
       height: 100%;
+      &.platform-page,
+      &.search {
+        height: auto;
+      }
       &.mobile-detail {
         height: auto;
         min-height: 100%;

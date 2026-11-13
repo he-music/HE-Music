@@ -1,12 +1,6 @@
 <template>
-  <div class="ranking-list">
-    <n-tabs
-      v-model:value="platform"
-      class="tabs"
-      type="bar"
-      animated
-      @update:value="platformChange"
-    >
+  <div class="ranking-list platform-page">
+    <PagePlatformTabs :value="platform" @update:value="platformChange">
       <n-tab-pane
         v-for="platform in supportPlatforms"
         :key="`ranking-list-${platform.id}`"
@@ -17,11 +11,12 @@
       >
         <RankingListResult :platform="platform.id" />
       </n-tab-pane>
-    </n-tabs>
+    </PagePlatformTabs>
   </div>
 </template>
 
 <script setup lang="ts">
+import PagePlatformTabs from "@/components/Page/PagePlatformTabs.vue";
 import { usePlatformStore } from "@/stores";
 import { onBeforeRouteUpdate } from "vue-router";
 import { FeatureSupportFlag } from "@/api/platform";
@@ -92,13 +87,5 @@ const watcher = watch(
   display: flex;
   flex-direction: column;
   width: 100%;
-  overflow: hidden;
-  .tabs {
-    width: 100%;
-    overflow: hidden;
-    :deep(.n-tabs-pane-wrapper) {
-      overflow: hidden;
-    }
-  }
 }
 </style>
