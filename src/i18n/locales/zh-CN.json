@@ -663,6 +663,7 @@
   "search": {
     "best_match": "最佳匹配",
     "collapse_full_lyric": "收起完整歌词",
+    "copy_input": "复制搜索框内容",
     "delete_search_history": "删除搜索历史",
     "direct_search": "直接搜索",
     "fuzzy_search": "模糊搜索",
@@ -681,6 +682,8 @@
     "no_song_result": "很抱歉，未能找到与 {keyword} 相关的任何歌曲",
     "no_video_result": "很抱歉，未能找到与 {keyword} 相关的任何视频",
     "original": "原唱",
+    "paste_and_search": "粘贴并搜索",
+    "paste_input": "粘贴至搜索框",
     "placeholder": "搜索音乐 / 视频",
     "related_match": "相关匹配",
     "search_result": "搜索结果",

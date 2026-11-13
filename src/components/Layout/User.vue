@@ -1,7 +1,7 @@
 <template>
   <n-popover
     :show="userMenuShow"
-    style="padding: 12px; max-width: 160px"
+    style="padding: 12px; max-width: calc(100vw - 24px)"
     trigger="manual"
     @clickoutside="userMenuShow = false"
   >
@@ -218,14 +218,26 @@ onBeforeMount(() => {
   display: flex;
   justify-content: center;
   flex-direction: column;
+  min-width: 192px;
+  gap: 4px;
+  .n-button {
+    justify-content: flex-start;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: 8px;
+    :deep(.n-button__icon) {
+      margin-right: 10px;
+    }
+  }
   .user-info {
     .nickname {
       font-weight: bold;
     }
   }
   .like-num {
-    display: flex;
-    justify-content: space-around;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
     .num-item {
       display: flex;
       flex-direction: column;

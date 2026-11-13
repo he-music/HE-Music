@@ -471,7 +471,8 @@ const quality = computed(() => getQuality(song.value));
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
+    flex-shrink: 0;
+    width: var(--song-list-actions-width, 40px);
     .mobile-menu {
       width: 44px;
       height: 44px;
@@ -489,7 +490,8 @@ const quality = computed(() => getQuality(song.value));
     }
   }
   .meta {
-    width: 50px;
+    flex-shrink: 0;
+    width: var(--song-list-meta-width, 50px);
     font-size: 13px;
     text-align: center;
     &.size {

@@ -163,6 +163,11 @@ watch(searchSuggestData, calcSearchSuggestHeights, { flush: "post" });
         cursor: pointer;
         .name {
           white-space: normal;
+          :deep(.highlight) {
+            color: var(--primary-hex);
+            background-color: transparent;
+            font-weight: 600;
+          }
         }
         .artist {
           &::before {

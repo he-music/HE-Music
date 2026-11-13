@@ -663,6 +663,7 @@
   "search": {
     "best_match": "Best Match",
     "collapse_full_lyric": "Hide Full Lyrics",
+    "copy_input": "Copy Search Text",
     "delete_search_history": "Delete Search History",
     "direct_search": "Direct Search",
     "fuzzy_search": "Fuzzy Search",
@@ -681,6 +682,8 @@
     "no_song_result": "Sorry, no tracks found related to {keyword}",
     "no_video_result": "Sorry, no videos found related to {keyword}",
     "original": "Original",
+    "paste_and_search": "Paste and Search",
+    "paste_input": "Paste into Search Box",
     "placeholder": "Search Music / Video",
     "related_match": "Related Matches",
     "search_result": "Search Results",

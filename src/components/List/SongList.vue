@@ -485,9 +485,14 @@ onBeforeUnmount(() => {
 
 <style lang="scss" scoped>
 .song-list {
+  --song-list-actions-width: 88px;
+  --song-list-meta-width: 72px;
   height: 100%;
   border-radius: 12px 0 0 12px;
   overflow: hidden;
+  @media (max-width: 767.98px) {
+    --song-list-actions-width: 44px;
+  }
   &.auto-height {
     height: auto;
     overflow: visible;
@@ -510,6 +515,10 @@ onBeforeUnmount(() => {
     // background-color: var(--background-hex);
     .n-text {
       opacity: 0.6;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .num {
       position: relative;
@@ -524,6 +533,7 @@ onBeforeUnmount(() => {
     .title {
       position: relative;
       flex: 1;
+      min-width: 0;
       display: flex;
       align-items: center;
       padding: 4px 20px 4px 0;
@@ -562,16 +572,19 @@ onBeforeUnmount(() => {
     }
     .album {
       flex: 1;
+      min-width: 0;
       padding-right: 20px;
     }
     .actions {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 40px;
+      flex-shrink: 0;
+      width: var(--song-list-actions-width);
     }
     .meta {
-      width: 50px;
+      flex-shrink: 0;
+      width: var(--song-list-meta-width);
       text-align: center;
       &.size {
         width: 60px;

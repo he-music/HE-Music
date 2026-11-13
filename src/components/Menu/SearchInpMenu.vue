@@ -15,6 +15,9 @@ import type { DropdownOption } from "naive-ui";
 import ContextMenu from "./ContextMenu.vue";
 import { renderIcon, copyData, getClipboardData } from "@/utils/helper";
 import { useStatusStore } from "@/stores";
+import { useI18n } from "vue-i18n";
+
+const { t } = useI18n();
 
 const emit = defineEmits<{
   // 直接搜索
@@ -41,7 +44,7 @@ const openDropdown = async (e: MouseEvent) => {
       dropdownOptions.value = [
         {
           key: "copy",
-          label: "复制搜索框内容",
+          label: t("search.copy_input"),
           show: !!statusStore.searchInputValue,
           props: {
             onClick: () => copyData(statusStore.searchInputValue),
@@ -50,7 +53,7 @@ const openDropdown = async (e: MouseEvent) => {
         },
         {
           key: "paste",
-          label: "粘贴至搜索框",
+          label: t("search.paste_input"),
           show: !!ClipboardData,
           props: {
             onClick: () => (statusStore.searchInputValue += ClipboardData),
@@ -59,7 +62,7 @@ const openDropdown = async (e: MouseEvent) => {
         },
         {
           key: "paste-search",
-          label: "粘贴并搜索",
+          label: t("search.paste_and_search"),
           show: !!ClipboardData,
           props: {
             onClick: () => {
@@ -77,7 +80,7 @@ const openDropdown = async (e: MouseEvent) => {
     });
   } catch (error) {
     console.error("右键菜单出现异常：", error);
-    window.$message.error("右键菜单出现异常");
+    window.$message.error(t("message.right_click_menu_error"));
   }
 };
 
