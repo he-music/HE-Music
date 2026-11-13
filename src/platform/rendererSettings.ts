@@ -108,6 +108,7 @@ const settingSchema: Schema<SettingState> = {
   showTaskbarProgress: bool,
   useOnlineService: bool,
   checkUpdateOnStart: bool,
+  skippedUpdateVersion: string,
   hideVipTag: bool,
   lyricFontSize: number,
   lyricTranFontSize: number,

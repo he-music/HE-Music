@@ -1,4 +1,4 @@
-import { nextTick, onBeforeUnmount, onMounted, watch, type Ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, toRef, watch, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingStore, useStatusStore } from "@/stores";
 import { platform } from "@/platform";
@@ -75,7 +75,10 @@ export function useDesktopLifecycle(ui: {
       window.$message?.error(t("message.song_play_fail"));
     },
   });
-  const updates = createShellUpdatesSession(() => setting.checkUpdateOnStart);
+  const updates = createShellUpdatesSession(
+    () => setting.checkUpdateOnStart,
+    toRef(setting, "skippedUpdateVersion"),
+  );
   const { t, locale } = useI18n();
   let disposed = false;
   let requestId: number | null = null;

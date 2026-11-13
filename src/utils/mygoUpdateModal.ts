@@ -15,7 +15,7 @@ export function createMygoUpdatePresenter(
       if (updatesSession.value !== session || !session.ready.value) return;
       const modal = window.$modal.create({
         preset: "card",
-        title: t("setting.about.check_update"),
+        title: t("updates.view"),
         autoFocus: false,
         style: { width: "560px", maxWidth: "90vw" },
         content: () => h(MygoUpdate, { owner: session, onClose: () => modal.destroy() }),

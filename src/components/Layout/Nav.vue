@@ -22,6 +22,7 @@
       <SearchInp />
 
       <n-flex align="center">
+        <UpdateNotice v-if="platform.kind === 'mygo'" />
         <!-- 用户 -->
         <User v-if="settingStore.useOnlineService" />
         <!-- 设置菜单 -->
@@ -319,7 +320,7 @@ onUnmounted(() => {
   .page-control {
     --app-region: no-drag;
   }
-  .n-button {
+  .n-button:not(.update-notice) {
     width: 40px;
     height: 40px;
     -webkit-app-region: no-drag;
@@ -331,6 +332,11 @@ onUnmounted(() => {
     align-items: center;
     height: 100%;
     margin-left: 12px;
+    @media (max-width: 768px) {
+      &:has(.update-notice) :deep(.search:not(.focus)) {
+        width: max(40px, calc(100% - 212px));
+      }
+    }
   }
   .client-control {
     .divider {

@@ -38,6 +38,17 @@ const partial = (setting: unknown = {}, shortcut: unknown = {}) => ({
 });
 
 describe("rendererSettings", () => {
+  it("persists skipped update versions and supplies an empty value for older settings", () => {
+    expect(validateSettingState({}).skippedUpdateVersion).toBe("");
+    const setting = useSettingStore();
+    const shortcut = useShortcutStore();
+    setting.skippedUpdateVersion = "2.0.4";
+    const saved = serializeRendererSettings(setting.$state, shortcut.$state);
+    expect(validateSettingState(JSON.parse(saved["setting-store"])).skippedUpdateVersion).toBe(
+      "2.0.4",
+    );
+    expect(() => validateSettingState({ skippedUpdateVersion: 204 })).toThrow();
+  });
   it("defaults to preserving audio and persists the strict download preference", () => {
     expect(validateSettingState({}).downloadKeepAudioOnMetadataFailure).toBe(true);
     const setting = useSettingStore();

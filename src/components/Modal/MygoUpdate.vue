@@ -5,7 +5,7 @@
       <SvgIcon name="Right" />
       <n-tag :bordered="false" type="warning">{{ state?.version || "—" }}</n-tag>
     </n-flex>
-    <n-scrollbar style="max-height: 500px">
+    <n-scrollbar style="max-height: min(45vh, 400px)">
       <div
         v-if="renderedNotes"
         v-dompurify-html="renderedNotes"
@@ -14,54 +14,82 @@
       />
       <div v-else class="markdown-body">{{ t("modal.no_update_log") }}</div>
     </n-scrollbar>
-    <n-flex v-if="phase === 'installing'" vertical :size="8">
-      <n-progress v-if="downloadPercent !== null" type="line" :percentage="downloadPercent" />
-      <n-spin v-else size="small" />
-      <n-text>{{
-        t(downloadPercent === null ? "updates.download_received" : "updates.download_progress", {
-          downloaded: downloadedMB,
-          total: totalMB,
-        })
-      }}</n-text>
+    <n-flex v-if="phase === 'installing'" class="progress" vertical :size="8" role="status">
+      <template v-if="!finishing">
+        <n-progress v-if="downloadPercent !== null" type="line" :percentage="downloadPercent" />
+        <n-spin v-else size="small" />
+        <n-text>{{
+          t(downloadPercent === null ? "updates.download_received" : "updates.download_progress", {
+            downloaded: downloadedMB,
+            total: totalMB,
+          })
+        }}</n-text>
+      </template>
+      <template v-else>
+        <n-spin size="small" />
+        <n-text>{{ t("updates.finishing") }}</n-text>
+      </template>
     </n-flex>
     <n-text v-if="phase !== 'available' && phase !== 'installing'" role="status">{{
       t(`updates.phase_${phase}`)
     }}</n-text>
     <n-alert v-if="failure" type="warning" :show-icon="false">{{ failure }}</n-alert>
-    <n-flex class="menu" justify="end">
-      <n-button strong secondary @click="emit('close')">{{
-        t(phase === "installed" ? "updates.later" : "common.close")
-      }}</n-button>
+    <n-flex class="menu" justify="space-between" align="center">
       <n-button
-        v-if="phase === 'installing'"
-        :loading="session?.cancelling.value"
-        :disabled="!current || !session?.canCancel.value"
-        @click="cancelInstall"
-        >{{ t(session?.cancelling.value ? "updates.cancelling" : "updates.cancel") }}</n-button
+        v-if="phase !== 'installing' && phase !== 'installed'"
+        text
+        :disabled="busy"
+        @click="goDownload"
+        >{{ t("updates.download_page") }}</n-button
       >
-      <n-button v-if="phase === 'cancelled'" :disabled="busy" @click="checkAgain">{{
-        t("setting.about.check_update")
-      }}</n-button>
-      <n-button type="warning" strong secondary :disabled="busy" @click="goDownload">{{
-        t("modal.click_download")
-      }}</n-button>
-      <n-button
-        v-if="phase === 'available' || phase === 'installing'"
-        type="primary"
-        :loading="busy"
-        :disabled="!current || busy"
-        @click="installUpdate"
-        >{{ t(phase === "installing" ? "updates.phase_installing" : "modal.update_now") }}</n-button
-      >
-      <n-button
-        v-if="phase === 'installed'"
-        type="primary"
-        :loading="restarting"
-        :disabled="!current || busy"
-        @click="restartApp"
-      >
-        {{ t("updates.restart") }}
-      </n-button>
+      <n-flex class="actions" justify="end" :size="8">
+        <n-button
+          v-if="phase === 'available'"
+          text
+          :disabled="!current || busy || !state?.version"
+          @click="skipVersion"
+          >{{ t("updates.skip") }}</n-button
+        >
+        <n-button secondary @click="emit('close')">{{
+          t(phase === "installing" ? "common.close" : "updates.later")
+        }}</n-button>
+        <n-button
+          v-if="phase === 'installing' && (session?.canCancel.value || session?.cancelling.value)"
+          :loading="session?.cancelling.value"
+          :disabled="!current"
+          @click="cancelInstall"
+          >{{ t(session?.cancelling.value ? "updates.cancelling" : "updates.cancel") }}</n-button
+        >
+        <n-button
+          v-if="failure"
+          :disabled="!current || restarting || session?.checking.value"
+          @click="refreshStatus"
+          >{{ t("updates.refresh") }}</n-button
+        >
+        <n-button
+          v-if="phase === 'cancelled' || phase === 'error'"
+          type="primary"
+          :disabled="!current || busy"
+          @click="checkAgain"
+          >{{ t("setting.about.check_update") }}</n-button
+        >
+        <n-button
+          v-if="phase === 'available'"
+          type="primary"
+          :loading="busy"
+          :disabled="!current || busy"
+          @click="installUpdate"
+          >{{ t("modal.update_now") }}</n-button
+        >
+        <n-button
+          v-if="phase === 'installed'"
+          type="primary"
+          :loading="restarting"
+          :disabled="!current || busy"
+          @click="restartApp"
+          >{{ t("updates.restart") }}</n-button
+        >
+      </n-flex>
     </n-flex>
   </div>
 </template>
@@ -76,10 +104,13 @@ import { UpdatesSession, updatesSession } from "@/platform/updatesSession";
 import "github-markdown-css/github-markdown.css";
 import { filesSession } from "@/platform/filesSession";
 import { flushApplicationWrites } from "@/platform/applicationStorage";
+import { useSettingStore } from "@/stores";
+import { useUpdateProgress } from "@/composables/useUpdateProgress";
 
 const props = defineProps<{ owner?: UpdatesSession }>();
 const emit = defineEmits<{ close: [] }>();
 const { t } = useI18n();
+const setting = useSettingStore();
 const session = computed(() => props.owner ?? updatesSession.value);
 const current = computed(() => {
   const value = session.value;
@@ -88,14 +119,7 @@ const current = computed(() => {
 const state = computed(() => (current.value ? session.value?.state.value : undefined));
 const phase = computed(() => state.value?.phase ?? "unavailable");
 const restarting = ref(false);
-const downloadPercent = computed(() => {
-  const value = state.value;
-  return value && value.total > 0
-    ? Math.min(100, Math.round((value.downloaded / value.total) * 1000) / 10)
-    : null;
-});
-const downloadedMB = computed(() => ((state.value?.downloaded ?? 0) / 1024 / 1024).toFixed(1));
-const totalMB = computed(() => ((state.value?.total ?? 0) / 1024 / 1024).toFixed(1));
+const { finishing, percent: downloadPercent, downloadedMB, totalMB } = useUpdateProgress(state);
 const failure = ref("");
 const busy = computed(
   () => restarting.value || session.value?.busy.value === true || phase.value === "installing",
@@ -128,6 +152,29 @@ function jumpLink(event: MouseEvent): void {
   if (!(link instanceof HTMLAnchorElement)) return;
   event.preventDefault();
   if (!disposed && /^https?:\/\//i.test(link.href)) void openExternal(link.href);
+}
+function skipVersion(): void {
+  if (
+    disposed ||
+    !current.value ||
+    busy.value ||
+    phase.value !== "available" ||
+    !state.value?.version
+  )
+    return;
+  setting.skippedUpdateVersion = state.value.version;
+  emit("close");
+}
+async function refreshStatus(): Promise<void> {
+  const owner = session.value;
+  if (disposed || !current.value || restarting.value || !owner) return;
+  try {
+    await owner.refresh();
+    if (!disposed && current.value && session.value === owner) failure.value = "";
+  } catch {
+    if (!disposed && current.value && session.value === owner)
+      failure.value = t("updates.operation_failed");
+  }
 }
 async function installUpdate(): Promise<void> {
   const owner = session.value;
@@ -192,6 +239,12 @@ async function restartApp(): Promise<void> {
     .n-tag {
       border-radius: 6px;
     }
+  }
+  .progress {
+    margin-top: 20px;
+  }
+  .actions {
+    margin-left: auto;
   }
   .menu {
     margin-top: 20px;

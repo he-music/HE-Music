@@ -6,6 +6,8 @@ import ts from "typescript";
 import { UpdatesSession, updatesSession } from "@/platform/updatesSession";
 import type { PlatformUpdates, UpdatesEvent, UpdatesState } from "@/platform/updates";
 import { marked } from "marked";
+import { useUpdateProgress } from "@/composables/useUpdateProgress";
+const setting = Vue.reactive({ skippedUpdateVersion: "" });
 const openExternal = vi.fn(async () => {});
 const flushWrites = vi.fn(async () => {});
 const disposeFiles = vi.fn(async () => {});
@@ -35,6 +37,7 @@ afterEach(async () => {
   await session?.dispose();
   session = undefined;
   vi.unstubAllGlobals();
+  setting.skippedUpdateVersion = "";
 });
 
 function mount(owner?: UpdatesSession) {
@@ -67,6 +70,8 @@ function mount(owner?: UpdatesSession) {
     },
     "@/platform/applicationStorage": { flushApplicationWrites: flushWrites },
     "@/platform/updatesSession": { UpdatesSession, updatesSession },
+    "@/stores": { useSettingStore: () => setting },
+    "@/composables/useUpdateProgress": { useUpdateProgress },
   };
   const exports: { default?: Vue.Component } = {};
   new Function("require", "exports", compiled)((name: string) => {
@@ -204,7 +209,7 @@ it("uses native acknowledgements, starts the current candidate with one click an
     getState: vi.fn(async () => {}),
     download: vi.fn(async () => {}),
     restart: vi.fn(async (id, _epoch, revision) =>
-      emit(id, { operationRevision: revision, stateRevision: 7, phase: "installed" }),
+      emit(id, { operationRevision: revision, stateRevision: 8, phase: "installed" }),
     ),
     install: vi.fn(async (id, _epoch, revision) => {
       installID = id;
@@ -243,10 +248,15 @@ it("uses native acknowledgements, starts the current candidate with one click an
   const versionText = (element: Element): string =>
     element.text + element.children.map(versionText).join("");
   expect(version && versionText(version)).toBe("1.0.42.0.0");
-  await ui.click("modal.click_download");
+  await ui.click("updates.download_page");
   expect(openExternal).toHaveBeenCalledWith("https://github.test/music/releases");
-  expect(ui.all().map((element) => element.props.style)).toContainEqual({ "max-height": "500px" });
+  expect(ui.all().map((element) => element.props.style)).toContainEqual({
+    "max-height": "min(45vh, 400px)",
+  });
   expect(ui.all().some((element) => element.props.class === "menu")).toBe(true);
+  await ui.click("updates.skip");
+  expect(setting.skippedUpdateVersion).toBe("2.0.0");
+  expect(provider.install).not.toHaveBeenCalled();
   const applying = ui.click("modal.update_now");
   expect(provider.install).toHaveBeenCalledOnce();
   expect(warning).not.toHaveBeenCalled();
@@ -267,12 +277,25 @@ it("uses native acknowledgements, starts the current candidate with one click an
   });
   await flush();
   expect(ui.all().some((element) => element.props.percentage === 50)).toBe(true);
+  expect(ui.all().some((element) => element.text === "modal.update_now")).toBe(false);
+  expect(ui.all().some((element) => element.text === "updates.skip")).toBe(false);
+  emit(0, {
+    operationRevision: installRevision,
+    stateRevision: 6,
+    phase: "installing",
+    installBusy: true,
+    downloaded: 100,
+    total: 100,
+  });
+  await flush();
+  expect(ui.all().some((element) => element.props.percentage !== undefined)).toBe(false);
+  expect(ui.all().some((element) => element.text === "updates.finishing")).toBe(true);
   expect(provider.restart).not.toHaveBeenCalled();
   ui.close();
   expect(provider.teardown).not.toHaveBeenCalled();
   emit(installID, {
     operationRevision: installRevision,
-    stateRevision: 6,
+    stateRevision: 7,
     phase: "installed",
     code: "restart-required",
   });
