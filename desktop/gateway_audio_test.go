@@ -6,14 +6,17 @@ import (
 	"crypto/cipher"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/he-music/HE-Music/desktop/internal/audiodecrypt/transform"
@@ -213,6 +216,59 @@ func TestGatewayAudioSodaDownloadsOnceThenServesPlaintextRanges(t *testing.T) {
 	if downloads.Load() != 1 {
 		t.Fatalf("soda downloaded %d times", downloads.Load())
 	}
+}
+
+func TestGatewayAudioConcurrentSampleCacheLifecycle(t *testing.T) {
+	file, auth := sampleGatewayFixture(t)
+	params, err := transform.Parse(auth)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected, err := transform.DecryptSamples(file, params, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	synctest.Test(t, func(t *testing.T) {
+		g := &NetworkGateway{}
+		var downloads atomic.Int32
+		for batch, wantDownloads := range []int32{1, 1, 2} {
+			if batch == 2 {
+				// 与网关重新启动时相同，下一批请求使用新的音频缓存。
+				g.mu.Lock()
+				g.audio = nil
+				g.mu.Unlock()
+			}
+			release := make(chan struct{})
+			media := &http.Client{Transport: downloadRoundTripper(func(*http.Request) (*http.Response, error) {
+				downloads.Add(1)
+				<-release
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(bytes.NewReader(file)), ContentLength: int64(len(file))}, nil
+			})}
+			var responses [4]*httptest.ResponseRecorder
+			var requests sync.WaitGroup
+			for i := range responses {
+				responses[i] = httptest.NewRecorder()
+				requests.Go(func() {
+					r := httptest.NewRequestWithContext(t.Context(), http.MethodGet, gatewayAudioURL("http://gateway", "https://audio.example/song", auth, "m4a"), nil)
+					r.Header.Set("Range", "bytes=10-19")
+					g.serveAudio(responses[i], r, media)
+				})
+			}
+			// 首次加载停在上游，其他请求应等待同一次加载；缓存命中则直接完成。
+			synctest.Wait()
+			gotDownloads := downloads.Load()
+			close(release)
+			requests.Wait()
+			if gotDownloads != wantDownloads || downloads.Load() != wantDownloads {
+				t.Fatalf("batch %d: downloads before release=%d after=%d, want %d", batch, gotDownloads, downloads.Load(), wantDownloads)
+			}
+			for i, response := range responses {
+				if response.Code != http.StatusPartialContent || !bytes.Equal(response.Body.Bytes(), expected[10:20]) {
+					t.Fatalf("batch %d request %d: status=%d data=%q", batch, i, response.Code, response.Body.Bytes())
+				}
+			}
+		}
+	})
 }
 
 func TestGatewayAudioNativeDownloadSavesDecryptedPayload(t *testing.T) {

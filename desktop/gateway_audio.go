@@ -16,16 +16,22 @@ func (g *NetworkGateway) serveAudio(w http.ResponseWriter, r *http.Request, medi
 		return
 	}
 	client := gatewayAudioClient(media)
-	g.mu.Lock()
-	var err error
-	if g.audio == nil {
-		g.audio, err = transform.NewAudioServer(client, transform.AudioOptions{MaxRequests: 4, CacheBytes: 128 << 20, CacheTTL: time.Minute})
-	}
+	g.mu.RLock()
 	audio := g.audio
-	g.mu.Unlock()
-	if err != nil {
-		http.Error(w, "audio unavailable", http.StatusServiceUnavailable)
-		return
+	g.mu.RUnlock()
+	if audio == nil {
+		g.mu.Lock()
+		var err error
+		// 读锁释放后可能已有其他请求完成初始化，必须在写锁内再次检查。
+		if g.audio == nil {
+			g.audio, err = transform.NewAudioServer(client, transform.AudioOptions{MaxRequests: 4, CacheBytes: 128 << 20, CacheTTL: time.Minute})
+		}
+		audio = g.audio
+		g.mu.Unlock()
+		if err != nil {
+			http.Error(w, "audio unavailable", http.StatusServiceUnavailable)
+			return
+		}
 	}
 	transform.ServeAudioRequest(w, r, client, audio, func(target *url.URL) error {
 		_, err := parseDesktopGatewayURL(target.String())
