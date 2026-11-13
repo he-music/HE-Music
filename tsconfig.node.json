@@ -1,5 +1,11 @@
 {
   "extends": "./tsconfig.vite.json",
   "compilerOptions": { "composite": true },
-  "include": ["vite.config.ts", "vite.desktop.config.ts", "vitest.config.ts", "env.d.ts"]
+  "include": [
+    "vite.config.ts",
+    "vite.desktop.config.ts",
+    "vitest.config.ts",
+    "mygo.config.ts",
+    "env.d.ts"
+  ]
 }

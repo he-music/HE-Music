@@ -43,7 +43,7 @@ async function fixture(t) {
       { version: "1.2.2", url: "https://example.test/old.tar.gz", size: bytes.length, signature },
     ],
   };
-  await writeFile(path.join(root, "mygo.json"), JSON.stringify(config));
+  await writeFile(path.join(root, "mygo.config.ts"), `export default ${JSON.stringify(config)};\n`);
   await writeFile(
     path.join(root, "go.mod"),
     `module fixture\nrequire (\n github.com/egoist/mygo ${SDK_VERSION}\n)\ntool github.com/egoist/mygo/cmd/mygo\n`,
@@ -156,7 +156,10 @@ test("archive/delta/previous signature 均接受 CRLF，密钥文本保留 trim"
   f.manifest.previous[0].signature = signature;
   f.config.updates.publicKey = ` \t${f.config.updates.publicKey}\n`;
   f.env.MYGO_UPDATER_PRIVATE_KEY = ` \t${f.env.MYGO_UPDATER_PRIVATE_KEY}\n`;
-  await writeFile(path.join(f.root, "mygo.json"), JSON.stringify(f.config));
+  await writeFile(
+    path.join(f.root, "mygo.config.ts"),
+    `export default ${JSON.stringify(f.config)};\n`,
+  );
   f.artifacts(path.join(f.root, f.config.out));
   assert.equal((await verifyArtifacts(f.config, f.root, ["darwin/arm64"])).length, 2);
   await runRelease({ root: f.root, mode: "build", env: f.env, spawn: () => ({ status: 0 }) });

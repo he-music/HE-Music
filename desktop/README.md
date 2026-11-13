@@ -2,7 +2,7 @@
 
 正常入口为 `main.go`，平台服务位于 `platform.go`。Web 与 mygo 共用
 `src/platform` 的 `PlatformAdapter`：系统平台、能力声明、窗口控制、可退订的最大化事件和
-HTTP(S) 外链。`mygo.bindings.ts` 由固定版本 CLI 生成并纳入源码；`mygo.json` 的 bindings
+HTTP(S) 外链。`mygo.bindings.ts` 由固定版本 CLI 生成并纳入源码；`mygo.config.ts` 的 bindings
 路径保持一致。修改服务后执行 `pnpm generate:desktop`，不要手改生成客户端。
 
 mygo 采用系统原生标题栏，托盘初始化成功且应用壳就绪后沿用关闭提示及隐藏/退出偏好；

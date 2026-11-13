@@ -1,0 +1,47 @@
+import { defineConfig } from "mygo-cli";
+import pkg from "./package.json" with { type: "json" };
+
+export default defineConfig({
+  name: pkg.productName,
+  slug: "he-music",
+  identifier: "com.hemusic.music",
+  version: pkg.version,
+  copyright: `© 2026 ${pkg.author}`,
+  publisher: pkg.author,
+  license: pkg.license,
+  icon: "public/icons/favicon-1024x1024.png",
+  main: "./desktop",
+  out: "build/mygo",
+  linux: {
+    depends: [
+      "libc6 (>= 2.35)",
+      "libstdc++6",
+      "libpulse0",
+      "gstreamer1.0-plugins-base",
+      "gstreamer1.0-plugins-good",
+      "gstreamer1.0-plugins-bad",
+      "gstreamer1.0-libav",
+      "gstreamer1.0-pulseaudio",
+    ],
+  },
+  macos: {
+    entitlements: "desktop/macos.entitlements.plist",
+    infoPlist: {
+      CFBundleIconFile: "HE-Music.icns",
+      NSMicrophoneUsageDescription:
+        "仅在你读取音频输出设备时访问麦克风，以获取可选输出设备列表，不保存或上传音频。",
+    },
+  },
+  bindings: "src/platform/mygo.bindings.ts",
+  devUrl: "http://127.0.0.1:14667",
+  devCommand: "pnpm run dev:desktop:frontend",
+  buildCommand: "pnpm run build:desktop:frontend",
+  frontendDist: "dist/desktop",
+  urlSchemes: ["orpheus", "kuwo"],
+  updates: {
+    publicKey: "thU9j49Fo0bCsPcU0uhZ4km6LMpHsDGTscyW2EKrjhc=",
+    github: "he-music/HE-Music",
+    tagPrefix: "v",
+    deltas: 0,
+  },
+});

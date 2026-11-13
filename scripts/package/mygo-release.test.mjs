@@ -38,7 +38,7 @@ async function fixture(t) {
   const root = await mkdtemp(path.join(tmpdir(), "mygo-release-test-"));
   t.after(() => rm(root, { recursive: true, force: true }));
   const c = config();
-  await writeFile(path.join(root, "mygo.json"), JSON.stringify(c));
+  await writeFile(path.join(root, "mygo.config.ts"), `export default ${JSON.stringify(c)};\n`);
   await writeFile(path.join(root, "go.mod"), goMod);
   await vendorFixture(root);
   const dir = path.join(root, c.out, "darwin-arm64");
@@ -109,7 +109,7 @@ test("GitHub 构建在调用 Go 前拦截版本或仓库不匹配，合法 tag �
   const f = await fixture(t);
   f.c.updates = { publicKey: keys.pub, github: "he-music/HE-Music", tagPrefix: "mygo-v" };
   f.manifest.url = `https://github.com/he-music/HE-Music/releases/download/mygo-v1.0.4/${f.name}`;
-  await writeFile(path.join(f.root, "mygo.json"), JSON.stringify(f.c));
+  await writeFile(path.join(f.root, "mygo.config.ts"), `export default ${JSON.stringify(f.c)};\n`);
   await writeFile(f.manifestPath, JSON.stringify(f.manifest));
   const github = {
     ...env,
@@ -237,7 +237,7 @@ test("vendor 被修改或缺失时，发布构建在调用 Go 前拒绝", async 
   assert.equal(calls, 0);
 });
 
-test("拒绝 SDK 漂移、replace 与并行 TS 配置，零 spawn", async (t) => {
+test("拒绝 SDK 漂移、replace 与并行 JSON 配置，零 spawn", async (t) => {
   const { root } = await fixture(t);
   let calls = 0;
   const spawn = () => {
@@ -249,8 +249,8 @@ test("拒绝 SDK 漂移、replace 与并行 TS 配置，零 spawn", async (t) =>
     await assert.rejects(runRelease({ root, mode: "build", env, spawn }), /固定 mygo/);
   }
   await writeFile(path.join(root, "go.mod"), goMod);
-  await writeFile(path.join(root, "mygo.config.ts"), "not executed");
-  await assert.rejects(runRelease({ root, mode: "build", env, spawn }), /单一 mygo.json/);
+  await writeFile(path.join(root, "mygo.json"), "{}");
+  await assert.rejects(runRelease({ root, mode: "build", env, spawn }), /单一 mygo.config.ts/);
   assert.equal(calls, 0);
 });
 
@@ -313,7 +313,7 @@ test("CLI 拒绝未知参数、冲突模式与缺平台值", async () => {
     ["--upload"],
     ["--build", "--check-only"],
     ["--platform"],
-    ["--config", "mygo.json"],
+    ["--config", "mygo.config.ts"],
     ["--platform", "darwin/arm64", "--platform", "linux/amd64"],
   ])
     await assert.rejects(main(args));

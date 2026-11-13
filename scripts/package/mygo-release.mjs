@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import { SDK_VERSION, verifyVendoredDependencies } from "../vendor/mygo.mjs";
 export { SDK_VERSION };
+import { loadMygoConfig } from "./mygo-config.mjs";
 const targetsAllowed = new Set([
   "darwin/arm64",
   "darwin/amd64",
@@ -82,7 +83,7 @@ function httpsURL(value, label) {
 }
 
 export function validateConfig(config) {
-  if (!config || typeof config !== "object") fail("mygo.json 配置无效");
+  if (!config || typeof config !== "object") fail("mygo.config.ts 配置无效");
   const u = config.updates;
   if (!u || typeof u !== "object") fail("updates 未配置，自动更新不可用；请先配置真实 feed 和公钥");
   decodeKey(u.publicKey, 32, "updates.publicKey");
@@ -120,11 +121,11 @@ export function validateGitHubRelease(config, packageVersion, env) {
     fail("GitHub 发布的 updates.github 必须与当前工作流仓库一致");
   }
   if (packageVersion !== config.version) {
-    fail("package.json 与 mygo.json 的 version 必须一致");
+    fail("package.json 与 mygo.config.ts 的 version 必须一致");
   }
   const tag = `${config.updates.tagPrefix || "v"}${config.version}`;
   if (env.GITHUB_REF !== `refs/tags/${tag}`) {
-    fail("Git tag 必须等于 updates.tagPrefix（默认 v）加 mygo.json version");
+    fail("Git tag 必须等于 updates.tagPrefix（默认 v）加 mygo.config.ts version");
   }
 }
 
@@ -319,9 +320,15 @@ export async function runRelease({
   if (!["check-only", "verify-artifacts", "build"].includes(mode)) fail("模式无效");
   let config;
   try {
-    config = JSON.parse(await readFile(path.join(root, "mygo.json"), "utf8"));
+    config = await loadMygoConfig(root, "build");
   } catch {
-    fail("无法读取合法 mygo.json");
+    fail("无法读取合法 mygo.config.ts");
+  }
+  try {
+    await lstat(path.join(root, "mygo.json"));
+    fail("只支持单一 mygo.config.ts；请移除 mygo.json");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
   }
   validateConfig(config);
   if (mode === "check-only") {
@@ -346,12 +353,6 @@ export async function runRelease({
       /^\s*replace\b/m.test(goMod)
     )
       fail("go.mod 必须使用固定 mygo SDK/tool 且无 replace");
-    try {
-      await lstat(path.join(root, "mygo.config.ts"));
-      fail("只支持单一 mygo.json；请移除并行 TS 配置");
-    } catch (error) {
-      if (error.code !== "ENOENT") throw error;
-    }
     await validateOutputDirectory(config, root);
     try {
       await verifyVendoredDependencies(root);

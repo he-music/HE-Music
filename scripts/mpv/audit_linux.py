@@ -7,6 +7,7 @@ from pathlib import Path
 import re
 import subprocess
 
+
 import download
 
 
@@ -53,7 +54,11 @@ def main():
     parser.add_argument("--target", required=True)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    config = json.loads((download.ROOT / "mygo.json").read_text())
+    config = json.loads(subprocess.check_output(
+        ["node", str(download.ROOT / "scripts/package/mygo-config.mjs"), "--json"],
+        cwd=download.ROOT,
+        text=True,
+    ))
     report = audit(args.root, args.target.split(","), config)
     output = json.dumps(report, ensure_ascii=False, indent=2) + "\n"
     args.output.parent.mkdir(parents=True, exist_ok=True)
