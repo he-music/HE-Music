@@ -333,6 +333,12 @@ const refreshList = () => {
   border-radius: 12px 12px 0 0;
 }
 
+.lyric-search-section:hover,
+:deep(.virtual-item:has(> .song-card .song-content:hover) > .lyric-search-section),
+:deep(.virtual-item:has(> .lyric-search-section:hover) > .song-card .song-content) {
+  border-color: rgba(var(--primary), 0.58);
+}
+
 :deep(.virtual-item:has(> .song-card .song-content.play) > .lyric-search-section) {
   border-color: rgba(var(--primary), 0.58);
   background-color: rgba(var(--primary), 0.28);
