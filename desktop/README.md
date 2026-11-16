@@ -48,11 +48,17 @@ macOS 通过公开的 `Updater.SetSource` 接口优先读取当前进程架构�
 sh scripts/diagnostics/mygo-linux.sh software-gl /opt/he-music/he-music
 ```
 
-兼容模式在启动前请求 Mesa 软件 GL 和 Skia CPU 绘制，同时保留合成；不能使用旧版通过关闭合成实现的 `cpu` 模式。兼容模式可能增加 CPU 占用，影响续航或动画帧率，其效果取决于系统图形栈。
+兼容模式在启动前请求软件 GL 和 Skia CPU 绘制，并使用共享内存传输保留合成；不能使用旧版通过关闭合成实现的 `cpu` 模式。兼容模式可能增加 CPU 占用，影响续航或动画帧率，其效果取决于系统图形栈。
+
+Ubuntu WebKit 2.50.4 的 NVIDIA 屏蔽检查会在选择传输方式前禁用合成，仅设置 `WEBKIT_DISABLE_DMABUF_RENDERER=0` 不足以绕过。兼容模式同时设置 `WEBKIT_FORCE_DMABUF_RENDERER=1` 和 `WEBKIT_DMABUF_RENDERER_FORCE_SHM=1`：允许合成后仅使用共享内存，不导入 GPU DMA 缓冲，也不强制更换当前 GLX 提供者。关闭兼容模式后清除这两项进程参数。
 
 诊断脚本的 `normal`／`software-gl` 会显式覆盖本次启动，并清除或设置对应图形开关；不会更改设置页保存的选择。环境开关仅影响本次程序及其子进程，不改变终端父进程或系统配置。模式之间切换需要从托盘彻底退出已有实例；关闭后从普通应用菜单启动会恢复已保存的选择。
 
-用户的 Ubuntu 22 X11 x86-64 机器已确认 `software-gl` 无拖影，正常模式仍有拖影；不能将兼容模式通过记录为正常模式通过。Go 层显式启用歌词合成，两种启动模式都保留这项要求。图形兼容模式不代替 GStreamer 运行依赖，播放卡顿应独立检查。
+Ubuntu 22／X11／x86-64 的 NVIDIA 实机对照已确认：驱动异常时，普通模式拖影、旧兼容模式正常；重装 NVIDIA 驱动后，旧包与新包的普通模式、旧兼容模式均出现拖影；共享内存合成 v6 的兼容模式已由用户确认正常。因此本次不再把新旧包现象归因于 mygo SDK 升级。该验收仅覆盖 v6 兼容模式，普通模式仍需单独验证。Go 层显式启用歌词合成，两种启动模式都保留这项要求。图形兼容模式不代替 GStreamer 运行依赖，播放卡顿应独立检查。
+
+若新包在兼容模式下仍出现桌面歌词拖影，先用 `scripts/diagnostics/mygo-linux.sh software-gl <程序路径>` 启动，再打开桌面歌词。`Linux WebKitGTK lyrics` 日志记录 mygo／GTK／WebKit 版本、实际显示后端、C 库读取到的六项图形开关及进程兼容模式状态；合成策略未生效时同时记录请求值和实际值。设置页的模式状态和交叉编译通过不能替代目标机器的渲染验收。
+
+如果 C 环境参数正确但合成策略仍读回 `actual=2`，可在同一图形会话的终端运行 `python3 scripts/diagnostics/linux-egl.py`。脚本会在独立子进程中对照原四参数软件 GL、共享内存合成和 Mesa EGL，记录 WebKit 所需 EGL 扩展、GTK GL 上下文、实际加载的 WebKit 库及策略读回，生成 `linux-egl-report.json`；不会修改系统驱动、持久环境或播放器设置。
 
 Linux 桌面歌词锁定通过 GTK 输入区域实现：锁定时歌词主体允许鼠标穿透，鼠标移到解锁按钮时可点击该按钮；解锁后恢复窗口交互。托盘仍提供外部解锁入口。原生输入适配的 X11 图形测试需在隔离显示上显式运行：
 

@@ -6,9 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"os"
+	"strings"
 	"sync"
 
 	"github.com/ebitengine/purego"
+	"github.com/egoist/mygo"
 )
 
 type linuxGTKList struct {
@@ -19,8 +22,9 @@ type linuxGTKList struct {
 
 var linuxWebViewPolicy struct {
 	sync.Once
-	access nativeWebViewPolicyAccess
-	err    error
+	access      nativeWebViewPolicyAccess
+	diagnostics func() string
+	err         error
 }
 
 // RTLD_NOLOAD only acquires libraries already owned by mygo. Loading a second
@@ -95,6 +99,31 @@ func loadLinuxWebViewPolicy() (access nativeWebViewPolicyAccess, err error) {
 	purego.RegisterLibFunc(&draw.setOperator, gtk, "cairo_set_operator")
 	purego.RegisterLibFunc(&draw.paint, gtk, "cairo_paint")
 	purego.RegisterLibFunc(&draw.restore, gtk, "cairo_restore")
+	var getenv func(string) string
+	var display func() uintptr
+	var typeName func(uintptr) string
+	purego.RegisterLibFunc(&getenv, gobject, "g_getenv")
+	purego.RegisterLibFunc(&display, gtk, "gdk_display_get_default")
+	purego.RegisterLibFunc(&typeName, gobject, "g_type_name_from_instance")
+	version := func(library uintptr, prefix string) string {
+		var major, minor, micro func() uint32
+		purego.RegisterLibFunc(&major, library, prefix+"_get_major_version")
+		purego.RegisterLibFunc(&minor, library, prefix+"_get_minor_version")
+		purego.RegisterLibFunc(&micro, library, prefix+"_get_micro_version")
+		return fmt.Sprintf("%d.%d.%d", major(), minor(), micro())
+	}
+	gtkVersion, webkitVersion := version(gtk, "gtk"), version(webkit, "webkit")
+	linuxWebViewPolicy.diagnostics = func() string {
+		values := make([]string, 0, len(linuxGraphicsEnvironment))
+		for _, flag := range linuxGraphicsEnvironment {
+			values = append(values, fmt.Sprintf("%s=%q", flag.key, getenv(flag.key)))
+		}
+		backend := "unavailable"
+		if current := display(); current != 0 {
+			backend = typeName(current)
+		}
+		return fmt.Sprintf("mygo=%s gtk=%s webkit=%s display=%s c_env=[%s]", mygo.Version, gtkVersion, webkitVersion, backend, strings.Join(values, " "))
+	}
 	// One callback per process; GTK disconnects the signal when its window dies.
 	var firstDraw sync.Once
 	clearBackground := purego.NewCallback(func(_, context, _ uintptr) int32 {
@@ -163,6 +192,9 @@ func configureNativeLyricsRendering(handle uintptr) error {
 	access, err := linuxNativeWebViewPolicy()
 	if err != nil {
 		return err
+	}
+	if linuxWebViewPolicy.diagnostics != nil {
+		log.Printf("Linux WebKitGTK lyrics: %s; compatibility_applied=%t", linuxWebViewPolicy.diagnostics(), linuxGraphicsApplied(os.Environ()))
 	}
 	if err := applyNativeLyricsRenderingPolicy(handle, access); err != nil {
 		return err

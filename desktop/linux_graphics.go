@@ -142,13 +142,17 @@ var linuxGraphicsEnvironment = []struct{ key, value string }{
 	{"LIBGL_ALWAYS_SOFTWARE", "1"},
 	{"WEBKIT_SKIA_ENABLE_CPU_RENDERING", "1"},
 	{"WEBKIT_DISABLE_DMABUF_RENDERER", "0"},
+	// Ubuntu's NVIDIA guard runs before the transport choice. Allow the
+	// compositor, then restrict its transport to shared memory, not GPU buffers.
+	{"WEBKIT_FORCE_DMABUF_RENDERER", "1"},
+	{"WEBKIT_DMABUF_RENDERER_FORCE_SHM", "1"},
 	{"WEBKIT_DISABLE_COMPOSITING_MODE", "0"},
 }
 
 // Build the child's initial environment; Go-only Setenv cannot be relied on to
 // update a dynamically loaded C library's getenv view in a CGO_ENABLED=0 app.
 func linuxGraphicsLaunchEnvironment(environment []string, enabled bool) ([]string, bool) {
-	next := make([]string, 0, len(environment)+4)
+	next := make([]string, 0, len(environment)+len(linuxGraphicsEnvironment))
 	current := make(map[string]string)
 	counts := make(map[string]int)
 	for _, entry := range environment {

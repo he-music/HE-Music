@@ -8,10 +8,13 @@ case "$mode" in
     export LIBGL_ALWAYS_SOFTWARE=1
     export WEBKIT_SKIA_ENABLE_CPU_RENDERING=1
     export WEBKIT_DISABLE_DMABUF_RENDERER=0
+    export WEBKIT_FORCE_DMABUF_RENDERER=1
+    export WEBKIT_DMABUF_RENDERER_FORCE_SHM=1
     export WEBKIT_DISABLE_COMPOSITING_MODE=0
     ;;
   normal)
     unset LIBGL_ALWAYS_SOFTWARE WEBKIT_SKIA_ENABLE_CPU_RENDERING WEBKIT_DISABLE_DMABUF_RENDERER WEBKIT_DISABLE_COMPOSITING_MODE
+    unset WEBKIT_FORCE_DMABUF_RENDERER WEBKIT_DMABUF_RENDERER_FORCE_SHM
     ;;
   *) printf '用法: %s [normal|software-gl] [播放器可执行文件]\n' "$0" >&2; exit 2 ;;
 esac
@@ -23,7 +26,7 @@ if [ ! -x "$binary" ]; then
 fi
 log_file="$script_dir/ubuntu22-$mode-diagnostic.log"
 {
-  printf 'HE-Music Linux diagnostic v5 (persistent graphics settings)\n'
+  printf 'HE-Music Linux diagnostic v6 (shared-memory compositing)\n'
   printf 'Mode: %s\n' "$mode"
   date -u
   printf 'Session: %s\n' "${XDG_SESSION_TYPE:-unknown}"
@@ -31,11 +34,13 @@ log_file="$script_dir/ubuntu22-$mode-diagnostic.log"
   # 只记录已知渲染开关，不展开整个环境。
   printf 'WEBKIT_SKIA_ENABLE_CPU_RENDERING=%s\n' "${WEBKIT_SKIA_ENABLE_CPU_RENDERING:-unset}"
   printf 'WEBKIT_DISABLE_DMABUF_RENDERER=%s\n' "${WEBKIT_DISABLE_DMABUF_RENDERER:-unset}"
+  printf 'WEBKIT_FORCE_DMABUF_RENDERER=%s\n' "${WEBKIT_FORCE_DMABUF_RENDERER:-unset}"
+  printf 'WEBKIT_DMABUF_RENDERER_FORCE_SHM=%s\n' "${WEBKIT_DMABUF_RENDERER_FORCE_SHM:-unset}"
   printf 'WEBKIT_DISABLE_COMPOSITING_MODE=%s\n' "${WEBKIT_DISABLE_COMPOSITING_MODE:-unset}"
   printf 'LIBGL_ALWAYS_SOFTWARE=%s\n' "${LIBGL_ALWAYS_SOFTWARE:-unset}"
   if command -v dpkg >/dev/null 2>&1 && command -v dpkg-query >/dev/null 2>&1; then
     package_arch=$(dpkg --print-architecture)
-    for package in libgtk-3-0 libwebkit2gtk-4.1-0 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-pulseaudio; do
+    for package in libgtk-3-0 libwebkit2gtk-4.1-0 libwebkit2gtk-4.0-37 gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-libav gstreamer1.0-pulseaudio; do
       dpkg-query -W -f='${binary:Package} ${Architecture} ${Version} ${db:Status-Status}\n' "$package:$package_arch" 2>/dev/null || printf '%s: 未查询到当前架构的软件包\n' "$package"
     done
   fi

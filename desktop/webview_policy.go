@@ -1,6 +1,9 @@
 package main
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 // Native calls must run on the window's UI thread. Keep policy verification
 // independent of platform bindings so missing views and failed setters fail open.
@@ -75,8 +78,8 @@ func applyNativeLyricsRenderingPolicy(handle uintptr, access nativeWebViewPolicy
 	// pixels. Keep compositing even when Skia/Mesa use software rendering.
 	access.setAcceleration(settings, webViewCompositingEnabled)
 	var policyErr error
-	if access.acceleration(settings) != webViewCompositingEnabled {
-		policyErr = errors.New("native lyrics rendering policy did not take effect")
+	if actual := access.acceleration(settings); actual != webViewCompositingEnabled {
+		policyErr = fmt.Errorf("native lyrics rendering policy did not take effect: requested=%d actual=%d", webViewCompositingEnabled, actual)
 	}
 	if access.prepareTransparentBackground == nil {
 		return errors.Join(policyErr, errors.New("native transparent background clearing is unavailable"))

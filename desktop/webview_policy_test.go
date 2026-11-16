@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func policyFixture() (nativeWebViewPolicyAccess, *bool, *int32) {
 	gesture, acceleration := true, int32(1)
@@ -74,7 +77,7 @@ func TestNativePoliciesVerifyReadbackAndMissingViews(t *testing.T) {
 	access.setAcceleration = func(uintptr, int32) {}
 	cleared := false
 	access.prepareTransparentBackground = func(uintptr) error { cleared = true; return nil }
-	if err := applyNativeLyricsRenderingPolicy(1, access); err == nil {
+	if err := applyNativeLyricsRenderingPolicy(1, access); err == nil || !strings.Contains(err.Error(), "requested=1 actual=2") {
 		t.Fatal("ignored failed rendering policy setter")
 	}
 	if !cleared {

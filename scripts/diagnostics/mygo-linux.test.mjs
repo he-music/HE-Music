@@ -9,6 +9,8 @@ const flags = [
   "WEBKIT_SKIA_ENABLE_CPU_RENDERING",
   "WEBKIT_DISABLE_DMABUF_RENDERER",
   "WEBKIT_DISABLE_COMPOSITING_MODE",
+  "WEBKIT_FORCE_DMABUF_RENDERER",
+  "WEBKIT_DMABUF_RENDERER_FORCE_SHM",
   "LIBGL_ALWAYS_SOFTWARE",
 ];
 
@@ -20,7 +22,7 @@ async function fixture(t) {
   const executable = path.join(directory, "he-music");
   await writeFile(
     executable,
-    '#!/bin/sh\nprintf "child_flags=%s,%s,%s,%s\\n" "${WEBKIT_SKIA_ENABLE_CPU_RENDERING:-unset}" "${WEBKIT_DISABLE_DMABUF_RENDERER:-unset}" "${WEBKIT_DISABLE_COMPOSITING_MODE:-unset}" "${LIBGL_ALWAYS_SOFTWARE:-unset}"\n',
+    '#!/bin/sh\nprintf "child_flags=%s,%s,%s,%s,%s,%s\\n" "${WEBKIT_SKIA_ENABLE_CPU_RENDERING:-unset}" "${WEBKIT_DISABLE_DMABUF_RENDERER:-unset}" "${WEBKIT_DISABLE_COMPOSITING_MODE:-unset}" "${LIBGL_ALWAYS_SOFTWARE:-unset}" "${WEBKIT_FORCE_DMABUF_RENDERER:-unset}" "${WEBKIT_DMABUF_RENDERER_FORCE_SHM:-unset}"\n',
     { mode: 0o755 },
   );
   // 用固定命令替身检查包架构及插件分支，不扫描宿主 GStreamer。
@@ -48,7 +50,7 @@ test("Software GL retains compositing before child launch and the log contains b
   const result = run(["software-gl"]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Mode: software-gl/);
-  assert.match(result.stdout, /child_flags=1,0,0,1/);
+  assert.match(result.stdout, /child_flags=1,0,0,1,1,1/);
   assert.match(result.stdout, /queried=libgtk-3-0:amd64/);
   assert.match(result.stdout, /GStreamer fakevideosink: available/);
   assert.match(result.stdout, /GStreamer webvttenc: unavailable or check timed out/);
@@ -62,10 +64,14 @@ test("normal diagnostic clears compatibility flags and accepts a program path wi
   const { directory, executable, run } = await fixture(t);
   const renamed = path.join(directory, "player with spaces");
   await copyFile(executable, renamed);
-  const result = run(["normal", renamed], { WEBKIT_SKIA_ENABLE_CPU_RENDERING: "0" });
+  const result = run(["normal", renamed], {
+    WEBKIT_SKIA_ENABLE_CPU_RENDERING: "0",
+    WEBKIT_FORCE_DMABUF_RENDERER: "1",
+    WEBKIT_DMABUF_RENDERER_FORCE_SHM: "1",
+  });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Mode: normal/);
-  assert.match(result.stdout, /child_flags=unset,unset,unset,unset/);
+  assert.match(result.stdout, /child_flags=unset,unset,unset,unset,unset,unset/);
 });
 
 test("default mode does not force process-wide CPU rendering", async (t) => {
@@ -73,7 +79,7 @@ test("default mode does not force process-wide CPU rendering", async (t) => {
   const result = run();
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Mode: normal/);
-  assert.match(result.stdout, /child_flags=unset,unset,unset,unset/);
+  assert.match(result.stdout, /child_flags=unset,unset,unset,unset,unset,unset/);
 });
 
 test("unknown modes and missing programs do not start an application", async (t) => {

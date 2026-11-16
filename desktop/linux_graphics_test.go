@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
+	"slices"
 	"testing"
 )
 
@@ -28,6 +29,25 @@ func TestLinuxGraphicsPersistsAndPlansEachNextStartup(t *testing.T) {
 		if err != nil || info.Mode().Perm() != 0o600 {
 			t.Fatal("graphics preference is not private")
 		}
+	}
+}
+
+func TestLinuxGraphicsCompatibilityUsesSharedMemoryCompositing(t *testing.T) {
+	base := []string{"DISPLAY=:1", "__GLX_VENDOR_LIBRARY_NAME=nvidia"}
+	compatible, changed := linuxGraphicsLaunchEnvironment(base, true)
+	if !changed || !slices.Contains(compatible, "WEBKIT_FORCE_DMABUF_RENDERER=1") ||
+		!slices.Contains(compatible, "WEBKIT_DMABUF_RENDERER_FORCE_SHM=1") {
+		t.Fatal("compatibility mode must bypass the NVIDIA compositor blacklist using shared memory")
+	}
+	partial := slices.DeleteFunc(slices.Clone(compatible), func(entry string) bool {
+		return entry == "WEBKIT_DMABUF_RENDERER_FORCE_SHM=1"
+	})
+	if linuxGraphicsApplied(partial) {
+		t.Fatal("an incomplete compatibility environment was reported as applied")
+	}
+	normal, changed := linuxGraphicsLaunchEnvironment(compatible, false)
+	if !changed || !slices.Equal(normal, base) {
+		t.Fatal("turning compatibility off changed the user's GLX selection or retained overrides")
 	}
 }
 
