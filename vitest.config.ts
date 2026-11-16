@@ -14,9 +14,8 @@ export default defineConfig({
       ...configDefaults.exclude,
       "scripts/package/mygo-release*.test.mjs",
       "scripts/diagnostics/*.test.mjs",
-      "scripts/vendor/*.test.mjs",
+      "scripts/mygo.test.mjs",
       "scripts/mpv/*.test.mjs",
-      "**/vendor/**",
     ],
   },
 });

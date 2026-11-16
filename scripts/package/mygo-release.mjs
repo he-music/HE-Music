@@ -7,8 +7,8 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
-import { SDK_VERSION, verifyVendoredDependencies } from "../vendor/mygo.mjs";
-export { SDK_VERSION };
+import pkg from "../../package.json" with { type: "json" };
+export const SDK_VERSION = `v${pkg.devDependencies["mygo-cli"]}`;
 import { loadMygoConfig } from "./mygo-config.mjs";
 const targetsAllowed = new Set([
   "darwin/arm64",
@@ -354,17 +354,7 @@ export async function runRelease({
     )
       fail("go.mod 必须使用固定 mygo SDK/tool 且无 replace");
     await validateOutputDirectory(config, root);
-    try {
-      await verifyVendoredDependencies(root);
-    } catch {
-      fail("vendor 或 Go 依赖校验失败；请运行 pnpm vendor:check 并审查依赖");
-    }
-    const args = [
-      path.join(root, "scripts/vendor/mygo.mjs"),
-      "build",
-      "-platform",
-      targets.join(","),
-    ];
+    const args = [path.join(root, "scripts/mygo.mjs"), "build", "-platform", targets.join(",")];
     if (targets.some((target) => target.startsWith("darwin/")))
       args.push("-sign", "-", "-skip-notarize");
     // 不转发构建 stdout/stderr：下游命令可能意外打印环境中的 secret。
@@ -372,7 +362,7 @@ export async function runRelease({
     try {
       result = spawn(process.execPath, args, {
         cwd: root,
-        env: { ...env, GOTOOLCHAIN: "local", GOWORK: "off", GOFLAGS: "-mod=vendor" },
+        env: { ...env, GOTOOLCHAIN: "local", GOWORK: "off", GOFLAGS: "-mod=readonly" },
         shell: false,
         encoding: "utf8",
         stdio: "pipe",

@@ -23,7 +23,7 @@ README 保留发布入口和最短操作步骤，本文维护一次性准备、�
 | `MYGO_UPDATER_PRIVATE_KEY` | 同上；填官方生成的私钥文件中的 base64 文本，不填文件路径 |
 | 更新公钥、仓库、频道 | 写入 `mygo.config.ts` 的 `updates`；公钥可以提交，私钥不能提交 |
 | 版本与更新说明 | 只修改 `package.json.version`；`mygo.config.ts` 自动读取该版本。`CHANGELOG.md` 需有本版本段落 |
-| 构建工具链 | Node.js 24 LTS、pnpm 10.28.1、Go 1.27.3；继续使用固定 vendor，不因发布升级 SDK |
+| 构建工具链 | Node.js 24 LTS、pnpm 10.28.1、Go 1.27.3；使用 go.mod 固定的官方 SDK 与 CLI |
 | 安装与测试环境 | 每个交付平台准备实际设备或虚拟机；Windows 需要 WebView2 Runtime，Linux 需要桌面运行依赖 |
 
 正式发布准备只要求上述后端地址和更新私钥两个 Secrets。`VITE_NETEASE_API_URL`／`/api/netease` 是历史网易 API 的兼容入口，不作为发布必备配置；已经停用该服务时，不要求重新部署或填写这个 Secret。当前本地歌曲标签编辑器的「在线自动匹配」仍调用旧 `/search/match` 和 `/lyric/new`，没有该服务时这项功能不可用，需另行迁移或清理；日常登录、播放、在线歌词、评论与视频走 HE-Music 的 `/v1` 接口。
@@ -34,10 +34,10 @@ README 保留发布入口和最短操作步骤，本文维护一次性准备、�
 
 ### 生成并保存更新密钥
 
-在项目根目录先运行 `pnpm vendor:check`。macOS／Linux 使用固定的官方 CLI：
+在项目根目录运行 `go mod download` 准备官方模块。macOS／Linux 使用固定的官方 CLI：
 
 ```sh
-GOWORK=off GOTOOLCHAIN=local GOFLAGS=-mod=vendor go tool mygo keygen
+GOWORK=off GOTOOLCHAIN=local GOFLAGS=-mod=readonly go tool mygo keygen
 ```
 
 Windows PowerShell 对应为：
@@ -45,7 +45,7 @@ Windows PowerShell 对应为：
 ```powershell
 $env:GOWORK = "off"
 $env:GOTOOLCHAIN = "local"
-$env:GOFLAGS = "-mod=vendor"
+$env:GOFLAGS = "-mod=readonly"
 go tool mygo keygen
 ```
 
@@ -85,7 +85,7 @@ go tool mygo keygen
 
 1. 将准备好的代码合入正式发布分支，把 `updates.tagPrefix` 设为 `v`，确认长期公钥与 `updates.github` 正确。首次正式版本为 `v2.0.0`；若此前使用测试前缀，正式包需单独安装为正式频道的基线。
 2. 修改唯一版本来源 `package.json.version`，例如 `2.0.4`，不带 `v`；`mygo.config.ts` 自动读取该值。在 `CHANGELOG.md` 中加入对应版本段落。更新说明在构建时写进 manifest，仅编辑 GitHub Release 正文不会更新客户端中的说明。
-3. 运行 `pnpm typecheck`、`pnpm test`、`pnpm vendor:check` 和 `pnpm release:desktop:check` 等检查，提交并推送代码，再创建版本 tag。推送正式 tag 即授权工作流在构建和校验通过后公开发布，例如：
+3. 运行 `pnpm typecheck`、`pnpm test`、`go mod verify` 和 `pnpm release:desktop:check` 等检查，提交并推送代码，再创建版本 tag。推送正式 tag 即授权工作流在构建和校验通过后公开发布，例如：
 
    ```sh
    git tag v2.0.0
@@ -107,7 +107,7 @@ go tool mygo keygen
 
    ```sh
    pnpm install --frozen-lockfile
-   pnpm vendor:check
+   go mod verify
    pnpm release:desktop:check
    pnpm typecheck
    pnpm test
@@ -163,7 +163,7 @@ pnpm test:desktop:release
 - `verify`：离线检查本次 manifest 和真实 archive／delta 的大小与签名，只需公钥，不调用 Go 或下载。
 - `build`：需要进程环境中的 `MYGO_UPDATER_PRIVATE_KEY`；使用固定官方 CLI 构建后再完成同样验签。该脚本自身不上传、不发布、不安装应用。只有 GitHub tag 工作流另外创建 Release；正式 tag 直接公开，测试 tag 保持草稿。
 
-工具链固定为 `github.com/egoist/mygo v0.9.0`，并校验 Go 依赖与 vendor 全树；Windows 修正已合入上游，不再重放本地补丁。构建设置 `GOTOOLCHAIN=local`、`GOWORK=off`、`GOFLAGS=-mod=vendor`。不使用模块缓存里的私改 SDK，不接受 `--config`、`--upload` 或任意参数透传，也拒绝并行 `mygo.json`。维护方式见 [固定 SDK 说明](../scripts/vendor/README.md)。
+工具链使用 `go.mod` 固定的官方 mygo SDK 与 CLI，版本与 npm 的 `mygo-cli` 对齐，通过标准 Go Modules 下载和校验；Windows 修正已合入上游，仓库不再保留本地补丁或 vendor。发布构建设置 `GOTOOLCHAIN=local`、`GOWORK=off`、`GOFLAGS=-mod=readonly`，不接受 `--config`、`--upload` 或任意参数透传，也拒绝并行 `mygo.json`。升级方式见[桌面指南](../desktop/README.md)。
 
 本地需要签名构建时，由密码管理器向进程环境提供私钥，不要把私钥粘贴到命令行。脚本不转发或落盘下游构建 stdout/stderr，避免 secret 泄露；失败只输出受控错误，输出缓冲超过 16 MiB 也会失败。SDK 的 delta 构建可能下载历史文件，只有 `check`、`verify` 和 fake 测试属于离线操作。
 

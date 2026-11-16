@@ -20,7 +20,7 @@
 - `src/types/`、`src/constants/`、`src/utils/`：类型、常量和工具函数。
 - `src/style/`、`src/assets/`、`src/i18n/`：样式、静态资源和国际化内容。
 - `desktop/`：mygo 原生服务与桌面入口；`src/platform/`：Web／mygo 适配与生成绑定。
-- `vendor/`、`scripts/vendor/`：固定 Go 依赖、SDK 回归测试及锁定摘要，使用 `pnpm vendor:refresh` 更新。
+- `go.mod`、`go.sum`：固定官方 Go SDK、CLI 与依赖版本；桌面构建入口为 `scripts/mygo.mjs`。
 - `scripts/`：开发辅助脚本；`docs/`：项目文档。
 
 ## 开发约定

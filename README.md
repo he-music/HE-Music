@@ -115,11 +115,11 @@ pnpm dev:web
 桌面端：
 
 ```sh
-pnpm vendor:check
+go mod download
 pnpm dev
 ```
 
-`pnpm dev` 默认启动 mygo 桌面开发。Go SDK 与官方 CLI 固定在仓库 `vendor/` 中，开发入口会核对锁定依赖，并准备所需的 libmpv 资源；首次准备需要下载资源。修改原生服务后执行 `pnpm generate:desktop` 重新生成绑定。依赖升级和回归测试见[固定 SDK 说明](scripts/vendor/README.md)。
+`pnpm dev` 默认启动 mygo 桌面开发。Go SDK 与官方 CLI 通过 Go Modules 获取，版本由 `go.mod` 固定、下载内容由 `go.sum` 校验。开发入口会准备所需的 libmpv 资源；首次构建需要下载 Go 依赖和资源。修改原生服务后执行 `pnpm generate:desktop` 重新生成绑定。升级步骤见[桌面指南](desktop/README.md)。
 
 ### 构建
 
@@ -138,7 +138,7 @@ Web 静态文件部署时需配置单页应用路由回退，并保证浏览器�
 pnpm typecheck
 pnpm lint:check
 pnpm test
-pnpm vendor:check
+go mod verify
 ```
 
 Go 静态检查使用 `pnpm lint:go`，需安装 mise，由其运行固定版本的 golangci-lint。协作约定和按修改范围选择检查的说明见 [AGENTS.md](AGENTS.md)。
@@ -153,7 +153,6 @@ Go 静态检查使用 `pnpm lint:go`，需安装 mise，由其运行固定版本
 - [应用数据与 Electron 导入](docs/mygo-data.md)：备份、恢复与旧版迁移。
 - [本地曲库与已下载播放](docs/local-library.md)：本地歌单、已下载优先播放、自动同步和验证边界。
 - [GitHub 发布与 mygo 自动更新](docs/mygo-updates.md)：发布准备、签名、更新演练和故障排查。正式 `v*` tag 在工作流校验通过后直接公开 Release 并设为 latest；测试 `mygo-test-v*` tag 生成草稿，手动运行工作流仅生成测试产物。
-- [固定 SDK 与依赖维护](scripts/vendor/README.md)：Go 依赖锁定及 Windows 窗口回归测试。
 - [随包 libmpv 资源](scripts/mpv/README.md)：播放引擎资源准备、校验和第三方许可。
 - [产品上下文](CONTEXT.md)：页面、内容模型与歌词展示术语。
 

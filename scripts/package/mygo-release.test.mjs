@@ -12,7 +12,6 @@ import {
   verifyArtifacts,
   runRelease,
 } from "./mygo-release.mjs";
-import { vendorFixture } from "../vendor/fixture.mjs";
 
 const pair = () => {
   const { publicKey, privateKey } = generateKeyPairSync("ed25519");
@@ -40,7 +39,6 @@ async function fixture(t) {
   const c = config();
   await writeFile(path.join(root, "mygo.config.ts"), `export default ${JSON.stringify(c)};\n`);
   await writeFile(path.join(root, "go.mod"), goMod);
-  await vendorFixture(root);
   const dir = path.join(root, c.out, "darwin-arm64");
   await mkdir(dir, { recursive: true });
   const archive = Buffer.from("offline test archive bytes");
@@ -196,7 +194,7 @@ test("发布使用统一资源准备入口和官方参数，ad hoc/跳过公证�
   await runRelease({ root, mode: "build", targets: ["darwin/arm64"], env, spawn });
   assert.equal(calls[0].command, process.execPath);
   assert.deepEqual(calls[0].args, [
-    path.join(root, "scripts/vendor/mygo.mjs"),
+    path.join(root, "scripts/mygo.mjs"),
     "build",
     "-platform",
     "darwin/arm64",
@@ -209,7 +207,7 @@ test("发布使用统一资源准备入口和官方参数，ad hoc/跳过公证�
   assert.equal(calls[0].options.stdio, "pipe");
   assert.equal(calls[0].options.env.GOWORK, "off");
   assert.equal(calls[0].options.env.GOTOOLCHAIN, "local");
-  assert.equal(calls[0].options.env.GOFLAGS, "-mod=vendor");
+  assert.equal(calls[0].options.env.GOFLAGS, "-mod=readonly");
   await assert.rejects(
     runRelease({
       root,
@@ -222,19 +220,6 @@ test("发布使用统一资源准备入口和官方参数，ad hoc/跳过公证�
   );
   await assert.rejects(runRelease({ root, mode: "build", targets: ["../bad"], env, spawn }));
   await assert.rejects(runRelease({ root, targets: ["darwin/arm64", "darwin/arm64"], spawn }));
-});
-test("vendor 被修改或缺失时，发布构建在调用 Go 前拒绝", async (t) => {
-  const { root } = await fixture(t);
-  let calls = 0;
-  const spawn = () => {
-    calls++;
-    return { status: 0 };
-  };
-  await writeFile(path.join(root, "vendor/fixture.txt"), "changed dependency");
-  await assert.rejects(runRelease({ root, mode: "build", env, spawn }), /vendor/);
-  await rm(path.join(root, "vendor"), { recursive: true });
-  await assert.rejects(runRelease({ root, mode: "build", env, spawn }), /vendor/);
-  assert.equal(calls, 0);
 });
 
 test("拒绝 SDK 漂移、replace 与并行 JSON 配置，零 spawn", async (t) => {

@@ -22,9 +22,11 @@ macOS 沿用 main 分支 Electron 包使用的 `public/icons/icon.icns`，其中
 
 ## 固定 SDK 与 Windows 透明修正
 
-正式依赖由根目录 `vendor/` 提供，固定为 mygo 0.9.0。原 Windows 透明窗口和细边框修正已合入上游，本项目不再重放本地补丁。构建前运行 `pnpm vendor:check`；开发、绑定生成和打包入口会核对完整依赖摘要。更新 Go 依赖时使用 `pnpm vendor:refresh`，不要直接覆盖 vendor。
+应用与官方 CLI 通过 Go Modules 获取，版本由 `go.mod` 固定，模块内容由 `go.sum` 校验。原 Windows 透明窗口和细边框修正已合入 mygo 0.9.0；仓库不保留 vendor、本地 SDK 补丁或额外源码摘要。
 
-依赖锁定、许可证保留和回归测试流程见 [固定 SDK 说明](../scripts/vendor/README.md)。新版构建仍需分别做平台验收，尤其是 Windows 桌面歌词的透明、边框、缩放和锁定穿透；WebView2 安装引导继续暂停。
+开发、绑定生成和打包通过 `scripts/mygo.mjs` 准备 libmpv（仅 build/dev）并运行 `go tool mygo`；使用 `GOWORK=off` 与 `-mod=readonly`，避免构建过程修改依赖声明。首次构建需要联网下载 Go 模块，之后复用 Go 模块缓存。`go mod verify` 可检查缓存内容。
+
+升级 mygo 时运行 `go get github.com/egoist/mygo@v<版本>`，同步修改 `package.json` 中的 `mygo-cli`、`mygo-runtime`，执行 `pnpm install`、`go mod tidy`、`pnpm generate:desktop` 和 `pnpm check:ci`，审查依赖及生成绑定差异。新版仍需平台实机验收，尤其是 Windows 桌面歌词的透明、边框、缩放和锁定穿透；WebView2 安装引导继续暂停。
 
 ## Linux 正常启动与图形兼容模式
 
