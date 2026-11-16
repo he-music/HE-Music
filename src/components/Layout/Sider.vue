@@ -7,7 +7,7 @@
         'logo',
         {
           collapsed,
-          'mac-traffic-light-safe': isMac && platform.kind === 'mygo',
+          'mac-traffic-light-safe': reserveMacTrafficLightSpace,
         },
       ]"
       @click="router.push('/')"
@@ -26,15 +26,24 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from "vue";
 import { useMusicStore, useStatusStore } from "@/stores";
 import { isMac } from "@/utils/env";
 import { platform } from "@/platform";
+import { windowAppearanceSession } from "@/platform/windowAppearance";
 import Logo from "@/components/Layout/Logo.vue";
 
 const router = useRouter();
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
 withDefaults(defineProps<{ collapsed?: boolean }>(), { collapsed: false });
+
+const reserveMacTrafficLightSpace = computed(
+  () =>
+    isMac &&
+    platform.kind === "mygo" &&
+    (windowAppearanceSession.value?.state.value?.appliedUseBorderless ?? true),
+);
 </script>
 
 <style lang="scss" scoped>
