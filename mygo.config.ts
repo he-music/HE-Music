@@ -42,6 +42,6 @@ export default defineConfig({
     publicKey: "thU9j49Fo0bCsPcU0uhZ4km6LMpHsDGTscyW2EKrjhc=",
     github: "he-music/HE-Music",
     tagPrefix: "v",
-    deltas: 0,
+    deltas: 1,
   },
 });
