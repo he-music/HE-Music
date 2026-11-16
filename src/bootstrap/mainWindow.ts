@@ -10,12 +10,14 @@ import { debounceDirective, throttleDirective, visibleDirective } from "@/utils/
 import { touchContextMenuDirective } from "@/utils/touchContextMenu";
 import i18n from "@/i18n";
 import { finishStartupLoading } from "./startupLoading";
+import { disposeOverlayHistory } from "@/utils/overlayHistory";
 import "@/style/main.scss";
 import "@/style/animate.scss";
 
 /** 主窗口保留原有插件和路由初始化顺序。 */
 export async function mountMainWindow(): Promise<void> {
   const app = createApp(App);
+  app.onUnmount(disposeOverlayHistory);
   const pinia = createPinia();
   pinia.use(piniaPluginPersistedstate);
   pinia.use(persistStatus);

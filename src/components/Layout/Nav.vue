@@ -141,6 +141,7 @@ import Menu from "@/components/Layout/Menu.vue";
 import { windowAppearanceSession } from "@/platform/windowAppearance";
 import Logo from "@/components/Layout/Logo.vue";
 import { useDesktopLifecycle } from "@/composables/useDesktopLifecycle";
+import { useOverlayBack } from "@/composables/useOverlayBack";
 
 const { t } = useI18n();
 
@@ -165,6 +166,9 @@ const showWindowControls = computed(
 const isMax = ref(false);
 // 是否显示侧边栏
 const showAside = ref(false);
+useOverlayBack(showAside, () => {
+  showAside.value = false;
+});
 // 最小化
 const min = () => void platform.window?.minimize().catch(console.error);
 

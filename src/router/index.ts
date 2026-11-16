@@ -5,6 +5,10 @@ import { isLogin } from "@/utils/auth";
 import routes from "./routes";
 import { usePlatformStore, useStatusStore } from "@/stores";
 import { t } from "@/i18n";
+import { closeOverlaysBeforeNavigation, getOverlayHistory } from "@/utils/overlayHistory";
+
+// 提前安装弹层监听，保证 popstate 先由弹层消费，再交给 Vue Router。
+getOverlayHistory();
 
 // 基础配置
 const router: Router = createRouter({
@@ -30,6 +34,10 @@ const router: Router = createRouter({
 });
 
 // 前置守卫
+router.beforeEach(async (to, from) => {
+  if (to.fullPath !== from.fullPath) await closeOverlaysBeforeNavigation();
+});
+
 router.beforeEach((to, from, next) => {
   // console.log("前置守卫", to, from);
   // 进度条

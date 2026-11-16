@@ -121,11 +121,18 @@ import type { VirtualListInst } from "naive-ui";
 import { usePlayer } from "@/utils/player";
 import { useI18n } from "vue-i18n";
 import { useMobile } from "@/composables/useMobile";
+import { useOverlayBack } from "@/composables/useOverlayBack";
 const { t } = useI18n();
 const player = usePlayer();
 const dataStore = useDataStore();
 const statusStore = useStatusStore();
 const { isSmallScreen } = useMobile();
+useOverlayBack(
+  () => statusStore.playListShow,
+  () => {
+    statusStore.playListShow = false;
+  },
+);
 
 const playListRef = ref<VirtualListInst | null>(null);
 

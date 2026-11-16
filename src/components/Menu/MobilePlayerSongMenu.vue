@@ -85,6 +85,7 @@ import { useStatusStore } from "@/stores";
 import { useI18n } from "vue-i18n";
 import { openAutoClose, openChangeRate, openPlaylistAdd } from "@/utils/modal";
 import { convertSecondsToTime } from "@/utils/time";
+import { useOverlayBack } from "@/composables/useOverlayBack";
 
 const emit = defineEmits<{ clickQuality: [] }>();
 
@@ -93,6 +94,9 @@ const { getPlayerMenuOptions } = useSongMenu();
 const { t } = useI18n();
 
 const showDrawer = ref(false);
+useOverlayBack(showDrawer, () => {
+  showDrawer.value = false;
+});
 const currentSong = ref<SongInfo | null>(null);
 const menuOptions = ref<DropdownOption[]>([]);
 

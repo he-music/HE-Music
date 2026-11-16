@@ -82,6 +82,7 @@ import MobilePlayButton from "../PlayerComponents/MobilePlayButton.vue";
 import PlayerStylePanel from "../PlayerStylePanel.vue";
 import audioManager from "@/utils/audioManager";
 import { useLyricPlaybackClock } from "@/components/LyricStage/useLyricPlaybackClock";
+import { useOverlayBack } from "@/composables/useOverlayBack";
 
 const AMLyric = defineAsyncComponent(() => import("./AMLyric.vue"));
 const MonetLyric = defineAsyncComponent(() => import("./MonetLyric.vue"));
@@ -105,6 +106,7 @@ const closeToolbar = () => {
   toolbarShow.value = false;
   toolbarTrigger.value?.focus();
 };
+useOverlayBack(toolbarShow, closeToolbar);
 
 /**
  * 当前歌曲 id

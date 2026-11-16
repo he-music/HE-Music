@@ -37,11 +37,15 @@ import { useSongMenu } from "@/composables/useSongMenu";
 const { getQualityMenuOptions } = useSongMenu();
 import { useStatusStore } from "@/stores";
 import { useI18n } from "vue-i18n";
+import { useOverlayBack } from "@/composables/useOverlayBack";
 
 const { t } = useI18n();
 const statusStore = useStatusStore();
 
 const showDrawer = ref(false);
+useOverlayBack(showDrawer, () => {
+  showDrawer.value = false;
+});
 const currentSong = ref<SongInfo | null>(null);
 const menuOptions = ref<DropdownOption[]>([]);
 

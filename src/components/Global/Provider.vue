@@ -34,6 +34,8 @@ import {
   useOsTheme,
   useLoadingBar,
   useModal,
+  useModalReactiveList,
+  useDialogReactiveList,
   useDialog,
   useMessage,
   useNotification,
@@ -45,6 +47,7 @@ import { MONOTONOUS_THEME, setColorSchemes } from "@/utils/color";
 import themeColor from "@/assets/data/themeColor.json";
 import { useI18n } from "vue-i18n";
 import { hexToRgb, rgbToHex } from "@imsyy/color-utils";
+import OverlayBackHandler from "./OverlayBackHandler.vue";
 
 const { locale, t } = useI18n();
 
@@ -323,9 +326,17 @@ const setupNaiveTools = () => {
 const NaiveProviderContent = defineComponent({
   setup() {
     setupNaiveTools();
-  },
-  render() {
-    return h("div", { className: "main-tools" });
+    const modals = useModalReactiveList();
+    const dialogs = useDialogReactiveList();
+    return () =>
+      h("div", { class: "main-tools" }, [
+        ...modals.value.map((overlay) =>
+          h(OverlayBackHandler, { key: `modal-${overlay.key}`, overlay }),
+        ),
+        ...dialogs.value.map((overlay) =>
+          h(OverlayBackHandler, { key: `dialog-${overlay.key}`, overlay }),
+        ),
+      ]);
   },
 });
 

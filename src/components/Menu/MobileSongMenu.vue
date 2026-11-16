@@ -40,12 +40,16 @@ import { SongInfo } from "@/types/main.hemusic";
 import songManager from "@/utils/songManager";
 import { useSongMenu } from "@/composables/useSongMenu";
 import { getSizeCover } from "@/utils/songCover";
+import { useOverlayBack } from "@/composables/useOverlayBack";
 
 const emit = defineEmits<{ removeSong: [index: SongInfo[]] }>();
 
 const { getMenuOptions } = useSongMenu();
 
 const showDrawer = ref(false);
+useOverlayBack(showDrawer, () => {
+  showDrawer.value = false;
+});
 const currentSong = ref<SongInfo | null>(null);
 const menuOptions = ref<DropdownOption[]>([]);
 

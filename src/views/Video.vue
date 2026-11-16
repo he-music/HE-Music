@@ -246,6 +246,7 @@ import { createVideoDetailCache } from "@/utils/videoDetailCache";
 import { useVideoGestures } from "@/composables/useVideoGestures";
 import VideoComments from "@/components/Video/VideoComments.vue";
 import { useMediaQuery } from "@vueuse/core";
+import { useOverlayBack } from "@/composables/useOverlayBack";
 
 const { t, n } = useI18n();
 
@@ -343,6 +344,9 @@ const hlsQualityOptions = computed(() => [
 const detailCache = createVideoDetailCache(videoDetail);
 const immersive = ref(false);
 const commentsOpen = ref(false);
+useOverlayBack(commentsOpen, () => {
+  commentsOpen.value = false;
+});
 const narrowScreen = useMediaQuery("(max-width: 760px)");
 const videoRoot = ref<HTMLElement | null>(null);
 const gestureSurface = ref<HTMLElement | null>(null);

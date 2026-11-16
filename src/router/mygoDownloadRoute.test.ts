@@ -65,7 +65,12 @@ beforeEach(() => {
   mocks.electron = false;
   mocks.loggedIn = true;
   mocks.warning.mockClear();
-  vi.stubGlobal("window", { $message: { warning: mocks.warning } });
+  const events = new EventTarget();
+  vi.stubGlobal("window", {
+    $message: { warning: mocks.warning },
+    addEventListener: events.addEventListener.bind(events),
+    removeEventListener: events.removeEventListener.bind(events),
+  });
 });
 afterEach(() => {
   vi.unstubAllGlobals();

@@ -6,7 +6,8 @@ export function useMonetBrowse(count: () => number, anchor: Readonly<Ref<number>
   const manualAnchor = ref<number | null>(null);
   let resetTimer: ReturnType<typeof setTimeout> | undefined;
   let accumulated = 0;
-  let pointerY: number | null = null;
+  let touch: { x: number; y: number; lastY: number } | undefined;
+  let axis: "horizontal" | "vertical" | undefined;
   let moved = false;
   let hoverPaused = false;
   function reset() {
@@ -16,7 +17,7 @@ export function useMonetBrowse(count: () => number, anchor: Readonly<Ref<number>
   }
   function scheduleReset() {
     clearTimeout(resetTimer);
-    if (!hoverPaused && pointerY === null) resetTimer = setTimeout(reset, 1800);
+    if (!hoverPaused && !touch) resetTimer = setTimeout(reset, 1800);
   }
   function move(delta: number) {
     if (!count()) return;
@@ -44,26 +45,39 @@ export function useMonetBrowse(count: () => number, anchor: Readonly<Ref<number>
     event.preventDefault();
     move(event.deltaY * (event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? 300 : 1));
   }
-  function touchMove(event: TouchEvent) {
-    if (!isOverflowingLine(event.target)) event.preventDefault();
-    event.stopPropagation();
-  }
-  function pointerDown(event: PointerEvent) {
-    if (event.pointerType === "mouse" || isOverflowingLine(event.target)) return;
-    pointerY = event.clientY;
+  function touchStart(event: TouchEvent) {
+    if (event.touches.length !== 1) {
+      touchEnd();
+      return;
+    }
+    const point = event.touches[0];
+    touch = { x: point.clientX, y: point.clientY, lastY: point.clientY };
+    axis = undefined;
     moved = false;
     clearTimeout(resetTimer);
   }
-  function pointerMove(event: PointerEvent) {
-    if (pointerY === null) return;
-    const delta = pointerY - event.clientY;
-    if (Math.abs(delta) < 4) return;
-    moved = true;
-    pointerY = event.clientY;
-    move(delta);
+  function touchMove(event: TouchEvent) {
+    if (!touch || event.touches.length !== 1) return;
+    const point = event.touches[0];
+    if (!axis) {
+      const dx = Math.abs(point.clientX - touch.x);
+      const dy = Math.abs(point.clientY - touch.y);
+      if (Math.max(dx, dy) < 10) return;
+      axis = dx > dy ? "horizontal" : "vertical";
+      moved = true;
+    }
+    // 横向事件交给移动播放器分页，纵向事件只用于浏览歌词。
+    if (axis === "horizontal") return;
+    event.stopPropagation();
+    if (!isOverflowingLine(event.target)) {
+      if (event.cancelable) event.preventDefault();
+      move(touch.lastY - point.clientY);
+    }
+    touch.lastY = point.clientY;
   }
-  function pointerEnd() {
-    pointerY = null;
+  function touchEnd() {
+    touch = undefined;
+    axis = undefined;
     scheduleReset();
   }
   function enter(pause: boolean) {
@@ -75,7 +89,7 @@ export function useMonetBrowse(count: () => number, anchor: Readonly<Ref<number>
   }
   function leave() {
     hoverPaused = false;
-    pointerEnd();
+    scheduleReset();
   }
   function allowClick() {
     if (moved) {
@@ -90,10 +104,9 @@ export function useMonetBrowse(count: () => number, anchor: Readonly<Ref<number>
     manualAnchor,
     reset,
     wheel,
+    touchStart,
     touchMove,
-    pointerDown,
-    pointerMove,
-    pointerEnd,
+    touchEnd,
     enter,
     leave,
     allowClick,

@@ -371,6 +371,23 @@ function mountView(kind: "mygo" | "web", fixture = providerFixture()) {
 }
 
 describe("DesktopLyric production SFC", () => {
+  it("连接提示使用中性色，首个快照直接显示保存的配色", async () => {
+    const view = mountView("mygo");
+    const styles = () => JSON.stringify(allNodes(view.root).map((node) => node.props.style));
+    expect(styles()).toContain("#fff");
+    expect(styles()).not.toContain(defaultConfig.playedColor);
+    view.fixture.attachment.resolve({
+      window: windowState(),
+      snapshot: {
+        ...snapshot(),
+        style: { ...desktopLyricStyle.createDefaultDesktopLyricStyle(), playedColor: "#123456" },
+      },
+    });
+    await flush();
+    expect(styles()).toContain("#123456");
+    expect(styles()).not.toContain(defaultConfig.playedColor);
+  });
+
   it("锁定透传时以原生悬浮显示解锁按钮，注册实际按钮区域并保持原生回执驱动", async () => {
     const view = mountView("mygo");
     view.fixture.attachment.resolve({

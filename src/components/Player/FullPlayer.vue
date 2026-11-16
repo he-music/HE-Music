@@ -110,6 +110,7 @@ import { platform } from "@/platform";
 import { useStatusStore, useMusicStore, useSettingStore, usePlatformStore } from "@/stores";
 import { FeatureSupportFlag } from "@/api/platform";
 import { playbackCapabilities } from "@/utils/audioManager";
+import { useOverlayBack } from "@/composables/useOverlayBack";
 
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
@@ -117,6 +118,12 @@ const settingStore = useSettingStore();
 const platformStore = usePlatformStore();
 
 const { isMobilePlayer } = useMobile();
+useOverlayBack(
+  () => statusStore.showFullPlayer,
+  () => {
+    statusStore.showFullPlayer = false;
+  },
+);
 
 /** 封面主颜色 */
 const mainCoverColor = useCssVar("--main-cover-color", document.documentElement);

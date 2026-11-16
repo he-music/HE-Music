@@ -100,7 +100,11 @@
             },
           ]"
           :style="{
-            color: line.active ? lyricConfig.playedColor : lyricConfig.unplayedColor,
+            color: line.active
+              ? consumer.snapshot.value
+                ? lyricConfig.playedColor
+                : '#fff'
+              : lyricConfig.unplayedColor,
             top: getLineTop(index),
             fontSize: index > 0 ? '0.8em' : '1em',
             '--line-index': index,

@@ -181,6 +181,7 @@ function mountNav() {
     "@/utils/env": { isElectron: false, isMac: true },
     "@/utils/modal": {},
     "@/constants/links": {},
+    "@/composables/useOverlayBack": { useOverlayBack: vi.fn() },
     "@/composables/useMobile": {
       useMobile: () => ({ isDesktopLayout: Vue.ref(true), isSmallScreen: Vue.ref(false) }),
     },

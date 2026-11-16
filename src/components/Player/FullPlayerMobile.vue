@@ -19,7 +19,7 @@
 
     <!-- 主内容 -->
     <div
-      :class="['mobile-content', { swiping: isSwiping }]"
+      :class="['mobile-content', { swiping: isPaging }]"
       :style="{ transform: contentTransform }"
       @click.stop
     >
@@ -175,35 +175,27 @@ watch(hasLyric, (val) => {
   if (!val) pageIndex.value = 0;
 });
 
-// 滑动偏移量
-const swipeOffset = ref(0);
-
 const { direction, isSwiping, lengthX } = useSwipe(mobileStart, {
   threshold: 10,
-  onSwipe: () => {
-    if (!hasLyric.value) return;
-    // 为正表示向左滑，为负表示向右滑
-    swipeOffset.value = lengthX.value;
-  },
   onSwipeEnd: () => {
-    if (!hasLyric.value) {
-      swipeOffset.value = 0;
-      return;
-    }
+    if (!hasLyric.value) return;
     // 超过阈值则切换页面
     if (direction.value === "left" && lengthX.value > 100) {
       pageIndex.value = pageIndex.value === totalPage - 1 ? pageIndex.value : pageIndex.value + 1;
     } else if (direction.value === "right" && lengthX.value < -100) {
       pageIndex.value = pageIndex.value === 0 ? pageIndex.value : pageIndex.value - 1;
     }
-    swipeOffset.value = 0;
   },
 });
+
+const isPaging = computed(
+  () => isSwiping.value && (direction.value === "left" || direction.value === "right"),
+);
 
 // 计算实时的变换位置
 const contentTransform = computed(() => {
   const baseOffset = pageIndex.value * 50; // 百分比
-  if (!isSwiping.value || !hasLyric.value) {
+  if (!isPaging.value || !hasLyric.value) {
     return `translateX(-${baseOffset}%)`;
   }
   let pixelOffset = lengthX.value;
