@@ -179,7 +179,8 @@ const jumpPage = debounce(
       .ar {
         font-size: 16px;
         opacity: 0.7;
-        display: inline-flex;
+        // 避免 macOS WebKit 在 inline-flex 歌手名前绘制多余圆点。
+        display: inline;
         transition: opacity 0.3s;
         cursor: pointer;
         &::after {
