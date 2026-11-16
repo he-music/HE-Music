@@ -8,6 +8,7 @@ import {
   type NetworkProxyState,
   type PlatformNetworkProxy,
 } from "@/platform/networkProxy";
+import { createSettingsRestartPrompt } from "./settingsRestartPrompt";
 
 export interface NetworkProxySettingsStore {
   proxyProtocol: "off" | "http" | "https";
@@ -29,6 +30,7 @@ export function useMygoNetworkProxySettings(
   store: NetworkProxySettingsStore,
 ) {
   let actionGeneration = 0;
+  const restartPrompt = createSettingsRestartPrompt();
   const state = shallowRef<NetworkProxyState>();
   const session = createNetworkProxySession(provider, (next) => {
     state.value = next;
@@ -37,6 +39,7 @@ export function useMygoNetworkProxySettings(
   const draft = computed(() => state.value?.draft ?? { protocol: "off", server: "", port: 0 });
   const update = (patch: Partial<NetworkProxyConfig>) => {
     actionGeneration++;
+    restartPrompt.dismiss();
     session.edit({ ...draft.value, ...patch });
   };
   const protocol = computed({
@@ -89,6 +92,7 @@ export function useMygoNetworkProxySettings(
   };
   const save = async () => {
     if (disabled.value) return;
+    restartPrompt.dismiss();
     const generation = actionGeneration;
     await session.apply();
     const current = state.value;
@@ -106,9 +110,19 @@ export function useMygoNetworkProxySettings(
       store.proxyPort = config.port;
     }
     const message = t(networkProxyReceiptMessage(receipt));
-    if (receipt.gatewayApplied && receipt.downloadsApplied && !receipt.restartRequired)
+    if (receipt.restartRequired) {
+      restartPrompt.show(
+        () =>
+          state.value?.active === true &&
+          generation === actionGeneration &&
+          state.value.receipt?.restartRequired === true,
+        networkProxyReceiptMessage(receipt),
+      );
+    } else if (receipt.gatewayApplied && receipt.downloadsApplied) {
       window.$message.success(message);
-    else window.$message.warning(message);
+    } else {
+      window.$message.warning(message);
+    }
   };
   const test = async () => {
     if (disabled.value) return;
@@ -192,6 +206,7 @@ export function useMygoNetworkProxySettings(
     },
     onDeactivate: () => {
       actionGeneration++;
+      restartPrompt.dismiss();
       session.deactivate();
     },
   };

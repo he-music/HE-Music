@@ -8,7 +8,13 @@ import {
 import { useAppearanceSettings } from "./appearance";
 
 const mocks = vi.hoisted(() => ({
-  platform: { kind: "mygo", os: "linux", linuxGraphics: {}, windowAppearance: undefined },
+  platform: {
+    kind: "mygo",
+    os: "linux",
+    linuxGraphics: {},
+    windowAppearance: undefined,
+    lifecycle: { restart: vi.fn(async () => {}) },
+  },
 }));
 vi.mock("@/stores", () => ({ useSettingStore: () => ({}), useStatusStore: () => ({}) }));
 vi.mock("@/platform", () => ({ platform: mocks.platform }));
@@ -16,6 +22,13 @@ vi.mock("@/utils/env", () => ({ isElectron: false }));
 vi.mock("@/utils/modal", () => ({ openFontManager: vi.fn(), openThemeConfig: vi.fn() }));
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
 const messages = { success: vi.fn(), error: vi.fn(), warning: vi.fn() };
+const warning = vi.fn(
+  (options: { content: string; onPositiveClick(): Promise<unknown>; onNegativeClick(): void }) => ({
+    ...options,
+    destroy: vi.fn(),
+    loading: false,
+  }),
+);
 const snapshot = (enabled = false, applied = false): LinuxGraphicsState => ({
   enabled,
   applied,
@@ -47,7 +60,7 @@ beforeEach(() => {
   mocks.platform.os = "linux";
   provider.current.mockResolvedValue(snapshot());
   provider.save.mockImplementation(async (enabled) => snapshot(enabled));
-  vi.stubGlobal("window", { $message: messages });
+  vi.stubGlobal("window", { $message: messages, $dialog: { warning } });
 });
 afterEach(() => {
   sessions.splice(0).forEach((session) => session.dispose());
@@ -85,7 +98,10 @@ it("saves the next-launch choice and reports restart without changing the applie
   expect(session.state.value).toEqual(snapshot(true));
   expect(toValue(item.value)).toBe(true);
   expect(session.state.value?.applied).toBe(false);
-  expect(messages.warning).toHaveBeenCalledWith("message.setting_saved_and_restart_required");
+  expect(warning).toHaveBeenCalledOnce();
+  expect(warning.mock.calls[0][0].content).toBe("message.setting_saved_and_restart_required");
+  await warning.mock.calls[0][0].onPositiveClick();
+  expect(mocks.platform.lifecycle.restart).toHaveBeenCalledOnce();
   config.onDeactivate?.();
 });
 it("save failures preserve the previous choice", async () => {
@@ -122,3 +138,31 @@ it("late replies from a replaced shell cannot overwrite the active graphics sess
   expect(current.state.value).toEqual(snapshot());
   expect(old.state.value).toBeUndefined();
 });
+
+it.each([false, true])(
+  "does not prompt when toggling back to the applied Linux graphics mode (%s)",
+  async (applied) => {
+    provider.current.mockResolvedValue(snapshot(applied, applied));
+    provider.save.mockImplementation(async (enabled) => snapshot(enabled, applied));
+    const session = new LinuxGraphicsSession(provider);
+    sessions.push(session);
+    await session.start();
+    const { config, item } = control();
+    await config.onActivate?.();
+    set(item, !applied);
+    await flush();
+    warning.mock.calls[0][0].onNegativeClick();
+    set(item, applied);
+    await flush();
+    expect(warning).toHaveBeenCalledOnce();
+    expect(session.state.value).toEqual(snapshot(applied, applied));
+    expect(mocks.platform.lifecycle.restart).not.toHaveBeenCalled();
+    set(item, !applied);
+    await flush();
+    expect(warning).toHaveBeenCalledTimes(2);
+    config.onDeactivate?.();
+    expect(warning.mock.results[1].value.destroy).toHaveBeenCalledOnce();
+    await warning.mock.calls[1][0].onPositiveClick();
+    expect(mocks.platform.lifecycle.restart).not.toHaveBeenCalled();
+  },
+);

@@ -6,6 +6,7 @@ import { t } from "@/i18n";
 import { platform } from "@/platform";
 import { windowAppearanceSession } from "@/platform/windowAppearance";
 import { linuxGraphicsSession } from "@/platform/linuxGraphics";
+import { createSettingsRestartPrompt } from "./settingsRestartPrompt";
 
 export const useAppearanceSettings = (): SettingConfig => {
   const settingStore = useSettingStore();
@@ -15,11 +16,13 @@ export const useAppearanceSettings = (): SettingConfig => {
   const useBorderless = ref(true);
   let active = false;
   let activation = 0;
+  const restartPrompt = createSettingsRestartPrompt();
 
   const handleBorderlessChange = async (val: boolean) => {
     if (platform.kind === "mygo") {
       const session = windowAppearanceSession.value;
       if (!session) return;
+      restartPrompt.dismiss();
       const generation = activation;
       try {
         const state = await session.save(val);
@@ -31,7 +34,14 @@ export const useAppearanceSettings = (): SettingConfig => {
         )
           return;
         if (state.restartRequired) {
-          window.$message.warning(t("message.setting_saved_and_restart_required"));
+          restartPrompt.show(
+            () =>
+              active &&
+              generation === activation &&
+              windowAppearanceSession.value === session &&
+              !session.saving.value &&
+              session.state.value?.restartRequired === true,
+          );
         } else {
           window.$message.success(t("mygo.window_appearance.saved"));
         }
@@ -47,13 +57,21 @@ export const useAppearanceSettings = (): SettingConfig => {
   const handleGraphicsChange = async (enabled: boolean) => {
     const session = linuxGraphicsSession.value;
     if (!session) return;
+    restartPrompt.dismiss();
     const generation = activation;
     try {
       const state = await session.save(enabled);
       if (!state || !active || generation !== activation || linuxGraphicsSession.value !== session)
         return;
       if (state.restartRequired) {
-        window.$message.warning(t("message.setting_saved_and_restart_required"));
+        restartPrompt.show(
+          () =>
+            active &&
+            generation === activation &&
+            linuxGraphicsSession.value === session &&
+            !session.saving.value &&
+            session.state.value?.restartRequired === true,
+        );
       } else {
         window.$message.success(t("mygo.linux_graphics.saved"));
       }
@@ -98,6 +116,7 @@ export const useAppearanceSettings = (): SettingConfig => {
     onDeactivate: () => {
       active = false;
       activation++;
+      restartPrompt.dismiss();
     },
     groups: [
       {

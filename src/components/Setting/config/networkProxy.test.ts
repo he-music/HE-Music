@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { isRef, toValue } from "vue";
 import type { NetworkProxySettingsStore } from "./networkProxy";
 import { networkProxyReceiptMessage, useMygoNetworkProxySettings } from "./networkProxy";
@@ -9,6 +9,12 @@ import type {
 } from "@/platform/networkProxy";
 
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
+const mocks = vi.hoisted(() => ({ lifecycle: { restart: vi.fn(async () => {}) } }));
+vi.mock("@/platform", () => ({ platform: { lifecycle: mocks.lifecycle } }));
+afterEach(() => {
+  vi.clearAllMocks();
+  vi.unstubAllGlobals();
+});
 
 const config: NetworkProxyConfig = { protocol: "HTTP", server: "proxy.invalid", port: 8080 };
 const partial: NetworkProxyReceipt = {
@@ -30,8 +36,25 @@ function setup() {
     test: vi.fn(async () => ({ reachable: true, scope: "go-http-test-only" })),
   };
   const messages = { success: vi.fn(), error: vi.fn(), warning: vi.fn() };
-  vi.stubGlobal("window", { $message: messages });
-  return { store, provider, messages, settings: useMygoNetworkProxySettings(provider, store) };
+  const warning = vi.fn(
+    (options: {
+      content: string;
+      onPositiveClick(): Promise<unknown>;
+      onNegativeClick(): void;
+    }) => ({
+      ...options,
+      destroy: vi.fn(),
+      loading: false,
+    }),
+  );
+  vi.stubGlobal("window", { $message: messages, $dialog: { warning } });
+  return {
+    store,
+    provider,
+    messages,
+    warning,
+    settings: useMygoNetworkProxySettings(provider, store),
+  };
 }
 function pendingReceipt() {
   let complete: (receipt: NetworkProxyReceipt) => void = () => {
@@ -52,7 +75,7 @@ describe("mygo network settings", () => {
     expect(settings.group.items).toHaveLength(4);
   });
 
-  it("loads on activation, saves only confirmed configs, and warns about unsupported webview", async () => {
+  it("loads on activation and warns when the webview cannot apply saved settings", async () => {
     const { settings, provider, store, messages } = setup();
     await settings.onActivate();
     expect(store.proxyProtocol).toBe("off");
@@ -119,6 +142,38 @@ describe("mygo network settings", () => {
     expect(provider.test).toHaveBeenCalledWith(config);
     expect(provider.apply).not.toHaveBeenCalled();
     expect(store.proxyProtocol).toBe("off");
+  });
+
+  it("offers restart only for saved proxy receipts that require it", async () => {
+    const { settings, provider, warning, messages } = setup();
+    await settings.onActivate();
+    provider.apply = vi.fn(async () => ({ ...partial, restartRequired: true }));
+    await settings.group.items[0].extraButton?.action();
+    expect(warning).toHaveBeenCalledOnce();
+    expect(warning.mock.calls[0][0].content).toBe("mygo.proxy.restart");
+    expect(messages.warning).not.toHaveBeenCalled();
+    expect(mocks.lifecycle.restart).not.toHaveBeenCalled();
+    await warning.mock.calls[0][0].onPositiveClick();
+    expect(mocks.lifecycle.restart).toHaveBeenCalledOnce();
+    settings.onDeactivate();
+  });
+
+  it("invalidates deferred proxy restart after editing or leaving settings", async () => {
+    const { settings, provider, warning } = setup();
+    await settings.onActivate();
+    provider.apply = vi.fn(async () => ({ ...partial, restartRequired: true }));
+    await settings.group.items[0].extraButton?.action();
+    const server = settings.group.items.find((item) => item.key === "proxyServe");
+    if (!server?.value || !isRef(server.value)) throw new Error("missing server input");
+    server.value.value = "changed.invalid";
+    expect(warning.mock.results[0].value.destroy).toHaveBeenCalledOnce();
+    await warning.mock.calls[0][0].onPositiveClick();
+    expect(mocks.lifecycle.restart).not.toHaveBeenCalled();
+    await settings.group.items[0].extraButton?.action();
+    settings.onDeactivate();
+    expect(warning.mock.results[1].value.destroy).toHaveBeenCalledOnce();
+    await warning.mock.calls[1][0].onPositiveClick();
+    expect(mocks.lifecycle.restart).not.toHaveBeenCalled();
   });
 
   it("distinguishes restart and partial scope receipts", () => {
