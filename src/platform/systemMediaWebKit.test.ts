@@ -17,7 +17,7 @@ const track: SystemMediaTrack = {
   canNext: true,
 };
 
-function fixture() {
+function fixture(useWebKit?: () => boolean) {
   let generation = 0;
   const native: PlatformSystemMedia = {
     configure: vi.fn(async (_generation, mediaEnabled, preventSleep) => ({
@@ -52,13 +52,49 @@ function fixture() {
   }
   vi.stubGlobal("navigator", { mediaSession: web });
   vi.stubGlobal("window", { MediaMetadata: Metadata });
-  const provider = createWebKitSystemMedia(native);
+  const provider = createWebKitSystemMedia(native, useWebKit);
   return { native, handlers, web, provider };
 }
 
 afterEach(() => vi.unstubAllGlobals());
 
 describe("WebKit system media ownership", () => {
+  it("starts mpv with native media even without Web APIs and releases controls when disabled", async () => {
+    const f = fixture(() => false);
+    vi.stubGlobal("navigator", {});
+    vi.stubGlobal("window", {});
+    const command = vi.fn();
+    const off = vi.fn();
+    vi.mocked(f.native.onCommand).mockReturnValue(off);
+    const unsubscribe = f.provider.onCommand(command);
+    expect(await f.provider.configure(0, true, true)).toMatchObject({
+      generation: 1,
+      mediaEnabled: true,
+      keepAwakeRequested: true,
+    });
+    expect(f.native.configure).toHaveBeenLastCalledWith(0, true, true);
+    await f.provider.set(1, 1, track);
+    await f.provider.setPlayback(1, 1, track.id, "paused", 0);
+    await f.provider.setArtwork!(1, 1, track.id, "iVBORsynthetic");
+    expect(f.native.set).toHaveBeenCalledWith(1, 1, track);
+    expect(f.native.setPlayback).toHaveBeenCalledWith(1, 1, track.id, "paused", 0);
+    expect(f.native.setArtwork).toHaveBeenCalledWith(1, 1, track.id, "iVBORsynthetic");
+    expect(f.web.metadata).toBeNull();
+    const notify = vi.mocked(f.native.onCommand).mock.calls[0][0];
+    const event = { generation: 1, revision: 1, trackId: track.id, action: "next", positionMs: 0 };
+    notify(event);
+    expect(command).toHaveBeenCalledOnce();
+    await f.provider.clear(1, 2);
+    expect(f.native.clear).toHaveBeenCalledWith(1, 2);
+    await f.provider.configure(1, false, true);
+    expect(f.native.configure).toHaveBeenLastCalledWith(1, false, true);
+    expect(off).toHaveBeenCalledOnce();
+    notify(event);
+    expect(command).toHaveBeenCalledOnce();
+    await f.provider.teardown(2);
+    expect(f.native.teardown).toHaveBeenCalledWith(2);
+    unsubscribe();
+  });
   it("retains native generation and power while publishing metadata, artwork and rate only to WebKit", async () => {
     const f = fixture();
     expect(await f.provider.configure(0, true, true)).toEqual({

@@ -4,13 +4,18 @@ import type { PlatformSystemMedia } from "./systemMedia";
 // A replaced shell must not clear a newer shell's WebKit metadata or handlers.
 const owners = new WeakMap<MediaSession, { release(): void }>();
 
-/** WebKit owns macOS media; native configure/teardown retain the independent power lease. */
-export function createWebKitSystemMedia(native: PlatformSystemMedia): PlatformSystemMedia {
+/** WebKit owns browser audio on macOS; mpv uses native media with the same power lease. */
+export function createWebKitSystemMedia(
+  native: PlatformSystemMedia,
+  useWebKit: () => boolean = () => true,
+): PlatformSystemMedia {
   const token = { release: (): void => release() };
   const listeners = new Set<(command: SystemMediaCommand) => void>();
   let generation = 0;
   let revision = 0;
   let enabled = false;
+  let nativeMode = false;
+  let offNativeCommand: (() => void) | undefined;
   let session: MediaSession | undefined;
   let track: SystemMediaTrack | undefined;
   let artwork: MediaImage[] = [];
@@ -80,9 +85,27 @@ export function createWebKitSystemMedia(native: PlatformSystemMedia): PlatformSy
     async configure(gen, requested, preventSleep) {
       enabled = false;
       release();
-      const status = await native.configure(gen, false, preventSleep);
+      offNativeCommand?.();
+      offNativeCommand = undefined;
+      nativeMode = !useWebKit();
+      const status = await native.configure(gen, requested && nativeMode, preventSleep);
       generation = status.generation;
       revision = 0;
+      if (nativeMode) {
+        enabled = status.mediaEnabled;
+        if (enabled) {
+          offNativeCommand = native.onCommand((command) => {
+            if (
+              enabled &&
+              nativeMode &&
+              generation === status.generation &&
+              command.generation === generation
+            )
+              listeners.forEach((listener) => listener(command));
+          });
+        }
+        return status;
+      }
       session = typeof navigator === "undefined" ? undefined : navigator.mediaSession;
       enabled = Boolean(
         requested &&
@@ -94,6 +117,7 @@ export function createWebKitSystemMedia(native: PlatformSystemMedia): PlatformSy
       return { ...status, mediaEnabled: enabled, metadataRequested: false };
     },
     async set(gen, rev, value) {
+      if (nativeMode) return native.set(gen, rev, value);
       if (!enabled || gen !== generation || rev <= revision || rev === 0)
         throw new Error("WebKit media snapshot is no longer active");
       validatePlayback(value.state, value.positionMs);
@@ -150,6 +174,7 @@ export function createWebKitSystemMedia(native: PlatformSystemMedia): PlatformSy
       }
     },
     async setPlayback(gen, rev, id, state, positionMs) {
+      if (nativeMode) return native.setPlayback(gen, rev, id, state, positionMs);
       current(gen, rev, id);
       validatePlayback(state, positionMs);
       if (track) {
@@ -159,6 +184,7 @@ export function createWebKitSystemMedia(native: PlatformSystemMedia): PlatformSy
       }
     },
     async setArtwork(gen, rev, id, base64) {
+      if (nativeMode) return native.setArtwork?.(gen, rev, id, base64);
       current(gen, rev, id);
       artwork = base64
         ? [{ src: `data:image/${base64.startsWith("iVBOR") ? "png" : "jpeg"};base64,${base64}` }]
@@ -166,6 +192,7 @@ export function createWebKitSystemMedia(native: PlatformSystemMedia): PlatformSy
       publishMetadata();
     },
     async clear(gen, rev) {
+      if (nativeMode) return native.clear(gen, rev);
       if (gen !== generation || rev <= revision || rev === 0)
         throw new Error("WebKit media snapshot is no longer active");
       revision = rev;
@@ -175,6 +202,8 @@ export function createWebKitSystemMedia(native: PlatformSystemMedia): PlatformSy
       if (gen !== generation) throw new Error("WebKit media owner is no longer active");
       enabled = false;
       release();
+      offNativeCommand?.();
+      offNativeCommand = undefined;
       await native.teardown(gen);
     },
     onCommand(listener) {

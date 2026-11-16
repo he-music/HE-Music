@@ -4,12 +4,16 @@ import { usePlayer } from "@/utils/player";
 import { SystemMediaSession } from "@/platform/systemMediaSession";
 import { createWebKitSystemMedia } from "@/platform/systemMediaWebKit";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
+import { activePlaybackEngine } from "@/core/audio-player/playbackCapabilities";
 
 export function createShellSystemMediaSession(): SystemMediaSession | undefined {
   const native = platform.systemMedia;
   if (!native) return;
+  const useWebKit = () => activePlaybackEngine.value === "web-audio";
   const provider =
-    platform.kind === "mygo" && platform.os === "darwin" ? createWebKitSystemMedia(native) : native;
+    platform.kind === "mygo" && platform.os === "darwin"
+      ? createWebKitSystemMedia(native, useWebKit)
+      : native;
   const music = useMusicStore();
   const status = useStatusStore();
   const setting = useSettingStore();
@@ -24,7 +28,11 @@ export function createShellSystemMediaSession(): SystemMediaSession | undefined 
   return new SystemMediaSession(
     provider,
     {
-      settings: () => ({ media: setting.smtcOpen, preventSleep: setting.preventSleep }),
+      settings: () => ({
+        media: setting.smtcOpen,
+        preventSleep: setting.preventSleep,
+        useWebKit: platform.os === "darwin" && useWebKit(),
+      }),
       trackID,
       artwork: () => (trackID() && music.playSong.name?.trim() ? music.getSongCover(512) : null),
       metadata: () => {
