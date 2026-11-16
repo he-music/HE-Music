@@ -115,6 +115,9 @@ func (w *window) showPopover() {
 		w.popoverHeld = false
 		send(w.popover, "setBehavior:", popoverBehaviorTransient)
 	}
+	// A status item's contrast appearance can differ from the app's theme.
+	// Give the whole popover (including its arrow) the content's appearance.
+	send(w.popover, "setAppearance:", uintptr(send(w.b.app, "effectiveAppearance")))
 	if w.flyout.Tray != nil {
 		// The popover of a menu bar app takes the keyboard of an app the
 		// user did not activate, as AppKit's own status items' do.

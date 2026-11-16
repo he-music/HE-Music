@@ -7,13 +7,11 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { ensureMpvResources } from "../mpv/resources.mjs";
-export const SDK_VERSION = "v0.8.3";
+export const SDK_VERSION = "v0.9.0";
 export const SDK_WINDOWS_FILE = "github.com/egoist/mygo/internal/windows/window.go";
-const definitionFile = "patches/mygo/patch.json";
-const lockFile = "patches/mygo/vendor-lock.json";
+const lockFile = "scripts/vendor/vendor-lock.json";
 const sha256 = (data) => createHash("sha256").update(data).digest("hex");
 const sourceHash = (text) => sha256(text.replace(/\r\n/g, "\n"));
-const digestPattern = /^[a-f0-9]{64}$/;
 
 async function goInputs(root) {
   const mod = await readFile(path.join(root, "go.mod"), "utf8");
@@ -25,64 +23,6 @@ async function goInputs(root) {
   )
     throw new Error("go.mod 必须固定 mygo SDK/tool 且无 replace");
   return { goModSHA256: sourceHash(mod), goSumSHA256: sourceHash(sum) };
-}
-
-function patchEdits(patch) {
-  if (patch.additionalEdits !== undefined && !Array.isArray(patch.additionalEdits))
-    throw new Error("mygo 附加补丁必须是明确的替换列表");
-  const edits = [{ before: patch.before, after: patch.after }, ...(patch.additionalEdits || [])];
-  if (
-    edits.length > 16 ||
-    edits.some(
-      (edit) =>
-        typeof edit?.before !== "string" ||
-        !edit.before ||
-        typeof edit.after !== "string" ||
-        edit.before === edit.after,
-    )
-  )
-    throw new Error("mygo 补丁替换定义无效");
-  return edits;
-}
-
-export async function readPatchDefinition(root) {
-  const definition = JSON.parse(await readFile(path.join(root, definitionFile), "utf8"));
-  const patch = definition?.patch;
-  if (
-    definition?.schemaVersion !== 1 ||
-    definition.sdkVersion !== SDK_VERSION ||
-    patch?.file !== SDK_WINDOWS_FILE ||
-    typeof patch.id !== "string" ||
-    !digestPattern.test(patch.upstreamSHA256) ||
-    !digestPattern.test(patch.patchedSHA256) ||
-    typeof patch.before !== "string" ||
-    typeof patch.after !== "string" ||
-    !patch.before ||
-    patch.before.includes("\n") ||
-    patch.after.includes("\n")
-  )
-    throw new Error("mygo 补丁定义与固定 SDK 不匹配");
-  patchEdits(patch);
-  return definition;
-}
-
-export async function applySDKPatch(vendorRoot, definition) {
-  const patch = definition.patch;
-  if (definition.sdkVersion !== SDK_VERSION || patch.file !== SDK_WINDOWS_FILE)
-    throw new Error("拒绝对未知 SDK 或文件应用补丁");
-  const filename = path.join(vendorRoot, SDK_WINDOWS_FILE);
-  const before = await readFile(filename);
-  if (sha256(before) !== patch.upstreamSHA256)
-    throw new Error("mygo 上游源码摘要不符，未应用补丁；请审查 SDK 更新");
-  let source = before.toString("utf8");
-  for (const edit of patchEdits(patch)) {
-    if (source.split(edit.before).length !== 2)
-      throw new Error("mygo 补丁上下文不唯一，未应用补丁");
-    source = source.replace(edit.before, edit.after);
-  }
-  const after = Buffer.from(source);
-  if (sha256(after) !== patch.patchedSHA256) throw new Error("mygo 补丁结果摘要不符，未写入源码");
-  await writeFile(filename, after);
 }
 
 export async function vendorFingerprint(directory) {
@@ -107,14 +47,9 @@ export async function vendorFingerprint(directory) {
 }
 
 export async function createVendorLock(root, vendorRoot = path.join(root, "vendor")) {
-  const definition = await readPatchDefinition(root);
-  const patched = await readFile(path.join(vendorRoot, SDK_WINDOWS_FILE));
-  if (sha256(patched) !== definition.patch.patchedSHA256)
-    throw new Error("vendor 中的 Windows 透明补丁缺失或已改变");
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     sdkVersion: SDK_VERSION,
-    patchId: definition.patch.id,
     ...(await goInputs(root)),
     ...(await vendorFingerprint(vendorRoot)),
   };
@@ -129,7 +64,6 @@ export async function verifyVendoredDependencies(root = process.cwd()) {
 }
 
 export async function refreshVendor(root = process.cwd(), spawn = spawnSync) {
-  const definition = await readPatchDefinition(root);
   const inputs = await goInputs(root);
   const parent = path.join(root, "build/mygo");
   await mkdir(parent, { recursive: true });
@@ -152,7 +86,6 @@ export async function refreshVendor(root = process.cwd(), spawn = spawnSync) {
     if (result.error || result.status !== 0) throw new Error("Go vendor 生成失败，原 vendor 保留");
     if (JSON.stringify(await goInputs(root)) !== JSON.stringify(inputs))
       throw new Error("生成期间 Go 依赖已改变，未替换 vendor");
-    await applySDKPatch(generated, definition);
     const lock = await createVendorLock(root, generated);
     const nextLock = path.join(stage, "vendor-lock.json");
     await writeFile(nextLock, JSON.stringify(lock, null, 2) + "\n");
@@ -211,7 +144,7 @@ export async function main(args = process.argv.slice(2), root = process.cwd()) {
             [path.join(
               root,
               "vendor/github.com/egoist/mygo/internal/windows/window_frame_test.go",
-            )]: path.join(root, "patches/mygo/_tests/window_frame_test.go"),
+            )]: path.join(root, "scripts/vendor/_tests/window_frame_test.go"),
           },
         }),
       );
@@ -238,7 +171,7 @@ export async function main(args = process.argv.slice(2), root = process.cwd()) {
     return;
   }
   if (args.length === 1 && args[0] === "check") {
-    console.log("固定 SDK、Windows 透明补丁及 vendor 全量摘要校验通过");
+    console.log("固定 SDK、Go 依赖及 vendor 全量摘要校验通过");
     return;
   }
   if (!new Set(["build", "dev", "generate", "doctor"]).has(args[0]))

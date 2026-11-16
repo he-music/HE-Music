@@ -1,6 +1,10 @@
 package mygo
 
-import "github.com/egoist/mygo/internal/platform"
+import (
+	"bytes"
+
+	"github.com/egoist/mygo/internal/platform"
+)
 
 // AuthRequest is passed to the auth handler of a window (SetAuthHandler):
 // a server, or a proxy, asks for a user name and a password before it
@@ -75,6 +79,109 @@ func (h *windowHandler) AuthRequested(req platform.AuthRequest) platform.AuthRes
 	}
 	r := fn(AuthRequest{Host: req.Host, Port: req.Port, Realm: req.Realm, Scheme: req.Scheme, IsProxy: req.IsProxy})
 	return platform.AuthResponse{Username: r.Username, Password: r.Password}
+}
+
+// ClientCertificate is one of the certificates a server that asks for one
+// can be given (ClientCertificateRequest.Certificates).
+type ClientCertificate struct {
+	// Certificate is the certificate, DER-encoded, which
+	// x509.ParseCertificate reads.
+	Certificate []byte
+	// Subject and Issuer name it as the platform does, and ValidFrom and
+	// ValidTo are the unix seconds it is valid from and to.
+	Subject, Issuer    string
+	ValidFrom, ValidTo int64
+}
+
+// ClientCertificateRequest is passed to the client certificate handler of
+// a window (SetClientCertificateHandler): a server, or a proxy, asks for
+// the certificate of a TLS connection before it serves the page, or
+// something the page loads.
+type ClientCertificateRequest struct {
+	// Host and Port of the server asking, or of the proxy, e.g.
+	// "intranet.example.com" and 443.
+	Host string
+	Port int
+	// IsProxy is true when a proxy asks rather than the server.
+	IsProxy bool
+	// Certificates are those the platform can offer, one of which an
+	// answer returns. What they are is the platform's: the certificates
+	// the user has that the server accepts, as WebView2 lists them on
+	// Windows and the keychain holds on macOS. Linux lists none, WebKitGTK
+	// has no way to, so Certificates is empty there.
+	Certificates []ClientCertificate
+}
+
+// ClientCertificateResponse answers a ClientCertificateRequest.
+// Certificate is one of the request's Certificates, matched by its bytes:
+// that is the certificate to give. One with no Certificate — the zero
+// response, or Cancel — refuses the challenge, and the load fails as when
+// a user dismisses a browser's prompt. Only a nil handler leaves the
+// challenge to the web view.
+type ClientCertificateResponse struct {
+	Certificate ClientCertificate
+	Cancel      bool
+}
+
+// SetClientCertificateHandler answers the servers that ask for a TLS
+// client certificate, for the window's pages and what they load, the
+// server's or a proxy's: fn returns one of the request's certificates to
+// give, or an empty response to cancel. It runs on the main thread while
+// the load waits. To choose without asking, fn can cancel and show the
+// app's own prompt, then Reload the page once it has decided. nil
+// restores the default, the platform's:
+//
+//   - macOS: WebKit's handling, which never asks. MyGo answers
+//     WKNavigationDelegate's
+//     webView:didReceiveAuthenticationChallenge:completionHandler: with
+//     the identities of the keychain, which the keychain asks the user
+//     for; the server's acceptable issuers are the app's to filter by.
+//   - Linux: WebKitGTK's certificate chooser. MyGo answers
+//     WebKitWebView::authenticate; WebKitGTK lists no certificates, so
+//     with a handler set fn can only cancel — an empty answer refuses —
+//     and only a nil handler leaves the choice to WebKit.
+//   - Windows: WebView2's certificate dialog. MyGo answers
+//     ICoreWebView2_5's ClientCertificateRequested; on a runtime without
+//     it, fn is never asked.
+func (p *Page) SetClientCertificateHandler(fn func(req ClientCertificateRequest) ClientCertificateResponse) {
+	p.w.mu.Lock()
+	p.w.clientCertHandler = fn
+	p.w.mu.Unlock()
+}
+
+func (h *windowHandler) ClientCertificateRequested(req platform.ClientCertificateRequest) platform.ClientCertificateResponse {
+	h.w.mu.Lock()
+	fn := h.w.clientCertHandler
+	h.w.mu.Unlock()
+	if fn == nil {
+		return platform.ClientCertificateResponse{Default: true}
+	}
+	offered := make([]ClientCertificate, len(req.Certificates))
+	for i, c := range req.Certificates {
+		offered[i] = ClientCertificate{Certificate: c.DER, Subject: c.Subject, Issuer: c.Issuer, ValidFrom: c.ValidFrom, ValidTo: c.ValidTo}
+	}
+	r := fn(ClientCertificateRequest{Host: req.Host, Port: req.Port, IsProxy: req.IsProxy, Certificates: offered})
+	resp := platform.ClientCertificateResponse{Cancel: r.Cancel}
+	if len(r.Certificate.Certificate) > 0 {
+		for i := range req.Certificates {
+			// An answer is one of the request's certificates: match it
+			// back, its DER, to the platform's own.
+			if bytes.Equal(req.Certificates[i].DER, r.Certificate.Certificate) {
+				c := req.Certificates[i]
+				resp.Certificate = &c
+				break
+			}
+		}
+	}
+	return resp
+}
+
+// HandlesClientCertificates tells whether the app answers client
+// certificate challenges at all.
+func (h *windowHandler) HandlesClientCertificates() bool {
+	h.w.mu.Lock()
+	defer h.w.mu.Unlock()
+	return h.w.clientCertHandler != nil
 }
 
 // CertificateError is passed to the certificate error handler of a

@@ -19,6 +19,8 @@ import (
 	"time"
 
 	"github.com/egoist/mygo/internal/i18ngen"
+	"github.com/egoist/mygo/internal/nativegen"
+	"github.com/egoist/mygo/internal/nativelib"
 )
 
 // buildInputs is what building the app reads, which is what mygo dev
@@ -32,6 +34,10 @@ type buildInputs struct {
 	// platform directories of other platforms.
 	resources string
 	trees     []string // the listed resources: everything in them
+	// natives are the sources of the native libraries that the app's
+	// packages build (see pluginFile): everything in them but what builds
+	// write.
+	natives []string
 	// generated are files the build writes itself, from inputs: the Go
 	// accessors of the catalogs.
 	generated []string
@@ -108,6 +114,22 @@ func listBuildInputs(c *Config) (*buildInputs, error) {
 			continue
 		}
 		in.sourceDirs = append(in.sourceDirs, p.Dir)
+		if nativegen.IsModule(p.Dir) {
+			// A native module: its implementations, as the libraries
+			// below, and its Swift package's plists, but not what mygo dev
+			// generates from its interfaces.
+			swift := filepath.Join(p.Dir, "swift")
+			in.files = append(in.files, filepath.Join(swift, "Info.plist"), filepath.Join(swift, "Entitlements.plist"))
+			for _, lang := range nativegen.Langs {
+				in.natives = append(in.natives, filepath.Join(p.Dir, lang))
+			}
+			if m, err := nativegen.Load(p.Dir); err == nil {
+				in.generated = append(in.generated, filepath.Join(p.Dir, nativegen.GeneratedGo(m.Package)))
+				for _, lang := range nativegen.Langs {
+					in.generated = append(in.generated, nativegen.GeneratedFile(m, lang))
+				}
+			}
+		}
 		for _, f := range p.EmbedFiles {
 			path := filepath.Join(p.Dir, f)
 			in.files = append(in.files, path)
@@ -116,8 +138,20 @@ func listBuildInputs(c *Config) (*buildInputs, error) {
 		if p.Module != nil && p.Module.GoMod != "" && !outside(filepath.Dir(p.Module.GoMod)) {
 			in.files = append(in.files, p.Module.GoMod, filepath.Join(filepath.Dir(p.Module.GoMod), "go.sum"))
 		}
+		manifest := filepath.Join(p.Dir, pluginFile)
+		if data, err := os.ReadFile(manifest); err == nil {
+			in.files = append(in.files, manifest)
+			if m, err := nativelib.Parse(data); err == nil {
+				for _, l := range m.Libraries {
+					if l.Build != nil {
+						_, dir := l.Build.Tool()
+						in.natives = append(in.natives, filepath.Join(p.Dir, filepath.FromSlash(dir)))
+					}
+				}
+			}
+		}
 	}
-	for _, s := range []*[]string{&in.sourceDirs, &in.fileDirs, &in.files, &in.trees} {
+	for _, s := range []*[]string{&in.sourceDirs, &in.fileDirs, &in.files, &in.trees, &in.natives} {
 		slices.Sort(*s)
 		*s = slices.Compact(*s)
 	}
@@ -160,7 +194,7 @@ func (w *watcher) set(in *buildInputs) {
 func (in *buildInputs) equal(o *buildInputs) bool {
 	return slices.Equal(in.sourceDirs, o.sourceDirs) && slices.Equal(in.fileDirs, o.fileDirs) &&
 		slices.Equal(in.files, o.files) && in.resources == o.resources && slices.Equal(in.trees, o.trees) &&
-		slices.Equal(in.generated, o.generated)
+		slices.Equal(in.natives, o.natives) && slices.Equal(in.generated, o.generated)
 }
 
 // snapshot stamps each input with what tells that it changed: "-" when it
@@ -241,6 +275,23 @@ func snapshot(in *buildInputs) map[string]string {
 	}
 	for _, t := range in.trees {
 		tree(t)
+	}
+	for _, dir := range in.natives {
+		_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+			switch {
+			case err != nil:
+				s[path] = "-"
+			case path != dir && nativelib.Skipped(d.Name()):
+				if d.IsDir() {
+					return filepath.SkipDir
+				}
+			case !d.IsDir():
+				if info, err := d.Info(); err == nil {
+					add(path, info)
+				}
+			}
+			return nil
+		})
 	}
 	return s
 }

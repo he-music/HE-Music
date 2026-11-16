@@ -17,7 +17,10 @@ import (
 // open a file while it is being replaced. The app's own files (window
 // states, recovery copies, recent documents) are replaced in place, so
 // their renames and reads retry for a few seconds while Windows reports
-// them in use, rather than lose what they hold.
+// them in use, rather than lose what they hold. The app's own reads share
+// the file's deletion (readShared) and its replaces rename with POSIX
+// semantics (renameOver), so that a goroutine reading an app file never
+// keeps another from saving it.
 
 // rename renames a file of the app, retrying while Windows reports it in
 // use.
@@ -25,12 +28,19 @@ func rename(from, to string) error {
 	return retryInUse(func() error { return os.Rename(from, to) })
 }
 
+// replaceAppFile renames from over to, its sibling, retrying while
+// Windows reports it in use: a read by readAppFile does not, only another
+// program holding to open without sharing its deletion.
+func replaceAppFile(from, to string) error {
+	return retryInUse(func() error { return renameOver(from, to) })
+}
+
 // readAppFile reads a file of the app, retrying while Windows reports it
 // in use, or reports it missing while it is being replaced: Windows can
 // fail to open the name for a moment while a rename replaces the file.
 func readAppFile(path string) (data []byte, err error) {
 	read := func() error {
-		data, err = os.ReadFile(path)
+		data, err = readShared(path)
 		return err
 	}
 	for i := 1; ; i++ {

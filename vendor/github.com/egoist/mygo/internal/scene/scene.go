@@ -475,7 +475,41 @@ type Image struct {
 	// nil for images that keep their pixels.
 	Restore func() []byte
 	Dropped func()
+	// GPU, for an image something draws on the GPU (native.Texture),
+	// gives GPU renderers a texture of their own showing its pixels with
+	// no copy, which they make again as Version changes. A renderer it
+	// gives none, as the CPU renderer, draws the pixels Restore reads. An
+	// interface its owner implements, so that renderers link no code of
+	// it.
+	GPU GPUSource
+	// Surface, unless nil, is a frame of video that renderers sample where
+	// a decoder left it, rather than upload Pix (see Surface); Restore
+	// converts it for those that need Pix.
+	Surface *Surface
 }
+
+// GPUSource gives renderers a texture showing an image that something
+// draws on the GPU (Image.GPU).
+type GPUSource interface {
+	// GPUTexture returns a new texture of device, of the API api, that
+	// shows the image's pixels now, which the renderer owns, or 0 where it
+	// has none for api: the renderer then draws the image's pixels.
+	GPUTexture(api GPUAPI, device uintptr) uintptr
+}
+
+// GPUAPI names the API of a GPU renderer, for a GPUSource.
+type GPUAPI uint8
+
+const (
+	// Metal: device is an id<MTLDevice>, the texture an id<MTLTexture>.
+	Metal GPUAPI = iota + 1
+	// Direct3D11: device is an ID3D11Device*, the texture an
+	// ID3D11ShaderResourceView*.
+	Direct3D11
+	// OpenGL: device is 0, in the renderer's context; the texture is a
+	// texture name.
+	OpenGL
+)
 
 // NewCanvas returns a w×h image that renderers draw from a scene of its
 // own, cleared to transparent: render to texture.

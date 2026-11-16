@@ -443,6 +443,30 @@ func TestCloaked(hwnd uintptr) (cloaked, drawn bool) {
 	return v != 0, s != nil && s.drawn
 }
 
+// TestSurfaceComposed reports whether the frames of the native UI in the window
+// hwnd show through DirectComposition: in a window without a redirection
+// bitmap, as a flyout's, and over web views.
+func TestSurfaceComposed(hwnd uintptr) bool {
+	s := surfaceByHandle(hwnd)
+	return s != nil && s.viaComposition()
+}
+
+// TestHoldReveal has the windows of native UI whose frames show through
+// DirectComposition stay cloaked after their first frame, as though DWM
+// had not composed it yet (reveal), until release, which restores the
+// wait: those shown meanwhile do not show when timerUncloak would fire
+// either. Both are called on the main thread.
+func TestHoldReveal() (release func()) {
+	held := make(chan struct{})
+	prevWait, prevAfter := awaitComposition, uncloakAfter
+	awaitComposition = func() { <-held }
+	uncloakAfter = time.Minute
+	return func() {
+		awaitComposition, uncloakAfter = prevWait, prevAfter
+		close(held)
+	}
+}
+
 // TestUndrawnCloaked reports how many windows of native UI have not had
 // their first frame reach their surface, and whether DWM keeps all of them
 // out of sight: a window's first frame may build while NewWindow creates

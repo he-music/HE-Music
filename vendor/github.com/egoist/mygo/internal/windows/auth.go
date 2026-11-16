@@ -12,14 +12,33 @@ import (
 	"github.com/egoist/mygo/internal/platform"
 )
 
-// HTTP authentication and server certificates of pages: ICoreWebView2_10's
-// BasicAuthenticationRequested and ICoreWebView2_14's
+// HTTP authentication, client certificates and server certificates of
+// pages: ICoreWebView2_5's ClientCertificateRequested,
+// ICoreWebView2_10's BasicAuthenticationRequested and ICoreWebView2_14's
 // ServerCertificateErrorDetected. Vtable indices from WebView2.h, as in
-// webview2.go: ICoreWebView2_9 ends with put_DefaultDownloadDialogMargin
+// webview2.go: ICoreWebView2_4 ends with remove_DownloadStarting (76),
+// ICoreWebView2_9 with put_DefaultDownloadDialogMargin
 // (96), ICoreWebView2_13 with get_Profile (105).
 const (
+	wv5AddClientCertificateRequested      = 77
 	wv10AddBasicAuthenticationRequested   = 97
 	wv14AddServerCertificateErrorDetected = 106
+
+	// ICoreWebView2ClientCertificateRequestedEventArgs, its certificates
+	// and one of them.
+	clientCertGetHost                = 3
+	clientCertGetPort                = 4
+	clientCertGetIsProxy             = 5
+	clientCertGetMutuallyTrusted     = 7
+	clientCertPutSelectedCertificate = 9
+	clientCertPutCancel              = 11
+	clientCertPutHandled             = 13
+	certsGetCount                    = 3
+	certsGetValueAtIndex             = 4
+	certGetSubject                   = 3
+	certGetIssuer                    = 4
+	certGetValidFrom                 = 5
+	certGetValidTo                   = 6
 
 	// ICoreWebView2BasicAuthenticationRequestedEventArgs and its response.
 	authGetURI          = 3
@@ -30,7 +49,8 @@ const (
 	authRespPutPassword = 6
 
 	// ICoreWebView2ServerCertificateErrorDetectedEventArgs, and
-	// ICoreWebView2Certificate's ToPemEncoding.
+	// ToPemEncoding, which ICoreWebView2Certificate and
+	// ICoreWebView2ClientCertificate both put at 9.
 	certErrGetErrorStatus       = 3
 	certErrGetRequestURI        = 4
 	certErrGetServerCertificate = 5
@@ -39,6 +59,7 @@ const (
 )
 
 var (
+	iidICoreWebView2_5  = guid("bedb11b8-d63c-11eb-b8bc-0242ac130003")
 	iidICoreWebView2_10 = guid("b1690564-6f5a-4983-8e48-31d1143fecdb")
 	iidICoreWebView2_14 = guid("6daa4f10-4a90-4753-8898-77c5df534165")
 )
@@ -79,10 +100,16 @@ func pemCertificate(s string) []byte {
 	return nil
 }
 
-// addAuthHandlers handles the web view's sign-ins and certificate errors,
-// on runtimes that have them.
+// addAuthHandlers handles the web view's sign-ins, client certificates
+// and certificate errors, on runtimes that have them.
 func (w *window) addAuthHandlers() {
 	var tok int64
+	if wv5 := queryInterface(w.webview, &iidICoreWebView2_5); wv5 != 0 {
+		withHandler(w.clientCertificateRequested, func(h uintptr) uintptr {
+			return comCall(wv5, wv5AddClientCertificateRequested, h, uintptr(unsafe.Pointer(&tok)))
+		})
+		release(wv5)
+	}
 	if wv10 := queryInterface(w.webview, &iidICoreWebView2_10); wv10 != 0 {
 		withHandler(w.basicAuthenticationRequested, func(h uintptr) uintptr {
 			return comCall(wv10, wv10AddBasicAuthenticationRequested, h, uintptr(unsafe.Pointer(&tok)))
@@ -129,6 +156,86 @@ func (w *window) basicAuthenticationRequested(_, args uintptr) {
 		comCall(r, authRespPutPassword, uintptr(unsafe.Pointer(u16(resp.Password))))
 		release(r)
 	}
+}
+
+// clientCertificateRequested asks the app which client certificate to
+// give a server that asks for one. Doing nothing leaves it to WebView2:
+// its certificate dialog. The certificates the collection holds are
+// alive until it is released, which is after the app has answered.
+func (w *window) clientCertificateRequested(_, args uintptr) {
+	if !w.h.HandlesClientCertificates() {
+		return // WebView2's own certificate dialog
+	}
+	var p uintptr
+	comCall(args, clientCertGetHost, uintptr(unsafe.Pointer(&p)))
+	host := takeWstr(p)
+	var port int32
+	comCall(args, clientCertGetPort, uintptr(unsafe.Pointer(&port)))
+	var isProxy int32
+	comCall(args, clientCertGetIsProxy, uintptr(unsafe.Pointer(&isProxy)))
+	var certs uintptr
+	if failed(comCall(args, clientCertGetMutuallyTrusted, uintptr(unsafe.Pointer(&certs)))) || certs == 0 {
+		return
+	}
+	defer release(certs)
+	var count uint32
+	if failed(comCall(certs, certsGetCount, uintptr(unsafe.Pointer(&count)))) {
+		return
+	}
+	req := platform.ClientCertificateRequest{Host: host, Port: int(port), IsProxy: isProxy != 0}
+	var offered []uintptr
+	defer func() {
+		for _, c := range offered {
+			release(c)
+		}
+	}()
+	for i := uint32(0); i < count; i++ {
+		var cert uintptr
+		if failed(comCall(certs, certsGetValueAtIndex, uintptr(i), uintptr(unsafe.Pointer(&cert)))) || cert == 0 {
+			continue
+		}
+		offered = append(offered, cert)
+		if c, ok := clientCertificate(cert); ok {
+			req.Certificates = append(req.Certificates, c)
+		}
+	}
+	switch resp := w.h.ClientCertificateRequested(req); {
+	case resp.Default:
+		// WebView2's own certificate dialog.
+	case resp.Certificate != nil && resp.Certificate.Native != 0:
+		comCall(args, clientCertPutSelectedCertificate, resp.Certificate.Native)
+		comCall(args, clientCertPutHandled, 1)
+	default:
+		// No certificate: the challenge is refused, as the server's
+		// refusal of one is.
+		comCall(args, clientCertPutCancel, 1)
+	}
+}
+
+// clientCertificate reads one of the offered client certificates, its
+// DER from the PEM ToPemEncoding writes.
+func clientCertificate(cert uintptr) (platform.ClientCertificate, bool) {
+	var c platform.ClientCertificate
+	var p uintptr
+	if !failed(comCall(cert, certGetSubject, uintptr(unsafe.Pointer(&p)))) {
+		c.Subject = takeWstr(p)
+	}
+	if !failed(comCall(cert, certGetIssuer, uintptr(unsafe.Pointer(&p)))) {
+		c.Issuer = takeWstr(p)
+	}
+	var from, to float64
+	if !failed(comCall(cert, certGetValidFrom, uintptr(unsafe.Pointer(&from)))) {
+		c.ValidFrom = int64(from)
+	}
+	if !failed(comCall(cert, certGetValidTo, uintptr(unsafe.Pointer(&to)))) {
+		c.ValidTo = int64(to)
+	}
+	if failed(comCall(cert, certToPemEncoding, uintptr(unsafe.Pointer(&p)))) {
+		return c, false
+	}
+	c.DER = pemCertificate(takeWstr(p))
+	c.Native = cert
+	return c, true
 }
 
 // serverCertificateErrorDetected asks the app about a certificate that

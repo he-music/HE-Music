@@ -695,34 +695,10 @@ export interface TrayRequest {
   mode?: TrayPlayMode;
 }
 
-/**
- * UpdatesEvent acknowledges queued commands. RequestID is caller correlation only;
- * epoch + operationRevision + stateRevision determine freshness, including queued events.
- * Code is a stable command rejection code, never a raw SDK/filesystem error.
- */
-export interface UpdatesEvent {
-  requestId: number;
-  code: string;
-  state: UpdatesState;
-}
-
-/**
- * UpdatesState never contains feed URLs, local paths, or SDK installation handles.
- * Phase is idle/checking/available/no-update/unavailable/installing/installed/cancelled/error/inactive.
- * Installed means replacement completed; the running process still uses its old version.
- */
 export interface UpdatesState {
-  epoch: number;
-  operationRevision: number;
-  stateRevision: number;
-  phase: string;
-  code: string;
-  version: string;
-  notes: string;
-  date: string;
-  downloaded: number;
-  total: number;
-  installBusy: boolean;
+  revision: number;
+  availableVersion: string;
+  installed: boolean;
 }
 
 /** AppliedUseBorderless describes this window; UseBorderless is the saved next-start value. */
@@ -1219,51 +1195,18 @@ export const Taskbar = {
 } as const;
 
 /**
- * Updates methods only enqueue short authorization/state work and return immediately.
- * RPC completion means queued, not authorized/successful. Subscribe to desktop:updates
- * before Begin and wait for its event before issuing commands with the returned epoch.
- * No background checker or installation runs until explicitly requested.
+ * Updates exposes only the official updater's public state and entry points.
+ * Downloads, cancellation, skipped versions and installation belong to the plugin.
  */
 export const Updates = {
-  begin(requestID: number): Promise<void> {
-    return call("Updates.Begin", requestID);
+  check(): Promise<void> {
+    return call("Updates.Check");
   },
-  /**
-   * Cancel requests cancellation without releasing the installation fence. The SDK
-   * result decides whether cancellation succeeded or the update was already applied.
-   */
-  cancel(requestID: number, epoch: number, revision: number): Promise<void> {
-    return call("Updates.Cancel", requestID, epoch, revision);
+  configure(automaticChecks: boolean): Promise<void> {
+    return call("Updates.Configure", automaticChecks);
   },
-  check(requestID: number, epoch: number, revision: number): Promise<void> {
-    return call("Updates.Check", requestID, epoch, revision);
-  },
-  /**
-   * Download is deliberately unsupported: the pinned SDK exposes only a combined
-   * signed download + replacement operation. This method never starts that operation.
-   */
-  download(requestID: number, epoch: number, revision: number): Promise<void> {
-    return call("Updates.Download", requestID, epoch, revision);
-  },
-  getState(requestID: number, epoch: number): Promise<void> {
-    return call("Updates.GetState", requestID, epoch);
-  },
-  /**
-   * Install applies the current candidate using SDK signature verification. There is
-   * no restart here and no promise that cancellation can prevent disk replacement.
-   */
-  install(requestID: number, epoch: number, revision: number): Promise<void> {
-    return call("Updates.Install", requestID, epoch, revision);
-  },
-  /**
-   * Restart only follows an explicitly requested, completed installation. Its ack
-   * is published before the separately queued native relaunch is allowed to run.
-   */
-  restart(requestID: number, epoch: number, revision: number): Promise<void> {
-    return call("Updates.Restart", requestID, epoch, revision);
-  },
-  teardown(requestID: number, epoch: number): Promise<void> {
-    return call("Updates.Teardown", requestID, epoch);
+  getState(): Promise<UpdatesState> {
+    return call("Updates.GetState");
   },
 } as const;
 
@@ -1294,5 +1237,5 @@ export const events = {
   desktopSystemMediaCommand: event<SystemMediaCommand>("desktop:system-media-command"),
   desktopTaskbarCommand: event<TaskbarCommand>("desktop:taskbar-command"),
   desktopTaskbarFailure: event<TaskbarFailure>("desktop:taskbar-failure"),
-  desktopUpdates: event<UpdatesEvent>("desktop:updates"),
+  desktopUpdates: event<UpdatesState>("desktop:updates"),
 } as const;

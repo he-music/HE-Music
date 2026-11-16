@@ -482,9 +482,12 @@ func (b *Backend) appMessage(m uint32, wp, lp uintptr) (uintptr, bool) {
 		return 0, true
 	}
 	if m == b.taskbarCreated && m != 0 {
-		// Explorer restarted: the notification area forgot our icons.
+		// Explorer restarted: the notification area forgot our icons. A
+		// temporary icon, which only carries a notification's balloon, has
+		// lost that balloon with the rest of explorer, so it is not added
+		// again: what is left of it is reclaimed on its own timer.
 		for _, t := range b.trays {
-			if t.added {
+			if t.added && !t.temporary {
 				t.add()
 			}
 		}

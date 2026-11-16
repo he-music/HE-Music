@@ -3,6 +3,7 @@
 package darwin
 
 import (
+	"errors"
 	"math"
 	"slices"
 	"sync"
@@ -63,6 +64,36 @@ func (s *surface) NewWebView(o *platform.WindowOptions, h platform.WindowHandler
 	return v, nil
 }
 
+// EmbedView puts a view of a native module under the surface, which places
+// it as it places web views.
+func (s *surface) EmbedView(view uintptr) (platform.WebView, error) {
+	host := s.w
+	if host.closed {
+		return nil, errors.New("darwin: the window is closed")
+	}
+	// It has no page to tell of: its handler is its host's, which hears
+	// nothing from it.
+	v := &window{b: host.b, h: host.h, opts: &platform.WindowOptions{}, win: host.win, host: host, foreign: true, web: id(view)}
+	withPool(func() {
+		retain(v.web)
+		send(v.web, "removeFromSuperview")
+		send(v.web, "setAutoresizingMask:", 0)
+		v.clip = msgInitRect(send(class("MyGoClipView"), "alloc"), sel("initWithFrame:"), NSRect{})
+		send(v.clip, "setWantsLayer:", 1)
+		send(send(v.clip, "layer"), "setMasksToBounds:", 1)
+		send(v.clip, "setAutoresizingMask:", nsViewMinYMargin)
+		send(v.clip, "setHidden:", 1)
+		v.pane = msgInitRect(send(class("MyGoClipView"), "alloc"), sel("initWithFrame:"), NSRect{})
+		send(v.pane, "setWantsLayer:", 1)
+		send(send(v.pane, "layer"), "setMasksToBounds:", 1)
+		send(v.pane, "addSubview:", uintptr(v.web))
+		send(v.clip, "addSubview:", uintptr(v.pane))
+		send(host.view, "addSubview:positioned:relativeTo:", uintptr(v.clip), nsWindowBelow, uintptr(s.view))
+	})
+	host.webViews = append(host.webViews, v)
+	return v, nil
+}
+
 // nsWindowBelow is NSWindowBelow, for addSubview:positioned:relativeTo:.
 const nsWindowBelow = ^uintptr(0)
 
@@ -87,6 +118,11 @@ func (s *surface) PlaceWebViews(views []platform.WebViewPlacement) {
 			v, ok := p.WebView.(*window)
 			if !ok || v.host != host || v.closed {
 				continue
+			}
+			if v.foreign && send(v.web, "superview") != v.pane {
+				// A view of a native module that another window showed
+				// since: back to this one.
+				send(v.pane, "addSubview:", uintptr(v.web))
 			}
 			c, f := p.Clip, p.Frame
 			pw, ph := p.Size()
@@ -357,6 +393,15 @@ func (w *window) closeWebView() {
 	withPool(func() {
 		if w.hasKeyboard() && w.host.surface != nil {
 			send(w.win, "makeFirstResponder:", uintptr(w.host.surface.view))
+		}
+		if w.foreign {
+			send(w.web, "removeFromSuperview")
+			send(w.clip, "removeFromSuperview")
+			release(w.web)
+			release(w.mask)
+			release(w.pane)
+			release(w.clip)
+			return
 		}
 		w.stopObserving()
 		send(w.ucc, "removeScriptMessageHandlerForName:", uintptr(nsString("mygo")))

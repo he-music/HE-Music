@@ -20,6 +20,10 @@ type Backend struct {
 	source   uintptr
 	mainLoop uintptr
 
+	// background is AppOptions.Background: the app does not come to the
+	// front as it finishes launching.
+	background bool
+
 	// Lookup tables for Objective-C callbacks. Main thread only.
 	byDelegate map[id]*window
 	byWebView  map[id]*window
@@ -101,6 +105,7 @@ func activationPolicy(p string) uintptr {
 
 func (b *Backend) Init(h platform.AppHandler, opts platform.AppOptions) error {
 	b.h = h
+	b.background = opts.Background
 	theBackend = b
 	registerClasses()
 
@@ -149,9 +154,12 @@ func (b *Backend) Init(h platform.AppHandler, opts platform.AppOptions) error {
 		uintptr(nsString("NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification")), 0)
 	// The languages and regional formats of the user: Foundation tells of
 	// a new current locale, and System Settings of new languages, a new
-	// time and date format, which the current locale may not change.
+	// time and date format, which the current locale may not change. The
+	// time format's notification comes before the current locale has the
+	// new format, so the region is read again at the current locale's,
+	// which Foundation posts under the constant's value, not its name.
 	send(center, "addObserver:selector:name:object:", uintptr(b.delegate), uintptr(sel("localeChanged:")),
-		uintptr(nsString("NSCurrentLocaleDidChangeNotification")), 0)
+		uintptr(currentLocaleDidChange()), 0)
 	distributed := send(class("NSDistributedNotificationCenter"), "defaultCenter")
 	for _, name := range []string{"AppleLanguagePreferencesChangedNotification", "AppleTimePreferencesChangedNotification", "AppleDatePreferencesChangedNotification"} {
 		send(distributed, "addObserver:selector:name:object:", uintptr(b.delegate), uintptr(sel("localeChanged:")), uintptr(nsString(name)), 0)
@@ -291,7 +299,7 @@ func registerAppDelegate() {
 		}),
 		method("applicationDidFinishLaunching:", func(self id, _ objc.SEL, n id) {
 			b := theBackend
-			if send(b.app, "activationPolicy") == nsApplicationActivationPolicyRegular {
+			if send(b.app, "activationPolicy") == nsApplicationActivationPolicyRegular && !b.background {
 				// Plain executables (go run) do not come to the front on
 				// their own.
 				send(b.app, "activateIgnoringOtherApps:", 1)

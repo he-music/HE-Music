@@ -298,6 +298,22 @@ func (msgs Messages) More() string {
 	return Catalog.Format(msgs.locale, "more", nil)
 }
 
+// MoreOptions says "More options"
+// in the language the app shows.
+//
+// Labels the arrow of a split button, which opens a menu of actions related
+// to the button's.
+func MoreOptions() string { return In(i18n.Locale()).MoreOptions() }
+
+// MoreOptions says "More options"
+// in the language of msgs.
+//
+// Labels the arrow of a split button, which opens a menu of actions related
+// to the button's.
+func (msgs Messages) MoreOptions() string {
+	return Catalog.Format(msgs.locale, "moreOptions", nil)
+}
+
 // CodeEditor says "Code editor"
 // in the language the app shows.
 //
@@ -744,6 +760,22 @@ func UnmodifiedLines(n int) string { return In(i18n.Locale()).UnmodifiedLines(n)
 // The unchanged lines a separator of a diff viewer collapses.
 func (msgs Messages) UnmodifiedLines(n int) string {
 	return Catalog.Format(msgs.locale, "unmodifiedLines", map[string]any{"n": n})
+}
+
+// NoNewlineAtEnd says "No newline at end of file"
+// in the language the app shows.
+//
+// Marks the last line of a text in a diff viewer when the text does not end
+// with a newline, as git diff's "\ No newline at end of file" line.
+func NoNewlineAtEnd() string { return In(i18n.Locale()).NoNewlineAtEnd() }
+
+// NoNewlineAtEnd says "No newline at end of file"
+// in the language of msgs.
+//
+// Marks the last line of a text in a diff viewer when the text does not end
+// with a newline, as git diff's "\ No newline at end of file" line.
+func (msgs Messages) NoNewlineAtEnd() string {
+	return Catalog.Format(msgs.locale, "noNewlineAtEnd", nil)
 }
 
 // Revert says "Revert"
@@ -2788,4 +2820,224 @@ func Selected() string { return In(i18n.Locale()).Selected() }
 // itself.
 func (msgs Messages) Selected() string {
 	return Catalog.Format(msgs.locale, "selected", nil)
+}
+
+// PermissionAccessibility says "Accessibility"
+// in the language the app shows.
+//
+// The name of the Accessibility permission in System Settings.
+func PermissionAccessibility() string { return In(i18n.Locale()).PermissionAccessibility() }
+
+// PermissionAccessibility says "Accessibility"
+// in the language of msgs.
+//
+// The name of the Accessibility permission in System Settings.
+func (msgs Messages) PermissionAccessibility() string {
+	return Catalog.Format(msgs.locale, "permissionAccessibility", nil)
+}
+
+// PermissionDeviceControlAndDataAccess says "Device Control and Data Access"
+// in the language the app shows.
+//
+// The macOS 27 name of the Accessibility permission in System Settings.
+func PermissionDeviceControlAndDataAccess() string {
+	return In(i18n.Locale()).PermissionDeviceControlAndDataAccess()
+}
+
+// PermissionDeviceControlAndDataAccess says "Device Control and Data Access"
+// in the language of msgs.
+//
+// The macOS 27 name of the Accessibility permission in System Settings.
+func (msgs Messages) PermissionDeviceControlAndDataAccess() string {
+	return Catalog.Format(msgs.locale, "permissionDeviceControlAndDataAccess", nil)
+}
+
+// PermissionScreenRecording says "Screen Recording"
+// in the language the app shows.
+//
+// The name of the Screen Recording permission in System Settings.
+func PermissionScreenRecording() string { return In(i18n.Locale()).PermissionScreenRecording() }
+
+// PermissionScreenRecording says "Screen Recording"
+// in the language of msgs.
+//
+// The name of the Screen Recording permission in System Settings.
+func (msgs Messages) PermissionScreenRecording() string {
+	return Catalog.Format(msgs.locale, "permissionScreenRecording", nil)
+}
+
+// PermissionInputMonitoring says "Input Monitoring"
+// in the language the app shows.
+//
+// The name of the Input Monitoring permission in System Settings.
+func PermissionInputMonitoring() string { return In(i18n.Locale()).PermissionInputMonitoring() }
+
+// PermissionInputMonitoring says "Input Monitoring"
+// in the language of msgs.
+//
+// The name of the Input Monitoring permission in System Settings.
+func (msgs Messages) PermissionInputMonitoring() string {
+	return Catalog.Format(msgs.locale, "permissionInputMonitoring", nil)
+}
+
+// PermissionFullDiskAccess says "Full Disk Access"
+// in the language the app shows.
+//
+// The name of the Full Disk Access permission in System Settings.
+func PermissionFullDiskAccess() string { return In(i18n.Locale()).PermissionFullDiskAccess() }
+
+// PermissionFullDiskAccess says "Full Disk Access"
+// in the language of msgs.
+//
+// The name of the Full Disk Access permission in System Settings.
+func (msgs Messages) PermissionFullDiskAccess() string {
+	return Catalog.Format(msgs.locale, "permissionFullDiskAccess", nil)
+}
+
+// PermissionAppManagement says "App Management"
+// in the language the app shows.
+//
+// The name of the App Management permission in System Settings.
+func PermissionAppManagement() string { return In(i18n.Locale()).PermissionAppManagement() }
+
+// PermissionAppManagement says "App Management"
+// in the language of msgs.
+//
+// The name of the App Management permission in System Settings.
+func (msgs Messages) PermissionAppManagement() string {
+	return Catalog.Format(msgs.locale, "permissionAppManagement", nil)
+}
+
+// PermissionDeveloperTools says "Developer Tools"
+// in the language the app shows.
+//
+// The name of the Developer Tools permission in System Settings.
+func PermissionDeveloperTools() string { return In(i18n.Locale()).PermissionDeveloperTools() }
+
+// PermissionDeveloperTools says "Developer Tools"
+// in the language of msgs.
+//
+// The name of the Developer Tools permission in System Settings.
+func (msgs Messages) PermissionDeveloperTools() string {
+	return Catalog.Format(msgs.locale, "permissionDeveloperTools", nil)
+}
+
+// PermissionMicrophone says "Microphone"
+// in the language the app shows.
+//
+// The name of the Microphone permission in System Settings.
+func PermissionMicrophone() string { return In(i18n.Locale()).PermissionMicrophone() }
+
+// PermissionMicrophone says "Microphone"
+// in the language of msgs.
+//
+// The name of the Microphone permission in System Settings.
+func (msgs Messages) PermissionMicrophone() string {
+	return Catalog.Format(msgs.locale, "permissionMicrophone", nil)
+}
+
+// PermissionCamera says "Camera"
+// in the language the app shows.
+//
+// The name of the Camera permission in System Settings.
+func PermissionCamera() string { return In(i18n.Locale()).PermissionCamera() }
+
+// PermissionCamera says "Camera"
+// in the language of msgs.
+//
+// The name of the Camera permission in System Settings.
+func (msgs Messages) PermissionCamera() string {
+	return Catalog.Format(msgs.locale, "permissionCamera", nil)
+}
+
+// PermissionCalendars says "Calendars"
+// in the language the app shows.
+//
+// The name of the Calendars permission in System Settings.
+func PermissionCalendars() string { return In(i18n.Locale()).PermissionCalendars() }
+
+// PermissionCalendars says "Calendars"
+// in the language of msgs.
+//
+// The name of the Calendars permission in System Settings.
+func (msgs Messages) PermissionCalendars() string {
+	return Catalog.Format(msgs.locale, "permissionCalendars", nil)
+}
+
+// PermissionReminders says "Reminders"
+// in the language the app shows.
+//
+// The name of the Reminders permission in System Settings.
+func PermissionReminders() string { return In(i18n.Locale()).PermissionReminders() }
+
+// PermissionReminders says "Reminders"
+// in the language of msgs.
+//
+// The name of the Reminders permission in System Settings.
+func (msgs Messages) PermissionReminders() string {
+	return Catalog.Format(msgs.locale, "permissionReminders", nil)
+}
+
+// PermissionBluetooth says "Bluetooth"
+// in the language the app shows.
+//
+// The name of the Bluetooth permission in System Settings.
+func PermissionBluetooth() string { return In(i18n.Locale()).PermissionBluetooth() }
+
+// PermissionBluetooth says "Bluetooth"
+// in the language of msgs.
+//
+// The name of the Bluetooth permission in System Settings.
+func (msgs Messages) PermissionBluetooth() string {
+	return Catalog.Format(msgs.locale, "permissionBluetooth", nil)
+}
+
+// PermissionMediaAppleMusic says "Media & Apple Music"
+// in the language the app shows.
+//
+// The name of the Media & Apple Music permission in System Settings.
+func PermissionMediaAppleMusic() string { return In(i18n.Locale()).PermissionMediaAppleMusic() }
+
+// PermissionMediaAppleMusic says "Media & Apple Music"
+// in the language of msgs.
+//
+// The name of the Media & Apple Music permission in System Settings.
+func (msgs Messages) PermissionMediaAppleMusic() string {
+	return Catalog.Format(msgs.locale, "permissionMediaAppleMusic", nil)
+}
+
+// GuideDrag says "Drag {app} to the list above to allow {permission}."
+// in the language the app shows.
+//
+// The sentence the permissionflow Guide panel shows above the app card.
+// 'app' is the name of the app to drag, 'permission' is the name of the
+// permission, as 'Accessibility'.
+func GuideDrag(app string, permission string) string {
+	return In(i18n.Locale()).GuideDrag(app, permission)
+}
+
+// GuideDrag says "Drag {app} to the list above to allow {permission}."
+// in the language of msgs.
+//
+// The sentence the permissionflow Guide panel shows above the app card.
+// 'app' is the name of the app to drag, 'permission' is the name of the
+// permission, as 'Accessibility'.
+func (msgs Messages) GuideDrag(app string, permission string) string {
+	return Catalog.Format(msgs.locale, "guideDrag", map[string]any{"app": app, "permission": permission})
+}
+
+// GuideDragHint says "Drag"
+// in the language the app shows.
+//
+// The small hint label on the app card of the permissionflow Guide panel,
+// next to the hand icon, telling the user to drag the app.
+func GuideDragHint() string { return In(i18n.Locale()).GuideDragHint() }
+
+// GuideDragHint says "Drag"
+// in the language of msgs.
+//
+// The small hint label on the app card of the permissionflow Guide panel,
+// next to the hand icon, telling the user to drag the app.
+func (msgs Messages) GuideDragHint() string {
+	return Catalog.Format(msgs.locale, "guideDragHint", nil)
 }

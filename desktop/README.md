@@ -22,9 +22,9 @@ macOS 沿用 main 分支 Electron 包使用的 `public/icons/icon.icns`，其中
 
 ## 固定 SDK 与 Windows 透明修正
 
-正式依赖由根目录 `vendor/` 提供，包含用户已验证的 Windows 透明窗口 v2 修正；不再依赖临时 SDK 副本或本地 `replace`。构建前运行 `pnpm vendor:check`，开发／绑定生成／打包优先使用 `pnpm dev:desktop`、`pnpm generate:desktop`、`pnpm build:desktop:win`／`build:desktop:mac`／`build:desktop:linux`，这些入口会核对补丁与完整依赖摘要。更新 Go 依赖时使用 `pnpm vendor:refresh` 重放补丁，不直接覆盖 vendor。
+正式依赖由根目录 `vendor/` 提供，固定为 mygo 0.9.0。原 Windows 透明窗口和细边框修正已合入上游，本项目不再重放本地补丁。构建前运行 `pnpm vendor:check`；开发、绑定生成和打包入口会核对完整依赖摘要。更新 Go 依赖时使用 `pnpm vendor:refresh`，不要直接覆盖 vendor。
 
-补丁范围、字节摘要、许可证保留与再生成流程见 [固定 SDK 说明](../patches/mygo/README.md)。Windows 细边框 v3 修正已获用户实体机确认；托盘左键恢复主窗口已接入，仍待该交互的实机复测。新版构建仍需分别做平台验收，WebView2 安装引导继续暂停。
+依赖锁定、许可证保留和回归测试流程见 [固定 SDK 说明](../scripts/vendor/README.md)。新版构建仍需分别做平台验收，尤其是 Windows 桌面歌词的透明、边框、缩放和锁定穿透；WebView2 安装引导继续暂停。
 
 ## Linux 正常启动与图形兼容模式
 

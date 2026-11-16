@@ -68,6 +68,9 @@ vi.mock("@/platform/filesSession", () => ({
   createFilesSession: () => doubles.makeSession("files"),
 }));
 vi.mock("@/platform/localAudioSession", () => ({ blockLocalAudio: () => () => {} }));
+vi.mock("@/platform/applicationQuit", () => ({
+  installApplicationQuitHandler: () => vi.fn(),
+}));
 vi.mock("@/composables/shellDesktopLyrics", () => ({
   createShellDesktopLyricsSession: () => doubles.makeSession("lyrics"),
 }));

@@ -43,9 +43,10 @@ type Config struct {
 	// years, as "Example Inc." of "Copyright © 2026 Example Inc.").
 	Publisher string `json:"publisher"`
 	// License is the SPDX license expression of the app, such as "MIT" or
-	// "Apache-2.0 WITH LLVM-exception", which the PKGBUILD of Arch Linux
-	// records. It defaults to the license of package.json, for apps whose
-	// frontend declares one (default: package.json's license).
+	// "Apache-2.0 WITH LLVM-exception", which the RPM package and the
+	// PKGBUILD of Arch Linux record. It defaults to the license of
+	// package.json, for apps whose frontend declares one (default:
+	// package.json's license).
 	License string `json:"license"`
 	// Icon is a square PNG, ideally 1024x1024 (default:
 	// resources/icon.png when it exists). Beside it, the same name with
@@ -116,6 +117,13 @@ type Config struct {
 
 	root string
 	file string // the configuration file, "" without one
+	// native is what the app's native modules add to its bundle, once
+	// prepareNative built them.
+	native *nativeApp
+	// deps caches the directories of the packages the app is built from,
+	// by target, for one build: listing them once serves both the native
+	// libraries (natives) and the native modules (appNativeModules).
+	deps map[string][]string
 	// langs are the languages the app ships, which languages reads once.
 	langs     []appLanguage
 	langsErr  error
@@ -323,6 +331,11 @@ func (c *Config) validate() error {
 		}
 		if slices.Contains(c.Linux.Command[:i], cmd) {
 			return fmt.Errorf("linux.command names %q twice", cmd)
+		}
+	}
+	for _, f := range c.Linux.Formats {
+		if !slices.Contains(linuxFormats, f) {
+			return fmt.Errorf("linux.formats %q is not a Linux package format, which are %s", f, strings.Join(linuxFormats, ", "))
 		}
 	}
 	if c.Updates != nil {

@@ -16,6 +16,17 @@ import (
 // The functions in this file drive native UI the way a user would, for the
 // GUI tests in internal/e2e. They must run on the main thread.
 
+// TestProgramName returns the name GLib has for the program, after which
+// GTK names the class of its windows and WebKitGTK the directories of its
+// pages' data.
+func TestProgramName() string {
+	var prgname func() ptr
+	if !bind(libGLib, &prgname, "g_get_prgname") {
+		return ""
+	}
+	return goStr(prgname())
+}
+
 // TestActivateMenuItem activates an item of a window's menu bar, found by
 // the labels along its path. plugins/automation's menu request chooses
 // items with it too.

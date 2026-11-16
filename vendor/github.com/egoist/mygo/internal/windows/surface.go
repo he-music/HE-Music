@@ -175,8 +175,9 @@ type surface struct {
 	// (FirstFrame), and cloaked that DWM keeps the window out of sight
 	// until a frame shows in it (cloak). hiddenFrame tells that the first
 	// frame of a window hidden, which no WM_PAINT asks for, is posted
-	// (drawHidden).
-	drawn, cloaked, hiddenFrame bool
+	// (drawHidden). revealing tells that the window, cloaked, waits for
+	// DWM to compose the first frame that showed in it (reveal).
+	drawn, cloaked, hiddenFrame, revealing bool
 
 	// bg is the content's background (SetBackground), and bgBrush a brush
 	// of it while it is opaque, which fills what the window shows beyond
@@ -274,10 +275,16 @@ func (s *surface) Size() (float64, float64, float64) {
 
 func (s *surface) RequestFrame() {
 	procInvalidateRectW.Call(s.hwnd, 0, 0)
-	if !s.drawn && !s.hiddenFrame && !s.w.IsVisible() {
+	if !s.hiddenFrame && s.unpainted() {
 		s.hiddenFrame = true
 		s.w.b.post(s.drawHidden)
 	}
+}
+
+// unpainted reports whether no WM_PAINT draws the window's next frame: a
+// window minimized gets none, nor does one hidden before its first frame.
+func (s *surface) unpainted() bool {
+	return s.Occluded() || !s.drawn && !s.w.IsVisible()
 }
 
 // The window of native UI is cloaked, which keeps it out of sight though
@@ -330,12 +337,69 @@ func (s *surface) showing() {
 // the window a refresh before the frame presented, it shows the window's
 // own pixels under the surface, which hold the content's background
 // (fillUnder): drawn nowhere while the window was hidden, they are drawn
-// now. It does not wait for DWM (DwmFlush), which may wait on the main
-// thread until something else on the screen changes.
+// now. A window whose frames show through DirectComposition has no such
+// pixels: there DWM would show nothing, black, for a refresh or more, as
+// the frame reaches it after the window (#1591), so it stays cloaked until
+// DWM composed what was presented (awaitComposition), waited for on
+// another goroutine, as DwmFlush may wait on the main thread until
+// something else on the screen changes.
 func (s *surface) reveal() {
-	s.fillUnder()
-	procGdiFlush.Call()
+	if !s.viaComposition() {
+		s.fillUnder()
+		procGdiFlush.Call()
+		s.uncloak()
+		return
+	}
+	if s.revealing {
+		return
+	}
+	s.revealing = true
+	b, wait := s.w.b, awaitComposition
+	go func() {
+		wait()
+		b.post(s.revealComposed)
+	}()
+}
+
+// revealComposed shows the window once DWM composed its first frame
+// (reveal), unless it closed meanwhile, or showed already (timerUncloak).
+func (s *surface) revealComposed() {
+	s.revealing = false
+	if s.w.closed || s.w.b.surfaces[s.hwnd] != s {
+		return
+	}
 	s.uncloak()
+}
+
+// revealLeast and revealMost bound awaitComposition's wait: DwmFlush may
+// return at once when DWM has nothing to compose, and wait until something
+// else on the screen changes when it composed the window's frame already.
+// Four refreshes at 60 Hz leave a first frame heavy for the GPU the time
+// to show.
+const (
+	revealLeast = time.Second / 120
+	revealMost  = 4 * time.Second / 60
+)
+
+// awaitComposition returns once DWM composed what was presented until it
+// was called (DwmFlush), within revealLeast and revealMost. It is called
+// off the main thread; tests replace it.
+var awaitComposition = func() {
+	start := time.Now()
+	done := make(chan struct{})
+	go func() {
+		procDwmFlush.Call()
+		close(done)
+	}()
+	timer := time.NewTimer(revealMost)
+	select {
+	case <-done:
+	case <-timer.C:
+	}
+	timer.Stop()
+	if d := revealLeast - time.Since(start); d > 0 {
+		time.Sleep(d)
+	}
 }
 
 // FirstFrame tells that the content's first frame reached the surface
@@ -344,12 +408,14 @@ func (s *surface) FirstFrame() { s.drawn = true }
 
 var _ platform.FirstFrameSurface = (*surface)(nil)
 
-// drawHidden draws the content's first frame in a window hidden, which no
-// WM_PAINT asks for: the window is then ready to show, and shows the frame
-// from the swap chain as it shows. A window shown since gets WM_PAINT.
+// drawHidden draws a frame no WM_PAINT asks for. The content's first frame
+// in a window hidden makes it ready to show, and shows from the swap chain
+// as the window shows. A frame in a window minimized builds the content as
+// it hides, so a view sees that it hides at once, not once it shows again.
+// A window shown or restored since gets WM_PAINT.
 func (s *surface) drawHidden() {
 	s.hiddenFrame = false
-	if s.drawn || s.w.closed || s.w.b.surfaces[s.hwnd] != s || s.w.IsVisible() {
+	if s.w.closed || s.w.b.surfaces[s.hwnd] != s || !s.unpainted() {
 		return
 	}
 	s.send(platform.SurfaceEvent{Kind: platform.SurfaceFrame})

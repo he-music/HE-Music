@@ -25,6 +25,49 @@ type AuthResponse struct {
 	Username, Password string
 }
 
+// ClientCertificate is one of the certificates a platform can offer a
+// server that asks for one (ClientCertificateRequest.Certificates).
+type ClientCertificate struct {
+	// DER is the certificate, DER-encoded; x509.ParseCertificate reads
+	// it. It is nil where the platform names its certificates without
+	// their bytes.
+	DER []byte
+	// Subject and Issuer name it as the platform does, and ValidFrom and
+	// ValidTo are the unix seconds it is valid from and to.
+	Subject, Issuer    string
+	ValidFrom, ValidTo int64
+	// Native is the platform's own certificate, which a backend fills in
+	// and an answer carries back: an ICoreWebView2ClientCertificate on
+	// Windows, a SecIdentityRef on macOS. Zero where the platform offers
+	// none.
+	Native uintptr
+}
+
+// ClientCertificateRequest is a server, or a proxy, asking for the
+// certificate of a TLS connection of the page, or of what it loads
+// (WindowHandler.ClientCertificateRequested).
+type ClientCertificateRequest struct {
+	// Host and Port of the server asking, or of the proxy.
+	Host    string
+	Port    int
+	IsProxy bool
+	// Certificates are those the platform can offer, which an answer may
+	// return. Linux lists none: WebKitGTK has no way to, and an answer
+	// can only take the default or cancel there.
+	Certificates []ClientCertificate
+}
+
+// ClientCertificateResponse answers a ClientCertificateRequest. Default
+// leaves the challenge to the platform, the choice of the web view. An
+// answer with no certificate and not Default refuses the challenge where
+// the platform can: the load fails, as a user dismissing a browser's
+// prompt does.
+type ClientCertificateResponse struct {
+	Default     bool
+	Cancel      bool
+	Certificate *ClientCertificate
+}
+
 // CertificateError is a server certificate that does not verify
 // (WindowHandler.CertificateError).
 type CertificateError struct {

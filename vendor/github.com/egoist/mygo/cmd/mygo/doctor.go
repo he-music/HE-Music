@@ -92,6 +92,15 @@ func runDoctor(args []string) error {
 	}
 	gh := tool("gh")
 	optional("gh", "mygo build -upload to GitHub releases, https://cli.github.com", gh != "", gh)
+	// The tools of native libraries built from their sources.
+	cargo := tool("cargo")
+	optional("cargo", "native libraries in Rust, https://rustup.rs", cargo != "", cargo)
+	zig := tool("zig")
+	optional("zig", "native libraries in Zig, https://ziglang.org/download", zig != "", zig)
+	if cargo != "" {
+		zb := tool("cargo-zigbuild")
+		optional("zigbuild", "Rust libraries for older Linux and other platforms (cargo install cargo-zigbuild)", zb != "" && zig != "", zb)
+	}
 	if runtime.GOOS == "darwin" {
 		out, _ := exec.Command("security", "find-identity", "-v", "-p", "codesigning").Output()
 		ids := strings.Count(string(out), "Developer ID Application")

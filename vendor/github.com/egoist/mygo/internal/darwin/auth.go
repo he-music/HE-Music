@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unsafe"
 
 	"github.com/ebitengine/purego"
 	"github.com/ebitengine/purego/objc"
@@ -25,8 +26,8 @@ const (
 )
 
 // authScheme names the NSURLAuthenticationMethods of HTTP, "" the
-// others, client certificates among them, which get WebKit's default
-// handling.
+// others, which get WebKit's default handling. Client certificates are
+// asked about apart, in clientCertificate.
 func authScheme(method string) string {
 	switch method {
 	case "NSURLAuthenticationMethodDefault", "NSURLAuthenticationMethodHTTPBasic":
@@ -41,8 +42,9 @@ func authScheme(method string) string {
 	return ""
 }
 
-// trustAPI is what checking server certificates takes of the Security
-// framework, loaded with the first check.
+// trustAPI is what checking server certificates and listing client
+// certificate identities takes of the Security framework, loaded with
+// the first use.
 var trustAPI = sync.OnceValue(func() *trustFuncs {
 	lib, err := purego.Dlopen("/System/Library/Frameworks/Security.framework/Security", purego.RTLD_GLOBAL|purego.RTLD_NOW)
 	if err != nil {
@@ -57,17 +59,46 @@ var trustAPI = sync.OnceValue(func() *trustFuncs {
 		chain:     mustDlsym(lib, "SecTrustCopyCertificateChain"),
 		data:      mustDlsym(lib, "SecCertificateCopyData"),
 		mainQueue: main, // dispatch_get_main_queue()
+
+		item:             mustDlsym(lib, "SecItemCopyMatching"),
+		identityCert:     mustDlsym(lib, "SecIdentityCopyCertificate"),
+		commonName:       mustDlsym(lib, "SecCertificateCopyCommonName"),
+		secClass:         cfConstant(lib, "kSecClass"),
+		secClassIdent:    cfConstant(lib, "kSecClassIdentity"),
+		secReturnRef:     cfConstant(lib, "kSecReturnRef"),
+		secMatchLimit:    cfConstant(lib, "kSecMatchLimit"),
+		secMatchLimitAll: cfConstant(lib, "kSecMatchLimitAll"),
+		boolTrue:         cfConstant(libCF, "kCFBooleanTrue"),
 	}
 })
 
-type trustFuncs struct{ evaluate, chain, data, mainQueue uintptr }
+type trustFuncs struct {
+	evaluate, chain, data, mainQueue uintptr
+
+	item, identityCert, commonName uintptr
+	// The query constants, their values read from the Security framework,
+	// and kCFBooleanTrue. CFStringRef and CFBooleanRef are toll-free
+	// bridged to NSString and NSNumber, so an NSDictionary takes them.
+	secClass, secClassIdent, secReturnRef, secMatchLimit, secMatchLimitAll, boolTrue uintptr
+}
+
+// cfConstant reads a constant a framework exports, kSecClass say: its
+// symbol is a CFStringRef, and the constant is that string.
+func cfConstant(lib uintptr, name string) uintptr {
+	addr := mustDlsym(lib, name)
+	return *(*uintptr)(*(*unsafe.Pointer)(unsafe.Pointer(&addr)))
+}
 
 // authChallenge answers a challenge of the page or of what it loads.
 func (w *window) authChallenge(challenge id, handler uintptr) {
 	space := send(challenge, "protectionSpace")
 	method := goString(send(space, "authenticationMethod"))
-	if method == "NSURLAuthenticationMethodServerTrust" {
+	switch method {
+	case "NSURLAuthenticationMethodServerTrust":
 		w.serverTrust(challenge, space, handler)
+		return
+	case "NSURLAuthenticationMethodClientCertificate":
+		w.clientCertificate(space, handler)
 		return
 	}
 	scheme := authScheme(method)
@@ -96,6 +127,119 @@ func (w *window) authChallenge(challenge id, handler uintptr) {
 			callBlock(handler, authUseCredential, uintptr(cred))
 		})
 	}
+}
+
+// clientCertificate asks the app which identity to give a server that
+// asks for one: every identity the keychain holds, with its certificate
+// DER-encoded, as Electron offers them; the server's acceptable issuers
+// (protectionSpace.distinguishedNames) are the app's to filter by. What
+// the app does not take is refused, for the platform has no choice of
+// its own to leave it to.
+func (w *window) clientCertificate(space id, handler uintptr) {
+	api := trustAPI()
+	if api == nil || !w.h.HandlesClientCertificates() {
+		// Without a handler the challenge is the web view's, and the
+		// keychain is not asked about: it would ask the user.
+		callBlock(handler, authDefault, 0)
+		return
+	}
+	certs, identities := keychainIdentities(api)
+	// The array owns the identities, which an answer uses: it lives as
+	// long as they do. The keychain may hold none.
+	if identities != 0 {
+		defer cfRelease(uintptr(identities))
+	}
+	resp := w.h.ClientCertificateRequested(platform.ClientCertificateRequest{
+		Host:         goString(send(space, "host")),
+		Port:         sendInt(space, "port"),
+		IsProxy:      sendBool(space, "isProxy"),
+		Certificates: certs,
+	})
+	switch {
+	case resp.Default:
+		callBlock(handler, authDefault, 0)
+	case resp.Certificate != nil && resp.Certificate.Native != 0:
+		withPool(func() {
+			const forSession = 1 // NSURLCredentialPersistenceForSession
+			cred := send(class("NSURLCredential"), "credentialWithIdentity:certificates:persistence:",
+				resp.Certificate.Native, uintptr(identityCertificates(api, resp.Certificate.Native)), forSession)
+			callBlock(handler, authUseCredential, uintptr(cred))
+		})
+	default:
+		callBlock(handler, authReject, 0)
+	}
+}
+
+// identityCertificates returns the array of certificates an identity's
+// credential carries: the identity's own certificate, which the
+// handshake needs.
+func identityCertificates(api *trustFuncs, identity uintptr) id {
+	chain := send(class("NSMutableArray"), "array")
+	cert := identityCertificate(api, identity)
+	if cert == 0 {
+		return chain
+	}
+	defer cfRelease(cert)
+	send(chain, "addObject:", cert)
+	return chain
+}
+
+// identityCertificate returns the certificate of an identity, which the
+// caller releases, or 0. SecIdentityCopyCertificate returns an OSStatus
+// and writes the certificate to its second argument.
+func identityCertificate(api *trustFuncs, identity uintptr) uintptr {
+	var cert uintptr
+	if status, _, _ := purego.SyscallN(api.identityCert, identity, uintptr(unsafe.Pointer(&cert))); int32(status) != 0 {
+		return 0
+	}
+	return cert
+}
+
+// keychainIdentities lists the identities of the keychain, their
+// certificates DER-encoded with their common names. The array
+// SecItemCopyMatching returns owns the identities; it is returned too,
+// for the caller to keep alive as long as an answer uses them.
+func keychainIdentities(api *trustFuncs) ([]platform.ClientCertificate, id) {
+	var certs []platform.ClientCertificate
+	var array id
+	withPool(func() {
+		query := send(class("NSMutableDictionary"), "dictionary")
+		send(query, "setObject:forKey:", api.secClassIdent, api.secClass)
+		send(query, "setObject:forKey:", api.boolTrue, api.secReturnRef)
+		send(query, "setObject:forKey:", api.secMatchLimitAll, api.secMatchLimit)
+		var result uintptr
+		if status, _, _ := purego.SyscallN(api.item, uintptr(query), uintptr(unsafe.Pointer(&result))); int32(status) != 0 || result == 0 {
+			return // errSecItemNotFound, among the others: no identities
+		}
+		array = id(result)
+		for i, n := 0, sendInt(array, "count"); i < n; i++ {
+			identity := send(array, "objectAtIndex:", uintptr(i))
+			cert := identityCertificate(api, uintptr(identity))
+			if cert == 0 {
+				continue
+			}
+			c := platform.ClientCertificate{Native: uintptr(identity)}
+			if data, _, _ := purego.SyscallN(api.data, cert); data != 0 {
+				c.DER = goBytes(id(data))
+				cfRelease(data)
+			}
+			// Security has no public call for the issuer or the validity
+			// on macOS: they are read from the certificate itself.
+			if issuer, from, to, ok := platform.CertificateIssuer(c.DER); ok {
+				c.Issuer, c.ValidFrom, c.ValidTo = issuer, from, to
+			}
+			var name uintptr
+			if status, _, _ := purego.SyscallN(api.commonName, cert, uintptr(unsafe.Pointer(&name))); int32(status) == 0 && name != 0 {
+				c.Subject = goString(id(name))
+				cfRelease(name)
+			}
+			cfRelease(cert)
+			if c.DER != nil {
+				certs = append(certs, c)
+			}
+		}
+	})
+	return certs, array
 }
 
 // serverTrust checks the server's certificate while the app handles

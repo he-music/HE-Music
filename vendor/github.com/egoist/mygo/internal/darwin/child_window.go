@@ -51,7 +51,7 @@ func (w *window) onScreen() bool {
 // puts the child window attached last, or as any window while its parent
 // does not show. Then its own children go above it.
 func (w *window) showAboveParent(key bool) {
-	w.hiddenWithParent = false
+	w.hiddenWithParent, w.hidMiniaturized = false, false
 	switch {
 	case w.isChild() && w.parent.onScreen():
 		w.b.orderingChildren = true

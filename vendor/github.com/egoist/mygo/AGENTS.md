@@ -65,6 +65,8 @@ go run ./cmd/mygo generate examples/todo   # regenerate an example's TypeScript 
 go run ./cmd/mygo dev examples/todo        # live reload (dev bundle in examples/todo/.mygo)
 go run ./cmd/mygo dev -web examples/counter-native   # native UI in the browser, with live reload
 go run ./cmd/mygo build examples/todo      # .app + .dmg in examples/todo/build
+go run ./cmd/mygo generate examples/native-module   # regenerate a native module, build its Swift package (macOS)
+go run ./cmd/mygo native check examples/native-module/modules/language   # a native module's problems, as file:line
 go run ./cmd/mygo build -platform web examples/counter-native   # a static site in examples/counter-native/dist/web
 go run ./examples/gallery                  # the native UI toolkit's tour
 go run ./examples/code-editor              # the code editor and the diff viewer (ui/editor)
@@ -75,6 +77,8 @@ go run ./examples/loading                  # loading.dev's 29 indicators (plugin
 go run ./examples/permissionflow           # the system's permissions, asked for and guided to (plugins/permissionflow)
 go run ./plugins/automation/cmd/mygo-automation skills   # the automation CLI's guide, for agents driving an app
 go run ./examples/sf-symbols               # the system's SF Symbols on macOS (plugins/sfsymbols)
+go run ./cmd/mygo native build -target host examples/rust-native  # build a package's Rust/Zig library for go run and go test (cargo)
+go run ./cmd/mygo native build ./pkg       # its libraries for every platform, into mygo-plugin.json, ready to publish
 go generate ./plugins/terminal             # build libghostty-vt for every platform (with Zig), write Ghostty's themes
 go generate ./internal/gpu/d3d11           # recompile the Direct3D shader (on Windows)
 go generate ./internal/gpu/metal           # recompile the Metal shader (on macOS, with Xcode)
@@ -103,13 +107,26 @@ Windows GUI tests need Windows with the WebView2 Runtime (a GitHub Actions
   `darwin`, `linux`, `windows`, `web`, `fake` and `unsupported`.
 - Objective-C: `alloc`/`init` objects are owned and must be released; wrap
   temporary objects in `withPool`; copy blocks you call later.
+- Native modules (`native`, `internal/nativegen`, docs/native-modules.md):
+  keep the generated example (`examples/native-module`) up to date, which
+  `TestExampleUpToDate` checks, and change the Swift glue in
+  `internal/nativegen/support.go` with `TestScaffoldBuilds` passing
+  without warnings. The Rust and Zig glue (`rustsupport.go`,
+  `zigsupport.go`) is checked by the roundtrip module built in each
+  language: `go run ./cmd/mygo native build -target host -lang <swift|rust|zig>
+  native/internal/roundtrip && go test ./native/internal/roundtrip`.
 - Official plugins live in `plugins/<name>`: the Go package and its npm
   package (`@mygo-plugins/<name>`) side by side, released with
   mygo-runtime's version. The updater plugin is Go only; its `native`
   package draws the update window in native UI. The terminal plugin is Go
-  only too, for native UI, with libghostty-vt loaded through purego: its
-  `mygo-plugin.json` pins the builds the CLI puts into apps, published as
-  release assets (`libghostty-vt-<commit>`); change it with `go generate`. The glass
+  only too, for native UI, with libghostty-vt loaded through purego. Its
+  `native/` (a Zig package pinning Ghostty's commit) is a native library
+  like any: `mygo-plugin.json` names its published builds (release assets
+  `libghostty-vt-<commit>`), each with the hash of its sources, and
+  `go generate` publishes new ones (`mygo native build`, with Zig 0.16.0).
+  The SQLite plugin's SQLite is a native module in Zig,
+  `plugins/sqlite/internal/sqlitecore`, which `mygo native build -target
+  host` builds for its tests and `-upload` publishes. The glass
   plugin is Go only too, an effect of the renderers (`scene.Effect`): its
   shader in Metal, HLSL and GLSL with a CPU twin that must draw the same
   pixels, compiled ahead of time by `go generate` on macOS and Windows.
@@ -143,6 +160,12 @@ Windows GUI tests need Windows with the WebView2 Runtime (a GitHub Actions
   template depends on both. Pushing a `v<version>` tag releases everything
   (`.github/workflows/release.yml`, see "Releasing" in the architecture
   guide); never commit the CLI's binaries.
+- Native libraries of apps and plugins (Rust crates, Zig packages, C) are
+  named in the binding package's `mygo-plugin.json` (`internal/nativelib`)
+  and loaded and bound with package `ffi`, never with a loader of their
+  own: the CLI builds those with `build` from their sources in `mygo dev`
+  and `mygo build`, and `mygo native build` publishes them for the apps of
+  others.
 - The configuration types of `packages/cli/index.d.ts` (for `mygo.config.ts`)
   mirror `Config` in `cmd/mygo/config.go`; `TestConfigTypes` checks them.
 - Tests: unit tests through `internal/fake`; GUI behavior in `internal/e2e`.

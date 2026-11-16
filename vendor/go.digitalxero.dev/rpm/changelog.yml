@@ -1,0 +1,160 @@
+- semver: 0.3.4
+  date: 2026-10-09T01:05:32.062486426Z
+  packager: Dj Gilcrease <digitalxero@gmail.com>
+  changes:
+    - commit: 9289b2d868d62563b4de7a813e25220a8c415f9e
+      note: 'fix: reject rich dependencies in trigger conditions'
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+- semver: 0.3.3
+  date: 2026-10-09T00:59:43.445773385Z
+  packager: Dj Gilcrease <digitalxero@gmail.com>
+  changes:
+    - commit: c1080bb26cfe0a2da50e518aacf176d2f93fb0b6
+      note: 'fix: validate trigger conditions and preserve empty bodies'
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+- semver: 0.3.2
+  date: 2026-10-09T00:52:14.442646342Z
+  packager: Dj Gilcrease <digitalxero@gmail.com>
+  changes:
+    - commit: 907f7ff23e098c2f0fd1cbc7dd6131b28706a3a3
+      note: |-
+        Merge branch 'fix/lua-feature-requirement' into 'main'
+
+        fix: declare built-in Lua script requirements
+
+        See merge request digitalxero/rpm!2
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+    - commit: b004416d73e88600108843ba8af9e9f42f5ffac3
+      note: 'fix: declare built-in Lua script requirements'
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+- semver: 0.3.1
+  date: 2026-10-09T00:40:00.140253481Z
+  packager: Dj Gilcrease <digitalxero@gmail.com>
+  changes:
+    - commit: 50dd819ccb3d794a065140d337d0ae51ca98472e
+      note: |-
+        Merge branch 'fix/lua-rpmversion' into 'main'
+
+        fix: emit RPMVERSION for Lua scriptlet compatibility
+
+        See merge request digitalxero/rpm!1
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+    - commit: 9c3d08276b7f9addaab48088ea69b8648d4c462b
+      note: 'fix: emit RPMVERSION for Lua scriptlet compatibility'
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+- semver: 0.3.0
+  date: 2026-09-27T21:18:38.600312391Z
+  packager: Dj Gilcrease <digitalxero@gmail.com>
+  changes:
+    - commit: ee14cdc6b48f5b824d547d6437ef69d688848e62
+      note: |-
+        feat: emit ISA-qualified and epoch-aware self provides
+
+        A built binary package now provides itself the same way rpmbuild does for
+        %{name} and %{name}%{?_isa}:
+
+            name = [epoch:]version-release
+            name(<isa>) = [epoch:]version-release
+
+        The ISA comes from the new ISA(arch) helper, which mirrors the architecture
+        table in rpm's installplatform script (x86_64 -> x86-64, aarch64 ->
+        aarch-64, ppc64le -> ppc-64, ...). noarch, source packages and unknown
+        architectures get no ISA provide. The plain self provide now carries the
+        epoch when one is set, which it previously dropped.
+
+        Red Hat software certification checks for the ISA provide
+        (goreleaser/nfpm#1140).
+
+        Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+- semver: 0.2.1
+  date: 2026-06-24T16:54:22.837359809Z
+  packager: Dj Gilcrease <digitalxero@gmail.com>
+  changes:
+    - commit: 55ca602577380c4edf1e855816dcd5dbdbac0308
+      note: 'fix: add licence'
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+- semver: 0.2.0
+  date: 2026-06-22T21:48:38.702395064Z
+  packager: Dj Gilcrease <digitalxero@gmail.com>
+  changes:
+    - commit: 21f4017db3c7a8ab84196b393aee2bc0c8f8fdcb
+      note: 'feat: convert to a streaming builder'
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+    - commit: 1647bb541ff56825d7047d616ffcec3edc63b266
+      note: 'feat: add missing features that caused unused tags'
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+    - commit: 5f0ad0fee424b9b897d21407bba69c1cc83a30a7
+      note: 'fix: address lint error'
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+    - commit: 3915f0e49562c891d5a335ceb8700a510332ab65
+      note: 'feat: initial release'
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+    - commit: 15bcc65f3c4ca7ac983a75c64d080f398b3f8300
+      note: add README
+      author:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com
+      committer:
+        name: Dj Gilcrease
+        email: digitalxero@gmail.com

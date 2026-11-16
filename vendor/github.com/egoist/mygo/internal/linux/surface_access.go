@@ -343,7 +343,9 @@ func loadAccessNames() {
 		platform.RoleHeading: {"heading", "label"},
 		// A landmark, whose xml-roles attribute says which, as Chromium's.
 		platform.RoleNavigation: {"landmark", "panel"}, platform.RoleRegion: {"landmark", "panel"},
-		platform.RoleSearch: {"landmark", "panel"}, platform.RoleArticle: {"article", "panel"},
+		platform.RoleSearch: {"landmark", "panel"}, platform.RoleMain: {"landmark", "panel"},
+		platform.RoleBanner: {"landmark", "panel"}, platform.RoleContentInfo: {"landmark", "panel"}, platform.RoleComplementary: {"landmark", "panel"},
+		platform.RoleArticle: {"article", "panel"},
 		// Live regions, which their object attributes say how to read.
 		platform.RoleLog: {"log", "panel"}, platform.RoleTimer: {"timer", "panel"},
 		platform.RoleAlert:     {"notification", "alert"},
@@ -352,6 +354,8 @@ func loadAccessNames() {
 		platform.RoleGrid: {"table"}, platform.RoleTreeGrid: {"tree table", "table"},
 		// Content removed and added (ATK 2.34), as Chromium's del and ins.
 		platform.RoleDeletion: {"content deletion", "panel"}, platform.RoleInsertion: {"content insertion", "panel"},
+		// A tab panel is a scroll pane, as Core-AAM says.
+		platform.RoleTabPanel: {"scroll pane", "panel"},
 	} {
 		atkRoles[r] = role(names...)
 	}
@@ -376,7 +380,8 @@ var xmlRoles = map[platform.AccessRole]string{
 	platform.RoleNavigation: "navigation", platform.RoleRegion: "region", platform.RoleSearch: "search", platform.RoleLog: "log",
 	platform.RoleTimer: "timer", platform.RoleAlert: "alert", platform.RoleStatus: "status",
 	platform.RoleGrid: "grid", platform.RoleTreeGrid: "treegrid",
-	platform.RoleDeletion: "deletion", platform.RoleInsertion: "insertion",
+	platform.RoleDeletion: "deletion", platform.RoleInsertion: "insertion", platform.RoleTabPanel: "tabpanel",
+	platform.RoleMain: "main", platform.RoleBanner: "banner", platform.RoleContentInfo: "contentinfo", platform.RoleComplementary: "complementary",
 }
 
 // accessTree is what assistive technology sees of a surface.
@@ -766,6 +771,12 @@ func stateList(n platform.AccessNode, focused bool) []int32 {
 		} else {
 			list = append(list, st.singleLine)
 		}
+	}
+	// Read-only is a state of the other roles aria-readonly is for too;
+	// Core-AAM maps it to STATE_READ_ONLY alone. The text roles above
+	// have it.
+	if n.States&platform.AccessReadOnly != 0 && n.Role != platform.RoleTextField && n.Role != platform.RoleComboBox {
+		list = append(list, st.readOnly)
 	}
 	// A toggle button is checked while pressed, as GTK's are.
 	if n.States&platform.AccessChecked != 0 && n.Role != platform.RoleTab && n.Role != platform.RoleTreeItem && n.Role != platform.RoleRow && n.Role != platform.RoleListItem &&

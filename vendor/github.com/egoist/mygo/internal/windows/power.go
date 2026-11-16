@@ -94,6 +94,11 @@ func (p power) KeepAwake(display bool, reason string) func() {
 	}
 }
 
+// KeepRunning does nothing for now. Windows slows some processes out of
+// sight too (power throttling, EcoQoS), which SetProcessInformation's
+// ProcessPowerThrottling would turn off.
+func (p power) KeepRunning(string) func() { return func() {} }
+
 func (p power) OnBattery() bool {
 	var status struct {
 		acLineStatus, batteryFlag, batteryLifePercent, systemStatusFlag uint8

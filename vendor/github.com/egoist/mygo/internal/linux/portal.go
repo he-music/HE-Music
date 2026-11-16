@@ -55,6 +55,10 @@ func portalSignal(conn, sender, path, iface, signal, params, data ptr) {
 		if name != appearanceSettings && name != gnomeInterfaceSettings {
 			return
 		}
+		if name == appearanceSettings && key == "color-scheme" && traysAppearanceChanged != nil {
+			// The panels follow the desktop's scheme, whatever the app's.
+			traysAppearanceChanged()
+		}
 		// GTK tells ThemeChanged itself when its setting changes.
 		if name == appearanceSettings && key == "color-scheme" && followsSystem() && followSystemScheme(gtkSettingsGetDefault()) {
 			return

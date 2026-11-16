@@ -29,6 +29,10 @@ func (p power) Watch() {
 	}
 }
 
+// KeepRunning does nothing: Linux desktops do not slow down apps whose
+// windows are out of sight, as macOS's App Nap does.
+func (p power) KeepRunning(string) func() { return func() {} }
+
 // KeepAwake asks the XDG desktop portal to inhibit suspending (and, with
 // display, the session going idle), else the freedesktop screen saver to
 // inhibit idleness.

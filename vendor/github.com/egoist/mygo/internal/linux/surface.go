@@ -14,6 +14,7 @@ import (
 	"github.com/ebitengine/purego"
 
 	"github.com/egoist/mygo/internal/gpu/gl"
+	"github.com/egoist/mygo/internal/pacing"
 	"github.com/egoist/mygo/internal/platform"
 )
 
@@ -232,7 +233,7 @@ func (w *window) createSurface() {
 	connect(s.im, "preedit-end", cbIMPreeditEnd, data)
 	s.connectSystem(data)
 	w.surface = s
-	if s.gl && w.b.waylandSurface != nil {
+	if s.gl && (w.b.waylandSurface != nil || w.b.onX11 && pacing.Uncapped) {
 		connect(w.win, "draw", cbWindowGLDamage, data)
 	}
 }
@@ -591,7 +592,8 @@ func (s *surface) refreshMilliHz() int32 {
 // on a 165 Hz display under Niri, as on X11 without a compositor
 // (#1219). Each frame asks the monitor again, which follows the window to
 // another; one whose rate is unknown keeps the clock's 60 Hz, and a
-// compositor's rate arriving later replaces this one.
+// compositor's rate arriving later replaces this one. Uncapped, it tells
+// uncappedInterval instead.
 func (s *surface) paceFrameClock() {
 	clock := gtkWidgetGetFrameClock(s.area)
 	if clock == 0 {
@@ -601,10 +603,25 @@ func (s *surface) paceFrameClock() {
 	if t == 0 || gdkFrameTimingsRefresh(t) != 0 {
 		return
 	}
-	if us := refreshInterval(s.refreshMilliHz()); us > 0 {
+	us := refreshInterval(s.refreshMilliHz())
+	if pacing.Uncapped {
+		us = uncappedInterval
+	}
+	if us > 0 {
 		setRefreshInterval(t, us, gdkFrameTimingsRefresh)
 	}
 }
+
+// uncappedInterval is the refresh interval paceFrameClock tells GTK's
+// frame clock while frames are uncapped (MYGO_UNCAPPED), in microseconds:
+// the least that is not unknown (0, which the clock takes as 1/60 s), so
+// that the clock starts the next frame as soon as the last was painted,
+// after the events that came meanwhile, as its timer of 0 ms runs below
+// them. A compositor that tells when frames show (presentation times, as
+// an X11 compositor sending _NET_WM_FRAME_TIMINGS does) or holds the clock
+// until it took the last (Wayland's frame callbacks, which GDK asks for
+// frames drawn in memory), still paces it.
+const uncappedInterval = 1
 
 // refreshInterval returns the time between refreshes of a display of mhz
 // millihertz in microseconds, as GDK computes it from a Wayland output's
@@ -1156,9 +1173,14 @@ func initSurfaceCallbacks() {
 		}
 		return ctx
 	})
-	// The toplevel's draw signal, before GTK draws it: the window paints.
+	// The toplevel's draw signal, before GTK draws it: the window paints,
+	// with its paint context current.
 	cbWindowGLDamage = purego.NewCallback(func(widget, cr, data ptr) bool {
 		if w := b().window(data); w != nil {
+			if w.b.onX11 && pacing.Uncapped {
+				// The paint's swap waits for no refresh.
+				gl.UnsyncGLXSwaps()
+			}
 			w.damageGLPaint(cr)
 		}
 		return false

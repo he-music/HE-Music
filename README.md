@@ -119,7 +119,7 @@ pnpm vendor:check
 pnpm dev
 ```
 
-`pnpm dev` 默认启动 mygo 桌面开发。Go SDK 与官方 CLI 固定在仓库 `vendor/` 中，开发入口会核对锁定依赖，并准备所需的 libmpv 资源；首次准备需要下载资源。修改原生服务后执行 `pnpm generate:desktop` 重新生成绑定。依赖升级和补丁维护见[固定 SDK 说明](patches/mygo/README.md)。
+`pnpm dev` 默认启动 mygo 桌面开发。Go SDK 与官方 CLI 固定在仓库 `vendor/` 中，开发入口会核对锁定依赖，并准备所需的 libmpv 资源；首次准备需要下载资源。修改原生服务后执行 `pnpm generate:desktop` 重新生成绑定。依赖升级和回归测试见[固定 SDK 说明](scripts/vendor/README.md)。
 
 ### 构建
 
@@ -153,7 +153,7 @@ Go 静态检查使用 `pnpm lint:go`，需安装 mise，由其运行固定版本
 - [应用数据与 Electron 导入](docs/mygo-data.md)：备份、恢复与旧版迁移。
 - [本地曲库与已下载播放](docs/local-library.md)：本地歌单、已下载优先播放、自动同步和验证边界。
 - [GitHub 发布与 mygo 自动更新](docs/mygo-updates.md)：发布准备、签名、更新演练和故障排查。正式 `v*` tag 在工作流校验通过后直接公开 Release 并设为 latest；测试 `mygo-test-v*` tag 生成草稿，手动运行工作流仅生成测试产物。
-- [固定 SDK 与补丁维护](patches/mygo/README.md)：Go 依赖锁定及 Windows 窗口补丁。
+- [固定 SDK 与依赖维护](scripts/vendor/README.md)：Go 依赖锁定及 Windows 窗口回归测试。
 - [随包 libmpv 资源](scripts/mpv/README.md)：播放引擎资源准备、校验和第三方许可。
 - [产品上下文](CONTEXT.md)：页面、内容模型与歌词展示术语。
 

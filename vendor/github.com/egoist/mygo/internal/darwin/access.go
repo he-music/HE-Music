@@ -144,6 +144,11 @@ var accessRoles = map[platform.AccessRole][2]string{
 	platform.RoleNavigation: {"AXGroup", "AXLandmarkNavigation"},
 	platform.RoleRegion:     {"AXGroup", "AXLandmarkRegion"},
 	platform.RoleSearch:     {"AXGroup", "AXLandmarkSearch"},
+	// The other landmarks, as WebKit's.
+	platform.RoleMain:          {"AXGroup", "AXLandmarkMain"},
+	platform.RoleBanner:        {"AXGroup", "AXLandmarkBanner"},
+	platform.RoleContentInfo:   {"AXGroup", "AXLandmarkContentInfo"},
+	platform.RoleComplementary: {"AXGroup", "AXLandmarkComplementary"},
 	// An article, as WebKit's.
 	platform.RoleArticle: {"AXGroup", "AXDocumentArticle"},
 	// Live regions, as WebKit's, and a rule, as WebKit's separator.
@@ -158,6 +163,8 @@ var accessRoles = map[platform.AccessRole][2]string{
 	// Content removed and added, as WebKit's del and ins.
 	platform.RoleDeletion:  {"AXGroup", "AXDeleteStyleGroup"},
 	platform.RoleInsertion: {"AXGroup", "AXInsertStyleGroup"},
+	// A tab panel is a group, which its role description names.
+	platform.RoleTabPanel: {"AXGroup", ""},
 }
 
 // orientation returns the NSAccessibilityOrientation of a node, as
@@ -309,6 +316,19 @@ func (el *accessElement) ariaGrid(attr string) int {
 // ariaGridAttrs are the attributes ariaGrid answers.
 var ariaGridAttrs = [...]string{"AXARIARowCount", "AXARIAColumnCount", "AXARIARowIndex", "AXARIAColumnIndex"}
 
+// roleDescription is what the node's role is called: what the app says
+// (aria-roledescription), else, for a role AppKit has no name for, the
+// name WAI-ARIA gives it.
+func roleDescription(n platform.AccessNode) string {
+	switch {
+	case n.RoleDescription != "":
+		return n.RoleDescription
+	case n.Role == platform.RoleTabPanel:
+		return "tab panel"
+	}
+	return ""
+}
+
 func roleOf(n platform.AccessNode) (role, subrole string) {
 	r := accessRoles[n.Role]
 	role, subrole = r[0], r[1]
@@ -352,6 +372,12 @@ func titled(r platform.AccessRole) bool {
 		return true
 	}
 	return false
+}
+
+// secret reports whether n is a password field, whose text, as
+// NSSecureTextField's, assistive technology never reads.
+func secret(n platform.AccessNode) bool {
+	return n.Role == platform.RoleTextField && n.States&platform.AccessPassword != 0
 }
 
 // textual reports whether elements of a role edit text: text fields and
@@ -884,8 +910,8 @@ func registerAccessClass() {
 		// What the app calls the element's role, as WebKit says
 		// aria-roledescription, else AppKit's name of it.
 		method("accessibilityRoleDescription", func(self id, cmd objc.SEL) id {
-			if el := b().accessElementOf(self); el != nil && el.node.RoleDescription != "" {
-				return nsString(el.node.RoleDescription)
+			if el := b().accessElementOf(self); el != nil && roleDescription(el.node) != "" {
+				return nsString(roleDescription(el.node))
 			}
 			return sendSuper(self, "MyGoAccessibilityElement", cmd)
 		}),
@@ -949,7 +975,7 @@ func registerAccessClass() {
 					more = append(more, "AXColumnHeaderUIElements")
 				}
 			}
-			if el.node.RoleDescription != "" {
+			if roleDescription(el.node) != "" {
 				more = append(more, "AXRoleDescription")
 			}
 			// What describes it (Description, DescribedBy, ErrorMessage),
@@ -1049,8 +1075,8 @@ func registerAccessClass() {
 				// answer here leaves out though accessibilityRoleDescription
 				// gives it.
 				case "AXRoleDescription":
-					if el.node.RoleDescription != "" {
-						return nsString(el.node.RoleDescription)
+					if roleDescription(el.node) != "" {
+						return nsString(roleDescription(el.node))
 					}
 				case "AXSelected":
 					if cell(el.node.Role) && chooses(el.node) {
@@ -1136,7 +1162,7 @@ func registerAccessClass() {
 		// NSAccessibilityElement does not answer (calling super throws):
 		// AppKit's answer without it is the attributes of the setters the
 		// class overrides, AXValue, AXFocused and a row's AXDisclosing,
-		// kept but for the value of a read-only text field, which is not
+		// kept but for the value of a read-only element, which is not
 		// settable, as WebKit's.
 		method("accessibilityIsAttributeSettable:", func(self id, _ objc.SEL, attr id) bool {
 			el := b().accessElementOf(self)
@@ -1145,6 +1171,11 @@ func registerAccessClass() {
 			}
 			switch stringOf(attr) {
 			case "AXValue":
+				// Nor is the value of anything read-only (aria-readonly),
+				// as Core-AAM maps it.
+				if el.node.States&platform.AccessReadOnly != 0 {
+					return false
+				}
 				return !textual(el.node.Role) || el.node.Actions&platform.ActionSetValue != 0
 			case "AXSelectedText":
 				return textual(el.node.Role) && el.node.Actions&platform.ActionSetValue != 0
@@ -1239,16 +1270,25 @@ func registerAccessClass() {
 			}
 		}),
 		method("setAccessibilityValue:", func(self id, cmd objc.SEL, value id) {
-			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(value))
-			if el := b().accessElementOf(self); el != nil && textual(el.node.Role) {
+			// What assistive technology writes to a password field is
+			// not kept, or any other could read it back; the content's
+			// own value, empty, still is.
+			el := b().accessElementOf(self)
+			if el == nil || !secret(el.node) || el.s.updating {
+				sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(value))
+			}
+			if el != nil && textual(el.node.Role) {
 				el.act(platform.AccessSetValue, stringOf(value))
 			}
 		}),
 		// Typing into a text field over its selection, as Voice Control,
 		// dictation and automation insert text (kAXSelectedTextAttribute).
 		method("setAccessibilitySelectedText:", func(self id, cmd objc.SEL, text id) {
-			sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(text))
-			if el := b().accessElementOf(self); el != nil && textual(el.node.Role) && el.node.Actions&platform.ActionSetValue != 0 {
+			el := b().accessElementOf(self)
+			if el == nil || !secret(el.node) {
+				sendSuper(self, "MyGoAccessibilityElement", cmd, uintptr(text))
+			}
+			if el != nil && textual(el.node.Role) && el.node.Actions&platform.ActionSetValue != 0 {
 				el.act(platform.AccessInsertText, stringOf(text))
 			}
 		}),

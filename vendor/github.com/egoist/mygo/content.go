@@ -240,7 +240,15 @@ func (h *windowHandler) SurfaceEvent(ev platform.SurfaceEvent) bool {
 	if ev.Kind == platform.SurfaceFrame {
 		framing := h.w.framing
 		h.w.framing = true
-		defer func() { h.w.framing = framing }()
+		defer func() {
+			h.w.framing = framing
+			if !framing && h.w.showLater {
+				// The frame waited handling events (Secrets.Get), where
+				// the settleShow NewWindow posted ran and left the
+				// window to show: it shows on the next turn.
+				postMain(h.w.settleShow)
+			}
+		}()
 	}
 	resolveDataDrag(ev.Drag)
 	c := h.w.conn

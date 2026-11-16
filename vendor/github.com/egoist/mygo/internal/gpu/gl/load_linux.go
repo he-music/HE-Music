@@ -361,3 +361,6 @@ func infoLog(obj uint32, get func(uint32, uint32, *int32), read func(uint32, int
 	read(obj, n, nil, &buf[0])
 	return strings.TrimSpace(string(buf[:n-1]))
 }
+
+// uploadElement is for browsers' video elements, which Linux has none of.
+func uploadElement(uintptr) bool { return false }

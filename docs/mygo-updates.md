@@ -2,7 +2,17 @@
 
 README 保留发布入口和最短操作步骤，本文维护一次性准备、更新测试、正式发布与故障排查。以下使用仓库 `he-music/HE-Music`；在 fork 中发布时必须替换为自己的公开仓库。
 
-当前 `mygo.json` 已配置正式频道的公钥、GitHub 更新源、`v` 前缀和完整更新包模式；公开配置校验不代表真实签名发布或在线升级已经验收。必须先手动安装一次带正确更新源和公钥的 mygo 版本，后续才能自动升级；已发布的 Electron 包也不能通过其旧 updater 自动切换到 mygo。旧数据迁移见 [数据说明](mygo-data.md)。
+当前 `mygo.config.ts` 已配置正式频道的公钥、GitHub 更新源、`v` 前缀和完整更新包模式；公开配置校验不代表真实签名发布或在线升级已经验收。必须先手动安装一次带正确更新源和公钥的 mygo 版本，后续才能自动升级；已发布的 Electron 包也不能通过其旧 updater 自动切换到 mygo。旧数据迁移见 [数据说明](mygo-data.md)。
+
+## 官方更新窗口
+
+应用使用 mygo 0.9.0 的 `plugins/updater`。插件管理检查、发布说明、跳过版本、下载、安装和重启；设置页与顶栏只负责打开官方窗口和展示可用版本，不再维护单独的下载状态机。
+
+- 自动检查沿用应用设置，运行期间间隔为六小时；启动检查由插件安排。手动检查会立即打开独立窗口。
+- 发现新版本时由插件显示窗口。下载过程中关闭该窗口会请求取消下载；最小化或隐藏窗口不会取消。更新已安装后关闭窗口，下次启动仍会使用新版。
+- 插件将跳过版本、自动下载选项和检查时间保存在用户数据目录的 `updater.json`。首次迁移会保留旧设置中的自动检查选择和跳过版本，已有插件偏好不会被迁移覆盖；旧的 `skippedUpdateVersion` 字段仅用于设置格式兼容。
+- 顶栏保留“有新版本”或“重启更新”入口，点击后回到官方窗口，不展示自定义下载百分比。
+- 官方重启按钮经过应用的退出保存边界：先结束文件会话并等待业务数据写入，失败则保留窗口。操作系统强制结束会话时不等待网页保存。
 
 ## 一次性准备
 
@@ -11,8 +21,8 @@ README 保留发布入口和最短操作步骤，本文维护一次性准备、�
 | 公开 GitHub 仓库 | 开启 Actions 和 Releases。客户端从公开 Release 下载，不携带 GitHub 私人访问令牌 |
 | `VITE_API_URL` | 仓库 Settings → Secrets and variables → Actions → Repository secrets；填真实 HE-Music 后端地址 |
 | `MYGO_UPDATER_PRIVATE_KEY` | 同上；填官方生成的私钥文件中的 base64 文本，不填文件路径 |
-| 更新公钥、仓库、频道 | 写入 `mygo.json` 的 `updates`；公钥可以提交，私钥不能提交 |
-| 版本与更新说明 | `package.json.version` 和 `mygo.json.version` 一致；存在 `CHANGELOG.md` 时需有本版本段落 |
+| 更新公钥、仓库、频道 | 写入 `mygo.config.ts` 的 `updates`；公钥可以提交，私钥不能提交 |
+| 版本与更新说明 | 只修改 `package.json.version`；`mygo.config.ts` 自动读取该版本。`CHANGELOG.md` 需有本版本段落 |
 | 构建工具链 | Node.js 24 LTS、pnpm 10.28.1、Go 1.27.3；继续使用固定 vendor，不因发布升级 SDK |
 | 安装与测试环境 | 每个交付平台准备实际设备或虚拟机；Windows 需要 WebView2 Runtime，Linux 需要桌面运行依赖 |
 
@@ -45,7 +55,7 @@ go tool mygo keygen
 
 ### 配置更新源与频道
 
-在现有 `mygo.json` 中增加以下 `updates` 对象，保留其他窗口、图标与构建配置。公钥占位文字必须替换为真实值后才能通过检查：
+在现有 `mygo.config.ts` 中增加以下 `updates` 对象，保留其他窗口、图标与构建配置。公钥占位文字必须替换为真实值后才能通过检查：
 
 ```json
 {
@@ -67,14 +77,14 @@ go tool mygo keygen
 
 工作流支持上述两种 tag。正式 `v*` tag 在所有平台构建和签名校验通过后直接创建公开普通 Release，设置 `draft: false`、`prerelease: false` 和 `make_latest: true`；`v` 频道客户端从 latest release 获取更新。测试 `mygo-test-v*` tag 继续先生成草稿，保持非 latest、非 prerelease，再手动公开。自定义测试前缀按 GitHub API 的发布顺序寻找匹配频道。两类 Release 均使用 `CHANGELOG.md` 中对应版本的说明；草稿和 GitHub prerelease 默认都不会被客户端检测到。
 
-公钥、feed 和目标平台会编译进安装包。旧包不会读取 GitHub 上最新的 `mygo.json`，修改频道、公钥或仓库后需要重新构建并安装基线包。测试和正式包可以使用同一长期密钥，但各自的前缀应保持稳定；正式密钥只提供给可信构建。
+公钥、feed 和目标平台会编译进安装包。旧包不会读取 GitHub 上最新的 `mygo.config.ts`，修改频道、公钥或仓库后需要重新构建并安装基线包。测试和正式包可以使用同一长期密钥，但各自的前缀应保持稳定；正式密钥只提供给可信构建。
 
 首次演练保留 `deltas: 0`，先验证完整包更新。完整链路通过后可改成 `3`，生成最近版本的增量包；没有更小的 delta 时 SDK 可以只生成完整包，不代表失败。保留历史 Release、archive 和 manifest，不要覆盖同版本附件。
 
 ## 正式发布到 GitHub
 
 1. 将准备好的代码合入正式发布分支，把 `updates.tagPrefix` 设为 `v`，确认长期公钥与 `updates.github` 正确。首次正式版本为 `v2.0.0`；若此前使用测试前缀，正式包需单独安装为正式频道的基线。
-2. 同时修改 `package.json.version` 和 `mygo.json.version`，例如首次正式 mygo 使用 `2.0.0`；二者都不带 `v`。存在 `CHANGELOG.md` 或配置了 `updates.changelog` 时，加入 `## 2.0.0` 或 `## [2.0.0] - 日期` 段落。更新说明在构建时写进 manifest，仅编辑 GitHub Release 正文不会更新客户端中的说明。
+2. 修改唯一版本来源 `package.json.version`，例如 `2.0.4`，不带 `v`；`mygo.config.ts` 自动读取该值。在 `CHANGELOG.md` 中加入对应版本段落。更新说明在构建时写进 manifest，仅编辑 GitHub Release 正文不会更新客户端中的说明。
 3. 运行 `pnpm typecheck`、`pnpm test`、`pnpm vendor:check` 和 `pnpm release:desktop:check` 等检查，提交并推送代码，再创建版本 tag。推送正式 tag 即授权工作流在构建和校验通过后公开发布，例如：
 
    ```sh
@@ -93,7 +103,7 @@ go tool mygo keygen
 
 以下版本只是示例，实际应选择频道内递增且未发布过的版本。使用单独测试分支，将 `updates.tagPrefix` 设为 `mygo-test-v`；在虚拟机或单独系统用户下验证，避免测试包使用日常数据目录。仅换 tag 前缀不会隔离本地业务数据。
 
-1. **构建旧版 A。** 将 `package.json.version` 和 `mygo.json.version` 都设为 `2.0.0`，公钥、仓库和测试前缀配置完整，运行公开配置检查：
+1. **构建旧版 A。** 将 `package.json.version` 设为 `2.0.0`，确认 `mygo.config.ts` 的公钥、仓库和测试前缀配置完整，运行公开配置检查：
 
    ```sh
    pnpm install --frozen-lockfile
@@ -113,7 +123,7 @@ go tool mygo keygen
 
 2. **检查并发布 A 的测试草稿。** 等待 Actions 的 validate、desktop 和 release job 成功。在 GitHub Releases 中核对草稿的版本、更新清单、完整更新包与安装介质；发布为普通 Release，保持非 latest、非 prerelease。该测试 Release 会公开，但正式 `v` 客户端不会读取它。
 3. **手动安装并运行 A。** macOS 把 `.app` 复制到用户可写的 `~/Applications` 后运行，不从只读 DMG 中测试；Windows 优先使用当前用户安装器，便携包应放在独立可写目录；Linux 使用 tar.gz／`install.sh` 安装到用户目录。通过 DEB 安装到系统目录的包由包管理器更新，不用于验证应用自更新。进入「设置 → 关于 → 检查更新」，确认界面版本为 A。`pnpm dev` 开发包不能用于该测试。
-4. **发布新版 B。** 在同一测试分支把两个版本都改为 `2.0.1`，增加可识别的更新说明，保持公钥、前缀、slug、identifier 和架构一致。提交、推送，并创建 `mygo-test-v2.0.1`。CI 成功后，按同样方式发布 B 的普通测试 Release。B 留在草稿时，A 应继续看不到 B。
+4. **发布新版 B。** 在同一测试分支把 `package.json.version` 改为 `2.0.1`，增加可识别的更新说明，保持公钥、前缀、slug、identifier 和架构一致。提交、推送，并创建 `mygo-test-v2.0.1`。CI 成功后，按同样方式发布 B 的普通测试 Release。B 留在草稿时，A 应继续看不到 B。
 5. **从 A 发起升级。** 仍运行 A，在「设置 → 关于 → 检查更新」检测到 B 后选择立即更新。观察下载进度、验签和替换结果；达到 100% 不等于安装完成。完成后先选「稍后」，确认程序没有自行重启；再显式重启或正常退出后重开，确认实际版本变成 B。
 6. **核对更新后的行为和数据。** 检查设置、收藏／歌单、下载任务、本地目录重新授权，以及播放、歌词、托盘、快捷键等实际功能。再检查更新，确认不重复提示同一个 B；较低版本不应触发自动降级。记录系统、架构、A/B 版本与结果。
 
@@ -153,7 +163,7 @@ pnpm test:desktop:release
 - `verify`：离线检查本次 manifest 和真实 archive／delta 的大小与签名，只需公钥，不调用 Go 或下载。
 - `build`：需要进程环境中的 `MYGO_UPDATER_PRIVATE_KEY`；使用固定官方 CLI 构建后再完成同样验签。该脚本自身不上传、不发布、不安装应用。只有 GitHub tag 工作流另外创建 Release；正式 tag 直接公开，测试 tag 保持草稿。
 
-工具链固定为 `github.com/egoist/mygo v0.8.3`，并校验 vendor 全树及 Windows 透明补丁；构建设置 `GOTOOLCHAIN=local`、`GOWORK=off`、`GOFLAGS=-mod=vendor`。不使用模块缓存里的私改 SDK，不接受 `--config`、`--upload` 或任意参数透传，也拒绝并行 `mygo.config.ts`。维护方式见 [固定 SDK 说明](../patches/mygo/README.md)。
+工具链固定为 `github.com/egoist/mygo v0.9.0`，并校验 Go 依赖与 vendor 全树；Windows 修正已合入上游，不再重放本地补丁。构建设置 `GOTOOLCHAIN=local`、`GOWORK=off`、`GOFLAGS=-mod=vendor`。不使用模块缓存里的私改 SDK，不接受 `--config`、`--upload` 或任意参数透传，也拒绝并行 `mygo.json`。维护方式见 [固定 SDK 说明](../scripts/vendor/README.md)。
 
 本地需要签名构建时，由密码管理器向进程环境提供私钥，不要把私钥粘贴到命令行。脚本不转发或落盘下游构建 stdout/stderr，避免 secret 泄露；失败只输出受控错误，输出缓冲超过 16 MiB 也会失败。SDK 的 delta 构建可能下载历史文件，只有 `check`、`verify` 和 fake 测试属于离线操作。
 
@@ -176,7 +186,7 @@ manifest 沿用 SDK 的 `version`、`url`、`size`、`signature`，以及可选 
 | 已发布但提示旧版本 | 自定义前缀按发布顺序取匹配 Release；不要在 B 之后重新公开旧的 A，也不要让其他产品共享频道 |
 | GitHub 请求受限 | 自定义前缀通过公开 GitHub API 查询，共享 IP 可能触发限流；默认匿名额度通常为每小时 60 次 |
 | tag 构建没有运行 | tag 不符合 `v*`／`mygo-test-v*`，或 tag 对应提交没有工作流、仓库 Actions 未开启 |
-| tag／版本校验失败 | tag 必须是 `tagPrefix + version`；检查 `package.json`、`mygo.json` 和 fork 仓库名 |
+| tag／版本校验失败 | tag 必须是 `tagPrefix + version`；检查 `package.json`、`mygo.config.ts` 和 fork 仓库名 |
 | 私钥／签名不匹配 | secret 是否为私钥文本，公钥是否来自同一密钥，archive 是否被替换或下载损坏 |
 | 更新说明为空或构建报缺版本段落 | 检查构建时的 CHANGELOG；修改 Release 正文不会修改已生成 manifest |
 | 100% 后仍在安装 | 正在验签和替换，等待 SDK 返回；安装完成后还需显式重启才能运行新版本 |

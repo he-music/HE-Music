@@ -77,6 +77,30 @@ func (p *PowerModule) KeepAwake(reason string, display bool) (release func()) {
 	return func() { once.Do(func() { onMain(r) }) }
 }
 
+// KeepRunning keeps the app at full speed while none of its windows shows,
+// for an app that serves the network, streams or syncs out of sight, until
+// release is called, and leaves the computer free to sleep when idle:
+//
+//	release := mygo.Power.KeepRunning("Serving the phones")
+//	defer release()
+//
+// macOS otherwise puts an app whose windows are hidden, minimized or
+// covered, or behind the locked screen, into App Nap within a minute: it
+// lowers the app's priority, coalesces its timers and throttles its I/O.
+// KeepAwake keeps App Nap off too, but the computer awake as well, which
+// an app that stays in the menu bar all day should not do. Other systems
+// do nothing here.
+func (p *PowerModule) KeepRunning(reason string) (release func()) {
+	needsApp("Power.KeepRunning")
+	var r func()
+	onMain(func() { r = backend().Power().KeepRunning(reason) })
+	if r == nil {
+		return func() {}
+	}
+	var once sync.Once
+	return func() { once.Do(func() { onMain(r) }) }
+}
+
 // IsOnBattery reports whether the computer runs on battery power.
 func (p *PowerModule) IsOnBattery() bool {
 	return onMainValue(func() bool { return backend().Power().OnBattery() })

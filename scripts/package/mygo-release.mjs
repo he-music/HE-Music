@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// 开发/CI 发布工具；不属于应用运行时。协议来源：mygo v0.8.3。
+// 开发/CI 发布工具；不属于应用运行时。协议来源：mygo v0.9.0。
 import { createHash, createPrivateKey, createPublicKey, verify } from "node:crypto";
 import { createReadStream } from "node:fs";
 import { lstat, readFile, realpath } from "node:fs/promises";
@@ -357,7 +357,7 @@ export async function runRelease({
     try {
       await verifyVendoredDependencies(root);
     } catch {
-      fail("vendor 或 Windows 透明补丁校验失败；请运行 pnpm vendor:check 并审查依赖");
+      fail("vendor 或 Go 依赖校验失败；请运行 pnpm vendor:check 并审查依赖");
     }
     const args = [
       path.join(root, "scripts/vendor/mygo.mjs"),

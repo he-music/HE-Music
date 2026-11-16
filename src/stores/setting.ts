@@ -165,7 +165,7 @@ export const createSettingState = (): SettingState => ({
   closeAppMethod: "hide", // 关闭方式
   showTaskbarProgress: false, // 显示任务栏进度
   checkUpdateOnStart: true, // 启动时检查更新
-  skippedUpdateVersion: "", // 已跳过提醒的更新版本
+  skippedUpdateVersion: "", // 兼容旧设置导入；实际跳过记录由官方 updater 管理
   preventSleep: false, // 是否禁止休眠
   fullPlayerCache: false, // 全屏播放器缓存
   useKeepAlive: true, // 使用 keep-alive

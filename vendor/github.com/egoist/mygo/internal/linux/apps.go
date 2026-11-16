@@ -4,6 +4,8 @@ package linux
 
 import (
 	"fmt"
+	"net/url"
+	"path/filepath"
 	"sync"
 
 	"github.com/egoist/mygo/internal/platform"
@@ -17,6 +19,7 @@ var (
 	gAppInfoGetDisplayName        func(info ptr) ptr
 	gAppInfoLaunch                func(info, files, ctx ptr, gerr *ptr) bool
 	gDesktopAppInfoGetFilename    func(info ptr) ptr
+	gFileInfoGetContentType       func(info ptr) ptr
 	gdkDisplayGetAppLaunchContext func(d ptr) ptr
 )
 
@@ -28,6 +31,7 @@ func loadApps() {
 		mustBind(libGIO, &gAppInfoGetDisplayName, "g_app_info_get_display_name")
 		mustBind(libGIO, &gAppInfoLaunch, "g_app_info_launch")
 		mustBind(libGIO, &gDesktopAppInfoGetFilename, "g_desktop_app_info_get_filename")
+		mustBind(libGIO, &gFileInfoGetContentType, "g_file_info_get_content_type")
 		mustBind(libGDK, &gdkDisplayGetAppLaunchContext, "gdk_display_get_app_launch_context")
 	})
 }
@@ -74,4 +78,67 @@ func (shell) OpenApplication(path string) error {
 		return gErr(gerr)
 	}
 	return nil
+}
+
+// DefaultApp returns the application that opens url: the default handler
+// for its scheme (g_app_info_get_default_for_uri_scheme), or for a file://
+// URL or a path, the default handler for the file's content type
+// (g_app_info_get_default_for_type): the type GIO finds the file to be,
+// which knows a folder and a file without an extension, or where there is
+// no such file, the type its name tells (g_content_type_guess).
+func (shell) DefaultApp(rawURL string) (platform.Application, error) {
+	loadApps()
+	var scheme, path string
+	if u, e := url.Parse(rawURL); e == nil && u.Scheme != "" {
+		if u.Scheme == "file" {
+			path = u.Path
+		} else {
+			scheme = u.Scheme
+		}
+	} else {
+		path = rawURL
+	}
+	var info ptr
+	if scheme != "" {
+		info = gAppInfoGetDefaultForURIScheme(cs(scheme))
+	} else if path != "" {
+		ct := contentType(path)
+		if ct == "" {
+			return platform.Application{}, fmt.Errorf("mygo: no application found for %q", rawURL)
+		}
+		info = gAppInfoGetDefaultForType(cs(ct), false)
+	} else {
+		return platform.Application{}, fmt.Errorf("mygo: invalid URL %q", rawURL)
+	}
+	if info == 0 {
+		return platform.Application{}, fmt.Errorf("mygo: no application found for %q", rawURL)
+	}
+	defer gObjectUnref(info)
+	entry := goStr(gDesktopAppInfoGetFilename(info))
+	id := goStr(gAppInfoGetID(info))
+	if entry == "" {
+		entry = id
+	}
+	return platform.Application{
+		Name: goStr(gAppInfoGetDisplayName(info)),
+		ID:   id,
+		Path: entry,
+	}, nil
+}
+
+// contentType returns the content type of the file at path, as GIO finds
+// it (standard::content-type, from its name and its first bytes, and
+// inode/directory for a folder), or what its name tells where there is no
+// such file.
+func contentType(path string) string {
+	f := gFileNewForPath(cs(path))
+	info := gFileQueryInfo(f, cs("standard::content-type"), 0, 0, nil)
+	gObjectUnref(f)
+	if info != 0 {
+		defer gObjectUnref(info)
+		return goStr(gFileInfoGetContentType(info))
+	}
+	ct := gContentTypeGuess(cs(filepath.Base(path)), 0, 0, nil)
+	defer gFree(ct)
+	return goStr(ct)
 }

@@ -30,12 +30,37 @@ func (p power) Watch() {
 	})
 }
 
+// Options of NSProcessInfo's activities.
+const (
+	activityIdleSystemSleepDisabled  = 1 << 20
+	activityIdleDisplaySleepDisabled = 1 << 40
+	// activityUserInitiated is NSActivityUserInitiated, which keeps App
+	// Nap off and the Mac from sleeping when idle: the second it leaves
+	// out (NSActivityUserInitiatedAllowingIdleSystemSleep).
+	activityUserInitiated = 0x00FFFFFF | activityIdleSystemSleepDisabled
+)
+
 func (p power) KeepAwake(display bool, reason string) func() {
-	const idleSystemSleepDisabled, idleDisplaySleepDisabled = 1 << 20, 1 << 40
-	opts := uint64(idleSystemSleepDisabled)
+	opts := uint64(activityIdleSystemSleepDisabled)
 	if display {
-		opts |= idleDisplaySleepDisabled
+		opts |= activityIdleDisplaySleepDisabled
 	}
+	return beginActivity(opts, reason)
+}
+
+// KeepRunning holds NSActivityUserInitiatedAllowingIdleSystemSleep, an
+// activity of the user's that keeps App Nap off while the Mac still sleeps
+// when idle: the system does not suppress the app (proc_pidinfo's
+// PROC_FLAG_SUPPRESSED) once none of its windows shows. KeepAwake's
+// activity keeps App Nap off too, but the Mac awake as well, and shows in
+// pmset -g assertions, which this one does not.
+func (p power) KeepRunning(reason string) func() {
+	return beginActivity(activityUserInitiated&^activityIdleSystemSleepDisabled, reason)
+}
+
+// beginActivity begins an activity of NSProcessInfo with the options, which
+// the function it returns ends.
+func beginActivity(opts uint64, reason string) func() {
 	var token id
 	withPool(func() {
 		info := send(class("NSProcessInfo"), "processInfo")

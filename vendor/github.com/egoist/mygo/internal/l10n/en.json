@@ -77,6 +77,10 @@
   "@more": {
     "description": "Labels the button of a toolbar that opens what the toolbar hides."
   },
+  "moreOptions": "More options",
+  "@moreOptions": {
+    "description": "Labels the arrow of a split button, which opens a menu of actions related to the button's."
+  },
   "codeEditor": "Code editor",
   "@codeEditor": {
     "description": "Names the code editor to assistive technology when the app gives it no label."
@@ -210,6 +214,10 @@
         "type": "int"
       }
     }
+  },
+  "noNewlineAtEnd": "No newline at end of file",
+  "@noNewlineAtEnd": {
+    "description": "Marks the last line of a text in a diff viewer when the text does not end with a newline, as git diff's \"\\ No newline at end of file\" line."
   },
   "revert": "Revert",
   "@revert": {
@@ -915,5 +923,73 @@
   "selected": "selected",
   "@selected": {
     "description": "What VoiceOver reads after the name of a cell of a grid that is chosen, as a calendar's day picked, where it reads no chosen state of cells itself."
+  },
+  "permissionAccessibility": "Accessibility",
+  "@permissionAccessibility": {
+    "description": "The name of the Accessibility permission in System Settings."
+  },
+  "permissionDeviceControlAndDataAccess": "Device Control and Data Access",
+  "@permissionDeviceControlAndDataAccess": {
+    "description": "The macOS 27 name of the Accessibility permission in System Settings."
+  },
+  "permissionScreenRecording": "Screen Recording",
+  "@permissionScreenRecording": {
+    "description": "The name of the Screen Recording permission in System Settings."
+  },
+  "permissionInputMonitoring": "Input Monitoring",
+  "@permissionInputMonitoring": {
+    "description": "The name of the Input Monitoring permission in System Settings."
+  },
+  "permissionFullDiskAccess": "Full Disk Access",
+  "@permissionFullDiskAccess": {
+    "description": "The name of the Full Disk Access permission in System Settings."
+  },
+  "permissionAppManagement": "App Management",
+  "@permissionAppManagement": {
+    "description": "The name of the App Management permission in System Settings."
+  },
+  "permissionDeveloperTools": "Developer Tools",
+  "@permissionDeveloperTools": {
+    "description": "The name of the Developer Tools permission in System Settings."
+  },
+  "permissionMicrophone": "Microphone",
+  "@permissionMicrophone": {
+    "description": "The name of the Microphone permission in System Settings."
+  },
+  "permissionCamera": "Camera",
+  "@permissionCamera": {
+    "description": "The name of the Camera permission in System Settings."
+  },
+  "permissionCalendars": "Calendars",
+  "@permissionCalendars": {
+    "description": "The name of the Calendars permission in System Settings."
+  },
+  "permissionReminders": "Reminders",
+  "@permissionReminders": {
+    "description": "The name of the Reminders permission in System Settings."
+  },
+  "permissionBluetooth": "Bluetooth",
+  "@permissionBluetooth": {
+    "description": "The name of the Bluetooth permission in System Settings."
+  },
+  "permissionMediaAppleMusic": "Media & Apple Music",
+  "@permissionMediaAppleMusic": {
+    "description": "The name of the Media & Apple Music permission in System Settings."
+  },
+  "guideDrag": "Drag {app} to the list above to allow {permission}.",
+  "@guideDrag": {
+    "description": "The sentence the permissionflow Guide panel shows above the app card. 'app' is the name of the app to drag, 'permission' is the name of the permission, as 'Accessibility'.",
+    "placeholders": {
+      "app": {
+        "type": "String"
+      },
+      "permission": {
+        "type": "String"
+      }
+    }
+  },
+  "guideDragHint": "Drag",
+  "@guideDragHint": {
+    "description": "The small hint label on the app card of the permissionflow Guide panel, next to the hand icon, telling the user to drag the app."
   }
 }

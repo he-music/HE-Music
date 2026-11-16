@@ -21,19 +21,19 @@ import (
 
 // Linux configures Linux packaging.
 type Linux struct {
-	// Maintainer of the Debian package and of the PKGBUILD, "Name
-	// <email>" (default: the author in package.json, else the app's
+	// Maintainer of the Debian and RPM packages and of the PKGBUILD,
+	// "Name <email>" (default: the author in package.json, else the app's
 	// name).
 	Maintainer string `json:"maintainer"`
 	// Comment is a short description of the app, for its desktop entry and
-	// its package.
+	// its packages.
 	Comment string `json:"comment"`
 	// Categories of the desktop entry (default Utility).
 	Categories []string `json:"categories"`
-	// Depends lists Debian packages the app needs besides GTK and
-	// WebKitGTK. The PKGBUILD depends on the Arch Linux packages of those
-	// archPackages knows.
-	Depends []string `json:"depends"`
+	// Depends lists packages the app needs besides GTK and WebKitGTK, by
+	// package format or as a list of Debian packages mapped to Arch Linux
+	// and RPM where known.
+	Depends linuxDepends `json:"depends"`
 	// WebView false says that the app shows no web page, in a window or a
 	// ui.WebView, as an app of native UI: its packages depend on GTK
 	// alone, and install.sh does not ask for WebKitGTK, which the app then
@@ -41,11 +41,25 @@ type Linux struct {
 	WebView *bool `json:"webview"`
 	// Command is the name of a command that runs the app, or a list of
 	// names, as ["my-app", "ma"], which adds a short one: a link in
-	// /usr/bin from the Debian package and the PKGBUILD, and in
+	// /usr/bin from the Debian and RPM packages and the PKGBUILD, and in
 	// ~/.local/bin from install.sh, for each, which says to run the app
 	// by the first it links. Empty means none, and the app opens from the
 	// applications menu.
 	Command commandNames `json:"command"`
+	// Formats lists the packages mygo build writes: "deb", "rpm" and
+	// "pkgbuild" (default all three). The archive with install.sh is
+	// always written, as install.sh updates the app from it and the
+	// PKGBUILD packages it; an empty list writes it alone.
+	Formats []string `json:"formats"`
+}
+
+// linuxFormats are the packages linux.formats chooses from.
+var linuxFormats = []string{"deb", "rpm", "pkgbuild"}
+
+// builds reports whether mygo build writes the package of format, which
+// linux.formats lists, or every one when it is left out.
+func (l *Linux) builds(format string) bool {
+	return l.Formats == nil || slices.Contains(l.Formats, format)
 }
 
 // commandNames are the names of linux.command, which takes one name, as
@@ -69,6 +83,41 @@ func (n *commandNames) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// linuxDepends holds extra Linux package dependencies for each package format.
+// Unmarshaling a JSON string array populates Deb and sets legacy to true so
+// archDepends and rpmDepends map those Debian package names through
+// archPackages and rpmPackages.
+type linuxDepends struct {
+	Deb    []string `json:"deb"`
+	RPM    []string `json:"rpm"`
+	Arch   []string `json:"arch"`
+	legacy bool     // true when unmarshaled from a JSON string array
+}
+
+func (d *linuxDepends) UnmarshalJSON(b []byte) error {
+	if bytes.Equal(bytes.TrimSpace(b), []byte("null")) {
+		*d = linuxDepends{}
+		return nil
+	}
+	var list []string
+	if err := json.Unmarshal(b, &list); err == nil {
+		*d = linuxDepends{
+			Deb:    list,
+			legacy: len(list) > 0,
+		}
+		return nil
+	}
+	type raw linuxDepends
+	dec := json.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	var r raw
+	if err := dec.Decode(&r); err != nil {
+		return fmt.Errorf("linux.depends is a list of packages, or an object with deb, rpm and arch lists, not %s", b)
+	}
+	*d = linuxDepends(r)
+	return nil
+}
+
 // webView reports whether the app may show web pages, which need
 // WebKitGTK.
 func (l *Linux) webView() bool { return l.WebView == nil || *l.WebView }
@@ -79,7 +128,7 @@ func (l *Linux) debDepends() []string {
 	if l.webView() {
 		depends = append(depends, "libwebkit2gtk-4.1-0")
 	}
-	return append(depends, l.Depends...)
+	return append(depends, l.Depends.Deb...)
 }
 
 // commandRe matches the names linux.command may take.

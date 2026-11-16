@@ -3,7 +3,11 @@
 package linux
 
 import (
+	"bytes"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"os"
 	"path/filepath"
 	"strings"
@@ -549,14 +553,22 @@ type tray struct {
 	// activate is the handler of the "activate" signal, 0 while the icon
 	// does not answer activation.
 	activate uint64
+	// dark is the desktop's color scheme, as last told. image is the PNG
+	// the icon shows, and template whether it is black and transparent,
+	// which the icon shows white while the desktop prefers dark, as macOS
+	// tints a template image.
+	dark     bool
+	image    []byte
+	template bool
 }
 
 func (b *Backend) NewTray(h platform.TrayHandler) (platform.Tray, error) {
 	if appIndicatorNew == nil {
 		return nil, fmt.Errorf("mygo: tray icons need libayatana-appindicator3: %w", platform.ErrUnsupported)
 	}
+	traysAppearanceChanged = b.traysAppearance
 	b.nextTray++
-	t := &tray{b: b, h: h, id: b.nextTray}
+	t := &tray{b: b, h: h, id: b.nextTray, dark: desktopDark()}
 	name := fmt.Sprintf("mygo-%d-%d", os.Getpid(), t.id)
 	t.ind = appIndicatorNew(cs(name), cs("application-x-executable"), 0) // APPLICATION_STATUS
 	appIndicatorSetStatus(t.ind, 1)                                      // ACTIVE
@@ -566,7 +578,14 @@ func (b *Backend) NewTray(h platform.TrayHandler) (platform.Tray, error) {
 	return t, nil
 }
 
-func (t *tray) SetImage(png []byte, template bool) error {
+func (t *tray) SetImage(data []byte, template bool) error {
+	img := data
+	if template && t.dark {
+		var err error
+		if img, err = whiten(data); err != nil {
+			return err
+		}
+	}
 	if t.iconDir == "" {
 		dir, err := os.MkdirTemp("", "mygo-tray-")
 		if err != nil {
@@ -580,16 +599,75 @@ func (t *tray) SetImage(png []byte, template bool) error {
 	// "icon", and showed a theme's icon in place of the app's.
 	t.icons++
 	file := filepath.Join(t.iconDir, fmt.Sprintf("icon-%d.png", t.icons))
-	if err := os.WriteFile(file, png, 0o644); err != nil {
+	if err := os.WriteFile(file, img, 0o644); err != nil {
 		return err
 	}
 	appIndicatorSetIconFull(t.ind, cs(file), cs(""))
+	t.image, t.template = data, template
 	return nil
 }
 
-// Dark reports false: AppIndicator tells nothing of the panel, whose
-// icon theme draws the icon in its own colors.
-func (t *tray) Dark() bool { return false }
+// Dark reports whether the desktop prefers dark. AppIndicator tells
+// nothing of the panel itself, whose theme can differ from the desktop's.
+func (t *tray) Dark() bool { return desktopDark() }
+
+// desktopDark reads the desktop's color scheme from the settings portal:
+// the system's, not the app's own (Theme.SetSource), which the panel does
+// not follow. Without a portal it is false.
+func desktopDark() bool {
+	scheme, ok := portalColorScheme()
+	return ok && scheme == 1
+}
+
+// traysAppearance tells the icons that the desktop turned dark or light.
+func (b *Backend) traysAppearance() {
+	if len(b.trays) == 0 {
+		return
+	}
+	dark := desktopDark()
+	for _, t := range b.trays {
+		t.appearanceChanged(dark)
+	}
+}
+
+func (t *tray) appearanceChanged(dark bool) {
+	if dark == t.dark {
+		return
+	}
+	t.dark = dark
+	if t.template && t.image != nil {
+		_ = t.SetImage(t.image, true)
+	}
+	if t.h != nil {
+		t.h.AppearanceChanged()
+	}
+}
+
+// traysAppearanceChanged is linked by NewTray: portal settings changes
+// reach every app, but only those with a tray need its image code.
+var traysAppearanceChanged func()
+
+// whiten draws a template image white, keeping its alpha, as the Windows
+// backend does on a dark taskbar.
+func whiten(data []byte) ([]byte, error) {
+	src, err := png.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, err
+	}
+	r := src.Bounds()
+	dst := image.NewNRGBA(r)
+	for y := r.Min.Y; y < r.Max.Y; y++ {
+		for x := r.Min.X; x < r.Max.X; x++ {
+			_, _, _, a := src.At(x, y).RGBA()
+			dst.SetNRGBA(x, y, color.NRGBA{255, 255, 255, uint8(a >> 8)})
+		}
+	}
+	var b bytes.Buffer
+	if err := png.Encode(&b, dst); err != nil {
+		return nil, err
+	}
+	return b.Bytes(), nil
+}
 
 // SetID does nothing: the indicator's ID is given as it is made, and
 // panels place indicators themselves.

@@ -126,10 +126,10 @@ type clipboard struct{}
 func (clipboard) ReadData([]transfer.Format) (transfer.Data, error) {
 	return transfer.Data{}, errUnsupported
 }
-func (clipboard) WriteData(transfer.Data, func()) error { return errUnsupported }
-func (clipboard) Formats() []transfer.Format            { return nil }
-func (clipboard) Flush() error                          { return errUnsupported }
-func (clipboard) Close()                                {}
+func (clipboard) WriteData(transfer.Data, bool, func()) error { return errUnsupported }
+func (clipboard) Formats() []transfer.Format                  { return nil }
+func (clipboard) Flush() error                                { return errUnsupported }
+func (clipboard) Close()                                      {}
 
 func (clipboard) ReadText() string           { return "" }
 func (clipboard) WriteText(string)           {}
@@ -146,10 +146,12 @@ func (shell) OpenExternal(string) error            { return errUnsupported }
 func (shell) OpenPath(string) error                { return errUnsupported }
 func (shell) ShowItemInFolder(string)              {}
 func (shell) TrashItem(string) error               { return errUnsupported }
+func (shell) PreviewItem(string) error             { return errUnsupported }
 func (shell) Beep()                                {}
 func (shell) FileIcon(string, int) ([]byte, error) { return nil, errUnsupported }
 func (shell) TypeIcon(string, int) ([]byte, error) { return nil, errUnsupported }
-func (shell) OpenApplication(string) error         { return errUnsupported }
+func (shell) OpenApplication(string) error                     { return errUnsupported }
+func (shell) DefaultApp(string) (platform.Application, error) { return platform.Application{}, errUnsupported }
 
 func (*Backend) Applications() ([]platform.Application, error) { return nil, errUnsupported }
 
@@ -172,6 +174,7 @@ type power struct{}
 
 func (power) Watch()                        {}
 func (power) KeepAwake(bool, string) func() { return func() {} }
+func (power) KeepRunning(string) func()     { return func() {} }
 func (power) OnBattery() bool               { return false }
 func (power) IdleTime() time.Duration       { return 0 }
 

@@ -73,13 +73,40 @@ const devRelaunchCode = 75
 // startDir is the working directory the app started in.
 var startDir, _ = os.Getwd()
 
-// Relaunch quits the app like Quit, then starts it again with the same
-// arguments, e.g. after changing a setting that needs a restart. Nothing
-// happens when OnBeforeQuit, OnWillQuit or a window cancels the quit.
-// Under `mygo dev` the build exits once it has quit and mygo dev starts it
-// again.
-func (a *Application) Relaunch() {
+// relaunchArguments returns the arguments of the instance that Relaunch
+// starts: those it was given, else those this one started with. Main
+// thread only.
+func relaunchArguments() []string {
+	if App.relaunchArgs != nil {
+		return App.relaunchArgs
+	}
+	return os.Args[1:]
+}
+
+// Relaunch quits the app like Quit, then starts it again, e.g. after
+// changing a setting that needs a restart or installing an update.
+// Nothing happens when OnBeforeQuit, OnWillQuit or a window cancels the
+// quit.
+//
+// Without arguments the new instance gets the arguments this one started
+// with. With arguments, they replace those (os.Args[1:]), so that the new
+// instance can be told why it starts, as with a flag of the app's own:
+//
+//	mygo.App.Relaunch("--safe-mode")
+//
+// The new instance runs the same executable, in the working directory
+// this one started in, on every platform: on macOS through Launch
+// Services, which passes the arguments on (open --args). Under
+// `mygo dev` the build exits once it has quit and mygo dev starts it
+// again, with the arguments. In browsers (GOOS=js) Relaunch only quits.
+func (a *Application) Relaunch(args ...string) {
+	if len(args) == 0 {
+		args = nil
+	} else {
+		args = slices.Clone(args)
+	}
 	postMain(func() {
+		a.relaunchArgs = args
 		if a.stopping {
 			// Quitting already, and not done: start again after all.
 			a.relaunch = true
@@ -95,7 +122,7 @@ func (a *Application) Relaunch() {
 		if a.prepareQuit() {
 			a.stopLoop()
 		} else {
-			a.relaunch = false
+			a.relaunch, a.relaunchArgs = false, nil
 		}
 	})
 }

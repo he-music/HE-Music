@@ -117,6 +117,7 @@ var (
 	gFilenameFromURI               func(uri string, hostname, gerr ptr) ptr
 	gErrorNewLiteral               func(domain uint32, code int32, msg *byte) ptr
 	gQuarkFromString               func(s *byte) uint32
+	gSetPrgname                    func(name *byte)
 	gIdleAddFull                   func(priority int32, fn ptr, data ptr, notify ptr) uint32
 	gTimeoutAdd                    func(ms uint32, fn ptr, data ptr) uint32
 	gMainContextIteration          func(ctx ptr, mayBlock bool) bool
@@ -140,6 +141,7 @@ var (
 	gAppInfoLaunchDefaultForURI    func(uri *byte, ctx ptr, err *ptr) bool
 	gAppInfoGetDefaultForURIScheme func(scheme *byte) ptr
 	gAppInfoGetID                  func(info ptr) ptr
+	gAppInfoGetDefaultForType      func(contentType *byte, mustSupportURIs bool) ptr
 	gFileNewForPath                func(path *byte) ptr
 	gFileGetURI                    func(file ptr) ptr
 	gFileTrash                     func(file ptr, cancellable ptr, err *ptr) bool
@@ -570,6 +572,7 @@ func load() error {
 	mustBind(g, &gFilenameFromURI, "g_filename_from_uri")
 	mustBind(g, &gErrorNewLiteral, "g_error_new_literal")
 	mustBind(g, &gQuarkFromString, "g_quark_from_string")
+	mustBind(g, &gSetPrgname, "g_set_prgname")
 	mustBind(g, &gIdleAddFull, "g_idle_add_full")
 	mustBind(g, &gTimeoutAdd, "g_timeout_add")
 	mustBind(g, &gMainContextIteration, "g_main_context_iteration")
@@ -621,6 +624,7 @@ func load() error {
 	mustBind(i, &gAppInfoLaunchDefaultForURI, "g_app_info_launch_default_for_uri")
 	mustBind(i, &gAppInfoGetDefaultForURIScheme, "g_app_info_get_default_for_uri_scheme")
 	mustBind(i, &gAppInfoGetID, "g_app_info_get_id")
+	mustBind(i, &gAppInfoGetDefaultForType, "g_app_info_get_default_for_type")
 	mustBind(i, &gFileNewForPath, "g_file_new_for_path")
 	mustBind(i, &gFileGetURI, "g_file_get_uri")
 	mustBind(i, &gFileTrash, "g_file_trash")

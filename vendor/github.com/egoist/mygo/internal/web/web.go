@@ -465,8 +465,9 @@ func (c clipboard) ReadData(formats []transfer.Format) (transfer.Data, error) {
 
 // WriteData keeps data's text formats, which the copy event under way
 // gives the browser (surface.copy), and writes its plain text to the
-// system's clipboard, which browsers allow while the user acts.
-func (c clipboard) WriteData(d transfer.Data, released func()) error {
+// system's clipboard, which browsers allow while the user acts. Browsers
+// have no mark of concealed content.
+func (c clipboard) WriteData(d transfer.Data, _ bool, released func()) error {
 	t, err := d.Read(transfer.Text)
 	if err != nil {
 		return errUnsupported
@@ -512,10 +513,12 @@ func (shell) OpenExternal(url string) error {
 func (shell) OpenPath(string) error                { return errUnsupported }
 func (shell) ShowItemInFolder(string)              {}
 func (shell) TrashItem(string) error               { return errUnsupported }
+func (shell) PreviewItem(string) error             { return errUnsupported }
 func (shell) Beep()                                {}
 func (shell) FileIcon(string, int) ([]byte, error) { return nil, errUnsupported }
 func (shell) TypeIcon(string, int) ([]byte, error) { return nil, errUnsupported }
-func (shell) OpenApplication(string) error         { return errUnsupported }
+func (shell) OpenApplication(string) error                         { return errUnsupported }
+func (shell) DefaultApp(string) (platform.Application, error)     { return platform.Application{}, errUnsupported }
 
 func (*Backend) Applications() ([]platform.Application, error) { return nil, errUnsupported }
 
@@ -615,3 +618,6 @@ func (power) Watch()                        {}
 func (power) KeepAwake(bool, string) func() { return func() {} }
 func (power) OnBattery() bool               { return false }
 func (power) IdleTime() time.Duration       { return 0 }
+
+// KeepRunning does nothing: a page's timers are the browser's to throttle.
+func (power) KeepRunning(string) func() { return func() {} }

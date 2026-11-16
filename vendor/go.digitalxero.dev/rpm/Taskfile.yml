@@ -1,0 +1,72 @@
+# https://taskfile.dev/
+version: '3'
+
+# This module is standalone; ignore any parent go.work so commands work in
+# isolation.
+env:
+  GOWORK: off
+
+tasks:
+  default:
+    cmds:
+      - task: test
+
+  test:
+    desc: Run all tests with the race detector
+    cmds:
+      - go test -race -count=1 ./...
+
+  test-rpmcli:
+    desc: Run tests including the native rpm integration tests (requires rpm)
+    cmds:
+      - go test -race -count=1 -tags rpmcli ./...
+
+  build:
+    desc: Build the package
+    cmds:
+      - go build ./...
+
+  tidy:
+    desc: Tidy go modules
+    cmds:
+      - go mod tidy
+
+  lint:
+    desc: vet + gofmt check
+    cmds:
+      - go vet ./...
+      - go vet -tags rpmcli ./...
+      - test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+
+  cover:
+    desc: Run tests with coverage
+    cmds:
+      - go test -coverprofile=coverage.out ./...
+      - go tool cover -func=coverage.out
+
+  verify-rpm:
+    desc: Cross-check generated RPMs against the real rpm toolchain (native or container)
+    cmds:
+      - ./scripts/verify_rpm.sh
+
+  verify-rpm-lua:
+    desc: Execute Lua install, verify, and erase scriptlets on pinned RPM 6.0.1 in a container
+    cmds:
+      - ./scripts/verify_lua_rpm.sh 6.0.1
+
+  verify-rpm-lua-matrix:
+    desc: Execute RPM integration tests on RPM 4.19.1.1, 6.0.1, and 6.0.2
+    cmds:
+      - ./scripts/verify_lua_rpm.sh 4.19.1.1
+      - ./scripts/verify_lua_rpm.sh 6.0.1
+      - ./scripts/verify_lua_rpm.sh 6.0.2
+
+  verify:
+    desc: Full local verification (tidy + test + build + lint + external cross-check)
+    cmds:
+      - task: tidy
+      - task: test
+      - task: build
+      - task: lint
+      - task: verify-rpm
+      - task: verify-rpm-lua

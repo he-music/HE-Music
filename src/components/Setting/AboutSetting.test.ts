@@ -1,17 +1,12 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { ref, shallowRef } from "vue";
+import { shallowRef } from "vue";
 import { debounce } from "lodash-es";
 import { emitHostEvent, flushSfcHost, mountProductionSfc } from "@/test/productionSfc";
+import type { UpdatesState } from "@/platform/updates";
 
-const ready = ref(true);
-const busy = ref(false);
-const checking = ref(false);
-const state = ref({ phase: "available" });
+const state = shallowRef<UpdatesState>();
 const check = vi.fn(async () => {});
-const session = { ready, busy, checking, state, check };
-const current = shallowRef<typeof session | undefined>(session);
-const open = vi.fn(async () => {});
-const message = { success: vi.fn(), error: vi.fn() };
+const message = { error: vi.fn() };
 const cleanups: Array<() => void> = [];
 function mount() {
   const host = mountProductionSfc(
@@ -25,10 +20,8 @@ function mount() {
       "github-markdown-css/github-markdown.css": {},
       "@/../package.json": { default: { version: "1.0.4", github: "https://github.test/music" } },
       "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
-      "@/utils/env": { isElectron: false },
-      "@/platform": { platform: { kind: "mygo" } },
-      "@/platform/updatesSession": { updatesSession: current },
-      "@/utils/mygoUpdateModal": { openMygoUpdate: open },
+      "@/platform": { platform: { kind: "mygo", updates: { check } } },
+      "@/platform/updates": { updatesState: state },
       "@/constants/links": { MOBILE_APP_RELEASE_URL: "https://github.test/mobile" },
     },
     [
@@ -54,9 +47,7 @@ function mount() {
       .find(
         (node) =>
           node.tag === "NButton" &&
-          ["setting.about.check_update", "updates.view", "setting.about.checking_update"].includes(
-            text(node),
-          ),
+          ["setting.about.check_update", "updates.view"].includes(text(node)),
       );
   return {
     ...host,
@@ -70,71 +61,47 @@ function mount() {
 }
 beforeEach(() => {
   vi.useFakeTimers();
-  ready.value = true;
-  busy.value = false;
-  checking.value = false;
-  state.value = { phase: "available" };
-  current.value = session;
+  state.value = undefined;
   check.mockReset();
   check.mockResolvedValue(undefined);
-  vi.stubGlobal("window", {
-    $message: message,
-    get electron() {
-      throw new Error("Electron bridge accessed");
-    },
-  });
+  message.error.mockReset();
+  vi.stubGlobal("window", { $message: message });
 });
 afterEach(() => {
   cleanups.splice(0).forEach((close) => close());
-  vi.clearAllMocks();
   vi.useRealTimers();
   vi.unstubAllGlobals();
 });
-it("opens the available update from the original about-page button and reports no-update", async () => {
+
+it("delegates checking and all result dialogs to the official updater", async () => {
   const host = mount();
   await flushSfcHost();
   host.click();
   await flushSfcHost();
   expect(check).toHaveBeenCalledOnce();
-  expect(open).toHaveBeenCalledExactlyOnceWith(current.value);
+  expect(host.button()?.props.loading).toBe(false);
   expect(host.all().filter((node) => node.tag === "NButton")).toHaveLength(3);
+  state.value = { revision: 1, availableVersion: "2.0.4", installed: true };
+  await flushSfcHost();
   await vi.advanceTimersByTimeAsync(300);
-  state.value = { phase: "no-update" };
   host.click();
   await flushSfcHost();
-  expect(message.success).toHaveBeenCalledWith("message.already_latest_version");
-  expect(open).toHaveBeenCalledTimes(1);
+  expect(check).toHaveBeenCalledTimes(2);
 });
-it("ignores a late check when the page closes or its native owner changes", async () => {
-  let finish!: () => void;
+
+it("reports delivery errors only while the settings page is mounted", async () => {
+  let reject!: (error: Error) => void;
   check.mockImplementationOnce(
     () =>
-      new Promise<void>((resolve) => {
-        finish = resolve;
+      new Promise((_, fail) => {
+        reject = fail;
       }),
   );
   const host = mount();
   await flushSfcHost();
   host.click();
   host.close();
-  current.value = undefined;
-  finish();
+  reject(new Error("page ended"));
   await flushSfcHost();
-  expect(open).not.toHaveBeenCalled();
   expect(message.error).not.toHaveBeenCalled();
 });
-
-it.each(["installing", "installed"])(
-  "reopens the %s update without checking again",
-  async (phase) => {
-    state.value = { phase };
-    busy.value = phase === "installing";
-    const host = mount();
-    await flushSfcHost();
-    expect(host.button()?.props.loading).toBe(false);
-    host.click();
-    await flushSfcHost();
-    expect(open).toHaveBeenCalledExactlyOnceWith(session);
-    expect(check).not.toHaveBeenCalled();
-  },
-);

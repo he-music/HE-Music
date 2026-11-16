@@ -33,40 +33,41 @@ var (
 	msgSendSuperAddr uintptr
 
 	// Typed variants of objc_msgSend for float and struct arguments.
-	msgRect          func(obj id, sel objc.SEL) NSRect
-	msgSetRect       func(obj id, sel objc.SEL, r NSRect)
-	msgSetRectBool   func(obj id, sel objc.SEL, r NSRect, b bool)
-	msgRectForRect   func(obj id, sel objc.SEL, r NSRect, style uint) NSRect
-	msgRectToRect    func(obj id, sel objc.SEL, r NSRect) NSRect
-	msgFloat         func(obj id, sel objc.SEL) float64
-	msgFloat32       func(obj id, sel objc.SEL) float32
-	msgSetFloat      func(obj id, sel objc.SEL, v float64)
-	msgSize          func(obj id, sel objc.SEL) NSSize
-	msgSetSize       func(obj id, sel objc.SEL, s NSSize)
-	msgSuperSetSize  func(sup uintptr, sel objc.SEL, s NSSize)
-	msgSuperPoint    func(sup uintptr, sel objc.SEL, p NSPoint) id
-	msgPoint         func(obj id, sel objc.SEL) NSPoint
-	msgSetPoint      func(obj id, sel objc.SEL, p NSPoint)
-	msgInitRect      func(obj id, sel objc.SEL, r NSRect) id
-	msgInitRectID    func(obj id, sel objc.SEL, r NSRect, a id) id
-	msgRectIDUint    func(obj id, sel objc.SEL, r NSRect, a id, n uint)
-	msgInitIDPoint   func(obj id, sel objc.SEL, a id, p NSPoint) id
-	msgInitWindow    func(obj id, sel objc.SEL, r NSRect, style uint, backing uint, deferFlag bool) id
-	msgColor         func(cls id, sel objc.SEL, r, g, b, a float64) id
-	msgOtherEvent    func(cls id, sel objc.SEL, typ uint, loc NSPoint, flags uint, ts float64, wn int, ctx id, subtype int16, d1, d2 int) id
-	msgPopUpMenu     func(menu id, sel objc.SEL, item id, loc NSPoint, view id) bool
-	msgNextEvent     func(app id, sel objc.SEL, mask uint64, until id, mode id, dequeue bool) id
-	msgPointFromView func(obj id, sel objc.SEL, p NSPoint, view id) NSPoint
-	msgDateSince     func(cls id, sel objc.SEL, seconds float64) id
-	msgFloatID       func(obj id, sel objc.SEL, v float64) id
-	msgFloat2ID      func(obj id, sel objc.SEL, a, b float64) id
-	msgFontFamily    func(obj id, sel objc.SEL, family id, traits uint, weight int, size float64) id
-	msgMouseEvent    func(cls id, sel objc.SEL, typ uint, loc NSPoint, flags uint, ts float64, wn int, ctx id, eventNumber int, clickCount int, pressure float32) id
-	msgHitTest       func(obj id, sel objc.SEL, p NSPoint) id
-	msgKeyEvent      func(cls id, sel objc.SEL, typ uint, loc NSPoint, flags uint, ts float64, wn int, ctx id, chars, charsIgnoring id, repeat bool, keyCode uint16) id
-	msgDrawImage     func(obj id, sel objc.SEL, dst, src NSRect, op uint, fraction float64)
-	msgInitBitmap    func(obj id, sel objc.SEL, planes uintptr, width, height, bitsPerSample, samplesPerPixel int, alpha, planar bool, colorSpace id, bytesPerRow, bitsPerPixel int) id
-	msgSetRateRange  func(obj id, sel objc.SEL, r caFrameRateRange)
+	msgRect            func(obj id, sel objc.SEL) NSRect
+	msgSetRect         func(obj id, sel objc.SEL, r NSRect)
+	msgSetRectBool     func(obj id, sel objc.SEL, r NSRect, b bool)
+	msgRectForRect     func(obj id, sel objc.SEL, r NSRect, style uint) NSRect
+	msgRectToRect      func(obj id, sel objc.SEL, r NSRect) NSRect
+	msgConvertRectView func(obj id, sel objc.SEL, r NSRect, view id) NSRect
+	msgFloat           func(obj id, sel objc.SEL) float64
+	msgFloat32         func(obj id, sel objc.SEL) float32
+	msgSetFloat        func(obj id, sel objc.SEL, v float64)
+	msgSize            func(obj id, sel objc.SEL) NSSize
+	msgSetSize         func(obj id, sel objc.SEL, s NSSize)
+	msgSuperSetSize    func(sup uintptr, sel objc.SEL, s NSSize)
+	msgSuperPoint      func(sup uintptr, sel objc.SEL, p NSPoint) id
+	msgPoint           func(obj id, sel objc.SEL) NSPoint
+	msgSetPoint        func(obj id, sel objc.SEL, p NSPoint)
+	msgInitRect        func(obj id, sel objc.SEL, r NSRect) id
+	msgInitRectID      func(obj id, sel objc.SEL, r NSRect, a id) id
+	msgRectIDUint      func(obj id, sel objc.SEL, r NSRect, a id, n uint)
+	msgInitIDPoint     func(obj id, sel objc.SEL, a id, p NSPoint) id
+	msgInitWindow      func(obj id, sel objc.SEL, r NSRect, style uint, backing uint, deferFlag bool) id
+	msgColor           func(cls id, sel objc.SEL, r, g, b, a float64) id
+	msgOtherEvent      func(cls id, sel objc.SEL, typ uint, loc NSPoint, flags uint, ts float64, wn int, ctx id, subtype int16, d1, d2 int) id
+	msgPopUpMenu       func(menu id, sel objc.SEL, item id, loc NSPoint, view id) bool
+	msgNextEvent       func(app id, sel objc.SEL, mask uint64, until id, mode id, dequeue bool) id
+	msgPointFromView   func(obj id, sel objc.SEL, p NSPoint, view id) NSPoint
+	msgDateSince       func(cls id, sel objc.SEL, seconds float64) id
+	msgFloatID         func(obj id, sel objc.SEL, v float64) id
+	msgFloat2ID        func(obj id, sel objc.SEL, a, b float64) id
+	msgFontFamily      func(obj id, sel objc.SEL, family id, traits uint, weight int, size float64) id
+	msgMouseEvent      func(cls id, sel objc.SEL, typ uint, loc NSPoint, flags uint, ts float64, wn int, ctx id, eventNumber int, clickCount int, pressure float32) id
+	msgHitTest         func(obj id, sel objc.SEL, p NSPoint) id
+	msgKeyEvent        func(cls id, sel objc.SEL, typ uint, loc NSPoint, flags uint, ts float64, wn int, ctx id, chars, charsIgnoring id, repeat bool, keyCode uint16) id
+	msgDrawImage       func(obj id, sel objc.SEL, dst, src NSRect, op uint, fraction float64)
+	msgInitBitmap      func(obj id, sel objc.SEL, planes uintptr, width, height, bitsPerSample, samplesPerPixel int, alpha, planar bool, colorSpace id, bytesPerRow, bitsPerPixel int) id
+	msgSetRateRange    func(obj id, sel objc.SEL, r caFrameRateRange)
 
 	blockCopy    func(block uintptr) uintptr
 	blockRelease func(block uintptr)
@@ -135,6 +136,7 @@ func load() {
 		purego.RegisterFunc(&msgRect, stret)
 		purego.RegisterFunc(&msgRectForRect, stret)
 		purego.RegisterFunc(&msgRectToRect, stret)
+		purego.RegisterFunc(&msgConvertRectView, stret)
 		purego.RegisterFunc(&msgSetRect, msgSendAddr)
 		purego.RegisterFunc(&msgDrawImage, msgSendAddr)
 		purego.RegisterFunc(&msgInitBitmap, msgSendAddr)

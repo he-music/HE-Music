@@ -16,7 +16,7 @@ The native UI rules below apply where the app uses package `ui`; preserve a web 
 - Bind persistent identity with `.Bind(&handle)`. `handle.Focused(c)` and `FocusWithin(c)` read committed focus independently of construction order. `handle.Focus(c)` requests focus and waits while hidden; `CancelFocus(c)` cancels it. Handles support several windows; select one with its Context, and keep widget state separate per window.
 - Use `.FocusBind(&a.pane, files)` when app data should request focus. The field holds desired focus; `ui.FocusedValue(c, &a.pane)` reads actual focus while a hidden target waits. Use a comparable field, unique target values and its zero value for no focus.
 - Use `handle.Bounds(c)` for committed geometry in input callbacks. `c.Resolve(handle)` returns only the current build's element. Do not capture an element in a later input callback to query its bounds.
-- Give controls stable, unique identity before construction with `c.Key(key)`, including stateful widgets. Container `.Key(key)` must precede children and local state. Configure fluent lists before `.Rows`; use `.ItemKey` for stable item identity and `ui.ListRow.Selected()`/`ListFocused()` for row styling.
+- Give controls stable, unique identity before construction with `c.Key(key)`, including stateful widgets. Container `.Key(key)` must precede children and local state. Configure fluent lists before `.Rows`; use `.ItemKey` for stable item identity and `ui.ListRow.Selected()`/`ListFocused()`/`Hovered()`/`Pressed()`/`PointerPosition()` for row styling, rather than `Hovered()`/`Pressed()` on an element inside the row, which takes the row's click.
 
 ## Input and actions
 

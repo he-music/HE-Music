@@ -11,8 +11,15 @@ type Automated interface {
 	// gave elements (ui's Key), by element ID.
 	AutomationTree() (tree *platform.AccessTree, keys map[uint64]any)
 	// FramePending reports whether the content asked for a frame that has
-	// not come yet, as it does after input and while something animates.
+	// not come yet, as it does after input and while something animates;
+	// in a window none of which shows, a frame that waits to be built.
 	FramePending() bool
+	// Settle builds at once the frame the content waits to build, if one
+	// waits, in a window none of which shows, whose surface may draw no
+	// frame until it shows (on macOS a hidden window's, or any while the
+	// screen is locked): the view then takes the input the plugin gave it,
+	// as a press, and the tree and captures are of what it shows now.
+	Settle()
 }
 
 // Automate is set by plugins/automation, in an app that links it and

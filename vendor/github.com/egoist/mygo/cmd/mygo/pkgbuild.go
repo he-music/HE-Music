@@ -49,11 +49,21 @@ var archPackages = map[string]string{
 	"git":                        "git",
 }
 
-// archDepends returns the Arch Linux packages the app depends on, those of
-// debDepends, and the Debian packages that have none archPackages knows.
+// archDepends returns the Arch Linux packages the app depends on: GTK,
+// WebKitGTK and l.Depends.Arch, or when l.Depends.legacy is true (linux.depends
+// is a list of Debian packages), those of debDepends mapped through
+// archPackages and the Debian packages that have none it knows.
 // A Debian dependency is one package, with its version and architecture
 // left out, or alternatives, of which the first that has one counts.
 func (l *Linux) archDepends() (depends, unknown []string) {
+	if !l.Depends.legacy {
+		depends = []string{"gtk3"}
+		if l.webView() {
+			depends = append(depends, "webkit2gtk-4.1")
+		}
+		return append(depends, l.Depends.Arch...), nil
+	}
+
 	for _, dep := range l.debDepends() {
 		found := ""
 		for alt := range strings.SplitSeq(dep, "|") {
@@ -134,12 +144,11 @@ func packageJSONString(root, key string) string {
 	return strings.TrimSpace(value)
 }
 
-// archLicense returns the license of the app for its PKGBUILD: the SPDX
-// expression of mygo.json, else of package.json, which Arch Linux takes
-// too, else LicenseRef-custom, which says that the license is the app's
-// own, as for UNLICENSED, npm's mark of a package that may not be used
-// freely.
-func archLicense(c *Config) string {
+// linuxLicense returns the license of the app for its Linux packages: the
+// SPDX expression of mygo.json, else of package.json, else
+// LicenseRef-custom, which says that the license is the app's own, as for
+// UNLICENSED, npm's mark of a package that may not be used freely.
+func (c *Config) linuxLicense() string {
 	license := c.License
 	if license == "" {
 		license = packageJSONString(c.root, "license")
@@ -240,7 +249,7 @@ func writePKGBUILD(c *Config, stage, name, goarch string, app []string, archive 
 	if u := archURL(c); u != "" {
 		fmt.Fprintf(&b, "url=%s\n", shQuote(u))
 	}
-	fmt.Fprintf(&b, "license=%s\n", shArray([]string{archLicense(c)}))
+	fmt.Fprintf(&b, "license=%s\n", shArray([]string{c.linuxLicense()}))
 	fmt.Fprintf(&b, "depends=%s\n", shArray(depends))
 	// The executable as built, as the Debian package has it.
 	b.WriteString("options=('!strip' '!debug')\n")

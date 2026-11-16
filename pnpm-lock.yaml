@@ -93,8 +93,8 @@ importers:
         specifier: ^2.3.0
         version: 2.3.0
       mygo-runtime:
-        specifier: 0.8.3
-        version: 0.8.3
+        specifier: 0.9.0
+        version: 0.9.0
       pinia:
         specifier: ^3.0.4
         version: 3.0.4(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3))
@@ -151,8 +151,8 @@ importers:
         specifier: ^16.5.0
         version: 16.5.0
       mygo-cli:
-        specifier: 0.8.3
-        version: 0.8.3
+        specifier: 0.9.0
+        version: 0.9.0
       naive-ui:
         specifier: ^2.45.3
         version: 2.45.3(vue@3.5.43(typescript@5.9.3))
@@ -280,33 +280,33 @@ packages:
     resolution: {integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==}
     engines: {node: '>=18'}
 
-  '@egoist/mygo-cli-darwin-arm64@0.8.3':
-    resolution: {integrity: sha512-qLkqs58idBSBONs1ce4YO5x+R67F/4HHiNMlT7fZE5QeyRHLdXnbqgVcvZ0Fwi2XSXMtXMF/AxZYtcrn5rJVrg==}
+  '@egoist/mygo-cli-darwin-arm64@0.9.0':
+    resolution: {integrity: sha512-esoSjfhKf8RwdRHkKI4HNtc33YIPfydAWPxQHSKe9CFts172XGzIdZYc937inr36SDaO4GBlLD3gXzhelZnvSw==}
     cpu: [arm64]
     os: [darwin]
 
-  '@egoist/mygo-cli-darwin-x64@0.8.3':
-    resolution: {integrity: sha512-G4UcPrqJxeXhIe8v/nF/Nu3l7MAbq0KloB1Hy75i50Ulc6YX4yvTTVNZjYFPfatJ3uoeIfRiolQmKLwhQ5vFUQ==}
+  '@egoist/mygo-cli-darwin-x64@0.9.0':
+    resolution: {integrity: sha512-fmNFgYceb5YuYrg83OKuKFef2uQ8riixjz6z1/wM/e1GcHKEoHbaERDMMJeq8z0ECByGVM6W7VDv8mQm/WjjNQ==}
     cpu: [x64]
     os: [darwin]
 
-  '@egoist/mygo-cli-linux-arm64@0.8.3':
-    resolution: {integrity: sha512-RcEeK3VwYbxEuuifL4N5PaUiKqTRt0NbDHt21bHBO8KMhM79xbMoK1rVBo0iinorP5lFJD2QSzn6OLwLZAR/PA==}
+  '@egoist/mygo-cli-linux-arm64@0.9.0':
+    resolution: {integrity: sha512-XhbAwmkNLv1sZrTi0yfbN4yWTCTOFiRecGwjHLTq6fH9fm9yansAuEekFoSRVigcVhax9hCblsuItqe1rnhXmQ==}
     cpu: [arm64]
     os: [linux]
 
-  '@egoist/mygo-cli-linux-x64@0.8.3':
-    resolution: {integrity: sha512-MHWMyaBLKLgLUugnzrS3OanZEO57w1Zf3XY2X3Gz0rMneKGAlszBgz0+I7bIY5dGZcdJXJ+2mPp9CqxJXSV2QA==}
+  '@egoist/mygo-cli-linux-x64@0.9.0':
+    resolution: {integrity: sha512-6uc+x92CLul/BiL9SZSDYNZ4oMHmzQUELCXeK0ICjx7kqY0dlvfQYBjyoB6n6Q/apX/OyKCToWRgCvtA22zqmw==}
     cpu: [x64]
     os: [linux]
 
-  '@egoist/mygo-cli-win32-arm64@0.8.3':
-    resolution: {integrity: sha512-25crS7CLiLv7rnx2+cYFa2zdNYyMrhgjQqXT6+5nvsGg+3/n9xY3ojkYtTOCN5nEXRTxOeUNXC9AJNrQFrf3HQ==}
+  '@egoist/mygo-cli-win32-arm64@0.9.0':
+    resolution: {integrity: sha512-vyVx8VpskvpZM1o356tGiN9CcO0WOBQpwsrg/2J++Ih0UOYQUDWYxltlG+fb36H1LBmVJxklkUSFT+FbGf1V2w==}
     cpu: [arm64]
     os: [win32]
 
-  '@egoist/mygo-cli-win32-x64@0.8.3':
-    resolution: {integrity: sha512-OE6v5PMN+2zpwgUpQlI/lUM9oqBO65+T0n6WrtR8F5YQ5PcIjvfMvyR558shrVXmw41IiZgan7ukaQJqs+/PBQ==}
+  '@egoist/mygo-cli-win32-x64@0.9.0':
+    resolution: {integrity: sha512-2N9SrpWyqkUyUAPXIVy/WYt779+UM4WLBIrPYlbQ6N2pLVn+B37zbi/3VfWQuWwxec6useeO6V9HHd3pGrZIBQ==}
     cpu: [x64]
     os: [win32]
 
@@ -1991,13 +1991,13 @@ packages:
   muggle-string@0.4.1:
     resolution: {integrity: sha512-VNTrAak/KhO2i8dqqnqnAHOa3cYBwXEZe9h+D5h/1ZqFSTEFHdM65lR7RoIqq3tBBYavsOXV84NoHXZ0AkPyqQ==}
 
-  mygo-cli@0.8.3:
-    resolution: {integrity: sha512-JHJkkrekMO9rKG/5au2NoFT0POF6LO6Q9p0wYKz0b4Rv6PV4fIqKZpLCpyS6FN3kfQudFtu64T/AcZ/1SJtbVQ==}
+  mygo-cli@0.9.0:
+    resolution: {integrity: sha512-a6vYSXrIvBXIki/cECvVQz3Oj4HYkBn1lgGhWtimN98mnS7hhK2mK6L4nCX5SVuX4iJyBpCo2sIvyjZVVNnC1Q==}
     engines: {node: '>=18'}
     hasBin: true
 
-  mygo-runtime@0.8.3:
-    resolution: {integrity: sha512-B2hbQcb6obuqYR+ZP+aJaB+zW7OIsjZrEdj3EqL42VZYyGKa6J4qXvbGkJ0mfxl8zVEkQBO76QDg3/Sl87RDIg==}
+  mygo-runtime@0.9.0:
+    resolution: {integrity: sha512-l+eWGHUmTQeJ4ztoH969xiIo1hpLqPIown87U2mDza922dE+azgvXRh5DyutajIWdGD9UB2NNWd6iwDEUbVgIg==}
 
   naive-ui@2.45.3:
     resolution: {integrity: sha512-D83gJ+6zUdkQ5DuUbmlfyaM1t8pV5WMPa6KmL9mByqQuiL12qBdA0n/iEIth4dQw1x/duNGpOS2anpt5FKO1kw==}
@@ -2728,22 +2728,22 @@ snapshots:
   '@csstools/css-tokenizer@3.0.4':
     optional: true
 
-  '@egoist/mygo-cli-darwin-arm64@0.8.3':
+  '@egoist/mygo-cli-darwin-arm64@0.9.0':
     optional: true
 
-  '@egoist/mygo-cli-darwin-x64@0.8.3':
+  '@egoist/mygo-cli-darwin-x64@0.9.0':
     optional: true
 
-  '@egoist/mygo-cli-linux-arm64@0.8.3':
+  '@egoist/mygo-cli-linux-arm64@0.9.0':
     optional: true
 
-  '@egoist/mygo-cli-linux-x64@0.8.3':
+  '@egoist/mygo-cli-linux-x64@0.9.0':
     optional: true
 
-  '@egoist/mygo-cli-win32-arm64@0.8.3':
+  '@egoist/mygo-cli-win32-arm64@0.9.0':
     optional: true
 
-  '@egoist/mygo-cli-win32-x64@0.8.3':
+  '@egoist/mygo-cli-win32-x64@0.9.0':
     optional: true
 
   '@emnapi/runtime@1.11.3':
@@ -4384,16 +4384,16 @@ snapshots:
 
   muggle-string@0.4.1: {}
 
-  mygo-cli@0.8.3:
+  mygo-cli@0.9.0:
     optionalDependencies:
-      '@egoist/mygo-cli-darwin-arm64': 0.8.3
-      '@egoist/mygo-cli-darwin-x64': 0.8.3
-      '@egoist/mygo-cli-linux-arm64': 0.8.3
-      '@egoist/mygo-cli-linux-x64': 0.8.3
-      '@egoist/mygo-cli-win32-arm64': 0.8.3
-      '@egoist/mygo-cli-win32-x64': 0.8.3
+      '@egoist/mygo-cli-darwin-arm64': 0.9.0
+      '@egoist/mygo-cli-darwin-x64': 0.9.0
+      '@egoist/mygo-cli-linux-arm64': 0.9.0
+      '@egoist/mygo-cli-linux-x64': 0.9.0
+      '@egoist/mygo-cli-win32-arm64': 0.9.0
+      '@egoist/mygo-cli-win32-x64': 0.9.0
 
-  mygo-runtime@0.8.3: {}
+  mygo-runtime@0.9.0: {}
 
   naive-ui@2.45.3(vue@3.5.43(typescript@5.9.3)):
     dependencies:

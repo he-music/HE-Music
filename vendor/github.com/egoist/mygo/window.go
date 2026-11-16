@@ -208,6 +208,7 @@ type WindowOptions struct {
 	// same key, for example at the next launch, gets them back as long as
 	// it would show on a connected display: they override X, Y, Width,
 	// Height, UseContentSize, Maximized and FullScreen.
+	// App.ClearWindowStates forgets them.
 	StateKey string
 
 	// Content makes the window show a user interface MyGo draws itself,
@@ -258,6 +259,14 @@ type WindowState struct {
 // field of a state, as JSON does: on Windows, a window whose state lost
 // its pixels (WindowState.PixelX) is centered when the displays have
 // different scales.
+//
+// In a quit, the states are saved after the OnBeforeQuit listeners have
+// run, as each window closes, and once more after the event loop has
+// stopped, right before the OnQuit listeners run: states that the app
+// removes from the store itself in OnBeforeQuit are written again.
+// App.ClearWindowStates drops them for good instead, from any of those
+// listeners or at any other time, through SaveWindowStates with no
+// states.
 type WindowStateStore interface {
 	// LoadWindowStates returns the saved states. It is called once, when
 	// the first window with a StateKey is created. Without states (nil, or
@@ -265,8 +274,9 @@ type WindowStateStore interface {
 	LoadWindowStates() (map[string]WindowState, error)
 	// SaveWindowStates replaces the saved states with states, which the
 	// store may keep. It is called when a window with a StateKey closes
-	// and when the app quits, if a state changed. After an error the
-	// next call saves the states again.
+	// and when the app quits, if a state changed, and with an empty map
+	// by App.ClearWindowStates. After an error the next call saves the
+	// states again.
 	SaveWindowStates(states map[string]WindowState) error
 }
 
@@ -280,6 +290,18 @@ func (a *Application) SetWindowStateStore(s WindowStateStore) {
 	a.stateStore = s
 	a.mu.Unlock()
 }
+
+// ClearWindowStates forgets the states of the windows
+// (WindowOptions.StateKey), as an app's "Reset settings" does: it saves
+// no states to the store (window-state.json, or the store of
+// SetWindowStateStore, with an empty map), and the windows save theirs no
+// more for the rest of the run. The windows open keep their bounds; those
+// created afterwards, as those of the next launch, get their options.
+// It may be called at any time, from any goroutine, from the OnBeforeQuit,
+// OnWillQuit and OnQuit listeners too, which run before the quit's last
+// save, and before Run. It returns the store's error; the next save, when
+// a window closes or the app quits, tries again.
+func (a *Application) ClearWindowStates() error { return onMainValue(clearWindowStates) }
 
 // Window is a native window hosting a web page, or the Content of package
 // ui. Create windows with NewWindow once the application is ready.
@@ -378,6 +400,7 @@ type Window struct {
 	permissionHandler  func(PermissionRequest) bool
 	authHandler        func(AuthRequest) AuthResponse
 	certificateHandler func(CertificateError) bool
+	clientCertHandler  func(ClientCertificateRequest) ClientCertificateResponse
 	pageCtx            context.Context
 	pageCancel         context.CancelFunc
 	// channels are those of the current page, by the page's id for them.
@@ -923,6 +946,10 @@ func (w *Window) destroy() {
 func (w *Window) Show() { onMain(w.show) }
 
 func (w *Window) show() {
+	if backgroundShow {
+		w.showInactive()
+		return
+	}
 	w.showLater = false
 	if w.native == nil {
 		return
@@ -939,27 +966,35 @@ func (w *Window) show() {
 }
 
 // ShowInactive shows the window without focusing it.
-func (w *Window) ShowInactive() {
-	onMain(func() {
-		w.showLater = false
-		if w.native == nil {
-			return
-		}
-		visible := w.native.IsVisible()
-		if w.fitShow(visible); w.native == nil {
-			return // the frame it laid out closed it
-		}
-		w.native.ShowInactive()
-		w.shown = true
-		if !w.focusKnown {
-			w.focusKnown = true
-			scheduleActive()
-		}
-		if !visible {
-			fire(&w.onShow)
-		}
-	})
+func (w *Window) ShowInactive() { onMain(w.showInactive) }
+
+func (w *Window) showInactive() {
+	w.showLater = false
+	if w.native == nil {
+		return
+	}
+	visible := w.native.IsVisible()
+	if w.fitShow(visible); w.native == nil {
+		return // the frame it laid out closed it
+	}
+	w.native.ShowInactive()
+	w.shown = true
+	if !w.focusKnown {
+		w.focusKnown = true
+		scheduleActive()
+	}
+	if !visible {
+		fire(&w.onShow)
+	}
 }
+
+// backgroundShow tells that an app `mygo dev -background` launched
+// (devBackground) has not come to the front yet: its windows show without
+// the focus, those NewWindow shows and those the app shows itself, as one
+// made Hidden until OnReadyToShow, since Show would bring the app there,
+// until one of its windows takes the focus, as the user clicks it, or the
+// app becomes the active one. Main thread only.
+var backgroundShow = devBackground
 
 // fitShow sizes a hidden flyout of native UI that takes its content's
 // size to that content before it shows (fitContent.show). Main thread
@@ -987,7 +1022,12 @@ func (w *Window) Hide() {
 // WindowOptions.Panel.
 func (w *Window) IsPanel() bool { return w.panel }
 
-// IsVisible reports whether the window is shown.
+// IsVisible reports whether the window is shown: Show or ShowInactive
+// (or WindowOptions) showed it and Hide did not hide it since. A
+// minimized window is still shown, on every platform, as is one on
+// another desktop or covered by other windows. To ask whether it is
+// minimized, use IsMinimized; whether any of a window of native UI shows
+// on screen, Context.WindowHidden in its view.
 func (w *Window) IsVisible() bool { return get(w, platform.Window.IsVisible) }
 
 // Focus focuses the window.
@@ -1266,9 +1306,49 @@ func (w *Window) SetHasShadow(v bool) { w.do(func(n platform.Window) { n.SetHasS
 // HasShadow reports whether the window has a shadow.
 func (w *Window) HasShadow() bool { return get(w, platform.Window.HasShadow) }
 
-// SetIgnoreMouseEvents makes the window transparent to mouse events.
+// SetIgnoreMouseEvents makes the window transparent to mouse events. It
+// wins over SetInputRegion.
 func (w *Window) SetIgnoreMouseEvents(v bool) {
 	w.do(func(n platform.Window) { n.SetIgnoreMouseEvents(v) })
+}
+
+// SetInputRegion limits the part of the window that takes the mouse to
+// rects, in DIPs from the top-left corner of its content: presses, moves
+// and the wheel elsewhere go through to what is behind the window, as
+// with SetIgnoreMouseEvents, another app's window or the desktop. It is
+// what a desktop pet needs, a frameless, transparent window always on
+// top: its character and speech bubble take clicks, and the rest of the
+// screen works as if the window were not there. Native UI's PassThrough
+// only lets the pointer through an element to the window's own content.
+//
+// nil gives the window all of it back, as it starts; an empty slice none
+// of it. Rectangles without area are dropped. Set the region again as
+// what takes clicks moves or changes size.
+//
+// On Linux, the window's input shape is the region (X11's SHAPE
+// extension, Wayland's input region). macOS and Windows shape no window's
+// input: the window takes the mouse or lets all of it through, switched
+// as the pointer comes into the region or leaves it, which macOS tells as
+// it moves and Windows is asked at each tick of its clock (15.6 ms) while
+// the window shows.
+// A button held keeps it as it is, so that a drag that started on the
+// character, as one moving the window, ends there; the release settles
+// it. In browsers it does nothing.
+func (w *Window) SetInputRegion(rects []Rectangle) {
+	var region []platform.Rect
+	if rects != nil {
+		region = make([]platform.Rect, 0, len(rects))
+		for _, r := range rects {
+			if r.Width > 0 && r.Height > 0 {
+				region = append(region, platform.Rect(r))
+			}
+		}
+	}
+	w.do(func(n platform.Window) {
+		if n, ok := n.(platform.InputRegionWindow); ok {
+			n.SetInputRegion(region)
+		}
+	})
 }
 
 // SetActiveAppearance keeps the window drawn as active, the key window of
@@ -1864,7 +1944,8 @@ func (w *Window) flush() {
 }
 
 // OnClose is called when the window is about to close. Call
-// e.PreventDefault to keep it open.
+// e.PreventDefault to keep it open, except when the OS ends the session
+// (see Application.OnBeforeQuit): the window closes then all the same.
 func (w *Window) OnClose(fn func(e *CloseEvent)) (off func()) { return w.onClose.add(fn, false) }
 
 // OnClosed is called after the window has been closed.
@@ -2041,6 +2122,7 @@ func (h *windowHandler) Closed() {
 var closingParents int
 
 func (h *windowHandler) Focused() {
+	backgroundShow = false
 	windows.Lock()
 	windows.focused = h.w
 	windows.Unlock()

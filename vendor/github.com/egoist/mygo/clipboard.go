@@ -8,7 +8,8 @@ import (
 	"github.com/egoist/mygo/transfer"
 )
 
-// ClipboardOptions configures the lifetime of a clipboard write.
+// ClipboardOptions configures a clipboard write: the lifetime of its
+// providers, and whether its content is confidential.
 type ClipboardOptions struct {
 	// OnRelease runs once on the main thread after native providers are no
 	// longer needed: replacement, Clear, Flush, or application shutdown.
@@ -17,6 +18,18 @@ type ClipboardOptions struct {
 	// a new clipboard. It does not run when Write fails. Closing a window
 	// does not release the application-owned clipboard.
 	OnRelease func()
+	// Concealed marks the content as confidential, such as a password, for
+	// the clipboard managers that read the platform's mark; what they do
+	// with it, such as leaving it out of their histories, is theirs. macOS
+	// adds nspasteboard.org's org.nspasteboard.ConcealedType to every item
+	// and writes for the current host only, which keeps the content off
+	// Universal Clipboard; Windows adds
+	// ExcludeClipboardContentFromMonitorProcessing, which keeps it out of
+	// the clipboard history and off the user's other devices; Linux offers
+	// KDE's x-kde-passwordManagerHint. Browsers have no such mark. Flush
+	// keeps the marks. The content stays on the clipboard until the app
+	// replaces or clears it.
+	Concealed bool
 }
 
 // ErrClipboardReentrant means a provider tried to access the clipboard.
@@ -149,7 +162,7 @@ func (ClipboardModule) Write(data transfer.Data, options ...ClipboardOptions) er
 			}
 			items = append(items, transfer.NewItem(reps...))
 		}
-		err := backend().Clipboard().WriteData(transfer.New(items...), l.release)
+		err := backend().Clipboard().WriteData(transfer.New(items...), opts.Concealed, l.release)
 		if err != nil {
 			l.onRelease = nil
 			return err

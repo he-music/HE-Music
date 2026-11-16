@@ -28,6 +28,7 @@
 package i18n
 
 import (
+	"encoding/binary"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -117,6 +118,47 @@ var modifierScripts = map[string]string{
 // they prefer more wins over a closer match of one they prefer less: fr
 // for fr-CA wins over de for de.
 func Match(preferred, supported []string) string {
+	// The key: each tag after its length, preferred then supported.
+	var buf [256]byte
+	key := buf[:0]
+	for _, list := range [2][]string{preferred, supported} {
+		key = binary.AppendUvarint(key, uint64(len(list)))
+		for _, t := range list {
+			key = binary.AppendUvarint(key, uint64(len(t)))
+			key = append(key, t...)
+		}
+	}
+	matched.mu.Lock()
+	m, ok := matched.m[string(key)]
+	matched.mu.Unlock()
+	if ok {
+		return m
+	}
+	m = match(preferred, supported)
+	matched.mu.Lock()
+	if matched.m == nil {
+		matched.m = map[string]string{}
+	}
+	if len(matched.m) < maxMatched {
+		matched.m[string(key)] = m
+	}
+	matched.mu.Unlock()
+	return m
+}
+
+// matched caches Match for the first maxMatched lists asked for. Parsing
+// the tags and building a matcher cost more than saying a message, and an
+// app works the language it shows out of the same lists for every message
+// it says before it runs, as in its tests.
+var matched struct {
+	mu sync.Mutex
+	m  map[string]string
+}
+
+const maxMatched = 256
+
+// match is Match, uncached.
+func match(preferred, supported []string) string {
 	var tags []language.Tag
 	var kept []string
 	for _, s := range supported {

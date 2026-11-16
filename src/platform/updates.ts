@@ -1,15 +1,12 @@
-import type { UpdatesEvent, UpdatesState } from "./mygo.bindings";
+import { shallowRef } from "vue";
+import type { UpdatesState } from "./mygo.bindings";
 
 export interface PlatformUpdates {
-  begin(requestID: number): Promise<void>;
-  getState(requestID: number, epoch: number): Promise<void>;
-  check(requestID: number, epoch: number, revision: number): Promise<void>;
-  download(requestID: number, epoch: number, revision: number): Promise<void>;
-  install(requestID: number, epoch: number, revision: number): Promise<void>;
-  cancel?(requestID: number, epoch: number, revision: number): Promise<void>;
-  restart(requestID: number, epoch: number, revision: number): Promise<void>;
-  teardown(requestID: number, epoch: number): Promise<void>;
-  onChange(listener: (event: UpdatesEvent) => void): () => void;
+  getState(): Promise<UpdatesState>;
+  configure(automaticChecks: boolean): Promise<void>;
+  check(): Promise<void>;
+  onChange(listener: (state: UpdatesState) => void): () => void;
 }
 
-export type { UpdatesEvent, UpdatesState };
+export const updatesState = shallowRef<UpdatesState>();
+export type { UpdatesState };

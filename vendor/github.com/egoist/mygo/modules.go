@@ -63,6 +63,20 @@ func (ShellModule) TrashItem(path string) error {
 	return onMainValue(func() error { return backend().Shell().TrashItem(abs) })
 }
 
+// PreviewItem shows the item at path in the Quick Look panel, the preview
+// Finder opens with the space bar. A relative path is relative to the
+// working directory.
+//
+// It is supported on macOS only; all other platforms return ErrUnsupported.
+func (ShellModule) PreviewItem(path string) error {
+	needsApp("Shell.PreviewItem")
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return err
+	}
+	return onMainValue(func() error { return backend().Shell().PreviewItem(abs) })
+}
+
 // FileIcon returns the icon the file manager shows for a file, a folder or
 // an application, as a PNG image of size by size pixels: pass the size in
 // DIPs times the display's scale factor for a sharp icon. On Windows path
@@ -156,6 +170,22 @@ func (ShellModule) LaunchApp(app InstalledApp) error {
 		return errors.New("mygo: Shell.LaunchApp: the app has no path")
 	}
 	return onMainValue(func() error { return backend().Shell().OpenApplication(app.Path) })
+}
+
+// DefaultApp returns the application the system would use to open url, the
+// default handler for it: the browser for a web URL, the editor for a
+// text file, and so on. url may be a web URL such as https://example.com,
+// a file:// URL, or any URL whose scheme is registered with the system.
+// It is supported on macOS, Linux and Windows; other platforms return
+// ErrUnsupported. It reads system associations: call it from a goroutine of
+// its own, which it does not block the main thread from.
+func (ShellModule) DefaultApp(url string) (InstalledApp, error) {
+	needsApp("Shell.DefaultApp")
+	if !isMainThread() {
+		App.waitReady()
+	}
+	app, err := backend().Shell().DefaultApp(url)
+	return InstalledApp(app), err
 }
 
 // Beep plays the system alert sound.
@@ -765,7 +795,8 @@ type TrayOptions struct {
 	// Icon is a PNG image, ideally 16x16 points (32x32 pixels for Retina).
 	Icon []byte
 	// IconIsTemplate lets macOS tint a black-and-transparent icon to match
-	// the menu bar; Windows shows it white on a dark taskbar.
+	// the menu bar; Windows shows it white on a dark taskbar, and Linux
+	// while the desktop prefers dark.
 	IconIsTemplate bool
 	// Title is shown next to the icon (macOS).
 	Title   string
@@ -920,8 +951,9 @@ func (t *Tray) OnRightClick(fn func()) (off func()) { return t.onRight.add(fn, f
 // Dark reports whether the bar the icon shows on is dark: the macOS menu
 // bar, as AppKit tints its items (by the system's appearance, or the
 // wallpaper under a translucent menu bar), or the Windows taskbar, in
-// the system's mode, which may differ from the apps'. It is false on
-// Linux, where panels draw their icon themes their own way.
+// the system's mode, which may differ from the apps'. On Linux, where
+// AppIndicator tells nothing of the panel, it is the desktop's color
+// scheme (the settings portal's color-scheme), false without a portal.
 //
 // A template icon (TrayOptions.IconIsTemplate) follows the bar by itself:
 // Dark is for an icon in color, as one drawing its measures in theirs,

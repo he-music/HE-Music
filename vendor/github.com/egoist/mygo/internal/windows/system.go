@@ -9,6 +9,8 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"syscall"
@@ -136,7 +138,7 @@ func (c clipboard) ReadText() string {
 	return string(utf16Decode(u))
 }
 
-func (c clipboard) WriteText(text string) { _ = c.WriteData(transfer.TextData(text), nil) }
+func (c clipboard) WriteText(text string) { _ = c.WriteData(transfer.TextData(text), false, nil) }
 
 // CF_HTML wraps a fragment in a header of byte offsets.
 func (c clipboard) ReadHTML() string {
@@ -170,7 +172,7 @@ func htmlOffset(data, key string) int {
 }
 
 func (c clipboard) WriteHTML(markup string) {
-	_ = c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.HTML, []byte(markup)), transfer.Bytes(transfer.Text, []byte(markup)))), nil)
+	_ = c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.HTML, []byte(markup)), transfer.Bytes(transfer.Text, []byte(markup)))), false, nil)
 }
 
 // htmlData is shared by clipboard and drag representations.
@@ -208,7 +210,7 @@ func (c clipboard) WriteImage(data []byte) error {
 	if _, err := png.Decode(bytes.NewReader(data)); err != nil {
 		return err
 	}
-	return c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.PNG, data))), nil)
+	return c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.PNG, data))), false, nil)
 }
 
 // dibToImage decodes an uncompressed 24 or 32-bit device independent
@@ -287,7 +289,7 @@ func imageToDIB(img image.Image) []byte {
 	return out
 }
 
-func (c clipboard) Clear() { _ = c.WriteData(transfer.Data{}, nil) }
+func (c clipboard) Clear() { _ = c.WriteData(transfer.Data{}, false, nil) }
 func (c clipboard) AvailableFormats() []string {
 	var out []string
 	for _, f := range c.Formats() {
@@ -316,6 +318,67 @@ func (shell) ShowItemInFolder(path string) {
 }
 
 func (shell) Beep() { procMessageBeep.Call(0) }
+
+func (shell) PreviewItem(string) error { return platform.ErrUnsupported }
+
+// DefaultApp returns the application that opens urlStr: the default handler
+// for its scheme or file extension, as AssocQueryString resolves it. For
+// packaged apps the AppUserModelID maps to the same shell:AppsFolder item
+// that InstalledApps lists; for desktop apps the executable path is used.
+func (shell) DefaultApp(urlStr string) (platform.Application, error) {
+	assoc := ""
+	if u, e := url.Parse(urlStr); e == nil && u.Scheme != "" {
+		if u.Scheme == "file" {
+			assoc = filepath.Ext(u.Path)
+		} else {
+			assoc = u.Scheme
+		}
+	} else {
+		assoc = filepath.Ext(urlStr)
+	}
+	if assoc == "" {
+		return platform.Application{}, fmt.Errorf("mygo: invalid URL %q", urlStr)
+	}
+	if aumid, e := assocQueryString(assocstrAppID, assoc); e == nil && aumid != "" {
+		name := aumid
+		if n, e := assocQueryString(assocstrFriendlyAppName, assoc); e == nil && n != "" {
+			name = n
+		}
+		return platform.Application{Name: name, ID: aumid, Path: appsFolder + aumid}, nil
+	}
+	exe, e := assocQueryString(assocstrExecutable, assoc)
+	if e != nil || exe == "" {
+		return platform.Application{}, fmt.Errorf("mygo: no application found for %q", urlStr)
+	}
+	if isOpenWithExecutable(exe) {
+		return platform.Application{}, fmt.Errorf("mygo: no application found for %q", urlStr)
+	}
+	if app, ok, _ := findInstalledApplication(exe); ok {
+		return app, nil
+	}
+	name := exe
+	if n, e := assocQueryString(assocstrFriendlyAppName, assoc); e == nil && n != "" {
+		name = n
+	}
+	return platform.Application{Name: name, ID: exe, Path: exe}, nil
+}
+
+func assocQueryString(str uint32, assoc string) (string, error) {
+	var buf [4096]uint16
+	n := uint32(len(buf))
+	r, _, _ := procAssocQueryStringW.Call(
+		0,
+		uintptr(str),
+		uintptr(unsafe.Pointer(u16(assoc))),
+		0,
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(unsafe.Pointer(&n)),
+	)
+	if r != 0 {
+		return "", fmt.Errorf("mygo: AssocQueryStringW failed: 0x%x", uint32(r))
+	}
+	return syscall.UTF16ToString(buf[:n]), nil
+}
 
 // Screen.
 

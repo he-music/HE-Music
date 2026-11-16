@@ -1,0 +1,14 @@
+# svu configuration — semantic versioning from conventional commits.
+# https://github.com/caarlos0/svu
+verbose: false
+tag:
+  pattern: "v*"
+  prefix: "v"
+  # mode "all" considers all commits since the last tag.
+  mode: all
+log:
+  directory:
+    - "."
+metadata: ""
+always: false
+v0: false

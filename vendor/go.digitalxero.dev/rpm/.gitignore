@@ -1,0 +1,14 @@
+# Go build/module caches (kept inside the project dir for GitLab CI caching).
+/.go/
+/.cache/
+
+# Test coverage output.
+/coverage.out
+/coverage.txt
+/coverage.xml
+
+# Local sample output from scripts/verify_rpm.sh.
+/.samples/
+
+# Built packages.
+*.rpm

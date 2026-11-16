@@ -33,6 +33,8 @@ type DesktopLifecycle struct {
 	listeners   []func()
 	stopOwner   func() bool
 	promptTimer *time.Timer
+	saveOnQuit  bool
+	quitSave    quitSaveGuard
 }
 
 func init() {
@@ -46,6 +48,7 @@ func (l *DesktopLifecycle) attachMainWindow(win *mygo.Window, enableTray bool) {
 		return
 	}
 	l.main = win
+	l.saveOnQuit = enableTray
 	// 首次导航也会 revoke，页面就绪前不因此显示隐藏窗口。
 	l.starting = !win.IsVisible()
 	desktopLyrics.attachMainWindow(win)
@@ -68,7 +71,11 @@ func (l *DesktopLifecycle) attachMainWindow(win *mygo.Window, enableTray bool) {
 			l.starting = false
 			l.revoke()
 		}),
-		mygo.App.OnBeforeQuit(func(*mygo.QuitEvent) {
+		mygo.App.OnBeforeQuit(func(event *mygo.QuitEvent) {
+			if !event.SessionEnding && !l.prepareQuitWrites() {
+				event.PreventDefault()
+				return
+			}
 			desktopShortcuts.revoke()
 			desktopProtocols.revoke()
 			desktopTaskbar.revoke()
@@ -76,7 +83,6 @@ func (l *DesktopLifecycle) attachMainWindow(win *mygo.Window, enableTray bool) {
 			desktopSystemMedia.revoke()
 			desktopMpv.revoke()
 			desktopFiles.revoke()
-			desktopUpdates.revoke()
 			desktopLyrics.revoke()
 			l.state.beginQuit()
 			l.stopPrompt()
@@ -305,7 +311,6 @@ func (l *DesktopLifecycle) revoke() {
 	desktopSystemMedia.revoke()
 	desktopMpv.revoke()
 	desktopFiles.revoke()
-	desktopUpdates.revoke()
 	desktopLyrics.revoke()
 	l.state.invalidate()
 	l.stopPrompt()
@@ -330,7 +335,6 @@ func (l *DesktopLifecycle) cleanup() {
 	desktopControl.revoke()
 	desktopSystemMedia.revoke()
 	desktopFiles.revoke()
-	desktopUpdates.revoke()
 	desktopLyrics.revoke()
 	l.traySession.revoke()
 	l.stopPrompt()

@@ -3,6 +3,7 @@ package gpu
 import (
 	"cmp"
 	"image"
+	"math"
 	"slices"
 
 	"github.com/egoist/mygo/internal/raster"
@@ -51,6 +52,15 @@ func (b *Builder) prepare(in *Instance, m scene.Affine, c *clip) bool {
 	if !c.masked {
 		return true
 	}
+	// Stationary clips can often reduce to one rounded rectangle, even
+	// around scaled content or a fractional scrolling viewport. Evaluate
+	// that geometry in the shader instead of rasterizing a window-sized mask.
+	if !c.moved && !c.masks {
+		if rounded, ok := b.analyticClip(); ok {
+			in.Clip, in.ClipRadii = rect(rounded.rect), rounded.radii
+			return true
+		}
+	}
 	// A hard clip sharing the drawing's coordinates is cheap to evaluate in
 	// the fragment shader. Keep the rounded ancestor's mask stationary even
 	// when a text input or custom clipped drawing moves within it. Drawing
@@ -87,6 +97,150 @@ func (b *Builder) prepare(in *Instance, m scene.Affine, c *clip) bool {
 	in.ClipRadii = [4]float32{}
 	in.Transform1[3] = 1
 	return true
+}
+
+// analyticClip removes clips that cover every pixel of the scissor, then
+// represents the remaining coverage with one rectangle and its corners.
+// Overlapping antialiased edges still need their multiplied pixel mask.
+func (b *Builder) analyticClip() (clip, bool) {
+	var rounded, hard *clip
+	sc := b.stack[len(b.stack)-1].scissor
+	area := scene.Rect{X: float32(sc.Left), Y: float32(sc.Top), W: float32(sc.Right - sc.Left), H: float32(sc.Bottom - sc.Top)}
+	for i := range b.stack {
+		c := &b.stack[i]
+		// Only Metal's shader evaluates continuous corners (SplitCorners):
+		// the other renderers, which never draw them in an app, keep the
+		// mask. On Metal, a pane against the side of a rounded frame, as a
+		// sidebar, cuts the frame's curves in the shader rather than with a
+		// mask of the whole frame (#1511).
+		if continuous(c.radii) && !b.contClips {
+			return clip{}, false
+		}
+		if c.radii == [4]float32{} && integerClip(c.rect) {
+			continue // the batch scissor implements these edges exactly
+		}
+		if clipOpaqueWithin(c, area) {
+			continue
+		}
+		if c.radii != [4]float32{} {
+			if rounded != nil {
+				return clip{}, false
+			}
+			rounded = c
+		} else {
+			if hard != nil {
+				return clip{}, false
+			}
+			hard = c
+		}
+	}
+	if rounded == nil {
+		if hard != nil {
+			return *hard, true
+		}
+		return clip{rect: area}, true
+	}
+	if hard != nil {
+		return intersectAnalyticClip(*rounded, hard.rect)
+	}
+	return *rounded, true
+}
+
+func integerClip(r scene.Rect) bool {
+	for _, v := range [4]float32{r.X, r.Y, r.X + r.W, r.Y + r.H} {
+		if v != float32(math.Floor(float64(v))) {
+			return false
+		}
+	}
+	return true
+}
+
+// clipCornerBounds conservatively encloses each curve and its
+// antialiasing: a continuous one (negative radius) reaches contExtent
+// times its radius from its corner, where the shader stops evaluating it
+// (contValue).
+func clipCornerBounds(c *clip) [4]scene.Rect {
+	r := c.rect
+	var boxes [4]scene.Rect
+	for i, radius := range c.radii {
+		if radius == 0 {
+			continue
+		}
+		reach := radius + 1
+		if radius < 0 {
+			reach = -radius*contExtent + 1
+		}
+		box := scene.Rect{X: r.X, Y: r.Y, W: reach, H: reach}
+		if i == 1 || i == 2 {
+			box.X = r.X + r.W - reach
+		}
+		if i == 2 || i == 3 {
+			box.Y = r.Y + r.H - reach
+		}
+		boxes[i] = box
+	}
+	return boxes
+}
+
+// clipOpaqueWithin proves that a clip contributes coverage 1 to every
+// integer pixel box in area; merely containing the pixel centers is unsafe.
+func clipOpaqueWithin(c *clip, area scene.Rect) bool {
+	r := c.rect
+	if area.X < r.X || area.Y < r.Y || area.X+area.W > r.X+r.W || area.Y+area.H > r.Y+r.H {
+		return false
+	}
+	for _, box := range clipCornerBounds(c) {
+		if !box.Intersect(area).Empty() {
+			return false
+		}
+	}
+	return true
+}
+
+// intersectAnalyticClip trims away whole corners, as a fractional lyrics
+// viewport trims its player card. Cutting a curve or multiplying partial
+// coverages cannot be represented by a single rounded rectangle.
+func intersectAnalyticClip(c clip, hard scene.Rect) (clip, bool) {
+	r := c.rect.Intersect(hard)
+	if r.W < 1 || r.H < 1 {
+		return clip{}, false
+	}
+	before := [4]float32{c.rect.X, c.rect.Y, c.rect.X + c.rect.W, c.rect.Y + c.rect.H}
+	after := [4]float32{r.X, r.Y, r.X + r.W, r.Y + r.H}
+	edges := [4]float32{hard.X, hard.Y, hard.X + hard.W, hard.Y + hard.H}
+	for i, edge := range edges {
+		old := float64(before[i])
+		if i < 2 {
+			if edge <= before[i] && float64(edge) > math.Floor(old) || edge > before[i] && math.Floor(float64(edge)) < math.Ceil(old) {
+				return clip{}, false
+			}
+		} else if edge >= before[i] && float64(edge) < math.Ceil(old) || edge < before[i] && math.Ceil(float64(edge)) > math.Floor(old) {
+			return clip{}, false
+		}
+	}
+	pixels := scene.Rect{X: float32(math.Floor(float64(r.X))), Y: float32(math.Floor(float64(r.Y)))}
+	pixels.W, pixels.H = float32(math.Ceil(float64(r.X+r.W)))-pixels.X, float32(math.Ceil(float64(r.Y+r.H)))-pixels.Y
+	for i, box := range clipCornerBounds(&c) {
+		sides := [4][2]int{{0, 1}, {2, 1}, {2, 3}, {0, 3}}[i]
+		if after[sides[0]] != before[sides[0]] || after[sides[1]] != before[sides[1]] {
+			if !box.Intersect(pixels).Empty() {
+				return clip{}, false
+			}
+			c.radii[i] = 0
+		} else if box.W > r.W/2 || box.H > r.H/2 {
+			// Moving a surviving curve across the new midpoint would change
+			// which corner the shader evaluates there. A continuous curve
+			// keeps its shape too, which depends on the sides and its
+			// neighbors' radii only where they are shorter than
+			// contExtent times the radii they join (the shader's
+			// contCorner): a side the cut leaves is as long as before, with
+			// the same neighbor, and one it shortens is still twice this
+			// box long, its neighbor cut away beyond it.
+			return clip{}, false
+		}
+	}
+	c.rect = r
+	return c, true
 }
 
 func (b *Builder) clipTexture(c *clip, shapes []scene.ClipShape) uintptr {

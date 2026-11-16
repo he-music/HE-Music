@@ -123,7 +123,7 @@ func clip() ptr {
 }
 
 func (clipboard) ReadText() string        { return takeStr(gtkClipboardWaitForText(clip())) }
-func (c clipboard) WriteText(text string) { _ = c.WriteData(transfer.TextData(text), nil) }
+func (c clipboard) WriteText(text string) { _ = c.WriteData(transfer.TextData(text), false, nil) }
 
 func (clipboard) ReadHTML() string {
 	sd := gtkClipboardWaitForContents(clip(), gdkAtomIntern(cs("text/html"), false))
@@ -140,7 +140,7 @@ func (clipboard) ReadHTML() string {
 }
 
 func (c clipboard) WriteHTML(markup string) {
-	_ = c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.HTML, []byte(markup)), transfer.Bytes(transfer.Text, []byte(markup)))), nil)
+	_ = c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.HTML, []byte(markup)), transfer.Bytes(transfer.Text, []byte(markup)))), false, nil)
 }
 
 func (clipboard) ReadImage() []byte {
@@ -158,7 +158,7 @@ func (c clipboard) WriteImage(png []byte) error {
 		return err
 	}
 	defer gObjectUnref(pix)
-	return c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.PNG, png))), nil)
+	return c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.PNG, png))), false, nil)
 }
 
 func (clipboard) Clear() { gtkClipboardClear(clip()) }
@@ -216,6 +216,8 @@ func (shell) TrashItem(path string) error {
 	}
 	return nil
 }
+
+func (shell) PreviewItem(string) error { return platform.ErrUnsupported }
 
 func (shell) Beep() { gdkDisplayBeep(gdkDisplayGetDefault()) }
 

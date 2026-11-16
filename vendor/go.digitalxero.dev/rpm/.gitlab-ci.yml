@@ -1,0 +1,189 @@
+# GitLab CI/CD for go.digitalxero.dev/rpm
+#
+# - test stage: unit tests (race + coverage), lint/format/vet, build + tidy
+#   check, and a real-rpm integration stage that validates generated packages
+#   with the actual rpm toolchain.
+# - release stage: on the default branch, computes the next semantic version
+#   from conventional commits with svu, updates the changelog, and pushes a tag.
+#
+# Required CI/CD variables:
+#   GL_TOKEN  - a project/group access token (api + write_repository scope) used
+#               to push the release commit and tag.
+
+stages:
+  - test
+  - release
+
+variables:
+  GIT_DEPTH: "0" # full history so svu can see all tags/commits
+  GOPATH: $CI_PROJECT_DIR/.go
+  GOCACHE: $CI_PROJECT_DIR/.cache/go-build
+  GOWORK: "off" # build this module standalone, ignoring any workspace
+
+# Shared Go image + module/build cache.
+.go:
+  image: golang:1.26
+  cache:
+    key: go-${CI_COMMIT_REF_SLUG}
+    paths:
+      - .go/pkg/mod/
+      - .cache/go-build/
+    policy: pull-push
+
+# Run on merge requests and on any branch push (the test stage gates release on
+# the default branch since it runs first).
+.test_rules:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+# =============================================================================
+# TEST STAGE
+# =============================================================================
+
+test:unit:
+  extends:
+    - .go
+    - .test_rules
+  stage: test
+  before_script:
+    - go version
+    - go mod download
+  script:
+    - echo "Running unit tests with race detection..."
+    - go test -race -coverprofile=coverage.out ./...
+    - go tool cover -func=coverage.out | tee coverage.txt | tail -1
+  coverage: '/total:\s+\(statements\)\s+(\d+\.\d+)%/'
+  artifacts:
+    paths:
+      - coverage.out
+      - coverage.txt
+    expire_in: 7 days
+    when: always
+
+test:lint:
+  extends:
+    - .go
+    - .test_rules
+  stage: test
+  before_script:
+    - go version
+    - go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+    - export PATH=$PATH:$(go env GOPATH)/bin
+  script:
+    # Format only this module's files; prune the in-project Go caches (.go/.cache)
+    # which hold dependencies' intentionally-malformed testdata.
+    - echo "Checking gofmt..."
+    - |
+      unformatted=$(find . -path ./.go -prune -o -path ./.cache -prune -o -name '*.go' -print | xargs -r gofmt -l)
+      if [ -n "$unformatted" ]; then echo "These files are not gofmt-clean:"; echo "$unformatted"; exit 1; fi
+    - echo "Running go vet (default and rpmcli tags)..."
+    - go vet ./...
+    - go vet -tags rpmcli ./...
+    - echo "Running golangci-lint (advisory)..."
+    - golangci-lint run --timeout=5m || true
+
+test:build:
+  extends:
+    - .go
+    - .test_rules
+  stage: test
+  before_script:
+    - go version
+    - go mod download
+  script:
+    - echo "Building all packages..."
+    - go build ./...
+    - CGO_ENABLED=0 go test -c -tags rpmcli -o rpmcli.test .
+    - echo "Verifying go.mod/go.sum are tidy..."
+    - go mod tidy
+    - test -z "$(git status --porcelain go.mod go.sum)" || { echo "go.mod/go.sum not tidy:"; git --no-pager diff -- go.mod go.sum; exit 1; }
+  artifacts:
+    paths:
+      - rpmcli.test
+    expire_in: 7 days
+
+# RPM 6.0.1 crashes on Lua scriptlets when RPMVERSION is absent. Execute all
+# integration tests on that exact release, using the static Go artifact.
+test:rpm-lua-6.0.1:
+  extends: .test_rules
+  image: registry.fedoraproject.org/fedora:43
+  stage: test
+  needs:
+    - job: test:build
+      artifacts: true
+  script:
+    - ./scripts/verify_lua_rpm.sh --inside 6.0.1 ./rpmcli.test
+
+# Validate the actual generated RPMs against the real rpm toolchain. The Go image
+# is Debian-based, so rpm is available via apt; this runs the //go:build rpmcli
+# integration tests (rpm -qpi / --list / --requires / -K, source packages, ...).
+test:rpm-integration:
+  extends:
+    - .go
+    - .test_rules
+  stage: test
+  before_script:
+    - go version
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends rpm
+    - rpm --version
+  script:
+    - echo "Validating generated packages against the rpm toolchain..."
+    - go test -race -tags rpmcli ./...
+
+# =============================================================================
+# RELEASE STAGE — svu auto-tagging on the default branch
+# =============================================================================
+
+release:tag:
+  extends:
+    - .go
+  stage: release
+  variables:
+    GIT_STRATEGY: clone
+    GIT_DEPTH: "0"
+  before_script:
+    - git config --global user.email "${GITLAB_USER_EMAIL}"
+    - git config --global user.name "${GITLAB_USER_NAME}"
+    - git remote set-url origin "https://oauth2:${GL_TOKEN}@${CI_REPOSITORY_URL#*@}"
+    - git fetch --tags --prune
+    - echo "Installing svu and chglog..."
+    - go install github.com/caarlos0/svu/v3@latest
+    - go install github.com/goreleaser/chglog/cmd/chglog@latest
+    - export PATH=$PATH:$(go env GOPATH)/bin
+  script:
+    - |
+      export PATH=$PATH:$(go env GOPATH)/bin
+      git checkout "$CI_DEFAULT_BRANCH"
+
+      CURRENT_VERSION=$(svu current --config .svu.yml 2>/dev/null || echo "v0.0.0")
+      NEXT_VERSION=$(svu next --config .svu.yml 2>/dev/null || echo "")
+      echo "Current version: ${CURRENT_VERSION}"
+      echo "Next version:    ${NEXT_VERSION:-<none>}"
+
+      if [ -z "$NEXT_VERSION" ] || [ "$NEXT_VERSION" = "$CURRENT_VERSION" ]; then
+        echo "No version bump needed. Use conventional commits (feat:/fix:/BREAKING CHANGE:) to trigger a release."
+        exit 0
+      fi
+
+      echo "Updating changelog for ${NEXT_VERSION}..."
+      chglog add --version "${NEXT_VERSION}"
+      chglog format --template repo > CHANGELOG.md
+      git add CHANGELOG.md changelog.yml
+      git commit -m "chore: release ${NEXT_VERSION}"
+
+      echo "Tagging ${NEXT_VERSION}..."
+      git tag -a "${NEXT_VERSION}" -m "Release ${NEXT_VERSION}
+
+      Auto-generated by GitLab CI
+      Pipeline: ${CI_PIPELINE_URL}
+      Commit: ${CI_COMMIT_SHA}"
+
+      # ci.skip prevents the pushed commit from triggering another pipeline.
+      git push --atomic origin "$CI_DEFAULT_BRANCH" "${NEXT_VERSION}" -o ci.skip
+      echo "✅ Released ${NEXT_VERSION}"
+  rules:
+    - if: $CI_COMMIT_TAG
+      when: never # never run when a tag is pushed manually
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  allow_failure: false

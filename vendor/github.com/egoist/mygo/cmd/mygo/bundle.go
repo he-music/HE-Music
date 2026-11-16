@@ -57,6 +57,9 @@ func writeBundle(c *Config, dir, bin string, icns []byte, car *assetCatalog, res
 	if err := copyResources(res, filepath.Join(contents, "Resources")); err != nil {
 		return "", err
 	}
+	if err := installNative(c, app); err != nil {
+		return "", err
+	}
 	langs, err := c.languages()
 	if err != nil {
 		return "", err
@@ -304,6 +307,11 @@ func infoPlist(c *Config, executable, icon, iconName string) []byte {
 		}
 		d["CFBundleURLTypes"] = []any{map[string]any{"CFBundleURLName": c.Identifier, "CFBundleURLSchemes": schemes}}
 	}
+	if c.native != nil {
+		for k, v := range c.native.info {
+			d[k] = v // the native modules' keys
+		}
+	}
 	for k, v := range c.MacOS.InfoPlist {
 		d[k] = v // the app's own keys win
 	}
@@ -400,9 +408,12 @@ func codesign(c *Config, path, identity string, production bool) error {
 	if err := signNestedCode(c, path, identity, production); err != nil {
 		return err
 	}
-	entitlements := ""
-	if c.MacOS.Entitlements != "" {
-		entitlements = c.path(c.MacOS.Entitlements)
+	entitlements, err := nativeEntitlements(c, filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	if entitlements != "" && c.native != nil && len(c.native.entitlements) > 0 {
+		defer os.Remove(entitlements)
 	}
 	out, err := exec.Command("codesign", codesignArgs(path, identity, entitlements, production)...).CombinedOutput()
 	if err != nil {

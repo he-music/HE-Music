@@ -89,8 +89,13 @@ type window struct {
 	programmatic bool
 	keepAbove    bool
 	// ignoreMouse passes pointer events through the window to whatever is
-	// beneath it (SetIgnoreMouseEvents).
-	ignoreMouse bool
+	// beneath it (SetIgnoreMouseEvents), and inputRegion through all of
+	// it but its rectangles, in DIPs from the top-left corner of the
+	// content (SetInputRegion), nil for none; ignoreMouse wins. allocWatched
+	// tells that the window's size-allocate shapes it again.
+	ignoreMouse  bool
+	inputRegion  []platform.Rect
+	allocWatched bool
 	// hiding tells that the window hides once the frame that asked for
 	// that returns (Hide), unless it shows again first.
 	hiding bool
@@ -868,31 +873,49 @@ func (w *window) SetActiveAppearance(bool)        {}
 
 func (w *window) SetIgnoreMouseEvents(v bool) {
 	w.ignoreMouse = v
-	w.applyIgnoreMouseEvents()
+	w.applyInputShape(true)
 }
 
-// applyIgnoreMouseEvents gives the window an empty input shape, which
-// passes the pointer through to what is beneath, or removes its shape. A
+// shapesInput tells that the window has an input shape of MyGo's.
+func (w *window) shapesInput() bool { return w.ignoreMouse || w.inputRegion != nil }
+
+// applyInputShape gives the window an input shape, which passes the
+// pointer through to what is beneath outside it: an empty one to ignore
+// the mouse, the input region's rectangles, or none, which removes it. A
 // window not realized yet gets it as it realizes, and again as it maps.
-// Under Wayland the shape takes effect with the surface's next commit:
-// a frame is drawn for it.
-func (w *window) applyIgnoreMouseEvents() {
+// GTK gives a window it decorates itself an input shape of its own, to
+// let the pointer through its shadow, as it allocates its size: the
+// window's size-allocate, after GTK's, shapes it again, as it does the
+// region where the content moved in the window, as under a menu bar
+// that shows. Under Wayland the shape takes effect with the surface's
+// next commit: a frame is drawn for it, when draw is set.
+func (w *window) applyInputShape(draw bool) {
 	if w.closed {
 		return
+	}
+	if w.shapesInput() && !w.allocWatched {
+		w.allocWatched = true
+		connectAfter(w.win, "size-allocate", cbWindowAllocated, ptr(w.id))
 	}
 	win := gtkWidgetGetWindow(w.win)
 	if win == 0 {
 		return
 	}
 	loadWebViews() // binds the GDK and cairo region functions
-	if w.ignoreMouse {
+	loadSurface()  // and gtk_widget_queue_draw, for a window without native UI
+	switch {
+	case w.ignoreMouse:
 		region := cairoRegionCreateRectangle(&gdkRectangle{})
 		gdkWindowInputShapeCombineRegion(win, region, 0, 0)
 		cairoRegionDestroy(region)
-	} else {
+	case w.inputRegion != nil:
+		shapeInputRegion(w, win)
+	default:
 		gdkWindowInputShapeCombineRegion(win, 0, 0, 0)
 	}
-	gtkWidgetQueueDraw(w.win)
+	if draw {
+		gtkWidgetQueueDraw(w.win)
+	}
 }
 
 // SetWindowButtonsTheme does nothing: GTK's title buttons follow the
@@ -1603,7 +1626,7 @@ var (
 	cbDragData, cbDragDrop, cbPrintFinished, cbPrintFailed, cbPermission        ptr
 	cbMotion, cbControlsAllocated, cbDecorationLayout, cbActivationResize       ptr
 	cbCloseLater, cbHideLater, cbPlayingAudio, cbCaptureState                   ptr
-	cbWindowRealize, cbWindowMap                                                ptr
+	cbWindowRealize, cbWindowMap, cbWindowAllocated                             ptr
 )
 
 func field[T any](p ptr, offset uintptr) T {
@@ -1625,11 +1648,16 @@ func initWindowCallbacks() {
 		}
 	})
 	cbWindowRealize = purego.NewCallback(func(widget, data ptr) {
-		if w := b().window(data); w != nil && w.ignoreMouse {
-			w.applyIgnoreMouseEvents()
+		if w := b().window(data); w != nil && w.shapesInput() {
+			w.applyInputShape(true)
 		}
 	})
 	cbWindowMap = cbWindowRealize
+	cbWindowAllocated = purego.NewCallback(func(widget, allocation, data ptr) {
+		if w := b().window(data); w != nil && w.shapesInput() {
+			w.applyInputShape(false)
+		}
+	})
 	cbCloseLater = purego.NewCallback(func(data ptr) int32 {
 		if w := b().window(data); w != nil {
 			w.Close()

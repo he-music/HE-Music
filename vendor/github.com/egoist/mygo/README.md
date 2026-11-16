@@ -15,6 +15,10 @@ Sponsored by:
   </a>
 </p>
 
+<p align="center">
+  <a href="https://mygo.egoist.dev/sponsors">Become a sponsor</a>
+</p>
+
 ---
 
 Each MyGo window shows one of two kinds of interface, and one app, or one
@@ -44,7 +48,7 @@ memory and CPU use.
   Playing and the media keys, the system accent color and accessibility
   settings, watching files, and more.
 - **Ready to ship**: app bundles and disk images, Windows installers, Debian
-  packages, PKGBUILDs for Arch Linux and a Linux install script, code signing, notarization, and signed
+  and RPM packages, PKGBUILDs for Arch Linux and a Linux install script, code signing, notarization, and signed
   auto-updates with delta updates and an update window in the manner of
   Sparkle.
 

@@ -142,6 +142,10 @@ func (w *window) measureControls() {
 			room.Height = max(room.Height, int(height))
 		}
 	}
+	// The bars, which hold the buttons, take the title bar's height.
+	if room.Left > 0 || room.Right > 0 {
+		room.Bottom = room.Height
+	}
 	if room != c.room {
 		c.room = room
 		w.h.TitleBarChanged()

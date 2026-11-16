@@ -6,7 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
+	"sync"
 	"unsafe"
+
+	"github.com/ebitengine/purego"
+	"github.com/ebitengine/purego/objc"
 
 	"github.com/egoist/mygo/internal/platform"
 	"github.com/egoist/mygo/transfer"
@@ -31,7 +36,7 @@ func (clipboard) ReadText() string {
 	return s
 }
 
-func (c clipboard) WriteText(text string) { _ = c.WriteData(transfer.TextData(text), nil) }
+func (c clipboard) WriteText(text string) { _ = c.WriteData(transfer.TextData(text), false, nil) }
 
 func (clipboard) ReadHTML() string {
 	var s string
@@ -40,7 +45,7 @@ func (clipboard) ReadHTML() string {
 }
 
 func (c clipboard) WriteHTML(markup string) {
-	_ = c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.HTML, []byte(markup)), transfer.Bytes(transfer.Text, []byte(markup)))), nil)
+	_ = c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.HTML, []byte(markup)), transfer.Bytes(transfer.Text, []byte(markup)))), false, nil)
 }
 
 func (clipboard) ReadImage() []byte {
@@ -72,7 +77,7 @@ func (c clipboard) WriteImage(png []byte) error {
 	if err != nil {
 		return err
 	}
-	return c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.PNG, png))), nil)
+	return c.WriteData(transfer.New(transfer.NewItem(transfer.Bytes(transfer.PNG, png))), false, nil)
 }
 func (clipboard) Clear() {
 	withPool(func() {
@@ -145,7 +150,120 @@ func (shell) TrashItem(path string) error {
 	return err
 }
 
+// Quick Look: QLPreviewPanel is the panel Finder opens with the space bar.
+// The app does not link QuickLook, so the framework is opened on first use,
+// before its class and data source protocol can be looked up.
+
+var (
+	quickLookOnce sync.Once
+	quickLookErr  error
+	// previewSource is the retained data source; the panel keeps its data
+	// source unretained, so this one lives as long as the process.
+	previewSource id
+	previewURLMu  sync.RWMutex
+	previewURL    id
+)
+
+// loadQuickLook opens QuickLook.framework.
+func loadQuickLook() error {
+	quickLookOnce.Do(func() {
+		_, quickLookErr = purego.Dlopen("/System/Library/Frameworks/QuickLook.framework/QuickLook", purego.RTLD_GLOBAL|purego.RTLD_NOW)
+	})
+	return quickLookErr
+}
+
+// previewDataSource returns the object QLPreviewPanel asks for the item to
+// show: one item, the retained URL of the last PreviewItem call.
+func previewDataSource() id {
+	if previewSource != 0 {
+		return previewSource
+	}
+	cls := classDef("MyGoPreviewDataSource", "NSObject", []string{"QLPreviewPanelDataSource"}, []objc.MethodDef{
+		method("numberOfPreviewItemsInPreviewPanel:", func(self id, _ objc.SEL, panel id) int { return 1 }),
+		method("previewPanel:previewItemAtIndex:", func(self id, _ objc.SEL, panel id, index int) id {
+			previewURLMu.RLock()
+			defer previewURLMu.RUnlock()
+			return previewURL
+		}),
+	})
+	previewSource = retain(send(send(cls, "alloc"), "init"))
+	return previewSource
+}
+
+// PreviewItem shows the item at path in the Quick Look panel, as Finder's
+// space bar does. The panel stays open until the user closes it; asking
+// again replaces the item it shows.
+func (shell) PreviewItem(path string) error {
+	if err := loadQuickLook(); err != nil {
+		return fmt.Errorf("mygo: cannot load Quick Look: %w", err)
+	}
+	var err error
+	withPool(func() {
+		if !hasClass("QLPreviewPanel") {
+			err = platform.ErrUnsupported
+			return
+		}
+		src := previewDataSource()
+		u := retain(fileURL(path))
+		previewURLMu.Lock()
+		old := previewURL
+		previewURL = u
+		previewURLMu.Unlock()
+		release(old)
+		panel := send(class("QLPreviewPanel"), "sharedPreviewPanel")
+		send(panel, "setDataSource:", uintptr(src))
+		send(panel, "reloadData")
+		if theBackend != nil {
+			send(theBackend.app, "activateIgnoringOtherApps:", 1)
+		}
+		send(panel, "makeKeyAndOrderFront:", 0)
+	})
+	return err
+}
+
 func (shell) Beep() { nsBeep() }
+
+// DefaultApp returns the application the system would use to open url.
+// url may be a web URL (https://example.com), a file:// URL, or any URL
+// whose scheme is registered with Launch Services. The name, bundle
+// identifier and path of the .app bundle are returned.
+func (shell) DefaultApp(url string) (platform.Application, error) {
+	var app platform.Application
+	var err error
+	withPool(func() {
+		u := nsURL(url)
+		if u == 0 {
+			err = fmt.Errorf("mygo: invalid URL %q", url)
+			return
+		}
+		// NSWorkspace -URLForApplicationToOpenURL: (10.10+) returns the
+		// .app bundle URL of the default handler.
+		appURL := send(workspace(), "URLForApplicationToOpenURL:", uintptr(u))
+		if appURL == 0 {
+			err = fmt.Errorf("mygo: no application found for %q", url)
+			return
+		}
+		// Pull the file-system path from the NSURL.
+		path := goString(send(appURL, "path"))
+		if path == "" {
+			err = fmt.Errorf("mygo: no application found for %q", url)
+			return
+		}
+		// Resolve name and bundle ID from the .app bundle.
+		bundle := send(class("NSBundle"), "bundleWithPath:", uintptr(nsString(path)))
+		fm := send(class("NSFileManager"), "defaultManager")
+		name := strings.TrimSuffix(goString(send(fm, "displayNameAtPath:", uintptr(nsString(path)))), ".app")
+		id := ""
+		if bundle != 0 {
+			id = goString(send(bundle, "bundleIdentifier"))
+		}
+		if id == "" {
+			id = path
+		}
+		app = platform.Application{Name: name, ID: id, Path: path}
+	})
+	return app, err
+}
 
 // Screen (NSScreen).
 

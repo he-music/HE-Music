@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"runtime"
 )
 
 func runGenerate(args []string) error {
@@ -22,7 +23,19 @@ client, named after the directory (src/locales.ts).`)
 	if *out != "" {
 		c.Bindings = *out
 	}
+	modules, err := appNativeModules(c, runtime.GOOS, runtime.GOARCH)
+	if err != nil {
+		return err
+	}
+	if len(modules) > 0 {
+		if err := generateNative(c); err != nil {
+			return err
+		}
+	}
 	if c.Bindings == "" && c.I18n == nil {
+		if len(modules) > 0 {
+			return nil
+		}
 		return fmt.Errorf("the project has no frontend to write a client for: set bindings in %s, or pass -o", c.configName())
 	}
 	// The accessors come first: the app's Go code calls them.

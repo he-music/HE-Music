@@ -1,4 +1,4 @@
-import { nextTick, onBeforeUnmount, onMounted, toRef, watch, type Ref } from "vue";
+import { nextTick, onBeforeUnmount, onMounted, watch, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingStore, useStatusStore } from "@/stores";
 import { platform } from "@/platform";
@@ -10,6 +10,7 @@ import { blockLocalAudio } from "@/platform/localAudioSession";
 import { createShellDesktopLyricsSession } from "./shellDesktopLyrics";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
 import { createShellUpdatesSession } from "./shellUpdates";
+import { installApplicationQuitHandler } from "@/platform/applicationQuit";
 import { createShellTraySession } from "./shellTray";
 import { createShellLocalArtworkSession } from "./shellLocalArtwork";
 import { createShellProtocolSession } from "./shellProtocols";
@@ -75,9 +76,9 @@ export function useDesktopLifecycle(ui: {
       window.$message?.error(t("message.song_play_fail"));
     },
   });
-  const updates = createShellUpdatesSession(
-    () => setting.checkUpdateOnStart,
-    toRef(setting, "skippedUpdateVersion"),
+  const updates = createShellUpdatesSession(() => setting.checkUpdateOnStart);
+  const stopQuitHandler = installApplicationQuitHandler(() =>
+    window.$message?.error(t("message.save_before_quit_failed")),
   );
   const { t, locale } = useI18n();
   let disposed = false;
@@ -227,6 +228,7 @@ export function useDesktopLifecycle(ui: {
   );
   onBeforeUnmount(() => {
     disposed = true;
+    stopQuitHandler();
     artwork?.dispose();
     appearance?.dispose();
     graphics?.dispose();

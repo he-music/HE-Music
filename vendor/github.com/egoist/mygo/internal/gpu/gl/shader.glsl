@@ -282,6 +282,28 @@ float textCoverage(float a, vec3 c, float contrast, float boost, vec4 g) {
 // above.
 #ifdef FRAGMENT
 
+// The chroma of an image that is a frame of video in NV12, whose luma
+// uImage holds (gpu.ImageYUV).
+uniform sampler2D uChroma;
+
+// yuvToRGB converts the samples of a frame of video in YCbCr to RGB, as
+// scene.YUVMatrix.YUVToRGB does: m is the matrix, 0 to 2 for BT.601, 709
+// and 2020 in the limited range, plus 3 for the full range.
+vec3 yuvToRGB(float y, vec2 c, float m) {
+	float full = m > 2.5 ? 1.0 : 0.0;
+	float std = m - 3.0 * full;
+	vec2 k = std < 0.5 ? vec2(0.299, 0.114) : std < 1.5 ? vec2(0.2126, 0.0722) : vec2(0.2627, 0.0593);
+	c -= 128.0 / 255.0;
+	if (full < 0.5) {
+		y = (y - 16.0 / 255.0) * (255.0 / 219.0);
+		c *= 255.0 / 224.0;
+	}
+	float r = y + 2.0 * (1.0 - k.x) * c.y;
+	float b = y + 2.0 * (1.0 - k.y) * c.x;
+	float g = (y - k.x * r - k.y * b) / (1.0 - k.x - k.y);
+	return clamp(vec3(r, g, b), 0.0, 1.0);
+}
+
 // subpixelCoverage does the same for each subpixel of a subpixel glyph.
 vec3 subpixelCoverage(vec3 a, vec3 c, float contrast, float boost, vec4 g) {
 	float k = contrast * clamp(3.0 - 4.0 * dot(c, vec3(0.30, 0.59, 0.11)), 0.0, 1.0) + boost;
@@ -581,9 +603,25 @@ void main() {
 		return;
 	}
 	if (kind < 4.5) {
-		res = sampleImage(uImage, tex, vWidths, vParams.z, dtex);
-		if (vParams.y > 0.5) {
-			res.rgb = vec3(dot(res.rgb, vec3(0.2126, 0.7152, 0.0722)));
+		if (vParams.y > 1.5) {
+			// A frame of video: its luma and its chroma, converted.
+			float code = vParams.y - 2.0;
+			float gray = code > 7.5 ? 1.0 : 0.0;
+			// The chroma covers twice its size in luma, a column or row
+			// more than an odd size has.
+			vec2 cs = vec2(textureSize(uImage, 0)) / (2.0 * vec2(textureSize(uChroma, 0)));
+			res = vec4(yuvToRGB(sampleImage(uImage, tex, vWidths, vParams.z, dtex).r,
+								sampleImage(uChroma, tex * cs, vWidths * cs.xyxy, vParams.z, dtex * cs).rg,
+								code - 8.0 * gray),
+					   1.0);
+			if (gray > 0.5) {
+				res.rgb = vec3(dot(res.rgb, vec3(0.2126, 0.7152, 0.0722)));
+			}
+		} else {
+			res = sampleImage(uImage, tex, vWidths, vParams.z, dtex);
+			if (vParams.y > 0.5) {
+				res.rgb = vec3(dot(res.rgb, vec3(0.2126, 0.7152, 0.0722)));
+			}
 		}
 		res = tint(res, vColor) * localCoverage(p, vRect, vRadii, vTransform0.w, fr);
 		fragColor = res * clip * vParams.w;

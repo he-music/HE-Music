@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -114,6 +115,14 @@ func (b *Backend) Init(h platform.AppHandler, opts platform.AppOptions) error {
 	}
 	if disableDMABUF(opts.DMABUFRenderer, os.Getenv, "/") {
 		_ = os.Setenv("WEBKIT_DISABLE_DMABUF_RENDERER", "1")
+	}
+	// The program is its executable, by whichever name started it, as a
+	// link in /usr/bin of another name (linux.command): GTK names the class
+	// of the windows and the app id after the program, which the desktop
+	// entry names too (StartupWMClass), and WebKitGTK the directories of
+	// the pages' data.
+	if exe, err := os.Executable(); err == nil {
+		gSetPrgname(cs(filepath.Base(exe)))
 	}
 	if !gtkInitCheck(0, 0) {
 		return errors.New("mygo: cannot open display (is DISPLAY or WAYLAND_DISPLAY set?)")

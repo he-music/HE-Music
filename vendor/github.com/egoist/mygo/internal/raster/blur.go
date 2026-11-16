@@ -25,6 +25,9 @@ func (d *drawer) blurImages(s *scene.Scene, area image.Rectangle, bounds []image
 		if op.Kind != scene.OpImage || op.Blur <= 0 || op.Image == nil || op.Image.W == 0 || op.Image.H == 0 || !bounds[i].Overlaps(area) {
 			continue
 		}
+		if s := op.Image.Surface; s != nil && s.Format == scene.SurfaceNV12 {
+			continue // drawn unblurred, as the GPU renderers sample its planes
+		}
 		if out == nil {
 			out = make([]*blurredImage, len(s.Ops))
 		}

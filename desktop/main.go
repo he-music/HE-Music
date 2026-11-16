@@ -40,7 +40,7 @@ func main() {
 				mygo.App.Quit()
 				return
 			}
-			if err := prepareApplicationStorage(directory); err != nil {
+			if err := prepareApplicationStorageAndUpdates(directory); err != nil {
 				log.Print("配置业务数据存储失败: ", err)
 				mygo.App.Quit()
 				return
@@ -97,6 +97,7 @@ func main() {
 			mygo.App.Quit()
 		}
 	})
+	configureDesktopUpdates()
 	err := mygo.App.Run()
 	stopGateway()
 	if err != nil {

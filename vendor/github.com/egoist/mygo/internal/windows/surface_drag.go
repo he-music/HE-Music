@@ -54,6 +54,7 @@ type dragDataObject struct {
 	extra     map[uint16]stgMedium
 	err       error
 	clipboard bool
+	concealed bool
 	onRelease func()
 }
 type oleDragSource struct {
@@ -295,10 +296,12 @@ func dataGlobal(b []byte) uintptr {
 	return h
 }
 
-func newDragData(r platform.DragRequest) uintptr { return newTransferData(r.Data, r.Session, false) }
+func newDragData(r platform.DragRequest) uintptr {
+	return newTransferData(r.Data, r.Session, false, false)
+}
 
-func newTransferData(data transfer.Data, session string, clipboard bool) uintptr {
-	d := &dragDataObject{vtbl: &dragDataVtbl, refs: 1, providers: map[uint16]func() ([]byte, error){}, extra: map[uint16]stgMedium{}, clipboard: clipboard}
+func newTransferData(data transfer.Data, session string, clipboard, concealed bool) uintptr {
+	d := &dragDataObject{vtbl: &dragDataVtbl, refs: 1, providers: map[uint16]func() ([]byte, error){}, extra: map[uint16]stgMedium{}, clipboard: clipboard, concealed: concealed}
 	setTransferProviders(d, data, session)
 	p := uintptr(unsafe.Pointer(d))
 	dragObjects[p] = d
@@ -377,6 +380,9 @@ func setTransferProviders(d *dragDataObject, data transfer.Data, session string)
 	}
 	if session != "" {
 		add(uint16(registerClipboardFormat(string(platform.DragSessionFormat))), func() ([]byte, error) { return []byte(session), nil })
+	}
+	if d.concealed {
+		add(uint16(registerClipboardFormat(winConcealedFormat)), func() ([]byte, error) { return []byte{1, 0, 0, 0}, nil })
 	}
 }
 

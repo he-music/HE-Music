@@ -322,7 +322,7 @@ func writeAppFile(path string, write func(io.Writer) error) error {
 		err = cerr
 	}
 	if err == nil {
-		err = rename(f.Name(), path)
+		err = replaceAppFile(f.Name(), path)
 	}
 	if err != nil {
 		os.Remove(f.Name())

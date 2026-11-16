@@ -20,11 +20,44 @@ var (
 )
 
 type macClipboardSource struct {
-	obj      id
-	change   int
-	data     transfer.Data
-	items    map[id]transfer.Item
-	released func()
+	obj       id
+	change    int
+	data      transfer.Data
+	items     map[id]transfer.Item
+	concealed bool
+	released  func()
+}
+
+// macConcealedType is nspasteboard.org's mark of confidential content, for
+// the clipboard managers that read it. It goes on every item, with no data,
+// next to the content.
+const macConcealedType = "org.nspasteboard.ConcealedType"
+
+// prepareMacClipboard takes the pasteboard for new contents, as clearContents
+// does; concealed contents stay on this host, off Universal Clipboard
+// (NSPasteboardContentsCurrentHostOnly), until the next write clears it.
+func prepareMacClipboard(board id, concealed bool) {
+	if concealed {
+		send(board, "prepareForNewContentsWithOptions:", 1)
+		return
+	}
+	send(board, "clearContents")
+}
+
+// pasteboardItem makes the NSPasteboardItem that promises item's
+// representations through s, autoreleased.
+func (s *macClipboardSource) pasteboardItem(item transfer.Item) id {
+	pb := autorelease(send(send(class("NSPasteboardItem"), "alloc"), "init"))
+	s.items[pb] = item
+	var types []id
+	for _, typ := range macClipboardTypes(item) {
+		types = append(types, nsString(typ))
+	}
+	send(pb, "setDataProvider:forTypes:", uintptr(s.obj), uintptr(nsArray(types...)))
+	if s.concealed {
+		send(pb, "setData:forType:", uintptr(nsData(nil)), uintptr(nsString(macConcealedType)))
+	}
+	return pb
 }
 
 func registerClipboardClass() {
@@ -107,7 +140,7 @@ func macClipboardTypes(item transfer.Item) []string {
 	return types
 }
 
-func (clipboard) WriteData(data transfer.Data, released func()) error {
+func (clipboard) WriteData(data transfer.Data, concealed bool, released func()) error {
 	var err error
 	withPool(func() {
 		registerClipboardClass()
@@ -118,22 +151,15 @@ func (clipboard) WriteData(data transfer.Data, released func()) error {
 			}
 			return
 		}
-		s := &macClipboardSource{data: data, items: map[id]transfer.Item{}, released: released}
+		s := &macClipboardSource{data: data, items: map[id]transfer.Item{}, concealed: concealed, released: released}
 		s.obj = send(send(class("MyGoClipboardProvider"), "alloc"), "init")
 		macClipboardProviders[s.obj] = s
 		var items []id
 		for _, item := range data.Items() {
-			pb := autorelease(send(send(class("NSPasteboardItem"), "alloc"), "init"))
-			s.items[pb] = item
-			var types []id
-			for _, typ := range macClipboardTypes(item) {
-				types = append(types, nsString(typ))
-			}
-			send(pb, "setDataProvider:forTypes:", uintptr(s.obj), uintptr(nsArray(types...)))
-			items = append(items, pb)
+			items = append(items, s.pasteboardItem(item))
 		}
 		board := pasteboard()
-		send(board, "clearContents")
+		prepareMacClipboard(board, concealed)
 		if old := macClipboard; old != nil {
 			old.release()
 		}
@@ -330,10 +356,13 @@ func (clipboard) Flush() error {
 				}
 				send(pb, "setData:forType:", uintptr(nsData(b)), uintptr(nsString(name)))
 			}
+			if s.concealed {
+				send(pb, "setData:forType:", uintptr(nsData(nil)), uintptr(nsString(macConcealedType)))
+			}
 			items = append(items, pb)
 		}
 		board := pasteboard()
-		send(board, "clearContents")
+		prepareMacClipboard(board, s.concealed)
 		if !sendBool(board, "writeObjects:", uintptr(nsArray(items...))) {
 			err = errors.New("mygo: cannot persist pasteboard items")
 		}

@@ -1,6 +1,44 @@
+# github.com/ProtonMail/go-crypto v1.4.1
+## explicit; go 1.23.0
+github.com/ProtonMail/go-crypto/bitcurves
+github.com/ProtonMail/go-crypto/brainpool
+github.com/ProtonMail/go-crypto/eax
+github.com/ProtonMail/go-crypto/internal/byteutil
+github.com/ProtonMail/go-crypto/ocb
+github.com/ProtonMail/go-crypto/openpgp
+github.com/ProtonMail/go-crypto/openpgp/aes/keywrap
+github.com/ProtonMail/go-crypto/openpgp/armor
+github.com/ProtonMail/go-crypto/openpgp/ecdh
+github.com/ProtonMail/go-crypto/openpgp/ecdsa
+github.com/ProtonMail/go-crypto/openpgp/ed25519
+github.com/ProtonMail/go-crypto/openpgp/ed448
+github.com/ProtonMail/go-crypto/openpgp/eddsa
+github.com/ProtonMail/go-crypto/openpgp/elgamal
+github.com/ProtonMail/go-crypto/openpgp/errors
+github.com/ProtonMail/go-crypto/openpgp/internal/algorithm
+github.com/ProtonMail/go-crypto/openpgp/internal/ecc
+github.com/ProtonMail/go-crypto/openpgp/internal/encoding
+github.com/ProtonMail/go-crypto/openpgp/packet
+github.com/ProtonMail/go-crypto/openpgp/s2k
+github.com/ProtonMail/go-crypto/openpgp/x25519
+github.com/ProtonMail/go-crypto/openpgp/x448
 # github.com/bmatcuk/doublestar/v4 v4.10.4
 ## explicit; go 1.16
 github.com/bmatcuk/doublestar/v4
+# github.com/cloudflare/circl v1.6.2
+## explicit; go 1.22.0
+github.com/cloudflare/circl/dh/x25519
+github.com/cloudflare/circl/dh/x448
+github.com/cloudflare/circl/ecc/goldilocks
+github.com/cloudflare/circl/internal/conv
+github.com/cloudflare/circl/internal/sha3
+github.com/cloudflare/circl/math
+github.com/cloudflare/circl/math/fp25519
+github.com/cloudflare/circl/math/fp448
+github.com/cloudflare/circl/math/mlsbset
+github.com/cloudflare/circl/sign
+github.com/cloudflare/circl/sign/ed25519
+github.com/cloudflare/circl/sign/ed448
 # github.com/ebitengine/purego v0.11.1
 ## explicit; go 1.25.0
 github.com/ebitengine/purego
@@ -8,7 +46,7 @@ github.com/ebitengine/purego/internal/cgo
 github.com/ebitengine/purego/internal/fakecgo
 github.com/ebitengine/purego/internal/strings
 github.com/ebitengine/purego/objc
-# github.com/egoist/mygo v0.8.3
+# github.com/egoist/mygo v0.9.0
 ## explicit; go 1.27.3
 github.com/egoist/mygo
 github.com/egoist/mygo/cmd/mygo
@@ -25,12 +63,17 @@ github.com/egoist/mygo/internal/i18ngen
 github.com/egoist/mygo/internal/i18nlink
 github.com/egoist/mygo/internal/l10n
 github.com/egoist/mygo/internal/linux
+github.com/egoist/mygo/internal/media
 github.com/egoist/mygo/internal/menuicon
+github.com/egoist/mygo/internal/nativegen
+github.com/egoist/mygo/internal/nativelib
 github.com/egoist/mygo/internal/nsis
+github.com/egoist/mygo/internal/pacing
 github.com/egoist/mygo/internal/platform
 github.com/egoist/mygo/internal/raster
 github.com/egoist/mygo/internal/scene
 github.com/egoist/mygo/internal/schemehost
+github.com/egoist/mygo/internal/schemestream
 github.com/egoist/mygo/internal/surface
 github.com/egoist/mygo/internal/tsgen
 github.com/egoist/mygo/internal/uimigrate
@@ -45,7 +88,20 @@ github.com/egoist/mygo/locales/ja
 github.com/egoist/mygo/locales/zh-Hans
 github.com/egoist/mygo/locales/zh-Hant
 github.com/egoist/mygo/netproxy
+github.com/egoist/mygo/plugins/updater
+github.com/egoist/mygo/plugins/updater/internal/frontend
+github.com/egoist/mygo/plugins/updater/internal/markdown
 github.com/egoist/mygo/transfer
+# github.com/klauspost/compress v1.18.6
+## explicit; go 1.24
+github.com/klauspost/compress
+github.com/klauspost/compress/fse
+github.com/klauspost/compress/huff0
+github.com/klauspost/compress/internal/cpuinfo
+github.com/klauspost/compress/internal/le
+github.com/klauspost/compress/internal/snapref
+github.com/klauspost/compress/zstd
+github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/tommyo123/mtag v1.0.2
 ## explicit; go 1.23
 github.com/tommyo123/mtag
@@ -54,13 +110,30 @@ github.com/tommyo123/mtag/flac
 github.com/tommyo123/mtag/id3v1
 github.com/tommyo123/mtag/id3v2
 github.com/tommyo123/mtag/mp4
+# github.com/ulikunitz/xz v0.5.15
+## explicit; go 1.12
+github.com/ulikunitz/xz
+github.com/ulikunitz/xz/internal/hash
+github.com/ulikunitz/xz/internal/xlog
+github.com/ulikunitz/xz/lzma
+# go.digitalxero.dev/rpm v0.3.4
+## explicit; go 1.26.1
+go.digitalxero.dev/rpm
 # golang.org/x/crypto v0.57.0
 ## explicit; go 1.26.0
+golang.org/x/crypto/argon2
+golang.org/x/crypto/blake2b
+golang.org/x/crypto/cast5
+golang.org/x/crypto/cryptobyte
+golang.org/x/crypto/cryptobyte/asn1
+golang.org/x/crypto/hkdf
+golang.org/x/crypto/sha3
 # golang.org/x/net v0.59.0
 ## explicit; go 1.26.0
 golang.org/x/net/publicsuffix
 # golang.org/x/sys v0.49.0
 ## explicit; go 1.26.0
+golang.org/x/sys/cpu
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry

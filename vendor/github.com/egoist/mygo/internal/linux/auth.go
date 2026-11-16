@@ -21,6 +21,7 @@ var (
 	webkitAuthenticationRequestGetScheme    func(req ptr) int32
 	webkitAuthenticationRequestIsForProxy   func(req ptr) bool
 	webkitAuthenticationRequestAuthenticate func(req, credential ptr)
+	webkitAuthenticationRequestCancel       func(req ptr)
 	webkitCredentialNew                     func(user, password *byte, persistence int32) ptr
 	webkitCredentialFree                    func(credential ptr)
 	webkitWebViewGetContext                 func(wv ptr) ptr
@@ -38,6 +39,7 @@ func bindAuth() {
 	mustBind(w, &webkitAuthenticationRequestGetScheme, "webkit_authentication_request_get_scheme")
 	mustBind(w, &webkitAuthenticationRequestIsForProxy, "webkit_authentication_request_is_for_proxy")
 	mustBind(w, &webkitAuthenticationRequestAuthenticate, "webkit_authentication_request_authenticate")
+	mustBind(w, &webkitAuthenticationRequestCancel, "webkit_authentication_request_cancel")
 	mustBind(w, &webkitCredentialNew, "webkit_credential_new")
 	mustBind(w, &webkitCredentialFree, "webkit_credential_free")
 	mustBind(w, &webkitWebViewGetContext, "webkit_web_view_get_context")
@@ -46,8 +48,8 @@ func bindAuth() {
 }
 
 // authScheme names WebKitAuthenticationScheme's HTTP schemes, "" the
-// others, client certificates among them, which get WebKit's default
-// handling.
+// others, which get WebKit's default handling. Client certificates are
+// asked about apart, in clientCertificate.
 func authScheme(scheme int32) string {
 	switch scheme {
 	case 1, 2: // DEFAULT, HTTP_BASIC
@@ -78,8 +80,14 @@ func initAuthCallbacks() {
 	// Returning false leaves the request to WebKit: its sign-in dialog.
 	cbAuthenticate = purego.NewCallback(func(web, req, data ptr) bool {
 		w := b().window(data)
+		if w == nil {
+			return false
+		}
+		if webkitAuthenticationRequestGetScheme(req) == 7 { // CLIENT_CERTIFICATE_REQUESTED
+			return w.clientCertificate(req)
+		}
 		scheme := authScheme(webkitAuthenticationRequestGetScheme(req))
-		if w == nil || scheme == "" {
+		if scheme == "" {
 			return false
 		}
 		resp := w.h.AuthRequested(platform.AuthRequest{
@@ -148,6 +156,27 @@ func initAuthCallbacks() {
 		}
 		return 0 // G_SOURCE_REMOVE
 	})
+}
+
+// clientCertificate asks the app about a server that asks for a client
+// certificate. WebKitGTK lists none to offer, so an answer can only
+// refuse; leaving the challenge alone (a nil handler, resp.Default) is
+// WebKit's own certificate chooser. Refusing is
+// webkit_authentication_request_cancel: the load ends as a
+// cancellation, which OnDidFailLoad does not report, as a stop does not.
+// Answering with a certificate of one's own takes
+// webkit_credential_new_for_certificate, which nothing offers it.
+func (w *window) clientCertificate(req ptr) bool {
+	resp := w.h.ClientCertificateRequested(platform.ClientCertificateRequest{
+		Host:    goStr(webkitAuthenticationRequestGetHost(req)),
+		Port:    int(webkitAuthenticationRequestGetPort(req)),
+		IsProxy: webkitAuthenticationRequestIsForProxy(req),
+	})
+	if resp.Default {
+		return false
+	}
+	webkitAuthenticationRequestCancel(req)
+	return true
 }
 
 // connectAuth connects the signals of the web view's authentication.

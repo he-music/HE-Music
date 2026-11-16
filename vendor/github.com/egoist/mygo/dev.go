@@ -27,5 +27,25 @@ func devMarker() bool {
 	return set && production != "1"
 }
 
+// devRelaunchFile is the file in which `mygo dev` looks for the arguments
+// of the build that App.Relaunch has it start again, MYGO_DEV_RELAUNCH,
+// which the core takes out of its environment as MYGO_DEV.
+var devRelaunchFile = func() string {
+	f := os.Getenv("MYGO_DEV_RELAUNCH")
+	os.Unsetenv("MYGO_DEV_RELAUNCH")
+	return f
+}()
+
+// devBackground tells that `mygo dev -background` launched the app, with
+// MYGO_DEV_BACKGROUND=1: it starts without coming to the front, and its
+// windows show without the focus until it takes it (backgroundShow), so
+// that the rebuild of a save leaves the focus in the editor. Production
+// builds ignore it.
+var devBackground = func() bool {
+	set := os.Getenv("MYGO_DEV_BACKGROUND") == "1"
+	os.Unsetenv("MYGO_DEV_BACKGROUND")
+	return set && production != "1"
+}()
+
 // launchedByDev reports whether `mygo dev` launched the app.
 func launchedByDev() bool { return devLaunched }

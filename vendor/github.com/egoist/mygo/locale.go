@@ -179,6 +179,43 @@ func (a *Application) SetLocale(tag string) {
 	}
 }
 
+// ChosenLocale returns the language the app chose for its users
+// (SetLocale) as SetLocale keeps it, a normalized BCP 47 tag such as
+// "de-AT", or "" while the app follows the user's languages, which is the
+// default. Locale returns the language shown; ChosenLocale tells a
+// language menu's "System" item apart from the language the system
+// resolves to, and reports the tag kept even where the app is not written
+// in it and shows another. It is the language saved in an earlier run
+// until SetLocale chooses another. While the MYGO_LOCALE environment
+// variable (`mygo dev -lang`) is set, it is that language, until
+// SetLocale chooses another as the app runs, for that run. The pseudo
+// locales en-XA and ar-XB are reported as they are.
+//
+// It is safe from any goroutine. Off the main thread it waits for it, so
+// that it reports the SetLocale calls made before it, from any goroutine,
+// which the main thread runs in turn; before Run it waits for Run, as
+// Locale does.
+func (a *Application) ChosenLocale() string {
+	tag, ran := "", false
+	onMain(func() {
+		loadLocale()
+		tag, ran = chosenLocale(), true
+	})
+	if !ran {
+		// The app has quit: the language it chose last.
+		tag = chosenLocale()
+	}
+	return tag
+}
+
+// chosenLocale returns the language the app chose, as loadLocale and
+// SetLocale left it.
+func chosenLocale() string {
+	locales.mu.Lock()
+	defer locales.mu.Unlock()
+	return locales.override
+}
+
 // OnLocaleChanged calls fn on the main thread with the language the app
 // shows when it changes: SetLocale chose another, the languages the app
 // is written in changed, or the user's languages changed while the app
