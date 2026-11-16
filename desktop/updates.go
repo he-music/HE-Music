@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/egoist/mygo"
@@ -33,6 +34,9 @@ func init() { mygo.Bind(desktopUpdates) }
 // Register after main's WhenReady callback so legacy preferences are migrated
 // before the plugin starts reading updater.json. Binding generation never starts it.
 func configureDesktopUpdates() {
+	if runtime.GOOS == "darwin" {
+		mygo.Updater.SetSource(newMacUpdatesSource(runtime.GOARCH))
+	}
 	mygo.Use(updater.New(updater.Options{
 		Interval:               6 * time.Hour,
 		DisableAutomaticChecks: true,

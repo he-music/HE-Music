@@ -28,6 +28,8 @@ macOS 沿用 main 分支 Electron 包使用的 `public/icons/icon.icns`，其中
 
 升级 mygo 时运行 `go get github.com/egoist/mygo@v<版本>`，同步修改 `package.json` 中的 `mygo-cli`、`mygo-runtime`，执行 `pnpm install`、`go mod tidy`、`pnpm generate:desktop` 和 `pnpm check:ci`，审查依赖及生成绑定差异。新版仍需平台实机验收，尤其是 Windows 桌面歌词的透明、边框、缩放和锁定穿透；WebView2 安装引导继续暂停。
 
+macOS 通过公开的 `Updater.SetSource` 接口优先读取当前进程架构的更新清单；仅当该清单返回 HTTP 404 时，回退到 `update-darwin-universal.json`。网络错误、其他 HTTP 错误或清单解析失败不触发回退。请求保留系统代理、超时和临时错误重试，清单解析、更新包签名校验及安装仍由官方更新器负责；不修改 vendor 或 SDK 源码。
+
 ## Linux 正常启动与图形兼容模式
 
 首次启动默认使用正常模式。Linux mygo 应用提供 **设置 → 外观 → 图形兼容模式**：启用后保存到本机用户数据目录，彻底退出应用再启动即可生效；之后直接双击程序或从应用菜单启动会继续沿用。关闭开关并重启可恢复正常模式。页面会显示本次进程正在使用的模式，保存失败时保留原选择。
