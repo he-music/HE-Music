@@ -1,37 +1,32 @@
 import { watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { songInfo } from "@/api/song";
+import { useRouter, type Router } from "vue-router";
 import { useSettingStore } from "@/stores";
-import { usePlayer } from "@/utils/player";
-import type { SongInfo } from "@/types/main.hemusic";
 import {
   ProtocolSession,
   type PlatformProtocols,
   type ProtocolIntent,
 } from "@/platform/protocolSession";
 
-export interface ProtocolPlaybackDependencies<T> {
+export interface ProtocolNavigationDependencies {
   owner(): unknown;
-  songInfo(platform: string, id: string): Promise<{ list?: T[] }>;
-  addNextSong(song: T, play: boolean): Promise<unknown>;
+  router: Pick<Router, "isReady" | "push">;
   reportFailure(): void;
 }
 
-/** Each API request borrows both the shell owner and the session's latest intent. */
-export function createProtocolPlaybackHandler<T>(deps: ProtocolPlaybackDependencies<T>) {
+/** Navigation borrows both the shell owner and the session's latest intent. */
+export function createProtocolNavigationHandler(deps: ProtocolNavigationDependencies) {
   return async (intent: ProtocolIntent, active: () => boolean): Promise<void> => {
     const owner = deps.owner();
     const current = () => owner !== undefined && deps.owner() === owner && active();
     if (!current()) return;
     try {
-      const result = await deps.songInfo(intent.platform, intent.songId);
+      await deps.router.isReady();
       if (!current()) return;
-      const song = result.list?.[0];
-      if (!song) {
-        deps.reportFailure();
-        return;
-      }
-      await deps.addNextSong(song, true);
+      await deps.router.push({
+        name: "song",
+        query: { platform: intent.platform, id: intent.songId },
+      });
     } catch {
       if (current()) deps.reportFailure();
     }
@@ -42,17 +37,16 @@ export function createProtocolPlaybackHandler<T>(deps: ProtocolPlaybackDependenc
 export function createShellProtocolSession(provider: PlatformProtocols | undefined) {
   if (!provider) return;
   const setting = useSettingStore();
-  const player = usePlayer();
+  const router = useRouter();
   const { t } = useI18n();
   const identity = Symbol("protocol shell");
   let owner: symbol | undefined;
   let disposed = false;
   let stopWatch: (() => void) | undefined;
-  const handle = createProtocolPlaybackHandler<SongInfo>({
+  const handle = createProtocolNavigationHandler({
     owner: () => owner,
-    songInfo,
-    addNextSong: (song, play) => player.addNextSong(song, play),
-    reportFailure: () => window.$message?.error(t("message.song_play_fail")),
+    router,
+    reportFailure: () => window.$message?.error(t("message.get_song_detail_fail")),
   });
   const session = new ProtocolSession(
     provider,

@@ -113,13 +113,14 @@ func decodeOrpheusSong(payload []byte) (string, bool) {
 
 func parseKuwoSongID(raw string) (string, bool) {
 	parsed, err := url.Parse(raw)
-	if err != nil || parsed.Host != "play" || parsed.User != nil || parsed.Path != "" || parsed.Fragment != "" || parsed.Opaque != "" {
+	if err != nil || parsed.Host != "play" || parsed.User != nil || (parsed.Path != "" && parsed.Path != "/") || parsed.Fragment != "" || parsed.Opaque != "" {
 		return "", false
 	}
 	query, err := url.ParseQuery(parsed.RawQuery)
-	if err != nil || len(query) != 1 || len(query["musicrid0"]) != 1 {
+	if err != nil || len(query["musicrid0"]) != 1 {
 		return "", false
 	}
+	// Official links include display metadata; only the first song ID becomes an intent.
 	payload, ok := decodeProtocolBase64(query["musicrid0"][0])
 	if !ok || !strings.HasPrefix(string(payload), "MUSIC_") {
 		return "", false

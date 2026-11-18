@@ -29,7 +29,10 @@ func TestProtocolParse(t *testing.T) {
 		orpheusFixture(`{"type":"song","id":"123","cmd":"play"} {}`),
 		"kuwo://user@play?musicrid0=TVVTSUNfMTIz", "kuwo://play:80?musicrid0=TVVTSUNfMTIz",
 		"kuwo://play?musicrid0=TVVTSUNfMTIz&musicrid0=TVVTSUNfMTIz", "kuwo://play?musicrid0=TVVTSUNfMTIz#x",
-		"kuwo://play?musicrid0=TVVTSUNfMTIz&x=1", "kuwo://play/?musicrid0=TVVTSUNfMTIz", "https://play", "orpheus://!", strings.Repeat("x", 2049),
+		"kuwo://play/song?musicrid0=TVVTSUNfMTIz", "kuwo://play//?musicrid0=TVVTSUNfMTIz",
+		"kuwo://play/?name0=ignored", "kuwo://play/?musicrid0=TVVTSUNfMTIz&musicrid0=TVVTSUNfNDU2",
+		"kuwo://play/?musicrid0=TVVTSUNfMA==", "kuwo://play/?musicrid0=TVVTSUNfMTIz&name0=%ZZ",
+		"https://play", "orpheus://!", strings.Repeat("x", 2049),
 	} {
 		if _, ok := parseProtocolURL(raw); ok {
 			t.Fatal("unsafe intent accepted")
