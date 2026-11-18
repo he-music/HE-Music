@@ -515,7 +515,7 @@ onMounted(() => {
             margin-right: 4px;
           }
           .ar {
-            display: inline-flex;
+            display: inline;
             cursor: pointer;
             &::after {
               content: "/";

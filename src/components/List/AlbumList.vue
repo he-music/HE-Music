@@ -318,7 +318,7 @@ const playList = debounce(
         margin-top: 2px;
         font-size: 13px;
         .ar {
-          display: inline-flex;
+          display: inline;
           transition: opacity 0.3s;
           opacity: 0.6;
           cursor: pointer;

@@ -144,6 +144,7 @@ const handleAlbumClick = () => {
     align-self: stretch;
     justify-content: space-around;
     flex: 1;
+    min-width: 0;
     :deep(.n-skeleton) {
       height: 20px;
       margin-bottom: 12px;
@@ -161,7 +162,8 @@ const handleAlbumClick = () => {
         transform: translateY(3px);
       }
       .ar {
-        display: inline-flex;
+        // 截断容器内保持行内文本，避免 macOS WebKit 为短歌手名绘制省略号。
+        display: inline;
         transition: opacity 0.3s;
         opacity: 0.6;
         &::after {

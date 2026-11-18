@@ -501,7 +501,7 @@ const jumpRadioList = () => {
         overflow: hidden;
         word-break: break-all;
         .ar-item {
-          display: inline-flex;
+          display: inline;
           transition: color 0.3s;
           cursor: pointer;
           &::after {

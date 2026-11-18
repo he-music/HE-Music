@@ -416,7 +416,7 @@ const quality = computed(() => getQuality(song.value));
           min-width: 0;
           font-size: 13px;
           .ar {
-            display: inline-flex;
+            display: inline;
             transition: opacity 0.3s;
             opacity: 0.6;
             cursor: pointer;

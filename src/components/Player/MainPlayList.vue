@@ -226,7 +226,7 @@ const cleanPlayList = () => {
         word-break: break-all;
         .ar {
           font-size: 12px;
-          display: inline-flex;
+          display: inline;
           &::after {
             content: "/";
             margin: 0 4px;
