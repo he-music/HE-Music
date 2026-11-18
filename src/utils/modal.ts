@@ -106,7 +106,7 @@ export const openJumpArtist = async (platform: string, data: SongInfo["artists"]
     preset: "card",
     transformOrigin: "center",
     autoFocus: false,
-    style: { width: "600px" },
+    style: { width: "400px", maxWidth: "calc(100vw - 32px)" },
     title: t("modal.artist_jump"),
     content: () => {
       return h(JumpArtist, { artist: data, platform, onClose: () => modal.destroy() });

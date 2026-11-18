@@ -13,10 +13,10 @@
           hoverable
           @click="jumpArtist(item.id, artistPlatform)"
         >
-          <n-avatar :src="'/images/artist.jpg?asset'" class="cover" round />
-          <n-text class="name">
+          <n-text class="name" :title="item.name">
             {{ item.name }}
           </n-text>
+          <SvgIcon name="Right" :size="20" :depth="3" class="arrow" aria-hidden="true" />
         </n-card>
       </div>
       <div v-else class="ar-list">
@@ -127,11 +127,17 @@ const jumpArtist = (id: string, platform: string) => {
       display: flex;
       align-items: center;
     }
-    .cover {
-      margin-right: 8px;
-    }
     .name {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
       font-size: 16px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .arrow {
+      flex-shrink: 0;
+      margin-left: 12px;
     }
     &:hover {
       border-color: rgba(var(--primary), 0.58);
