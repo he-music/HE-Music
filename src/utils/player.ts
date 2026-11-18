@@ -58,6 +58,8 @@ class Player {
   }
   /** 播放请求递增序号，用于防止快速切歌异步竞态 */
   private playRequestId = 0;
+  /** 独立于界面加载状态，防止获取音源期间重复初始化。 */
+  private initializingRequestId?: number;
   /** radio API 等待期尚无新 source request，须单独标识这次操作。 */
   private radioOperation?: symbol;
   // Playback intent is separate from source ownership: pause must not discard
@@ -433,6 +435,7 @@ class Player {
     if (!preserveIntent) this.autoPlayIntent = autoPlay;
     this.autoPlayOwner = canAutoPlay;
     const currentRequestId = ++this.playRequestId;
+    this.initializingRequestId = currentRequestId;
     this.pendingAutoPlay = canAutoPlay
       ? { owner: canAutoPlay, requestId: currentRequestId }
       : undefined;
@@ -556,7 +559,23 @@ class Player {
           if (!link) throw new Error("Get song link error");
           statusStore.playQuality = link.name;
           console.log(`Getting online song url: ${this.getSongLogInfo()}; quality=${link.name}`);
-          const resolved = await songManager.getOnlineSource(id, platform, link);
+          let resolved;
+          for (let retry = 0; ; retry++) {
+            try {
+              resolved = await songManager.getOnlineSource(id, platform, link);
+              break;
+            } catch (error) {
+              if (currentRequestId !== this.playRequestId) return;
+              const status = error instanceof AxiosError ? error.response?.status : undefined;
+              const retryable =
+                error instanceof AxiosError &&
+                (status !== undefined
+                  ? status === 408 || status === 429 || status >= 500
+                  : ["ERR_NETWORK", "ECONNABORTED", "ETIMEDOUT"].includes(error.code ?? ""));
+              if (engine !== "mpv" || retry >= 2 || !retryable) throw error;
+              this.logPlaybackError(`获取歌曲地址失败，正在重试（${retry + 1}/2）：`, error);
+            }
+          }
           playerUrl = resolved?.url ?? null;
           if (engine === "mpv" && !playerUrl) throw new Error("Get song URL error");
           const format = resolved?.format;
@@ -616,6 +635,7 @@ class Player {
         preserveIntent ||
         (isMygo && useSettingStore().playbackEngine === "mpv")
       ) {
+        this.logPlaybackError("初始化播放器失败：", error);
         this.autoPlayIntent = false;
         statusStore.playStatus = false;
         statusStore.playLoading = false;
@@ -629,6 +649,8 @@ class Player {
       this.logPlaybackError("❌ 初始化音乐播放器出错：", error);
       window.$message.error(t("message.song_play_fail"));
       await this.recovery.handlePlaybackError(undefined);
+    } finally {
+      if (this.initializingRequestId === currentRequestId) this.initializingRequestId = undefined;
     }
   }
   /**
@@ -642,11 +664,12 @@ class Player {
     if (pendingRadio) statusStore.playLoading = false;
     this.autoPlayIntent = true;
     this.autoPlayOwner = canAutoPlay;
-    if (statusStore.playLoading && !audioManager.src) return;
+    if (this.initializingRequestId !== undefined && !audioManager.src) return;
     if (
       useMusicStore().playSong?.path &&
       (localAudioBlocked() ||
-        (audioManager.src !== useMusicStore().playSong.id &&
+        (audioManager.src &&
+          audioManager.src !== useMusicStore().playSong.id &&
           audioManager.src !==
             localResourceURL("audio", nativeLocalEntry(useMusicStore().playSong.id))))
     ) {
@@ -657,6 +680,10 @@ class Player {
     // 检查播放器状态
     const src = audioManager.src;
     if (!src) {
+      if (songManager.getPlaySongData()) {
+        await this.initPlayer(true, 0, "", canAutoPlay);
+        return;
+      }
       window.$message.warning("播放器未就绪，请稍后重试");
       return;
     }

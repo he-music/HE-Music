@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { reactive } from "vue";
 import type { SongInfo } from "@/types/main.hemusic";
-import type { PlatformMpvPlayback, MpvSnapshot } from "@/platform/mpvPlayback";
+import type { PlatformMpvPlayback, MpvSnapshot, MpvEvent } from "@/platform/mpvPlayback";
+import { AxiosError, AxiosHeaders } from "axios";
 
 import type { ControlCommand, ControlProvider } from "@/platform/controlSession";
 
@@ -44,6 +45,7 @@ const mocks = vi.hoisted(() => ({
     playQuality: "128mp3",
     selectedQuality: "128mp3",
     eqEnabled: false,
+    autoClose: { enable: false },
   },
   data: { playList: [] as SongInfo[], setHistory: vi.fn(), playListOriginal: [] as SongInfo[] },
   url: vi.fn<() => Promise<string>>(),
@@ -361,6 +363,9 @@ function mpvProvider(): PlatformMpvPlayback {
     device: "auto",
     error: null,
   };
+  let listener: ((event: MpvEvent) => void) | undefined;
+  const emit = (type: "play" | "pause" | "playing") =>
+    listener?.({ type, snapshot: update({ state: type === "pause" ? "paused" : "playing" }) });
   const update = (patch: Partial<MpvSnapshot>) =>
     (snapshot = { ...snapshot, ...patch, sequence: snapshot.sequence + 1 });
   return {
@@ -381,12 +386,15 @@ function mpvProvider(): PlatformMpvPlayback {
       }),
     ),
     play: vi.fn(async () => {
-      update({ state: "playing" });
+      emit("play");
+      emit("playing");
     }),
     pause: vi.fn(async () => {
-      update({ state: "paused" });
+      emit("pause");
     }),
-    clearSource: vi.fn(async () => update({ source: "", state: "idle", position: 0 })),
+    clearSource: vi.fn(async () =>
+      update({ session: snapshot.session + 1, source: "", state: "idle", position: 0 }),
+    ),
     stop: vi.fn(async () => update({ source: "", state: "idle", position: 0 })),
     seek: vi.fn(async (_lifecycle, _session, position) => {
       update({ position });
@@ -397,7 +405,12 @@ function mpvProvider(): PlatformMpvPlayback {
     getOutputDevices: vi.fn(async () => []),
     snapshot: vi.fn(async () => snapshot),
     destroy: vi.fn(async () => {}),
-    onEvent: vi.fn(() => () => {}),
+    onEvent: vi.fn((callback) => {
+      listener = callback;
+      return () => {
+        listener = undefined;
+      };
+    }),
     teardown: vi.fn(),
   };
 }
@@ -653,6 +666,149 @@ describe("real Player + MpvPlaybackEngine errors", () => {
       );
     },
   );
+});
+
+describe("mpv 自动切歌与失败恢复", () => {
+  let provider: PlatformMpvPlayback;
+
+  function networkError(status?: number) {
+    return new AxiosError(
+      "temporary network failure",
+      status ? "ERR_BAD_RESPONSE" : "ETIMEDOUT",
+      undefined,
+      undefined,
+      status
+        ? {
+            status,
+            statusText: "Error",
+            data: null,
+            headers: {},
+            config: { headers: new AxiosHeaders() },
+          }
+        : undefined,
+    );
+  }
+
+  async function endCurrent(provider: PlatformMpvPlayback) {
+    const snapshot = await provider.snapshot(1);
+    const listener = vi.mocked(provider.onEvent).mock.calls[0]?.[0];
+    if (!listener) throw new Error("Missing mpv event listener");
+    listener({
+      type: "ended",
+      snapshot: { ...snapshot, sequence: snapshot.sequence + 1, state: "ended" },
+    });
+    await flush();
+  }
+
+  beforeEach(() => {
+    mocks.engine = "mpv";
+    provider = mpvProvider();
+    mocks.mpv = provider;
+    mocks.status.autoClose = { enable: false };
+  });
+
+  it.each([undefined, 502, 503])("自动切歌获取地址遇到 %s 时重试当前歌曲", async (status) => {
+    await player.initPlayer();
+    mocks.url
+      .mockRejectedValueOnce(networkError(status))
+      .mockResolvedValueOnce("https://synthetic.invalid/B");
+
+    await endCurrent(provider);
+    await vi.waitFor(() => expect(provider.play).toHaveBeenCalledTimes(2));
+
+    expect(mocks.status.playIndex).toBe(1);
+    expect(mocks.music.playSong.id).toBe("B");
+    expect(manager.src).toBe("test:B");
+    expect(manager.paused).toBe(false);
+    expect(mocks.url).toHaveBeenCalledTimes(3);
+  });
+
+  it("连续网络失败只有限重试，点击播放可重新加载当前歌曲", async () => {
+    await player.initPlayer();
+    mocks.url.mockRejectedValue(networkError(502));
+    await endCurrent(provider);
+    await vi.waitFor(() => expect(mocks.status.playLoading).toBe(false));
+    expect(mocks.url).toHaveBeenCalledTimes(4);
+    expect(manager.src).toBe("");
+    expect(mocks.music.playSong.id).toBe("B");
+
+    mocks.url.mockResolvedValue("https://synthetic.invalid/B");
+    await player.play();
+
+    expect(manager.src).toBe("test:B");
+    expect(manager.paused).toBe(false);
+    expect(window.$message.warning).not.toHaveBeenCalled();
+  });
+
+  it("鉴权失败不自动重试，点击播放后可重新获取音源", async () => {
+    mocks.url.mockRejectedValueOnce(networkError(401));
+    await player.initPlayer();
+    expect(mocks.url).toHaveBeenCalledOnce();
+    expect(manager.src).toBe("");
+
+    await player.play();
+
+    expect(manager.src).toBe("test:A");
+    expect(manager.paused).toBe(false);
+    expect(mocks.url).toHaveBeenCalledTimes(2);
+  });
+
+  it("获取地址期间重复点击播放不会重复初始化，暂停仍可撤销自动播放", async () => {
+    const url = deferred<string>();
+    mocks.url.mockReturnValueOnce(url.promise);
+    const loading = player.initPlayer();
+    await flush();
+    await player.play();
+    expect(mocks.url).toHaveBeenCalledOnce();
+    await player.pause();
+    url.resolve("https://synthetic.invalid/A");
+    await loading;
+    expect(manager.src).toBe("test:A");
+    expect(manager.paused).toBe(true);
+    expect(mocks.mpv?.play).not.toHaveBeenCalled();
+  });
+
+  it("原生加载拒绝后，点击播放可重新加载当前歌曲", async () => {
+    vi.mocked(provider.load).mockRejectedValueOnce(new Error("load failed"));
+    await player.initPlayer();
+    expect(manager.src).toBe("");
+
+    await player.play();
+
+    expect(manager.src).toBe("test:A");
+    expect(manager.paused).toBe(false);
+    expect(provider.load).toHaveBeenCalledTimes(2);
+  });
+
+  it("重试获取地址期间暂停，成功后仍保留暂停意图", async () => {
+    const url = deferred<string>();
+    mocks.url.mockRejectedValueOnce(networkError(502)).mockReturnValueOnce(url.promise);
+    const loading = player.initPlayer();
+    await flush();
+    expect(mocks.url).toHaveBeenCalledTimes(2);
+    await player.pause();
+    url.resolve("https://synthetic.invalid/A");
+    await loading;
+
+    expect(manager.src).toBe("test:A");
+    expect(manager.paused).toBe(true);
+    expect(provider.play).not.toHaveBeenCalled();
+  });
+
+  it("旧歌曲地址请求失败不会重试或清空新歌曲", async () => {
+    let reject!: (error: unknown) => void;
+    mocks.url.mockReturnValueOnce(new Promise((_resolve, fail) => (reject = fail)));
+    const oldLoading = player.initPlayer();
+    await flush();
+    await player.nextOrPrev("next");
+    reject(networkError(502));
+    await oldLoading;
+
+    expect(mocks.url).toHaveBeenCalledTimes(2);
+    expect(manager.src).toBe("test:B");
+    expect(manager.paused).toBe(false);
+    expect(window.$message.error).not.toHaveBeenCalled();
+  });
 });
 
 describe("real Player HTTP control autoplay intent", () => {
