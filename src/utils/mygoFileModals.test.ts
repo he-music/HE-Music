@@ -417,19 +417,19 @@ describe("fresh URL resolver", () => {
   );
   it.each([
     {},
-    { format: "flac" },
-    { format: "aac" },
+    { format: "" },
+    { format: "unsupported" },
     { format: "mp3", url: "file:///private/song.mp3" },
     { format: "mp3", url: "https://user:secret@example.invalid/audio" },
   ])(
-    "rejects mismatched/missing formats and unsafe URL without exposing response",
+    "rejects unsupported/missing formats and unsafe URL without exposing response",
     async (response) => {
       const request = vi
         .fn()
         .mockResolvedValue({ url: "https://example.invalid/?token=secret", ...response });
       const resolve = createMygoDownloadResolver(request);
       await expect(resolve("MP3", localDownloadSource(song))).rejects.toThrow(
-        /^Download source unavailable$/,
+        /^Download (source unavailable|format unsupported)$/,
       );
     },
   );

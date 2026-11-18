@@ -189,6 +189,34 @@ describe("LocalDownloadSession candidate persistence seam", () => {
     });
   });
 
+  it("恢复 AAC 请求、M4A 容器的下载任务后仍可重试", async () => {
+    const { session, access, resolveURL } = setup([
+      snapshot("old", {
+        filename: "song.m4a",
+        source: {
+          id: "song",
+          name: "Song",
+          platform: "kuwo",
+          links: [{ name: "320", quality: 128, format: "aac" }],
+        },
+      }),
+    ]);
+    resolveURL.mockResolvedValue({ url: "https://example.test/fresh.m4a", format: "m4a" });
+    await session.restored;
+    const id = await session.retry("old");
+    expect(id).toBeTruthy();
+    expect(resolveURL).toHaveBeenCalledWith(
+      "320",
+      expect.objectContaining({
+        platform: "kuwo",
+        links: [expect.objectContaining({ format: "aac" })],
+      }),
+    );
+    expect(access.start).toHaveBeenCalledWith(
+      expect.objectContaining({ filename: "song.m4a", url: "https://example.test/fresh.m4a" }),
+    );
+  });
+
   it.each([
     ["kuwo", "mflac", "flac"],
     ["soda", "flac", "m4a"],

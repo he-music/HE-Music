@@ -5,6 +5,7 @@ import {
 } from "../platform/localDownloadSession";
 import { validLocalDownloadFormat } from "@/platform/localDownloadPersistence";
 import { audioOutputFormat } from "@/platform/audioSource";
+import { DownloadPreparationError } from "@/platform/localDownloadDiagnostics";
 import { toLineDownloadLyrics } from "./downloadLyrics";
 
 export interface MygoDownloadResolution {
@@ -53,12 +54,11 @@ export function createMygoDownloadResolver(
       if (!response || typeof response !== "object") throw new Error();
       const url = "url" in response ? response.url : undefined;
       const resolvedFormat = "format" in response ? response.format : undefined;
-      if (
-        !validResolvedURL(url) ||
-        typeof resolvedFormat !== "string" ||
-        resolvedFormat.toLowerCase() !== format
-      )
-        throw new Error();
+      if (!validResolvedURL(url) || typeof resolvedFormat !== "string") throw new Error();
+      // 请求格式用于选择音质；返回格式才是下载文件的实际容器（例如 AAC 请求返回 M4A）。
+      const outputFormat = resolvedFormat.toLowerCase();
+      if (!validLocalDownloadFormat(outputFormat))
+        throw new DownloadPreparationError("unsupported_format");
       const needMetadata = options?.writeMetadata || options?.writeCover;
       const needLyrics = options?.writeLyrics;
       const [detailResult, lyricResult] = await Promise.all([
@@ -104,7 +104,7 @@ export function createMygoDownloadResolver(
         !validDownloadHTTPURL(resolvedCover) &&
         !options.keepAudioOnMetadataFailure
       )
-        throw new Error("Download cover unavailable");
+        throw new DownloadPreparationError("cover_unavailable");
       const fetchedLyrics = lyricText(lyricResult);
       const metadata = {
         title: typeof song?.name === "string" ? song.name : (captured?.title ?? source.name),
@@ -117,12 +117,22 @@ export function createMygoDownloadResolver(
       };
       return {
         url,
-        format,
+        format: outputFormat,
         ...(needMetadata || needLyrics ? { metadata } : {}),
       };
     } catch (error) {
-      if (error instanceof Error && error.message === "Download cover unavailable") throw error;
-      throw new Error("Download source unavailable");
+      if (error instanceof DownloadPreparationError) throw error;
+      const response =
+        error && typeof error === "object" && "response" in error ? error.response : undefined;
+      const status =
+        response && typeof response === "object" && "status" in response
+          ? response.status
+          : undefined;
+      const httpStatus =
+        typeof status === "number" && Number.isInteger(status) && status >= 100 && status <= 599
+          ? status
+          : undefined;
+      throw new DownloadPreparationError("source_unavailable", httpStatus);
     }
   };
 }

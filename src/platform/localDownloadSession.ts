@@ -612,10 +612,7 @@ export class LocalDownloadSession {
     const format = resolved.toLowerCase();
     const link = source.links.find((item) => item.name === quality);
     return (
-      !!link &&
-      validLocalDownloadFormat(format) &&
-      format === audioOutputFormat(source.platform, link.format) &&
-      filename.toLowerCase().endsWith(`.${format}`)
+      !!link && validLocalDownloadFormat(format) && filename.toLowerCase().endsWith(`.${format}`)
     );
   }
 

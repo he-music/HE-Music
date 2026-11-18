@@ -6,9 +6,11 @@ import ts from "typescript";
 import { createMygoDownloadResolver } from "../../utils/localDownloadResolver";
 import { defaultGrantIndex } from "@/platform/localDownloadOptions";
 import { audioOutputFormat } from "@/platform/audioSource";
+import { DownloadPreparationError } from "@/platform/localDownloadDiagnostics";
 const settings = Vue.reactive({ downloadPath: "Music one" });
 const openSettings = vi.fn();
 const success = vi.fn();
+const failureLog = vi.fn();
 vi.mock("@/api/song", () => ({ songDetail: vi.fn(), songLyric: vi.fn(), songUrl: vi.fn() }));
 import {
   LocalDownloadSession,
@@ -46,6 +48,7 @@ afterEach(async () => {
   expect(vi.getTimerCount()).toBe(0);
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 function mount(props: object) {
@@ -66,11 +69,12 @@ function mount(props: object) {
     "@/utils/helper": { formatFileSize: (bytes: number) => `${bytes} B` },
     "@/platform/localDownloadPersistence": { validLocalDownloadFormat },
     "@/platform/audioSource": { audioOutputFormat },
+    "@/platform/localDownloadDiagnostics": { DownloadPreparationError },
     vue: Vue,
     "vue-i18n": {
       useI18n: () => ({
-        t: (key: string, data?: { version?: string }) =>
-          data?.version ? `${key}:${data.version}` : key,
+        t: (key: string, data?: { version?: string; status?: number }) =>
+          data?.version ? `${key}:${data.version}` : data?.status ? `${key}:${data.status}` : key,
       }),
     },
     "@/platform/localDownloadSession": {
@@ -238,6 +242,8 @@ beforeEach(() => {
   settings.downloadPath = "Music one";
   openSettings.mockClear();
   success.mockClear();
+  failureLog.mockClear();
+  vi.spyOn(console, "error").mockImplementation(failureLog);
   vi.stubGlobal("window", { $message: { success } });
   vi.useFakeTimers();
   snapshot = {};
@@ -395,7 +401,7 @@ it("only adds a task and closes, leaving progress and retries to the manager", a
   expect(session.tasks.value).toHaveLength(1);
 });
 
-it("reacts to grant props, rejects mismatched formats, and prevents a revoked pending URL from starting", async () => {
+it("reacts to grant props, rejects unsupported formats, and prevents a revoked pending URL from starting", async () => {
   let finish!: (result: { url: string; format: string }) => void;
   const resolveURL = vi.fn(
     () =>
@@ -429,12 +435,71 @@ it("reacts to grant props, rejects mismatched formats, and prevents a revoked pe
   const mismatch = mount({
     ...properties,
     grants,
-    resolveURL: async () => ({ url: "https://example.test/audio", format: "flac" }),
+    resolveURL: async () => ({ url: "https://example.test/audio", format: "unsupported" }),
   });
   await mismatch.click("download.add");
   await flush();
-  expect(mismatch.text()).toContain("local_download.operation_failed");
+  expect(mismatch.text()).toContain("local_download.unsupported_format");
   expect(access.start).not.toHaveBeenCalled();
+});
+
+it.each([
+  ["kuwo", "aac", "m4a"],
+  ["kuwo", "m4a", "m4a"],
+  ["soda", "aac", "m4a"],
+  ["soda", "flac", "m4a"],
+  ["kuwo", "mflac", "flac"],
+  ["qq", "mp3", "flac"],
+])("实际 SFC 按返回格式下载 %s/%s → %s", async (platform, requested, output) => {
+  const request = vi.fn(async () => ({
+    url: `https://cdn.test/audio.${output}`,
+    format: output,
+    audio_params: "",
+  }));
+  const resolveURL = createMygoDownloadResolver(request);
+  const view = mount({
+    song: {
+      ...song,
+      platform,
+      links: [{ name: "quality", quality: 128, format: requested, size: "1", url: "" }],
+    },
+    session,
+    grants,
+    chooseDirectory: async () => {},
+    resolveURL,
+  });
+  await view.click("download.add");
+  await flush();
+  expect(request).toHaveBeenCalledWith("song", platform, 128, requested);
+  expect(access.start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      filename: `Song.${output}`,
+      url: `https://cdn.test/audio.${output}`,
+    }),
+  );
+  expect(success).toHaveBeenCalledOnce();
+});
+
+it("显示音源请求失败的 HTTP 状态，并记录可定位的错误原因", async () => {
+  const resolveURL = createMygoDownloadResolver(async () => {
+    throw {
+      response: { status: 502, data: { message: "https://cdn.test/audio?signature=private" } },
+      config: { headers: { Authorization: "private-token" } },
+    };
+  });
+  const view = mount({ song, session, grants, chooseDirectory: async () => {}, resolveURL });
+  await view.click("download.add");
+  await flush();
+  expect(view.text()).toContain("local_download.source_unavailable");
+  expect(view.text()).toContain("local_download.http_status:502");
+  expect(access.start).not.toHaveBeenCalled();
+  expect(failureLog).toHaveBeenCalledWith("添加下载任务失败", {
+    reason: "source_unavailable",
+    httpStatus: 502,
+  });
+  expect(view.text() + JSON.stringify(failureLog.mock.calls)).not.toMatch(
+    /signature|private-token/,
+  );
 });
 
 it("leaves committed warnings and scan failure in the queue after closing", async () => {
@@ -652,5 +717,5 @@ it.each([
   await flush();
   expect(access.start).not.toHaveBeenCalled();
   expect(session.tasks.value).toEqual([]);
-  expect(view.text()).toContain("local_download.operation_failed");
+  expect(view.text()).toContain("local_download.cover_unavailable");
 });

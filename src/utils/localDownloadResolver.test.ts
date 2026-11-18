@@ -56,6 +56,22 @@ describe("mygo local download resolver candidate", () => {
     });
   });
 
+  it("使用酷我接口返回的 M4A 格式并保留原始请求参数", async () => {
+    const request = vi.fn(async () => ({
+      url: "https://kw-er.kuwo.cn/resource/track.m4a",
+      format: "m4a",
+      audio_params: "",
+    }));
+    const resolve = createMygoDownloadResolver(request);
+    const kuwo = {
+      ...source,
+      platform: "kuwo",
+      links: [{ name: "aac", quality: 128, format: "aac", size: "1" }],
+    };
+    await expect(resolve("aac", kuwo)).resolves.toMatchObject({ format: "m4a" });
+    expect(request).toHaveBeenCalledExactlyOnceWith("song", "kuwo", 128, "aac");
+  });
+
   it("does not fetch optional metadata for an audio-only request", async () => {
     const detail = vi.fn();
     const lyric = vi.fn();

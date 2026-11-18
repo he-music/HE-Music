@@ -1,5 +1,25 @@
 import type { DownloadIssue } from "./mygo.bindings";
 
+export type DownloadPreparationFailure =
+  "source_unavailable" | "unsupported_format" | "cover_unavailable";
+
+const preparationMessages: Record<DownloadPreparationFailure, string> = {
+  source_unavailable: "Download source unavailable",
+  unsupported_format: "Download format unsupported",
+  cover_unavailable: "Download cover unavailable",
+};
+
+/** 下载准备阶段只暴露明确的原因与 HTTP 状态，不携带签名链接或请求凭据。 */
+export class DownloadPreparationError extends Error {
+  constructor(
+    readonly reason: DownloadPreparationFailure,
+    readonly httpStatus?: number,
+  ) {
+    super(preparationMessages[reason]);
+    this.name = "DownloadPreparationError";
+  }
+}
+
 const stages: readonly string[] = [
   "audio",
   "metadata",

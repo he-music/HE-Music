@@ -36,6 +36,9 @@
     </div>
     <n-alert v-if="failure" type="error" :show-icon="false" class="feedback" role="alert">
       {{ t(`local_download.${failure}`) }}
+      <template v-if="failureHTTPStatus">
+        {{ t("local_download.http_status", { status: failureHTTPStatus }) }}
+      </template>
     </n-alert>
     <n-flex class="menu" justify="end">
       <n-button strong secondary @click="close">{{ t("common.cancel") }}</n-button>
@@ -57,6 +60,7 @@ import {
 } from "@/platform/localDownloadOptions";
 import { validLocalDownloadFormat } from "@/platform/localDownloadPersistence";
 import { audioOutputFormat } from "@/platform/audioSource";
+import { DownloadPreparationError } from "@/platform/localDownloadDiagnostics";
 import { useI18n } from "vue-i18n";
 import type { SongInfo } from "@/types/main.hemusic";
 import type { DirectoryGrant } from "@/platform/mygo.bindings";
@@ -81,6 +85,7 @@ const directory = computed(() => defaultGrantIndex(props.grants, settingStore.do
 const quality = ref("");
 const busy = ref(false);
 const failure = ref("");
+const failureHTTPStatus = ref<number>();
 let closed = false;
 let revision = 0;
 onScopeDispose(() => {
@@ -159,6 +164,7 @@ async function submit() {
   const version = revision;
   busy.value = true;
   failure.value = "";
+  failureHTTPStatus.value = undefined;
   try {
     const result = await resolveURL(
       link.name,
@@ -179,15 +185,11 @@ async function submit() {
     )
       return;
     const format = result.format.toLowerCase();
-    if (
-      !validLocalDownloadFormat(format) ||
-      format !== link.format.toLowerCase() ||
-      !name.toLowerCase().endsWith(`.${format}`)
-    )
-      throw new Error("Unavailable");
+    if (!validLocalDownloadFormat(format)) throw new DownloadPreparationError("unsupported_format");
+    const resolvedFilename = normalizePortableFilename(capturedPlan.filenameStem, format);
     const id = await session.start({
       grantToken: grant.token,
-      filename: name,
+      filename: resolvedFilename,
       label,
       quality: link.name,
       display,
@@ -207,9 +209,14 @@ async function submit() {
       window.$message?.success(t("message.download_added"));
       close();
     }
-  } catch {
-    if (!closed && revision === version && props.session === session)
-      failure.value = "operation_failed";
+  } catch (error) {
+    const reason = error instanceof DownloadPreparationError ? error.reason : "operation_failed";
+    const httpStatus = error instanceof DownloadPreparationError ? error.httpStatus : undefined;
+    console.error("添加下载任务失败", { reason, httpStatus });
+    if (!closed && revision === version && props.session === session) {
+      failure.value = reason;
+      failureHTTPStatus.value = httpStatus;
+    }
   } finally {
     busy.value = false;
   }

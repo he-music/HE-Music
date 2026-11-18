@@ -451,6 +451,34 @@ it("retains committed history and duplicate protection for a different live gran
   ).toBeUndefined();
 });
 
+it.each(["m4a", "mp3"])("重试时核对已保存的实际扩展名：返回 %s", async (format) => {
+  const resolveURL = vi.fn(async () => ({ url: "https://example.test/fresh", format }));
+  const id = (await session.start({
+    ...input,
+    filename: "song.m4a",
+    source: {
+      ...input.source,
+      platform: "kuwo",
+      links: [{ name: input.quality, quality: 128, format: "aac", size: "1" }],
+    },
+    resolveURL,
+  }))!;
+  vi.mocked(access.read).mockResolvedValueOnce(
+    state(id, { filename: "song.m4a", done: true, code: "network_error" }),
+  );
+  await session.refresh(id);
+  const next = await session.retry(id);
+  if (format === "m4a") {
+    expect(next).toBeTruthy();
+    expect(access.start).toHaveBeenLastCalledWith(
+      expect.objectContaining({ filename: "song.m4a", url: "https://example.test/fresh" }),
+    );
+  } else {
+    expect(next).toBeUndefined();
+    expect(access.start).toHaveBeenCalledOnce();
+  }
+});
+
 it("retries a copied immutable source without retaining the song link URL", async () => {
   const source = {
     ...input.source,
