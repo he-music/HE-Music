@@ -108,6 +108,7 @@ import { platform } from "@/platform";
 import { useStatusStore, useMusicStore, useSettingStore, usePlatformStore } from "@/stores";
 import { FeatureSupportFlag } from "@/api/platform";
 import { playbackCapabilities } from "@/utils/audioManager";
+import { isPVLyricRenderer } from "@/utils/lyric/renderer";
 import { useOverlayBack } from "@/composables/useOverlayBack";
 
 const musicStore = useMusicStore();
@@ -134,21 +135,19 @@ const isShowComment = computed<boolean>(
     platformStore.isFeatureSupport(musicStore.playSong.platform, FeatureSupportFlag.GetCommentList),
 );
 
-/** 没有歌词 */
+/** 没有可显示的歌词区域；PV 效果在纯音乐时仍保留画布 */
 const noLrc = computed<boolean>(() => {
   const noNormalLrc = !musicStore.isHasLrc;
   const noYrcAvailable = !musicStore.isHasYrc || !settingStore.showYrc;
   // const notLoading = !statusStore.lyricLoading;
 
-  return noNormalLrc && noYrcAvailable;
+  return noNormalLrc && noYrcAvailable && !isPVLyricRenderer(settingStore.lyricRenderer);
 });
 
 /** 是否处于纯净模式 */
 const pureLyricMode = computed<boolean>(() => statusStore.pureLyricMode && !noLrc.value);
 const fullBleedPV = computed(
-  () =>
-    pureLyricMode.value &&
-    (settingStore.lyricRenderer === "hanabi" || settingStore.lyricRenderer === "lumiere"),
+  () => pureLyricMode.value && isPVLyricRenderer(settingStore.lyricRenderer),
 );
 
 // 仅在切歌时重置主内容，布局切换复用现有歌词实例。

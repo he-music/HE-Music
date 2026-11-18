@@ -50,6 +50,7 @@ import { adaptPVLines, createPVTheme } from "./model";
 import { createPVAudioSignals } from "./audio";
 import { createPVRuntime, type PVMode, type PVRuntime, type PVSong } from "./runtime";
 import { usePVSafeArea } from "./usePVSafeArea";
+import audioManager from "@/utils/audioManager";
 
 // Vue 管理宿主与离散状态，原版 Pixi 引擎只在自己的渲染循环中读取播放时钟。
 const props = withDefaults(
@@ -194,6 +195,9 @@ async function updateSong(next: PVSong) {
     if (!controller.signal.aborted && !disposed) console.warn("[LyricPV] 更新歌曲失败", error);
   }
 }
+function onSeek() {
+  runtime?.seek?.();
+}
 onMounted(() => {
   readFont();
   if (root.value) {
@@ -201,6 +205,7 @@ onMounted(() => {
     root.value.addEventListener("webglcontextlost", contextLost, true);
   }
   document.fonts.addEventListener("loadingdone", readFont);
+  audioManager.on("seeked", onSeek);
   void start();
 });
 watch(
@@ -230,6 +235,7 @@ onBeforeUnmount(() => {
   fontObserver.disconnect();
   root.value?.removeEventListener("webglcontextlost", contextLost, true);
   document.fonts.removeEventListener("loadingdone", readFont);
+  audioManager.off("seeked", onSeek);
   release();
 });
 </script>

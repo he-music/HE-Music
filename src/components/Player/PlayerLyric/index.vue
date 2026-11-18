@@ -8,7 +8,7 @@
         partita: settingStore.lyricRenderer === 'partita',
         kinetic: settingStore.lyricRenderer === 'kinetic',
         classic: settingStore.lyricRenderer === 'classic',
-        pv: settingStore.lyricRenderer === 'hanabi' || settingStore.lyricRenderer === 'lumiere',
+        pv: isPVLyricRenderer(settingStore.lyricRenderer),
       },
     ]"
   >
@@ -20,9 +20,7 @@
       <ClassicLyric v-else-if="settingStore.lyricRenderer === 'classic'" :clock="lyricClock" />
       <KineticLyric v-else-if="settingStore.lyricRenderer === 'kinetic'" :clock="lyricClock" />
       <PVLyric
-        v-else-if="
-          settingStore.lyricRenderer === 'hanabi' || settingStore.lyricRenderer === 'lumiere'
-        "
+        v-else-if="isPVLyricRenderer(settingStore.lyricRenderer)"
         :mode="settingStore.lyricRenderer"
         :clock="lyricClock"
         :full-bleed="statusStore.pureLyricMode && !compactToolbar"
@@ -85,6 +83,7 @@
 import { useMobile } from "@/composables/useMobile";
 import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { usePlayer } from "@/utils/player";
+import { isPVLyricRenderer } from "@/utils/lyric/renderer";
 import { useI18n } from "vue-i18n";
 import LyricToolbar from "./LyricToolbar.vue";
 import MobilePlayButton from "../PlayerComponents/MobilePlayButton.vue";

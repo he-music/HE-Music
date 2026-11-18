@@ -102,12 +102,20 @@ const groups = computed(() => [
     label: t("common.lyrics"),
     description: t("setting.lyrics.renderer"),
     value: settingStore.lyricRenderer,
-    options: ["default", "amll", "monet", "partita", "classic", "kinetic", "hanabi", "lumiere"].map(
-      (value) => ({
-        value,
-        label: value === "amll" ? "AMLL" : t(`setting.lyrics.renderer_${value}`),
-      }),
-    ),
+    options: [
+      "default",
+      "amll",
+      "monet",
+      "partita",
+      "classic",
+      "kinetic",
+      "hanabi",
+      "lumiere",
+      "52hz",
+    ].map((value) => ({
+      value,
+      label: value === "amll" ? "AMLL" : t(`setting.lyrics.renderer_${value}`),
+    })),
     select: (value: string) => {
       settingStore.lyricRenderer = resolveLyricRenderer(value);
     },

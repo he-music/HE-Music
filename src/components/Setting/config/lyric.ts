@@ -199,6 +199,7 @@ export const useLyricSettings = (): SettingConfig => {
               { label: t("setting.lyrics.renderer_kinetic"), value: "kinetic" },
               { label: t("setting.lyrics.renderer_hanabi"), value: "hanabi" },
               { label: t("setting.lyrics.renderer_lumiere"), value: "lumiere" },
+              { label: t("setting.lyrics.renderer_52hz"), value: "52hz" },
             ],
             value: computed({
               get: () => settingStore.lyricRenderer,

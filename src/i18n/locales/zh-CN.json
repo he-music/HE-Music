@@ -951,6 +951,7 @@
       "renderer_kinetic": "跃音",
       "renderer_hanabi": "花火",
       "renderer_lumiere": "绘光",
+      "renderer_52hz": "52Hz",
       "kinetic_resume": "回到当前歌词",
       "kinetic_settings": "跃音专属设置",
       "kinetic_jump_granularity": "音符跳动粒度",

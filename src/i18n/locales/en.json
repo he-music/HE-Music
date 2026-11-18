@@ -951,6 +951,7 @@
       "renderer_kinetic": "Kinetic",
       "renderer_hanabi": "Hanabi",
       "renderer_lumiere": "Lumiere",
+      "renderer_52hz": "52Hz",
       "kinetic_resume": "Back to current lyrics",
       "kinetic_settings": "Kinetic settings",
       "kinetic_jump_granularity": "Note jump granularity",

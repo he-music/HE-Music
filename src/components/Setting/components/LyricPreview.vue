@@ -20,10 +20,7 @@
     }"
     class="set-item"
   >
-    <div
-      v-if="settingStore.lyricRenderer === 'hanabi' || settingStore.lyricRenderer === 'lumiere'"
-      class="monet-preview"
-    >
+    <div v-if="isPVLyricRenderer(settingStore.lyricRenderer)" class="monet-preview">
       <LyricPVStage
         :mode="settingStore.lyricRenderer"
         :lines="partitaPreviewLines"
@@ -187,6 +184,7 @@
 import { useSettingStore, useStatusStore } from "@/stores";
 import { useI18n } from "vue-i18n";
 import { lyricFontStyle, lyricLangFontStyle } from "@/utils/lyric/lyricFontConfig";
+import { isPVLyricRenderer } from "@/utils/lyric/renderer";
 import { adaptMonetLines } from "@/components/Monet/model";
 import { adaptPartitaLines } from "@/components/Partita/model";
 import { adaptClassicLines } from "@/components/Classic/model";

@@ -28,6 +28,7 @@ afterEach(() => {
 function runtime(): PVRuntime {
   return {
     swapSong: vi.fn(async () => {}),
+    seek: vi.fn(),
     setPaused: vi.fn(),
     setStaticMode: vi.fn(),
     renderOnce: vi.fn(),
@@ -42,6 +43,11 @@ function mount(
   const updates = vi.fn();
   const onScreen = ref(true);
   const safeArea = ref<{ top: number; bottom: number }>();
+  const audioListeners = new Map<string, () => void>();
+  const audio = {
+    on: vi.fn((type: string, callback: () => void) => audioListeners.set(type, callback)),
+    off: vi.fn((type: string) => audioListeners.delete(type)),
+  };
   const lines = adaptPartitaLines(
     [
       {
@@ -68,6 +74,7 @@ function mount(
         usePreferredReducedMotion: () => ref("no-preference"),
       },
       "@/components/Partita/model": { resolvePartitaFrame },
+      "@/utils/audioManager": { default: audio },
       "@/components/LyricStage/useStageClock": { useStageClock },
       "@/components/LyricStage/retireCanvasScene": {
         retireCanvasScene: (scene: PVRuntime) => scene.destroy(),
@@ -96,8 +103,23 @@ function mount(
     },
   );
   cleanups.push(host.close);
-  return { host, updates, time, onScreen, safeArea };
+  return { host, updates, time, onScreen, safeArea, audioListeners, audio };
 }
+
+it("resets history for explicit short seeks and removes the listener on unmount", async () => {
+  const next = runtime();
+  const { host, time, audioListeners, audio } = mount(async () => next);
+  await flushSfcHost();
+  time.value += 16;
+  await flushSfcHost();
+  expect(next.seek).not.toHaveBeenCalled();
+  time.value -= 200;
+  audioListeners.get("seeked")?.();
+  expect(next.seek).toHaveBeenCalledOnce();
+  host.close();
+  expect(audio.off).toHaveBeenCalledWith("seeked", expect.any(Function));
+  expect(audioListeners.size).toBe(0);
+});
 
 it("updates the scene after the new safe-area DOM styles are applied", async () => {
   const next = runtime();

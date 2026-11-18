@@ -4,6 +4,7 @@ import type { AudioBands, MotionValue } from "./vendor/types";
 // 复用播放器现有频谱；同一帧只采样一次，不创建 AudioContext、定时器或响应式高频状态。
 export function createPVAudioSignals(enabled: () => boolean) {
   let sampledAt = -Infinity;
+  let spectrum: Uint8Array = new Uint8Array(0);
   const frame = { bass: 0, mid: 0, treble: 0, vocal: 0, power: 0 };
   const signal = (key: keyof typeof frame): MotionValue<number> => ({
     get() {
@@ -12,6 +13,7 @@ export function createPVAudioSignals(enabled: () => boolean) {
       if (now - sampledAt >= 12) {
         sampledAt = now;
         const data = audioManager.getFrequencyData();
+        spectrum = data;
         const average = (from: number, to: number) => {
           const start = Math.floor(data.length * from);
           const end = Math.floor(data.length * to);
@@ -34,5 +36,14 @@ export function createPVAudioSignals(enabled: () => boolean) {
     treble: signal("treble"),
     vocal: signal("vocal"),
   };
-  return { audioPower: signal("power"), audioBands };
+  const audioPower = signal("power");
+  return {
+    audioPower,
+    audioBands,
+    audioSpectrum: () => {
+      if (!enabled()) return null;
+      audioPower.get();
+      return spectrum;
+    },
+  };
 }

@@ -35,7 +35,7 @@ import { adaptPartitaLines, lyricSeekTime } from "@/components/Partita/model";
 import LyricPVStage from "@/components/LyricPV/LyricPVStage.vue";
 import type { PVMode } from "@/components/LyricPV/runtime";
 
-// 花火与绘光共用播放器入口，复用已移植效果的歌词归一化、字体和跳转偏移规则。
+// 花火、绘光与 52Hz 共用播放器入口，复用已移植效果的歌词归一化、字体和跳转偏移规则。
 defineProps<{ mode: PVMode; fullBleed?: boolean; clock: { time: Readonly<Ref<number>> } }>();
 const musicStore = useMusicStore();
 const settingStore = useSettingStore();

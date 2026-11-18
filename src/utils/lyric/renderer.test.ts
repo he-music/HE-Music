@@ -30,7 +30,7 @@ describe("lyric renderer persistence", () => {
       lyricRenderer: "kinetic",
     });
   });
-  it.each(["hanabi", "lumiere"])(
+  it.each(["hanabi", "lumiere", "52hz"])(
     "persists %s without reverting to the legacy renderer",
     (renderer) => {
       expect(

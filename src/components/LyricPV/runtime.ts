@@ -1,7 +1,8 @@
+import type { PVLyricRenderer } from "@/utils/lyric/renderer";
 import type { AudioBands, Line, MotionValue, Theme } from "./vendor/types";
 
-// 两个原版引擎共用 Vue 宿主契约；模块在选择效果后才加载。
-export type PVMode = "hanabi" | "lumiere";
+// 原版引擎共用 Vue 宿主契约；模块在选择效果后才加载。
+export type PVMode = PVLyricRenderer;
 export interface PVSong {
   seed: string;
   lines: Line[];
@@ -16,6 +17,7 @@ export interface PVRuntime {
   setPaused(paused: boolean): void;
   setStaticMode(reduced: boolean): void;
   renderOnce(): void;
+  seek?(): void;
   destroy(): void;
 }
 export interface PVRuntimeOptions {
@@ -24,6 +26,7 @@ export interface PVRuntimeOptions {
   currentTime: MotionValue<number>;
   audioPower: MotionValue<number>;
   audioBands: AudioBands;
+  audioSpectrum?: () => Uint8Array | null;
   paused: boolean;
   reduced: boolean;
   signal: AbortSignal;
@@ -46,6 +49,10 @@ export function createPVProgramCache<T>(compile: (song: PVSong) => T) {
   };
 }
 export async function createPVRuntime(mode: PVMode, options: PVRuntimeOptions): Promise<PVRuntime> {
+  if (mode === "52hz") {
+    const { create52HzRuntime } = await import("./hz52/runtime");
+    return create52HzRuntime(options);
+  }
   const metadata = (song: PVSong) => ({
     title: song.title,
     artist: song.artist,

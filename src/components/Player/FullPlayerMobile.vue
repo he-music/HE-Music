@@ -138,8 +138,9 @@
 
 <script setup lang="ts">
 import { useSwipe } from "@vueuse/core";
-import { useMusicStore, useStatusStore, useDataStore } from "@/stores";
+import { useMusicStore, useStatusStore, useDataStore, useSettingStore } from "@/stores";
 import { toLikeSong } from "@/utils/auth";
+import { isPVLyricRenderer } from "@/utils/lyric/renderer";
 import { usePlayer } from "@/utils/player";
 import PlayerTime from "./PlayerComponents/PlayerTime.vue";
 import MobilePlayButton from "./PlayerComponents/MobilePlayButton.vue";
@@ -147,6 +148,7 @@ import MobilePlayerSongMenu from "@/components/Menu/MobilePlayerSongMenu.vue";
 import MobileSongQualityMenu from "@/components/Menu/MobileSongQualityMenu.vue";
 
 const musicStore = useMusicStore();
+const settingStore = useSettingStore();
 const statusStore = useStatusStore();
 const dataStore = useDataStore();
 const player = usePlayer();
@@ -159,7 +161,7 @@ const pageIndex = ref(0);
 const totalPage = 2;
 
 const hasLyric = computed(() => {
-  return musicStore.isHasLrc;
+  return musicStore.isHasLrc || isPVLyricRenderer(settingStore.lyricRenderer);
 });
 
 const artistName = computed(() => {

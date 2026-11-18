@@ -2,7 +2,11 @@ import { resolveKineticJumpGranularity } from "./kinetic";
 
 // src/utils/lyric/renderer.ts — 歌词效果选择及旧设置迁移。
 export type LyricRenderer =
-  "default" | "amll" | "monet" | "partita" | "classic" | "kinetic" | "hanabi" | "lumiere";
+  "default" | "amll" | "monet" | "partita" | "classic" | "kinetic" | "hanabi" | "lumiere" | "52hz";
+export type PVLyricRenderer = Extract<LyricRenderer, "hanabi" | "lumiere" | "52hz">;
+export function isPVLyricRenderer(value: unknown): value is PVLyricRenderer {
+  return value === "hanabi" || value === "lumiere" || value === "52hz";
+}
 
 export function resolveLyricRenderer(value: unknown, legacyAMLL?: unknown): LyricRenderer {
   if (
@@ -12,8 +16,7 @@ export function resolveLyricRenderer(value: unknown, legacyAMLL?: unknown): Lyri
     value === "partita" ||
     value === "classic" ||
     value === "kinetic" ||
-    value === "hanabi" ||
-    value === "lumiere"
+    isPVLyricRenderer(value)
   )
     return value;
   return legacyAMLL === true ? "amll" : "default";
