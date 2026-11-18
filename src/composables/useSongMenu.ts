@@ -1,4 +1,5 @@
 import { DropdownOption, NAlert } from "naive-ui";
+import SongQualityLabel from "@/components/UI/SongQualityLabel.vue";
 import { useStatusStore, useDataStore, usePlatformStore, useMusicStore } from "@/stores";
 import { renderIcon, copyData, getShareUrl } from "@/utils/helper";
 import {
@@ -621,15 +622,25 @@ export const useSongMenu = () => {
       ];
     }
     return song?.links?.map((item): DropdownOption => {
-      const desc = platformStore.getPlatformQualityDescription(song?.platform, item.name);
       return {
-        label: desc ? `${item.name}(${desc})` : `${item.name}`,
+        label: () =>
+          h(SongQualityLabel, {
+            name: item.name,
+            description: platformStore.getPlatformQualityDescription(song.platform, item.name),
+          }),
         key: item.name,
-        props: {
-          onClick: () => {
-            player.changeQuality(item.name);
-          },
-        },
+        icon: () =>
+          h(
+            "span",
+            {
+              "aria-hidden": true,
+              style: {
+                display: "inline-flex",
+                opacity: statusStore.playQuality === item.name ? 1 : 0,
+              },
+            },
+            [renderIcon("Check", { size: 16 })()],
+          ),
       };
     });
   };

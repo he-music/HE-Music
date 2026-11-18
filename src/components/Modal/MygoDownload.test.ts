@@ -163,6 +163,7 @@ function mount(props: object) {
   const app = renderer.createApp({ setup: () => () => Vue.h(component, props) });
   for (const name of [
     "NSelect",
+    "SongQualitySelect",
     "NInput",
     "NButton",
     "NRadioGroup",
@@ -288,7 +289,7 @@ it("mounts the actual SFC, reads the configured grant, links to settings and fre
   expect(directory.props.value).toBe("Music two");
   expect(directory.props.disabled).toBe(true);
   expect(quality.props.name).toBe("level");
-  expect(view.all().filter((element) => element.props.value === "lossless")).toHaveLength(1);
+  expect(quality.props.links).toEqual(song.links);
   change(quality, "lossless");
   await flush();
   await view.click("setting.local.download_config");

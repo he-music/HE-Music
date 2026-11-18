@@ -31,41 +31,41 @@
 </template>
 
 <script setup lang="ts">
-import { NMenu, type MenuOption, type DropdownOption } from "naive-ui";
+import { NMenu } from "naive-ui";
 import { SongInfo } from "@/types/main.hemusic";
 import { useSongMenu } from "@/composables/useSongMenu";
 const { getQualityMenuOptions } = useSongMenu();
 import { useStatusStore } from "@/stores";
 import { useI18n } from "vue-i18n";
 import { useOverlayBack } from "@/composables/useOverlayBack";
+import { usePlayer } from "@/utils/player";
 
 const { t } = useI18n();
 const statusStore = useStatusStore();
+const player = usePlayer();
 
 const showDrawer = ref(false);
 useOverlayBack(showDrawer, () => {
   showDrawer.value = false;
 });
 const currentSong = ref<SongInfo | null>(null);
-const menuOptions = ref<DropdownOption[]>([]);
+const menuOptions = computed(() =>
+  currentSong.value ? getQualityMenuOptions(currentSong.value) : [],
+);
 
 const selectedQuality = computed<string>(() => statusStore.playQuality);
 
 // 打开菜单
 const open = (song: SongInfo) => {
   currentSong.value = song;
-  menuOptions.value = getQualityMenuOptions(song);
   showDrawer.value = true;
 };
 
-const handleMenuClick = (_key: string, item: MenuOption) => {
-  const onClick = item.props?.onClick;
-  if (typeof onClick === "function") {
-    (onClick as unknown as () => void)();
-    showDrawer.value = false;
-  }
+const handleMenuClick = (quality: string) => {
+  if (currentSong.value?.path) return;
+  player.changeQuality(quality);
+  showDrawer.value = false;
 };
-
 defineExpose({ open });
 </script>
 

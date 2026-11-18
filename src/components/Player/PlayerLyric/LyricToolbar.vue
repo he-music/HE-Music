@@ -87,11 +87,11 @@
     <n-popover
       v-else
       v-model:show="styleMenuShow"
-      raw
+      class="player"
       :show-arrow="false"
       trigger="click"
       placement="left-end"
-      style="border-radius: 8px"
+      style="padding: 0; border-radius: 8px"
     >
       <template #trigger>
         <button

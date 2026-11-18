@@ -10,26 +10,15 @@
         {{ t("modal.song_download_warning") }}
       </n-alert>
       <SongDataCard :data="song" />
-      <n-collapse :default-expanded-names="['level', 'path']" arrow-placement="right">
-        <n-collapse-item :title="t('common.song_quality')" name="level">
-          <!-- 音质选择 -->
-          <n-radio-group v-model:value="songLevelChosen" name="level">
-            <n-flex>
-              <n-radio v-for="(item, index) in song.links" :key="index" :value="item.name">
-                <n-flex>
-                  <n-text class="name">
-                    {{ getQualityDescription(item.name) }}
-                  </n-text>
-                  <!-- 文件预估大小 -->
-                  <n-text v-if="Number(item.size) > 0" depth="3">
-                    {{ formatFileSize(Number(item.size) || 0) }}
-                  </n-text>
-                </n-flex>
-              </n-radio>
-            </n-flex>
-          </n-radio-group>
-        </n-collapse-item>
-      </n-collapse>
+      <div class="download-field">
+        <n-text class="field-label">{{ t("common.song_quality") }}</n-text>
+        <SongQualitySelect
+          v-model:value="songLevelChosen"
+          :platform="song.platform"
+          :links="song.links"
+          name="level"
+        />
+      </div>
     </n-collapse-transition>
     <n-flex class="menu" justify="end">
       <n-button strong secondary @click="emit('close')">
@@ -43,8 +32,6 @@
 </template>
 
 <script setup lang="ts">
-import { usePlatformStore } from "@/stores";
-import { formatFileSize } from "@/utils/helper";
 import type { SongInfo } from "@/types/main.hemusic";
 import { useI18n } from "vue-i18n";
 const { t } = useI18n();
@@ -52,8 +39,6 @@ import downloadManager from "@/utils/downloadManager";
 
 const props = defineProps<{ song: SongInfo }>();
 const emit = defineEmits<{ close: [] }>();
-
-const platformStore = usePlatformStore();
 
 // 歌曲数据
 // const songData = ref<SongInfo>(props.song);
@@ -65,11 +50,6 @@ const songLevelChosen = ref<string>("320mp3");
 if (!props.song.links?.find((item) => item.name === songLevelChosen.value)) {
   songLevelChosen.value = props.song.links?.at(-1)?.name || "";
 }
-
-const getQualityDescription = (name: string) => {
-  const desc = platformStore.getPlatformQualityDescription(props.song?.platform, name);
-  return desc ? `${name}(${desc})` : `${name}`;
-};
 
 // 下载歌曲
 const download = async () => {
@@ -93,8 +73,12 @@ const download = async () => {
   .n-alert {
     margin-bottom: 20px;
   }
-  .n-collapse {
+  .download-field {
     margin-top: 20px;
+  }
+  .field-label {
+    display: block;
+    margin-bottom: 8px;
   }
   .menu {
     margin-top: 20px;

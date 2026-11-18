@@ -4,31 +4,25 @@
       {{ t("modal.song_download_warning") }}
     </n-alert>
     <SongDataCard :data="song" />
-    <n-collapse :default-expanded-names="['level', 'path']" arrow-placement="right">
-      <n-collapse-item :title="t('common.song_quality')" name="level">
-        <n-radio-group
+    <div class="download-fields">
+      <div class="download-field">
+        <n-text class="field-label">{{ t("common.song_quality") }}</n-text>
+        <SongQualitySelect
           v-model:value="quality"
+          :platform="song.platform"
+          :links="supported"
           data-download-field="quality"
           name="level"
           :disabled="busy"
-        >
-          <n-flex>
-            <n-radio v-for="link in supported" :key="link.name" :value="link.name">
-              <n-flex>
-                <n-text class="name">{{ qualityDescription(link.name) }}</n-text>
-                <n-text v-if="Number(link.size) > 0" depth="3">
-                  {{ formatFileSize(Number(link.size)) }}
-                </n-text>
-              </n-flex>
-            </n-radio>
-          </n-flex>
-        </n-radio-group>
-      </n-collapse-item>
-      <n-collapse-item :title="t('modal.download_path')" name="path">
+        />
+      </div>
+      <div class="download-field">
+        <n-text class="field-label">{{ t("modal.download_path") }}</n-text>
         <n-input-group>
           <n-input
             :value="settingStore.downloadPath || t('modal.download_path_not_configured')"
             data-download-field="directory"
+            :aria-label="t('modal.download_path')"
             :disabled="true"
           >
             <template #prefix><SvgIcon name="Folder" /></template>
@@ -38,8 +32,8 @@
             {{ t("setting.local.download_config") }}
           </n-button>
         </n-input-group>
-      </n-collapse-item>
-    </n-collapse>
+      </div>
+    </div>
     <n-alert v-if="failure" type="error" :show-icon="false" class="feedback" role="alert">
       {{ t(`local_download.${failure}`) }}
     </n-alert>
@@ -54,8 +48,7 @@
 
 <script setup lang="ts">
 import { computed, onScopeDispose, ref, watch } from "vue";
-import { useSettingStore, usePlatformStore } from "@/stores";
-import { formatFileSize } from "@/utils/helper";
+import { useSettingStore } from "@/stores";
 import { openSetting } from "@/utils/modal";
 import {
   createLocalDownloadPlan,
@@ -84,11 +77,6 @@ const props = defineProps<{
 const emit = defineEmits<{ close: [] }>();
 const { t } = useI18n();
 const settingStore = useSettingStore();
-const platformStore = usePlatformStore();
-const qualityDescription = (name: string) => {
-  const description = platformStore.getPlatformQualityDescription(props.song.platform, name);
-  return description ? `${name}(${description})` : name;
-};
 const directory = computed(() => defaultGrantIndex(props.grants, settingStore.downloadPath));
 const quality = ref("");
 const busy = ref(false);
@@ -238,8 +226,15 @@ function close(): void {
   .download-warning {
     margin-bottom: 20px;
   }
-  .n-collapse {
+  .download-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
     margin-top: 20px;
+  }
+  .field-label {
+    display: block;
+    margin-bottom: 8px;
   }
   .menu,
   .feedback {

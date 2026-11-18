@@ -18,12 +18,19 @@
       :options="getQualityMenuOptions(musicStore.playSong)"
       :show-arrow="true"
       :disabled="musicStore.isLocalSong"
+      :value="statusStore.playQuality"
       @select="(quality) => player.changeQuality(quality)"
+      :style="{ minWidth: '250px', maxWidth: 'calc(100vw - 24px)', padding: '8px 0' }"
       :class="{ player: statusStore.showFullPlayer }"
     >
-      <div class="menu-icon quality-selector hidden">
+      <button
+        type="button"
+        class="menu-icon quality-selector hidden"
+        :aria-label="`${t('common.song_quality')}：${currentQuality}`"
+        :disabled="musicStore.isLocalSong"
+      >
         <span class="current-quality">{{ currentQuality }}</span>
-      </div>
+      </button>
     </n-dropdown>
     <!-- 播放模式 -->
     <n-dropdown
@@ -203,7 +210,8 @@ const handleControls = (key: string) => {
       transform: scale(1);
     }
   }
-  .desktop-lyrics-toggle {
+  .desktop-lyrics-toggle,
+  .quality-selector {
     appearance: none;
     border: 0;
     background: transparent;
