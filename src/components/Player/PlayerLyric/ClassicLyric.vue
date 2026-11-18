@@ -2,6 +2,7 @@
   <div :class="['classic-player-lyric', { pure: statusStore.pureLyricMode }]" :style="fontStyle">
     <ClassicLyricRail
       :key="`${musicStore.playSong.platform}-${musicStore.playSong.id}`"
+      :style="{ ...fontStyle, fontWeight: fontStyle.fontWeight || 700 }"
       :lines="lines"
       :clock="clock"
       :playing="statusStore.playStatus"

@@ -1,39 +1,21 @@
 import type { LineStatus } from "./model";
+import {
+  MONET_SCROLL_SPRING,
+  MONET_SCALE_SPRING,
+  resolveMonetGlow,
+  resolveMonetTone,
+} from "@/components/LyricDom/vendor/components/visualizer/monet/monetLyricMotion";
 
-// src/components/Monet/motion.ts
-// Adapted from Folia (chthollyphile), AGPL-3.0: monetLyricMotion.ts / MonetLyricsRail.tsx.
-// https://github.com/chthollyphile/folia-major
-export const SCROLL_SPRING = { stiffness: 142, damping: 28, mass: 0.82 };
-export const SCALE_SPRING = { stiffness: 150, damping: 30, mass: 0.78 };
+// 弹簧积分由 Vue 宿主维护，视觉包络与色调参数直接复用固定上游算法。
+export const SCROLL_SPRING = MONET_SCROLL_SPRING;
+export const SCALE_SPRING = MONET_SCALE_SPRING;
 export const clamp = (value: number, min = 0, max = 1) => Math.min(max, Math.max(min, value));
-
-/** Folia 的绝对时间辉光包络，输入统一为毫秒，暂停或跳转不依赖动画累计时间。 */
 export function resolveGlow(time: number, start: number, end: number, lineEnd: number) {
-  if (time <= start) return 0;
-  const peak = start + Math.max(1, end - start) * 1.18;
-  const tail = Math.max(lineEnd, end + 1050);
-  const progress =
-    time <= peak
-      ? clamp((time - start) / (peak - start))
-      : 1 - clamp((time - peak) / Math.max(180, tail - peak));
-  return progress * progress * (3 - 2 * progress);
+  return resolveMonetGlow(time / 1000, start / 1000, end / 1000, lineEnd / 1000);
 }
-
 export function resolveTone(status: LineStatus, offset: number) {
-  if (status === "active") return { opacity: 1, scale: 1, blur: 0 };
-  const distance = Math.max(Math.abs(offset), 1);
-  const waiting = status === "waiting";
-  return {
-    opacity: waiting
-      ? clamp(0.72 - (distance - 1) * 0.18, 0.36, 0.72)
-      : clamp(0.52 - (distance - 1) * 0.12, 0.28, 0.52),
-    scale: clamp(0.78 * Math.pow(0.9, distance - 1), 0.68, 0.92),
-    blur: waiting
-      ? distance === 1
-        ? 0.7
-        : 1.8 + (distance - 2) * 0.8
-      : 1.1 + (distance - 1) * 0.7,
-  };
+  const tone = resolveMonetTone(status, offset);
+  return { opacity: tone.alpha, scale: tone.scale, blur: tone.blur };
 }
 
 export interface SpringValue {

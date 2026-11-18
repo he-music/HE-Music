@@ -29,29 +29,31 @@
         @keydown.enter.prevent.stop="seek(entry.line.start)"
         @keydown.space.prevent.stop="seek(entry.line.start)"
       >
-        <div class="monet-text" :lang="getLyricLanguage(entry.line.text)">
+        <div
+          class="monet-text"
+          :lang="getLyricLanguage(entry.line.text)"
+          :dir="resolveLyricTextDirection(entry.line.text)"
+        >
           <template v-if="entry.line.timed">
-            <span v-for="(word, wi) in entry.line.words" :key="wi" class="monet-word"
-              ><span
-                v-for="(glyph, gi) in word.glyphs"
-                :key="gi"
-                class="monet-glyph"
-                :data-glyph-start="glyph.start"
-                :data-glyph-end="glyph.end"
-                :data-word-duration="word.glyphs.at(-1)!.end - word.glyphs[0].start"
-                :data-text="glyph.text"
-                >{{ glyph.text }}</span
-              ></span
+            <span
+              v-for="(word, wi) in displayWords(entry.line)"
+              :key="wi"
+              class="monet-word"
+              :data-word-index="wi"
             >
+              <span class="monet-word-glow" aria-hidden="true">{{ word.text }}</span>
+              <span class="monet-word-body">{{ word.text }}</span>
+              <span class="monet-word-fill" aria-hidden="true">{{ word.text }}</span>
+            </span>
           </template>
           <template v-else>{{ entry.line.text }}</template>
         </div>
         <template v-if="entry.status === 'active' || browse.manualAnchor.value !== null">
-          <div v-if="showTranslation && entry.line.translation" class="monet-translation">
-            {{ entry.line.translation }}
-          </div>
           <div v-if="showRomanization && entry.line.romanization" class="monet-romanization">
             {{ entry.line.romanization }}
+          </div>
+          <div v-if="showTranslation && entry.line.translation" class="monet-translation">
+            {{ entry.line.translation }}
           </div>
         </template>
       </div>
@@ -71,6 +73,8 @@ import { resolveMonetFrame, type MonetLine } from "./model";
 import { resolveTone } from "./motion";
 import { useMonetMotion, type RailEntry } from "./useMonetMotion";
 import { useMonetBrowse } from "./useMonetBrowse";
+import { monetDisplayWords as displayWords } from "./upstream";
+import { resolveLyricTextDirection } from "@/components/LyricDom/vendor/utils/lyrics/textDirection";
 
 // src/components/Monet/MonetLyricRail.vue
 // Vue adaptation of Folia's MonetLyricsRail (chthollyphile, AGPL-3.0).

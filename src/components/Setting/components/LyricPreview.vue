@@ -78,6 +78,11 @@
       :style="{ '--main-cover-color': previewMainColor }"
     >
       <PartitaLyricRail
+        :style="{
+          ...lyricFontStyle(settingStore.lyricFont),
+          ...lyricLangFontStyle(settingStore),
+          fontWeight: lyricFontStyle(settingStore.lyricFont).fontWeight || 700,
+        }"
         :lines="partitaPreviewLines"
         :clock="previewClock"
         :playing="previewVisible && documentVisibility === 'visible'"
@@ -124,6 +129,11 @@
       :style="{ '--main-cover-color': previewMainColor }"
     >
       <ClassicLyricRail
+        :style="{
+          ...lyricFontStyle(settingStore.lyricFont),
+          ...lyricLangFontStyle(settingStore),
+          fontWeight: lyricFontStyle(settingStore.lyricFont).fontWeight || 700,
+        }"
         :lines="classicPreviewLines"
         :clock="previewClock"
         :playing="previewVisible && documentVisibility === 'visible'"
