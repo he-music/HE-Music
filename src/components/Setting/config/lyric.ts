@@ -214,6 +214,15 @@ export const useLyricSettings = (): SettingConfig => {
             component: markRaw(LyricPreview),
           },
           {
+            key: "showPureLyricSongInfo",
+            label: t("setting.lyrics.show_pure_lyric_song_info"),
+            type: "switch",
+            value: computed({
+              get: () => settingStore.showPureLyricSongInfo,
+              set: (v) => (settingStore.showPureLyricSongInfo = v),
+            }),
+          },
+          {
             key: "lyricFontSize",
             label: t("setting.lyrics.lyrics_font_size"),
             type: "input-number",

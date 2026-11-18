@@ -928,6 +928,7 @@
       "lyrics_scroll_position_value_center": "居中",
       "lyrics_scroll_position_value_top": "顶部",
       "lyrics_setting": "歌词设置",
+      "show_pure_lyric_song_info": "纯歌词模式显示顶部歌曲信息",
       "lyrics_tran_font_size": "翻译歌词大小",
       "lyrics_tran_font_size_placeholder": "请输入翻译歌词字体大小",
       "lyrics_tran_font_size_tip": "单位 px，最小 5，最大 40",

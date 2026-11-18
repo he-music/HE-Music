@@ -114,6 +114,7 @@ const settingSchema: Schema<SettingState> = {
   lyricTranFontSize: number,
   lyricRomaFontSize: number,
   lyricFontBold: bool,
+  showPureLyricSongInfo: bool,
   showYrc: bool,
   showYrcAnimation: bool,
   showYrcLongEffect: bool,

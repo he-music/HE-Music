@@ -74,7 +74,11 @@
               >
                 <!-- 数据 -->
                 <PlayerData
-                  v-if="pureLyricMode || settingStore.playerType === 'fullscreen'"
+                  v-if="
+                    pureLyricMode
+                      ? settingStore.showPureLyricSongInfo
+                      : settingStore.playerType === 'fullscreen'
+                  "
                   :center="pureLyricMode || noLrc"
                   :light="!(settingStore.playerType === 'fullscreen' && noLrc)"
                 />

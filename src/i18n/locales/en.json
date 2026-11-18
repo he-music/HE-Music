@@ -928,6 +928,7 @@
       "lyrics_scroll_position_value_center": "Center",
       "lyrics_scroll_position_value_top": "Top",
       "lyrics_setting": "Lyrics Settings",
+      "show_pure_lyric_song_info": "Show song info at the top in lyrics-only mode",
       "lyrics_tran_font_size": "Translated Lyrics Size",
       "lyrics_tran_font_size_placeholder": "Enter translated lyrics font size",
       "lyrics_tran_font_size_tip": "Unit: px, Min: 5, Max: 40",
