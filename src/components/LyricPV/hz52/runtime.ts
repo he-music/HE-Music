@@ -24,6 +24,8 @@ type RingSource =
 const WINDOWS = ["uWindow0", "uWindow1", "uWindow2", "uWindow3"] as const;
 const UNUSED_WINDOW = [1, 0];
 const OPEN_WINDOW_END = 1e9;
+// Pixi 8 的布尔 true 还会清空全局资源池，预览关闭时必须保留其他实例的批次。
+const RENDERER_DESTROY_OPTIONS = { removeView: true, releaseGlobalResources: false };
 
 export async function create52HzRuntime(options: PVRuntimeOptions): Promise<PVRuntime> {
   const pixi = await loadPixi();
@@ -42,11 +44,11 @@ export async function create52HzRuntime(options: PVRuntimeOptions): Promise<PVRu
       sharedTicker: false,
     });
   } catch (error) {
-    if (app.renderer) app.destroy(true, { children: true });
+    if (app.renderer) app.destroy(RENDERER_DESTROY_OPTIONS, { children: true });
     throw error;
   }
   if (options.signal.aborted) {
-    app.destroy(true, { children: true });
+    app.destroy(RENDERER_DESTROY_OPTIONS, { children: true });
     throw new DOMException("Cancelled", "AbortError");
   }
   let runtime: Hz52Runtime | undefined;
@@ -56,7 +58,7 @@ export async function create52HzRuntime(options: PVRuntimeOptions): Promise<PVRu
     return runtime;
   } catch (error) {
     if (runtime) runtime.destroy();
-    else app.destroy(true, { children: true });
+    else app.destroy(RENDERER_DESTROY_OPTIONS, { children: true });
     throw error;
   }
 }
@@ -436,6 +438,6 @@ class Hz52Runtime implements PVRuntime {
     this.ringSprite.destroy();
     this.historySource.destroy();
     this.beatSource.destroy();
-    this.app.destroy(true, { children: true });
+    this.app.destroy(RENDERER_DESTROY_OPTIONS, { children: true });
   }
 }

@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { AbstractRenderer, GlobalResourceRegistry, type RendererDestroyOptions } from "pixi.js";
 import { createPVTheme } from "../model";
 import { create52HzRuntime } from "./runtime";
 
@@ -13,13 +14,31 @@ vi.mock("../vendor/components/visualizer/pixi/loadPixi", () => ({
     },
   }),
 }));
+const sharedPool = { clear: vi.fn() };
 beforeEach(() => {
+  GlobalResourceRegistry.register(sharedPool);
+  mocks.destroy.mockImplementation((options: RendererDestroyOptions) => {
+    // 使用真实的 Pixi 销毁策略验证全局池，省去此测试不需要的 WebGL 实例。
+    Reflect.apply(
+      AbstractRenderer.prototype.destroy,
+      {
+        runners: { destroy: { items: [], emit() {}, destroy() {} } },
+        removeAllListeners() {},
+      },
+      [options],
+    );
+  });
   vi.stubGlobal("window", { devicePixelRatio: 1 });
   vi.stubGlobal("document", { createElement: () => ({ clientWidth: 640, clientHeight: 400 }) });
 });
 afterEach(() => {
-  vi.resetAllMocks();
-  vi.unstubAllGlobals();
+  GlobalResourceRegistry.unregister(sharedPool);
+  try {
+    expect(sharedPool.clear).not.toHaveBeenCalled();
+  } finally {
+    vi.resetAllMocks();
+    vi.unstubAllGlobals();
+  }
 });
 const options = (signal: AbortSignal) => ({
   host: document.createElement("div"),
@@ -66,7 +85,10 @@ it("destroys a late initialized application after cancellation", async () => {
   controller.abort();
   finish?.();
   await expect(pending).rejects.toMatchObject({ name: "AbortError" });
-  expect(mocks.destroy).toHaveBeenCalledExactlyOnceWith(true, { children: true });
+  expect(mocks.destroy).toHaveBeenCalledExactlyOnceWith(
+    { removeView: true, releaseGlobalResources: false },
+    { children: true },
+  );
 });
 it("releases renderer resources after an initialization failure", async () => {
   const error = new Error("WebGL unavailable");
