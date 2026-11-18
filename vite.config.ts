@@ -19,15 +19,7 @@ const vendorChunks = {
   ],
   "media-player": ["hls.js", "plyr"],
   markdown: ["marked", "github-markdown-css"],
-  pixi: [
-    "@pixi/app",
-    "@pixi/core",
-    "@pixi/display",
-    "@pixi/filter-blur",
-    "@pixi/filter-bulge-pinch",
-    "@pixi/filter-color-matrix",
-    "@pixi/sprite",
-  ],
+  pixi: ["pixi.js"],
 };
 
 // Web 与 mygo 共用渲染配置。

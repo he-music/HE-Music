@@ -30,6 +30,14 @@ describe("lyric renderer persistence", () => {
       lyricRenderer: "kinetic",
     });
   });
+  it.each(["hanabi", "lumiere"])(
+    "persists %s without reverting to the legacy renderer",
+    (renderer) => {
+      expect(
+        deserializeLyricSettings(JSON.stringify({ lyricRenderer: renderer, useAMLyrics: true })),
+      ).toEqual({ lyricRenderer: renderer });
+    },
+  );
   it.each(["auto", "character", "word"])("persists kinetic jump mode %s", (mode) => {
     expect(
       deserializeLyricSettings(

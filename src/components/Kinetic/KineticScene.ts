@@ -1,7 +1,4 @@
-import { Application } from "@pixi/app";
-import { Texture } from "@pixi/core";
-import { Container } from "@pixi/display";
-import { Sprite } from "@pixi/sprite";
+import { Application, CanvasSource, Container, Sprite, Texture } from "pixi.js";
 import { kineticBufferSize } from "./viewport";
 import {
   clamp,
@@ -47,18 +44,34 @@ export class KineticScene {
   private trailStart = 0;
   private destroyed = false;
 
-  constructor(canvas: HTMLCanvasElement, typography: KineticTypography) {
-    this.typography = typography;
-    this.app = new Application({
-      view: canvas,
+  static async create(
+    canvas: HTMLCanvasElement,
+    typography: KineticTypography,
+    signal: AbortSignal,
+  ) {
+    const app = new Application();
+    await app.init({
+      canvas,
       width: 1,
       height: 1,
       backgroundAlpha: 0,
       antialias: true,
-      resolution: this.resolution,
+      resolution: Math.min(window.devicePixelRatio || 1, 2),
       autoDensity: true,
       autoStart: false,
+      sharedTicker: false,
+      preference: "webgl",
     });
+    if (signal.aborted) {
+      app.destroy(false, { children: true });
+      throw new DOMException("Kinetic initialization cancelled", "AbortError");
+    }
+    return new KineticScene(app, typography);
+  }
+
+  private constructor(app: Application, typography: KineticTypography) {
+    this.typography = typography;
+    this.app = app;
     this.app.stage.addChild(this.world, this.effects);
     const glowTexture = this.texture("effect-glow", 64, 64, (ctx) => {
       const gradient = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -125,7 +138,9 @@ export class KineticScene {
     const ctx = canvas.getContext("2d")!;
     ctx.scale(this.resolution, this.resolution);
     paint(ctx);
-    const texture = Texture.from(canvas, { resolution: this.resolution });
+    const texture = new Texture({
+      source: new CanvasSource({ resource: canvas, resolution: this.resolution }),
+    });
     this.textures.set(key, texture);
     return texture;
   }
@@ -230,7 +245,7 @@ export class KineticScene {
   ) {
     if (this.destroyed || width <= 0 || height <= 0) return;
     const buffer = kineticBufferSize(width, height, this.resolution);
-    if (this.app.view.width !== buffer.width || this.app.view.height !== buffer.height) {
+    if (this.app.canvas.width !== buffer.width || this.app.canvas.height !== buffer.height) {
       this.app.renderer.resize(buffer.width / this.resolution, buffer.height / this.resolution);
     }
     if (time < this.lastTime || time - this.lastTime > 250) this.trailStart = time;
@@ -330,7 +345,7 @@ export class KineticScene {
   destroy() {
     if (this.destroyed) return;
     this.destroyed = true;
-    this.app.destroy(false, { children: true, texture: false, baseTexture: false });
+    this.app.destroy(false, { children: true, texture: false, textureSource: false });
     this.textures.forEach((texture) => texture.destroy(true));
     this.textures.clear();
   }

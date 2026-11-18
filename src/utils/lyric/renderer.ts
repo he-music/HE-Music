@@ -1,7 +1,8 @@
 import { resolveKineticJumpGranularity } from "./kinetic";
 
 // src/utils/lyric/renderer.ts — 歌词效果选择及旧设置迁移。
-export type LyricRenderer = "default" | "amll" | "monet" | "partita" | "classic" | "kinetic";
+export type LyricRenderer =
+  "default" | "amll" | "monet" | "partita" | "classic" | "kinetic" | "hanabi" | "lumiere";
 
 export function resolveLyricRenderer(value: unknown, legacyAMLL?: unknown): LyricRenderer {
   if (
@@ -10,7 +11,9 @@ export function resolveLyricRenderer(value: unknown, legacyAMLL?: unknown): Lyri
     value === "monet" ||
     value === "partita" ||
     value === "classic" ||
-    value === "kinetic"
+    value === "kinetic" ||
+    value === "hanabi" ||
+    value === "lumiere"
   )
     return value;
   return legacyAMLL === true ? "amll" : "default";

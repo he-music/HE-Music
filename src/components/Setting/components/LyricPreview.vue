@@ -21,6 +21,29 @@
     class="set-item"
   >
     <div
+      v-if="settingStore.lyricRenderer === 'hanabi' || settingStore.lyricRenderer === 'lumiere'"
+      class="monet-preview"
+    >
+      <LyricPVStage
+        :mode="settingStore.lyricRenderer"
+        :lines="partitaPreviewLines"
+        :clock="previewClock"
+        seed="settings-preview"
+        :duration="16000"
+        :playing="previewActive"
+        :visible="previewVisible"
+        preview
+        :color="previewMainColor"
+        :word-animation="settingStore.showYrcAnimation"
+        :show-translation="settingStore.showTran"
+        :show-romanization="settingStore.showRoma"
+        :translation-size="settingStore.lyricTranFontSize"
+        :romanization-size="settingStore.lyricRomaFontSize"
+        :style="lyricFontStyle(settingStore.lyricFont)"
+        @seek="seekPreview"
+      />
+    </div>
+    <div
       v-if="settingStore.lyricRenderer === 'monet'"
       class="monet-preview"
       :style="{ '--main-cover-color': previewMainColor, position: 'relative', overflow: 'hidden' }"
@@ -171,6 +194,7 @@ import { adaptClassicLines } from "@/components/Classic/model";
 const DefaultLyric = defineAsyncComponent(
   () => import("@/components/Player/PlayerLyric/DefaultLyric.vue"),
 );
+const LyricPVStage = defineAsyncComponent(() => import("@/components/LyricPV/LyricPVStage.vue"));
 const LyricPlayer = defineAsyncComponent(() => import("@/components/AMLL/LyricPlayer.vue"));
 const MonetLyricRail = defineAsyncComponent(() => import("@/components/Monet/MonetLyricRail.vue"));
 const MonetFloatingDecor = defineAsyncComponent(

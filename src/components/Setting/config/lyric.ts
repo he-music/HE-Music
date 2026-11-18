@@ -197,6 +197,8 @@ export const useLyricSettings = (): SettingConfig => {
               { label: t("setting.lyrics.renderer_partita"), value: "partita" },
               { label: t("setting.lyrics.renderer_classic"), value: "classic" },
               { label: t("setting.lyrics.renderer_kinetic"), value: "kinetic" },
+              { label: t("setting.lyrics.renderer_hanabi"), value: "hanabi" },
+              { label: t("setting.lyrics.renderer_lumiere"), value: "lumiere" },
             ],
             value: computed({
               get: () => settingStore.lyricRenderer,

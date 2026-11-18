@@ -17,33 +17,15 @@ importers:
       '@cap.js/widget':
         specifier: 0.1.58
         version: 0.1.58
+      '@chenglou/pretext':
+        specifier: 0.0.9
+        version: 0.0.9
       '@imsyy/color-utils':
         specifier: ^1.0.2
         version: 1.0.2
       '@material/material-color-utilities':
         specifier: ^0.3.0
         version: 0.3.0
-      '@pixi/app':
-        specifier: ^7.4.3
-        version: 7.4.3(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3))
-      '@pixi/core':
-        specifier: ^7.4.3
-        version: 7.4.3
-      '@pixi/display':
-        specifier: ^7.4.3
-        version: 7.4.3(@pixi/core@7.4.3)
-      '@pixi/filter-blur':
-        specifier: ^7.4.3
-        version: 7.4.3(@pixi/core@7.4.3)
-      '@pixi/filter-bulge-pinch':
-        specifier: ^5.1.1
-        version: 5.1.1(@pixi/core@7.4.3)
-      '@pixi/filter-color-matrix':
-        specifier: ^7.4.3
-        version: 7.4.3(@pixi/core@7.4.3)
-      '@pixi/sprite':
-        specifier: ^7.4.3
-        version: 7.4.3(@pixi/core@7.4.3)(@pixi/display@7.4.3(@pixi/core@7.4.3))
       '@vueuse/core':
         specifier: ^13.9.0
         version: 13.9.0(vue@3.5.43(typescript@5.9.3))
@@ -86,6 +68,9 @@ importers:
       lodash-es:
         specifier: ^4.18.1
         version: 4.18.1
+      lucide:
+        specifier: 1.75.0
+        version: 1.75.0
       marked:
         specifier: ^16.4.2
         version: 16.4.2
@@ -101,6 +86,9 @@ importers:
       pinia-plugin-persistedstate:
         specifier: ^4.7.1
         version: 4.7.1(pinia@3.0.4(typescript@5.9.3)(vue@3.5.43(typescript@5.9.3)))
+      pixi.js:
+        specifier: 8.21.0
+        version: 8.21.0
       plyr:
         specifier: ^3.8.5
         version: 3.8.5
@@ -241,6 +229,9 @@ packages:
 
   '@cap.js/widget@0.1.58':
     resolution: {integrity: sha512-snNjlYZLx1XddDH7DPZF9uedynSXTPPeRl/nExDlMjw0pCHiu/Fm1NKjRcT4HmqpOBf0TZRvio1HhkTMWg9p9A==}
+
+  '@chenglou/pretext@0.0.9':
+    resolution: {integrity: sha512-vInlpC//3vjRfWTs78k2BBIq/0bUdpjIp8TIn9fXe0NvnChhTQZfjioVzERQQbkQvCVpPpw7PDOrTWMHpq27VA==}
 
   '@css-render/plugin-bem@0.15.14':
     resolution: {integrity: sha512-QK513CJ7yEQxm/P3EwsI+d+ha8kSOcjGvD6SevM41neEMxdULE+18iuQK6tEChAWMOQNQPLG/Rw3Khb69r5neg==}
@@ -1017,6 +1008,10 @@ packages:
   '@types/earcut@2.1.4':
     resolution: {integrity: sha512-qp3m9PPz4gULB9MhjGID7wpo3gJ4bTGXm7ltNDsmOvsPduTeHp8wSW9YckBj3mljeOh4F0m2z/0JKAALRKbmLQ==}
 
+  '@types/earcut@3.2.4':
+    resolution: {integrity: sha512-I688mi107oflZOpzhs4EwasCN4ycLlZHf7XAGhM6EQIHEJkRTEuTL08lemIZOQ1YAACJoNoCzAiSDCJujpJLHA==}
+    deprecated: This is a stub types definition. earcut provides its own type definitions, so you do not need this installed.
+
   '@types/esrecurse@4.3.1':
     resolution: {integrity: sha512-xJBAbDifo5hpffDBuHl0Y8ywswbiAp/Wi7Y/GtAgSlZyIABppyurxVueOPE8LUQOxdlgi6Zqce7uoEpqNTeiUw==}
 
@@ -1214,6 +1209,13 @@ packages:
     resolution: {integrity: sha512-e89uuTLMh0U5cZ9iDpEI2senqPGfbPRTHM/0AaQkcxnpqjkZqDYP8rpfm7edOz8s+pOCOROEy1PIveSW8+fL5g==}
     peerDependencies:
       vue: ^3.5.0
+
+  '@webgpu/types@0.1.74':
+    resolution: {integrity: sha512-lgiI4hbuLcI9unnm2cL/tvCaQU45dp0xcLWJh5uB/9MBGvIA4F8XIk7nSiBeg+K4xWGYwgZKn80LmERI5CxoTA==}
+
+  '@xmldom/xmldom@0.8.15':
+    resolution: {integrity: sha512-/5NV/vDALVFDXgLmfsy9TRCBlKwO2LNBFzpzvb9iIj+jR+eSc6DLYYvVOdivT/jm7MtU6TebYuRmzEOI7w40UA==}
+    engines: {node: '>=10.0.0'}
 
   acorn-jsx@5.3.2:
     resolution: {integrity: sha512-rq9s+JNhf0IChjtDXxllJ7g41oZk5SlXtp0LHwyA5cejwn7vKmKp4pPri6YEePv2PU65sAsegbXtIinmDFDXgQ==}
@@ -1459,6 +1461,9 @@ packages:
   earcut@2.2.4:
     resolution: {integrity: sha512-/pjZsA1b4RPHbeWZQn66SWS8nZZWLQQ23oE3Eam7aroEFGEvwKAsJfZ9ytiEMycfzXWpca4FA9QIOehf7PocBQ==}
 
+  earcut@3.2.4:
+    resolution: {integrity: sha512-FHc6yNpnTORB0tM5kmZ03iD2mDuNakDE2lvf4Hw1XkfxtEHIGVi01B/GqUSwx+NcC1WGjidAfpTXzeALtPtfpg==}
+
   entities@6.0.1:
     resolution: {integrity: sha512-aN97NXWF6AWBTahfVOIrB/NShkzi5H7F9r1s9mD3cDj4Ko5f2qhhVoYMibXF7GlLveb/D2ioWay8lxI97Ven3g==}
     engines: {node: '>=0.12'}
@@ -1577,6 +1582,9 @@ packages:
   eventemitter3@4.0.7:
     resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
 
+  eventemitter3@5.0.4:
+    resolution: {integrity: sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==}
+
   evtd@0.2.4:
     resolution: {integrity: sha512-qaeGN5bx63s/AXgQo8gj6fBkxge+OoLddLniox5qtLAEY5HSnuSlISXVPxnSae1dWblvTh4/HoMIB+mbMsvZzw==}
 
@@ -1673,6 +1681,9 @@ packages:
   get-proto@1.0.1:
     resolution: {integrity: sha512-sTSfBjoXBp89JvIKIefqw7U2CCebsc74kiY6awiGogKtoSGbgjYE/G/+l9sF3MWFPNc9IcoOC4ODfKHfxFmp0g==}
     engines: {node: '>= 0.4'}
+
+  gifuct-js@2.1.2:
+    resolution: {integrity: sha512-rI2asw77u0mGgwhV3qA+OEgYqaDn5UNqgs+Bx0FGwSpuqfYn+Ir6RQY5ENNQ8SbIiG/m5gVa7CD5RriO4f4Lsg==}
 
   github-markdown-css@5.9.0:
     resolution: {integrity: sha512-tmT5sY+zvg2302XLYEfH2mtkViIM1SWf2nvYoF5N1ZsO0V6B2qZTiw3GOzw4vpjLygK/KG35qRlPFweHqfzz5w==}
@@ -1829,6 +1840,9 @@ packages:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
     hasBin: true
 
+  js-binary-schema-parser@2.0.3:
+    resolution: {integrity: sha512-xezGJmOb4lk/M1ZZLTR/jaBHQ4gG/lqQnJqdIv4721DMggsa1bDVlHXNeHYogaIEHD9vCRv0fcL4hMA+Coarkg==}
+
   js-cookie@3.0.8:
     resolution: {integrity: sha512-yeJd4aNAdYZQjaon2bpD/Gb0B/omw7HQOsynXXcOiWVCacbBcPlgn8S/d1X6blFSaHao7ozqtW7NZW19xpCtIw==}
 
@@ -1940,6 +1954,9 @@ packages:
 
   lru-cache@10.4.3:
     resolution: {integrity: sha512-JNAzZcXrCt42VGLuYz0zfAzDfAvJWW6AfYlDBQyDV5DClI2m5sAmK+OIO7s59XfsRsWHp02jAJrRadPRGTt6SQ==}
+
+  lucide@1.75.0:
+    resolution: {integrity: sha512-WNKnvz1XU6pcNuldOVx6gQx755isQcx8wWnIq8J6NNlHkqo9NJVLyTXC+0cizbdYEwROBSp/PXpMNqwf3d85XA==}
 
   magic-string@0.30.21:
     resolution: {integrity: sha512-vd2F4YUyEXKGcLHoq+TEyCjxueSeHnFxyyjNp80yg0XV4vUhnDer/lvvlqM/arB5bXQN5K2/3oinyCRyx8T2CQ==}
@@ -2062,6 +2079,9 @@ packages:
     resolution: {integrity: sha512-GQ2EWRpQV8/o+Aw8YqtfZZPfNRWZYkbidE9k5rpl/hC3vtHHBfGm2Ifi6qWV+coDGkrUKZAxE3Lot5kcsRlh+g==}
     engines: {node: '>=6'}
 
+  parse-svg-path@0.2.0:
+    resolution: {integrity: sha512-Tf7FFIrguPKQwzD4pWnYkR2VOv3raoHeKED80Bm+BYHI3KxC8KsgsGC5+fSMzAGDA6UEk4bHvmi+RsjmL3khpg==}
+
   parse5@7.3.0:
     resolution: {integrity: sha512-IInvU7fabl34qmi9gY8XOVxhYyMyuH2xUNpb2q8/Y+7552KlejkRvqvD19nMoUW/uQGGbqNpA6Tufu5FL5BZgw==}
 
@@ -2115,6 +2135,9 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  pixi.js@8.21.0:
+    resolution: {integrity: sha512-GJ/KqBtUuWDBPMQu2D0ZHsRCYOcWRjjKrpyC+3jPQI5JTqHMC5dH8l9sSyvoUT4qJidvRzs1fwFWRWceno2Ltw==}
 
   pkg-types@1.3.1:
     resolution: {integrity: sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==}
@@ -2318,6 +2341,10 @@ packages:
     resolution: {integrity: sha512-bWnjSNscmuI+GJze6ZupnHP8G/cTcsJF+bXCeQknk2SHQsgbNJnLrqiH9jZ2W4STPVXH2mDKKRX3iwPhc9Cn/Q==}
     engines: {node: '>=10'}
     hasBin: true
+
+  tiny-lru@11.4.7:
+    resolution: {integrity: sha512-w/Te7uMUVeH0CR8vZIjr+XiN41V+30lkDdK+NRIDCUYKKuL9VcmaUEmaPISuwGhLlrTGh5yu18lENtR9axSxYw==}
+    engines: {node: '>=12'}
 
   tiny-warning@1.0.3:
     resolution: {integrity: sha512-lBN9zLN/oAf68o3zNXYrdCt1kP8WsiGW8Oo2ka41b2IM5JL/S1CTyX1rW0mb/zSuJun0ZUrDxx4sqvYS2FWzPA==}
@@ -2694,6 +2721,8 @@ snapshots:
       '@babel/helper-validator-identifier': 7.29.7
 
   '@cap.js/widget@0.1.58': {}
+
+  '@chenglou/pretext@0.0.9': {}
 
   '@css-render/plugin-bem@0.15.14(css-render@0.15.14)':
     dependencies:
@@ -3258,6 +3287,10 @@ snapshots:
 
   '@types/earcut@2.1.4': {}
 
+  '@types/earcut@3.2.4':
+    dependencies:
+      earcut: 3.2.4
+
   '@types/esrecurse@4.3.1': {}
 
   '@types/estree@1.0.9': {}
@@ -3536,6 +3569,10 @@ snapshots:
     dependencies:
       vue: 3.5.43(typescript@5.9.3)
 
+  '@webgpu/types@0.1.74': {}
+
+  '@xmldom/xmldom@0.8.15': {}
+
   acorn-jsx@5.3.2(acorn@8.19.0):
     dependencies:
       acorn: 8.19.0
@@ -3775,6 +3812,8 @@ snapshots:
 
   earcut@2.2.4: {}
 
+  earcut@3.2.4: {}
+
   entities@6.0.1:
     optional: true
 
@@ -3934,6 +3973,8 @@ snapshots:
 
   eventemitter3@4.0.7: {}
 
+  eventemitter3@5.0.4: {}
+
   evtd@0.2.4: {}
 
   expect-type@1.4.0: {}
@@ -4026,6 +4067,10 @@ snapshots:
     dependencies:
       dunder-proto: 1.0.1
       es-object-atoms: 1.1.2
+
+  gifuct-js@2.1.2:
+    dependencies:
+      js-binary-schema-parser: 2.0.3
 
   github-markdown-css@5.9.0: {}
 
@@ -4154,6 +4199,8 @@ snapshots:
 
   jiti@2.7.0:
     optional: true
+
+  js-binary-schema-parser@2.0.3: {}
 
   js-cookie@3.0.8: {}
 
@@ -4336,6 +4383,8 @@ snapshots:
   lru-cache@10.4.3:
     optional: true
 
+  lucide@1.75.0: {}
+
   magic-string@0.30.21:
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
@@ -4476,6 +4525,8 @@ snapshots:
     dependencies:
       callsites: 3.1.0
 
+  parse-svg-path@0.2.0: {}
+
   parse5@7.3.0:
     dependencies:
       entities: 6.0.1
@@ -4509,6 +4560,19 @@ snapshots:
       vue: 3.5.43(typescript@5.9.3)
     optionalDependencies:
       typescript: 5.9.3
+
+  pixi.js@8.21.0:
+    dependencies:
+      '@pixi/colord': 2.9.6
+      '@types/earcut': 3.2.4
+      '@webgpu/types': 0.1.74
+      '@xmldom/xmldom': 0.8.15
+      earcut: 3.2.4
+      eventemitter3: 5.0.4
+      gifuct-js: 2.1.2
+      ismobilejs: 1.1.1
+      parse-svg-path: 0.2.0
+      tiny-lru: 11.4.7
 
   pkg-types@1.3.1:
     dependencies:
@@ -4756,6 +4820,8 @@ snapshots:
       acorn: 8.19.0
       commander: 2.20.3
       source-map-support: 0.5.21
+
+  tiny-lru@11.4.7: {}
 
   tiny-warning@1.0.3: {}
 

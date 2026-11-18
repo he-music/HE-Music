@@ -42,7 +42,8 @@
                 {
                   'no-lrc': noLrc,
                   'full-screen': settingStore.playerType === 'fullscreen',
-                  pure: statusStore.pureLyricMode && musicStore.isHasLrc,
+                  pure: pureLyricMode,
+                  'pv-pure': fullBleedPV,
                 },
               ]"
               @mousemove="playerMove"
@@ -73,10 +74,7 @@
               >
                 <!-- 数据 -->
                 <PlayerData
-                  v-if="
-                    (pureLyricMode && musicStore.isHasLrc) ||
-                    settingStore.playerType === 'fullscreen'
-                  "
+                  v-if="pureLyricMode || settingStore.playerType === 'fullscreen'"
                   :center="pureLyricMode || noLrc"
                   :light="!(settingStore.playerType === 'fullscreen' && noLrc)"
                 />
@@ -146,7 +144,12 @@ const noLrc = computed<boolean>(() => {
 });
 
 /** 是否处于纯净模式 */
-const pureLyricMode = computed<boolean>(() => statusStore.pureLyricMode && musicStore.isHasLrc);
+const pureLyricMode = computed<boolean>(() => statusStore.pureLyricMode && !noLrc.value);
+const fullBleedPV = computed(
+  () =>
+    pureLyricMode.value &&
+    (settingStore.lyricRenderer === "hanabi" || settingStore.lyricRenderer === "lumiere"),
+);
 
 // 仅在切歌时重置主内容，布局切换复用现有歌词实例。
 const playerContentKey = computed(
@@ -338,6 +341,23 @@ onBeforeUnmount(() => {
         align-items: center;
         width: 100% !important;
         max-width: 100% !important;
+      }
+    }
+    &.pv-pure {
+      inset: 0;
+      height: 100%;
+      .content-right {
+        inset: 0;
+        .player-data {
+          position: absolute;
+          top: 80px;
+          left: 50%;
+          transform: translateX(-50%);
+          width: 70%;
+          margin: 0;
+          z-index: 2;
+          pointer-events: auto;
+        }
       }
     }
     // 无歌词

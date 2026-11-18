@@ -2,36 +2,38 @@
   <div class="player-style-panel" role="dialog" :aria-label="t('setting.play.style')">
     <n-tabs default-value="lyrics" type="segment" size="small" :theme-overrides="tabTheme">
       <n-tab-pane v-for="group in groups" :key="group.key" :name="group.key" :tab="group.label">
-        <div class="style-options" role="group" :aria-label="group.description">
-          <button
-            v-for="option in group.options"
-            :key="option.value"
-            type="button"
-            class="style-option"
-            :class="{ selected: group.value === option.value }"
-            :aria-pressed="group.value === option.value"
-            @click="group.select(option.value)"
-          >
-            <span>{{ option.label }}</span>
-            <svg
-              class="selection-mark"
-              :class="{ visible: group.value === option.value }"
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
+        <n-scrollbar class="style-options-scroll" trigger="hover" :theme-overrides="scrollbarTheme">
+          <div class="style-options" role="group" :aria-label="group.description">
+            <button
+              v-for="option in group.options"
+              :key="option.value"
+              type="button"
+              class="style-option"
+              :class="{ selected: group.value === option.value }"
+              :aria-pressed="group.value === option.value"
+              @click="group.select(option.value)"
             >
-              <path
-                d="m5 12 4 4L19 6"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
-          </button>
-        </div>
+              <span>{{ option.label }}</span>
+              <svg
+                class="selection-mark"
+                :class="{ visible: group.value === option.value }"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                aria-hidden="true"
+              >
+                <path
+                  d="m5 12 4 4L19 6"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+          </div>
+        </n-scrollbar>
       </n-tab-pane>
     </n-tabs>
   </div>
@@ -39,12 +41,18 @@
 
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
-import type { TabsProps } from "naive-ui";
+import type { TabsProps, ScrollbarProps } from "naive-ui";
 import { useSettingStore } from "@/stores";
 import { resolveLyricRenderer } from "@/utils/lyric/renderer";
 
 const settingStore = useSettingStore();
 const { t } = useI18n();
+const scrollbarTheme: ScrollbarProps["themeOverrides"] = {
+  color: "rgba(var(--main-cover-color), 0.2)",
+  colorHover: "rgba(var(--main-cover-color), 0.36)",
+  width: "4px",
+  borderRadius: "2px",
+};
 const tabTheme: TabsProps["themeOverrides"] = {
   tabTextColorSegment: "rgba(var(--main-cover-color), 0.7)",
   tabTextColorActiveSegment: "rgb(var(--main-cover-color))",
@@ -94,10 +102,12 @@ const groups = computed(() => [
     label: t("common.lyrics"),
     description: t("setting.lyrics.renderer"),
     value: settingStore.lyricRenderer,
-    options: ["default", "amll", "monet", "partita", "classic", "kinetic"].map((value) => ({
-      value,
-      label: value === "amll" ? "AMLL" : t(`setting.lyrics.renderer_${value}`),
-    })),
+    options: ["default", "amll", "monet", "partita", "classic", "kinetic", "hanabi", "lumiere"].map(
+      (value) => ({
+        value,
+        label: value === "amll" ? "AMLL" : t(`setting.lyrics.renderer_${value}`),
+      }),
+    ),
     select: (value: string) => {
       settingStore.lyricRenderer = resolveLyricRenderer(value);
     },
@@ -112,14 +122,16 @@ const groups = computed(() => [
   padding: 10px;
   border-radius: 8px;
   color: rgb(var(--main-cover-color));
+  :deep(.style-options-scroll) {
+    // 为歌词选项预留高度，切换 Tab 时保持弹层位置稳定。
+    height: 260px;
+    max-height: calc(100dvh - 160px);
+  }
   .style-options {
     display: grid;
     align-content: start;
     gap: 4px;
-    // 为六个歌词选项预留高度，切换 Tab 时保持弹层位置稳定。
-    height: 260px;
-    max-height: calc(100dvh - 160px);
-    overflow-y: auto;
+    padding-right: 8px;
   }
   .style-option {
     display: flex;

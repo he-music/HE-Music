@@ -8,6 +8,7 @@
         partita: settingStore.lyricRenderer === 'partita',
         kinetic: settingStore.lyricRenderer === 'kinetic',
         classic: settingStore.lyricRenderer === 'classic',
+        pv: settingStore.lyricRenderer === 'hanabi' || settingStore.lyricRenderer === 'lumiere',
       },
     ]"
   >
@@ -18,6 +19,14 @@
       <PartitaLyric v-else-if="settingStore.lyricRenderer === 'partita'" :clock="lyricClock" />
       <ClassicLyric v-else-if="settingStore.lyricRenderer === 'classic'" :clock="lyricClock" />
       <KineticLyric v-else-if="settingStore.lyricRenderer === 'kinetic'" :clock="lyricClock" />
+      <PVLyric
+        v-else-if="
+          settingStore.lyricRenderer === 'hanabi' || settingStore.lyricRenderer === 'lumiere'
+        "
+        :mode="settingStore.lyricRenderer"
+        :clock="lyricClock"
+        :full-bleed="statusStore.pureLyricMode && !compactToolbar"
+      />
       <DefaultLyric v-else :clock="lyricClock" />
     </div>
     <!-- 歌词菜单 -->
@@ -89,6 +98,7 @@ const MonetLyric = defineAsyncComponent(() => import("./MonetLyric.vue"));
 const PartitaLyric = defineAsyncComponent(() => import("./PartitaLyric.vue"));
 const KineticLyric = defineAsyncComponent(() => import("./KineticLyric.vue"));
 const ClassicLyric = defineAsyncComponent(() => import("./ClassicLyric.vue"));
+const PVLyric = defineAsyncComponent(() => import("./PVLyric.vue"));
 
 const musicStore = useMusicStore();
 const settingStore = useSettingStore();
@@ -159,6 +169,7 @@ const lyricClock = { time: playSeek };
   &.monet,
   &.partita,
   &.kinetic,
+  &.pv,
   &.classic {
     .lyric-stage {
       mask: none;

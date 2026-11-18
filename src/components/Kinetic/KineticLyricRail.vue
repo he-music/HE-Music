@@ -50,7 +50,7 @@ import {
   type Ref,
 } from "vue";
 import { useDocumentVisibility, useElementSize, usePreferredReducedMotion } from "@vueuse/core";
-import { Color } from "@pixi/core";
+import { Color } from "pixi.js";
 import type { PartitaLine } from "../Partita/model";
 import { buildKineticLayout, kineticCamera } from "./model";
 import type { KineticJumpGranularity } from "@/utils/lyric/kinetic";
@@ -191,7 +191,8 @@ function fontsLoaded() {
   fontVersion.value++;
 }
 const observer = new MutationObserver(readFont);
-onMounted(() => {
+const initialization = new AbortController();
+onMounted(async () => {
   readFont();
   if (rail.value?.parentElement)
     observer.observe(rail.value.parentElement, {
@@ -200,9 +201,15 @@ onMounted(() => {
     });
   document.fonts.addEventListener("loadingdone", fontsLoaded);
   try {
-    scene = new KineticScene(canvas.value!, typography.value);
+    const next = await KineticScene.create(canvas.value!, typography.value, initialization.signal);
+    if (disposed || fallback.value) {
+      next.destroy();
+      return;
+    }
+    scene = next;
     void rebuild();
   } catch (error) {
+    if (disposed || initialization.signal.aborted) return;
     console.warn("Kinetic WebGL initialization unavailable, using DOM fallback", error);
     useFallback();
   }
@@ -247,6 +254,7 @@ function seek(time: number) {
 }
 onBeforeUnmount(() => {
   disposed = true;
+  initialization.abort();
   stopDrawing();
   stopLayout();
   stopLines();

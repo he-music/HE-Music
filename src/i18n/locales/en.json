@@ -949,6 +949,8 @@
       "renderer_default": "Standard",
       "renderer_monet": "Monet",
       "renderer_kinetic": "Kinetic",
+      "renderer_hanabi": "Hanabi",
+      "renderer_lumiere": "Lumiere",
       "kinetic_resume": "Back to current lyrics",
       "kinetic_settings": "Kinetic settings",
       "kinetic_jump_granularity": "Note jump granularity",
