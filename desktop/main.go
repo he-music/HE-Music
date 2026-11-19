@@ -32,78 +32,79 @@ func main() {
 		} else {
 			stopLogging = stop
 		}
-		appearance := WindowAppearance{}
 		directory, directoryErr := mygo.App.Path(mygo.PathUserData)
-		if directoryErr == nil {
-			if err := preparePreferencesResetStartup(directory); err != nil {
-				log.Print("恢复设置重置失败")
-				mygo.App.Quit()
-				return
-			}
-			if err := prepareApplicationStorageAndUpdates(directory); err != nil {
-				log.Print("配置业务数据存储失败: ", err)
-				mygo.App.Quit()
-				return
-			}
-			if err := prepareLibraryPersistence(directory); err != nil {
-				log.Print("配置本地目录持久化失败")
-			}
-			if err := prepareLibraryIndex(directory); err != nil {
-				log.Print("读取本地音乐索引失败，保留原索引并重新扫描")
-			}
-			if err := desktopLyrics.loadLockPreference(directory); err != nil {
-				log.Print("读取桌面歌词锁定偏好失败: ", err)
-			}
-			var appearanceErr error
-			appearance, appearanceErr = prepareWindowAppearance(directory)
-			if appearanceErr != nil {
-				log.Print("读取窗口外观配置失败，使用默认外观")
-			}
-			if proxyErr := prepareNetworkProxyStartup(directory); proxyErr != nil {
-				log.Print("读取代理配置失败")
-				mygo.App.Quit()
-				return
-			}
-		} else {
+		if directoryErr != nil {
 			log.Print("读取应用配置目录失败")
 			mygo.App.Quit()
 			return
 		}
-		options := WindowAppearanceOptions(appearance)
-		options.Title, options.Width, options.Height = "HE-Music", 1280, 800
-		// 最小宽度保留桌面双栏播放器与核心控制；窄窗口收起次要操作。
-		options.MinWidth, options.MinHeight = 960, 600
-		options.StateKey = "main"
-		options.Hidden = true
-		options.BackgroundColor = "light-dark(#ffffff, #161616)"
-		if gatewayOrigin != "" {
-			options.Page.PreloadScript = desktopGatewayPreloadScript(gatewayOrigin)
-		}
-		win := mygo.NewWindow(options)
-		// 旧版本保存的窗口尺寸可能小于新的下限，首次恢复时一并修正。
-		if width, height := win.Size(); width < options.MinWidth || height < options.MinHeight {
-			win.SetSize(max(width, options.MinWidth), max(height, options.MinHeight))
-		}
-		if mygo.IsDev() {
-			win.SetAutoHideMenuBar(true)
-			win.SetMenu(mygo.NewMenu([]*mygo.MenuItem{{Role: mygo.RoleViewMenu}}))
-		}
-		if mediaErr := configureNativeWebViewMedia(win.NativeHandle()); mediaErr != nil {
-			log.Print("配置 WebView 媒体策略失败，保留默认设置: ", mediaErr)
-		}
-		if _, hoverErr := installWindowButtonsHover(win, appearance.UseBorderless); hoverErr != nil {
-			log.Print("设置 macOS 原生窗口按钮悬停失败，保留可见按钮: ", hoverErr)
-		}
-		desktopLifecycle.attachMainWindow(win, true)
-		if err := win.Page().LoadURL("/"); err != nil {
-			log.Print("加载主窗口失败: ", err)
+		if err := preparePreferencesResetStartup(directory); err != nil {
+			log.Print("恢复设置重置失败")
 			mygo.App.Quit()
+			return
 		}
+		if err := prepareApplicationStorageAndUpdates(directory); err != nil {
+			log.Print("配置业务数据存储失败: ", err)
+			mygo.App.Quit()
+			return
+		}
+		if err := prepareLibraryPersistence(directory); err != nil {
+			log.Print("配置本地目录持久化失败")
+		}
+		if err := prepareLibraryIndex(directory); err != nil {
+			log.Print("读取本地音乐索引失败，保留原索引并重新扫描")
+		}
+		if err := desktopLyrics.loadLockPreference(directory); err != nil {
+			log.Print("读取桌面歌词锁定偏好失败: ", err)
+		}
+		appearance, appearanceErr := prepareWindowAppearance(directory)
+		if appearanceErr != nil {
+			log.Print("读取窗口外观配置失败，使用默认外观")
+		}
+		if proxyErr := prepareNetworkProxyStartup(directory); proxyErr != nil {
+			log.Print("读取代理配置失败")
+			mygo.App.Quit()
+			return
+		}
+		openMainWindow(appearance, gatewayOrigin)
 	})
 	configureDesktopUpdates()
 	err := mygo.App.Run()
 	stopGateway()
 	if err != nil {
 		log.Fatal(err)
+	}
+}
+
+func openMainWindow(appearance WindowAppearance, gatewayOrigin string) {
+	options := WindowAppearanceOptions(appearance)
+	options.Title, options.Width, options.Height = "HE-Music", 1280, 800
+	// 最小宽度保留桌面双栏播放器与核心控制；窄窗口收起次要操作。
+	options.MinWidth, options.MinHeight = 960, 600
+	options.StateKey = "main"
+	options.Hidden = true
+	options.BackgroundColor = "light-dark(#ffffff, #161616)"
+	if gatewayOrigin != "" {
+		options.Page.PreloadScript = desktopGatewayPreloadScript(gatewayOrigin)
+	}
+	win := mygo.NewWindow(options)
+	// 旧版本保存的窗口尺寸可能小于新的下限，首次恢复时一并修正。
+	if width, height := win.Size(); width < options.MinWidth || height < options.MinHeight {
+		win.SetSize(max(width, options.MinWidth), max(height, options.MinHeight))
+	}
+	if mygo.IsDev() {
+		win.SetAutoHideMenuBar(true)
+		win.SetMenu(mygo.NewMenu([]*mygo.MenuItem{{Role: mygo.RoleViewMenu}}))
+	}
+	if mediaErr := configureNativeWebViewMedia(win.NativeHandle()); mediaErr != nil {
+		log.Print("配置 WebView 媒体策略失败，保留默认设置: ", mediaErr)
+	}
+	if _, hoverErr := installWindowButtonsHover(win, appearance.UseBorderless); hoverErr != nil {
+		log.Print("设置 macOS 原生窗口按钮悬停失败，保留可见按钮: ", hoverErr)
+	}
+	desktopLifecycle.attachMainWindow(win, true)
+	if err := win.Page().LoadURL("/"); err != nil {
+		log.Print("加载主窗口失败: ", err)
+		mygo.App.Quit()
 	}
 }
