@@ -19,17 +19,19 @@ var (
 )
 
 // DesktopLyrics owns an independent web window with a native external unlock path.
-// It never owns audio, claims lifecycle readiness, writes settings, or accepts arbitrary IPC.
+// It never owns audio, claims lifecycle readiness, or accepts arbitrary IPC.
 type DesktopLyrics struct {
-	main            *mygo.Window
-	win             *mygo.Window
-	state           lyricsState
-	listeners       []func()
-	timer           *time.Timer
-	stopChild       func() bool
-	appliedFontSize int
-	unlockRegion    *LyricsUnlockRegion
-	hoverWatcher    *lyricsHoverWatcher
+	main               *mygo.Window
+	win                *mygo.Window
+	state              lyricsState
+	listeners          []func()
+	timer              *time.Timer
+	stopChild          func() bool
+	appliedFontSize    int
+	unlockRegion       *LyricsUnlockRegion
+	hoverWatcher       *lyricsHoverWatcher
+	lockPreferencePath string
+	preferredLocked    bool
 }
 
 func init() { mygo.Bind(desktopLyrics) }
@@ -104,6 +106,22 @@ func (l *DesktopLyrics) SetLocked(ctx context.Context, epoch uint64, locked bool
 }
 
 func (l *DesktopLyrics) setLocked(locked bool) error {
+	if err := l.applyLock(locked); err != nil {
+		return err
+	}
+	if l.win == nil || l.win.IsDestroyed() {
+		return nil
+	}
+	l.rememberLock(locked)
+	var err error
+	if !locked {
+		err = l.syncOptionsBounds()
+	}
+	l.emitWindow()
+	return err
+}
+
+func (l *DesktopLyrics) applyLock(locked bool) error {
 	if l.win == nil || l.win.IsDestroyed() {
 		if locked {
 			return errors.New("desktop lyrics window is closed")
@@ -133,12 +151,6 @@ func (l *DesktopLyrics) setLocked(locked bool) error {
 		return err
 	}
 	l.win.SetMovable(!locked)
-	if !locked {
-		if err := l.syncOptionsBounds(); err != nil {
-			return err
-		}
-	}
-	l.emitWindow()
 	if locked {
 		l.startHoverUnlock()
 	}
@@ -399,6 +411,12 @@ func (l *DesktopLyrics) maybeShow(generation uint64) {
 	if l.timer != nil {
 		l.timer.Stop()
 		l.timer = nil
+	}
+	// Restore only after the window is visible, using the same tray and mouse checks as a manual lock.
+	if l.preferredLocked {
+		if err := l.applyLock(true); err != nil {
+			log.Print("恢复桌面歌词锁定失败: ", err)
+		}
 	}
 	l.emitWindow()
 }

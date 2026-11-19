@@ -51,6 +51,9 @@ func main() {
 			if err := prepareLibraryIndex(directory); err != nil {
 				log.Print("读取本地音乐索引失败，保留原索引并重新扫描")
 			}
+			if err := desktopLyrics.loadLockPreference(directory); err != nil {
+				log.Print("读取桌面歌词锁定偏好失败: ", err)
+			}
 			var appearanceErr error
 			appearance, appearanceErr = prepareWindowAppearance(directory)
 			if appearanceErr != nil {

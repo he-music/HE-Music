@@ -18,6 +18,7 @@ var preferencesResetFiles = [...]string{
 	"window-appearance.json", "network-proxy.json", "local-library-directories.json",
 	"local-library-index.json", "window-state.json",
 	linuxGraphicsFile,
+	lyricsLockPreferenceFile,
 }
 
 func preferencesResetDirectory(directory string) error {

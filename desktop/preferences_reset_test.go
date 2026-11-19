@@ -83,6 +83,11 @@ func TestPreferencesResetOldWritersThenFreshStores(t *testing.T) {
 		t.Fatal(err)
 	}
 	resetTestWrite(t, filepath.Join(directory, "window-state.json"), `{"main":{"width":777}}`)
+	lyrics := &DesktopLyrics{}
+	requireTestNoError(t, lyrics.loadLockPreference(directory))
+	lyrics.rememberLock(true)
+	requireTestNoError(t, lyrics.loadLockPreference(directory))
+	requireTestEqual(t, lyrics.preferredLocked, true)
 	if err := completePreferencesReset(directory); err != nil {
 		t.Fatal(err)
 	}
