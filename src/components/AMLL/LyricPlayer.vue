@@ -286,15 +286,29 @@ watchEffect(() => {
   else playerRef.value?.setEnableScale(true);
 });
 
-// 歌词行数据
-watchEffect(() => {
-  if (props.lyricLines !== undefined) playerRef.value?.setLyricLines(props.lyricLines);
+const getPlaybackTime = () => Math.floor(props.clock?.time.value ?? props.currentTime);
+
+// 补齐 LRC 未指定的结束时间，使用 LRC 可表示的最大时间戳（999:59.999）。
+const maxLrcTimestamp = 59_999_999;
+watch([playerRef, () => props.lyricLines], ([player, lines]) => {
+  if (!player || !lines) return;
+  const coreLines = lines.map((line) => {
+    if (line.endTime !== Infinity && !line.words.some((word) => word.endTime === Infinity)) {
+      return line;
+    }
+    return {
+      ...line,
+      endTime: line.endTime === Infinity ? maxLrcTimestamp : line.endTime,
+      words: line.words.map((word) =>
+        word.endTime === Infinity ? { ...word, endTime: maxLrcTimestamp } : word,
+      ),
+    };
+  });
+  player.setLyricLines(coreLines, getPlaybackTime());
 });
 
-// 当前播放时间
 watchEffect(() => {
-  const time = props.clock?.time.value ?? props.currentTime;
-  playerRef.value?.setCurrentTime(Math.floor(time));
+  playerRef.value?.setCurrentTime(getPlaybackTime());
 });
 
 // 渐变宽度

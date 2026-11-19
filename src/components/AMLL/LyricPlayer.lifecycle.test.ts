@@ -15,7 +15,7 @@ function mountPlayer() {
     alignAnchor: "center",
     enableSpring: true,
     alignPosition: 0.5,
-    lyricLines: [{ startTime: 0, endTime: 2000, words: [] }],
+    lyricLines: [{ startTime: 0, endTime: 2000, words: [{ startTime: 0, endTime: 2000 }] }],
     clock,
   });
   const core = {
@@ -45,7 +45,7 @@ function mountPlayer() {
   const source = readFileSync(new URL("./LyricPlayer.vue", import.meta.url), "utf8").replace(
     '<script setup lang="ts">',
     `<script setup lang="ts">
-import { ref, computed, watchEffect, onMounted, onUnmounted } from "vue";
+import { ref, computed, watch, watchEffect, onMounted, onUnmounted } from "vue";
 import { useTemplateRef, useDocumentVisibility } from "probe-auto-imports";`,
   );
   const { descriptor } = parse(source);
@@ -122,11 +122,38 @@ describe("LyricPlayer SFC animation lifecycle", () => {
     await Vue.nextTick();
     expect(p.core.setCurrentTime).toHaveBeenLastCalledWith(2100);
     expect(p.core.setAlignPosition).toHaveBeenLastCalledWith(0.7);
-    expect(p.core.setLyricLines).toHaveBeenLastCalledWith(p.props.lyricLines);
+    expect(p.core.setLyricLines).toHaveBeenLastCalledWith(p.props.lyricLines, 2100);
     expect(p.frames.size).toBe(1);
     p.unmount();
     expect(p.core.dispose).toHaveBeenCalledOnce();
     expect(p.core.removeEventListener).toHaveBeenCalledTimes(2);
+  });
+
+  it("caps open-ended LRC timestamps without mutating the source or reloading on clock ticks", async () => {
+    const p = mountPlayer();
+    const lines = [
+      { startTime: 1000, endTime: 3000, words: [{ startTime: 1000, endTime: 3000 }] },
+      { startTime: 3000, endTime: Infinity, words: [{ startTime: 3000, endTime: Infinity }] },
+    ];
+    p.props.lyricLines = lines;
+    await Vue.nextTick();
+    const calls = p.core.setLyricLines.mock.calls.length;
+    const fallback = 59_999_999;
+    expect(p.core.setLyricLines).toHaveBeenLastCalledWith(
+      [
+        lines[0],
+        { ...lines[1], endTime: fallback, words: [{ startTime: 3000, endTime: fallback }] },
+      ],
+      100,
+    );
+
+    p.clock.time.value = 3500;
+    await Vue.nextTick();
+    expect(p.core.setLyricLines).toHaveBeenCalledTimes(calls);
+    expect(p.core.setCurrentTime).toHaveBeenLastCalledWith(3500);
+    expect(lines[1].endTime).toBe(Infinity);
+    expect(lines[1].words[0].endTime).toBe(Infinity);
+    p.unmount();
   });
 
   it("cancels hidden queued frames and resumes exactly one loop when visible", async () => {
