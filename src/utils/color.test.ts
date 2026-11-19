@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Hct, argbFromHex, themeFromSourceColor } from "@material/material-color-utilities";
 import type { CoverColors } from "@/types/main";
+import { hexToRgb, rgbToHex } from "./colorFormat";
 
 const { setting, status, setProperty } = vi.hoisted(() => ({
   setting: { themeGlobalColor: false, themeVariant: "primary" },
@@ -13,16 +14,25 @@ vi.mock("@/stores", () => ({
   useStatusStore: () => status,
 }));
 vi.mock("@/platform/gateway", () => ({ gatewayProxyUrl: (url: string) => url }));
-// 该依赖的入口使用无扩展名的 ESM 导入，Node 测试中仅替换 RGB 序列化。
-vi.mock("@imsyy/color-utils", () => ({
-  rgbToHex: (r: number, g: number, b: number) =>
-    `#${[r, g, b].map((channel) => channel.toString(16).padStart(2, "0")).join("")}`,
-}));
 vi.mock("./helper", () => ({
   argbToRgb: (argb: number) => [(argb >> 16) & 255, (argb >> 8) & 255, argb & 255],
 }));
 
 import { MONOTONOUS_THEME, setColorSchemes } from "./color";
+
+describe("颜色格式转换", () => {
+  it("输出带 # 的大写十六进制并补齐前导零", () => {
+    expect(rgbToHex(0, 15, 255)).toBe("#000FFF");
+  });
+
+  it.each(["#0aF", "0aF", "#00aAfF", "00aAfF"])("解析 %s 为 RGB", (hex) => {
+    expect(hexToRgb(hex)).toEqual({ r: 0, g: 170, b: 255 });
+  });
+
+  it.each(["", "#1234", "#001122FF", "#ggg", "#12345\n"])("拒绝无效颜色 %j", (hex) => {
+    expect(hexToRgb(hex)).toBeNull();
+  });
+});
 
 beforeEach(() => {
   setting.themeGlobalColor = false;
@@ -47,8 +57,8 @@ function coverTheme(): CoverColors {
 
 describe("局部主题色", () => {
   it.each([
-    ["light", 40, "#f6f6f6", "#ffffff"],
-    ["dark", 80, "#101014", "#18181c"],
+    ["light", 40, "#F6F6F6", "#FFFFFF"],
+    ["dark", 80, "#101014", "#18181C"],
   ] as const)("%s 模式保留中性背景，强调色具有可辨识的色度和明暗", (mode, tone, bg, surface) => {
     const result = setColorSchemes("#2196f3", mode);
     const primary = Hct.fromInt(argbFromHex(result["primary-hex"]));

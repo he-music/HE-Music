@@ -136,7 +136,7 @@ export const buildSequentialChunks = (
     const isLastChunk = c === actualRowCount - 1;
     const avg = remainingUnits / remainingChunks;
 
-    let chunkLength = 1;
+    let chunkLength: number;
     if (isLastChunk) {
       chunkLength = remainingUnits;
     } else {

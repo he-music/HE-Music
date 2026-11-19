@@ -99,10 +99,10 @@ export function adaptPartitaLines(
     const timed = wordTimed && line.words.some((w) => w.endTime > w.startTime);
     const fullText = line.words.map((w) => w.word || "").join("");
 
-    let words: PartitaWord[] = [];
+    let words: PartitaWord[];
     if (!timed) {
       // 普通歌词或非逐字模式：根据 fullText 智能按语义/空格切词，构建阶梯分块
-      let rawSegments: string[] = [];
+      let rawSegments: string[];
       if (typeof Intl !== "undefined" && Intl.Segmenter) {
         try {
           const seg = new Intl.Segmenter(undefined, { granularity: "word" });

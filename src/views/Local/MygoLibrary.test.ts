@@ -12,21 +12,8 @@ import * as songRowsModule from "@/platform/librarySongRows";
 import * as VueRouter from "vue-router";
 import { useSongSearch } from "@/composables/useSongSearch";
 import { useLibrarySync } from "@/composables/useLibrarySync";
+import { createSfcHostNode as node, type SfcHostNode as Element } from "@/test/productionSfc";
 
-type Element = {
-  tag: string;
-  text: string;
-  props: Record<string, unknown>;
-  children: Element[];
-  parent: Element | null;
-};
-const node = (tag: string, text = ""): Element => ({
-  tag,
-  text,
-  props: {},
-  children: [],
-  parent: null,
-});
 const play = vi.fn();
 const manage = vi.fn();
 const batch = vi.fn();
@@ -47,7 +34,11 @@ async function mount() {
   const { descriptor } = parse(readFileSync(new URL("./MygoLibrary.vue", import.meta.url), "utf8"));
   const script = compileScript(descriptor, { id: "MygoLibrary.vue", inlineTemplate: true });
   const compiled = ts.transpileModule(script.content, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      esModuleInterop: false,
+    },
   }).outputText;
   const pass = Vue.defineComponent({
     setup(_props, { attrs, slots }) {
@@ -139,7 +130,11 @@ async function mount() {
     "require",
     "exports",
     ts.transpileModule(songScript.content, {
-      compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+      compilerOptions: {
+        module: ts.ModuleKind.CommonJS,
+        target: ts.ScriptTarget.ES2022,
+        esModuleInterop: false,
+      },
     }).outputText,
   )((name: string) => modules[name], songExports);
   const group = (tag: string) =>

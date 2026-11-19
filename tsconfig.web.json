@@ -19,7 +19,6 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "maxNodeModuleJsDepth": 2,
-    "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": { "@/*": ["./src/*"] }
   }
 }

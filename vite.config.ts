@@ -11,12 +11,7 @@ const vendorChunks = {
   "vue-vendor": ["vue", "vue-router", "pinia", "pinia-plugin-persistedstate", "vue-i18n"],
   "naive-ui": ["naive-ui"],
   "vendor-utils": ["lodash-es", "@vueuse/core", "axios", "dayjs", "js-cookie", "md5"],
-  "color-theme": [
-    "@material/material-color-utilities",
-    "@imsyy/color-utils",
-    "jss",
-    "jss-preset-default",
-  ],
+  "color-theme": ["@material/material-color-utilities", "jss", "jss-preset-default"],
   "media-player": ["hls.js", "plyr"],
   markdown: ["marked", "github-markdown-css"],
   pixi: ["pixi.js"],
@@ -62,19 +57,21 @@ export function createFrontendConfig(mode: string, desktop = false): UserConfig 
     build: {
       outDir: desktop ? "dist/desktop" : "dist/web",
       emptyOutDir: true,
+      // 沿用 Vite 7 的浏览器目标，覆盖现有桌面 WebView。
+      target: ["chrome107", "edge107", "firefox104", "safari16"],
       minify: "terser",
-      rollupOptions: {
+      rolldownOptions: {
         input: resolve(import.meta.dirname, "index.html"),
         output: {
-          onlyExplicitManualChunks: true,
-          // 通用依赖单独共享，避免它们将按需加载的渲染库带入启动入口。
-          manualChunks(id) {
-            for (const [name, packages] of Object.entries(vendorChunks)) {
-              if (packages.some((dependency) => id.includes(`/node_modules/${dependency}/`))) {
-                return name;
-              }
-            }
-            return undefined;
+          strictExecutionOrder: true,
+          codeSplitting: {
+            // 只分组明确匹配的依赖，保留渲染库的按需加载。
+            includeDependenciesRecursively: false,
+            groups: Object.entries(vendorChunks).map(([name, packages]) => ({
+              name,
+              test: (id) =>
+                packages.some((dependency) => id.includes(`/node_modules/${dependency}/`)),
+            })),
           },
         },
       },

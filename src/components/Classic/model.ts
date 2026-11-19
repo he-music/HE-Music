@@ -277,7 +277,7 @@ export function adaptClassicLines(
         );
 
       let words: ClassicWord[] = [];
-      let fullText = "";
+      let fullText: string;
 
       if (rawWords.length > 0 && timed) {
         // AMLL 或 YRC 逐字数据
@@ -314,7 +314,7 @@ export function adaptClassicLines(
         }
 
         if (fullText) {
-          let rawSegments: string[] = [];
+          let rawSegments: string[];
           if (typeof Intl !== "undefined" && Intl.Segmenter) {
             try {
               const seg = new Intl.Segmenter(undefined, { granularity: "word" });

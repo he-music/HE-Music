@@ -9,14 +9,18 @@ export interface SfcHostNode {
   props: Record<string, unknown>;
   children: SfcHostNode[];
   parent: SfcHostNode | null;
+  getRootNode(): SfcHostNode;
 }
 
-const node = (tag: string, text = ""): SfcHostNode => ({
+export const createSfcHostNode = (tag: string, text = ""): SfcHostNode => ({
   tag,
   text,
   props: {},
   children: [],
   parent: null,
+  getRootNode() {
+    return this.parent?.getRootNode() ?? this;
+  },
 });
 
 /** Compiles the production template and runs Vue against a CPU-only host, without a DOM. */
@@ -34,7 +38,11 @@ export function mountProductionSfc(
   const { descriptor } = parse(source);
   const script = compileScript(descriptor, { id: file.pathname, inlineTemplate: true });
   const compiled = ts.transpileModule(script.content, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      esModuleInterop: false,
+    },
   }).outputText;
   const exports: { default?: Vue.Component } = {};
   const available = { vue: Vue, ...modules };
@@ -44,9 +52,9 @@ export function mountProductionSfc(
   }, exports);
   if (!exports.default) throw new Error("Missing compiled production component");
   const renderer = Vue.createRenderer<SfcHostNode, SfcHostNode>({
-    createElement: (tag) => node(tag),
-    createText: (text) => node("text", text),
-    createComment: (text) => node("comment", text),
+    createElement: (tag) => createSfcHostNode(tag),
+    createText: (text) => createSfcHostNode("text", text),
+    createComment: (text) => createSfcHostNode("comment", text),
     insert(child, parent, anchor) {
       if (child.parent) {
         const old = child.parent.children.indexOf(child);
@@ -77,7 +85,7 @@ export function mountProductionSfc(
       return siblings[siblings.indexOf(target) + 1] ?? null;
     },
   });
-  const root = node("root");
+  const root = createSfcHostNode("root");
   const app = renderer.createApp(exports.default, rootProps);
   for (const name of components) {
     app.component(

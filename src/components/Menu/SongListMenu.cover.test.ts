@@ -51,7 +51,11 @@ function fixture() {
   );
   const script = compileScript(descriptor, { id: "SongListMenu" });
   const compiled = ts.transpileModule(script.content, {
-    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
+    compilerOptions: {
+      module: ts.ModuleKind.CommonJS,
+      target: ts.ScriptTarget.ES2022,
+      esModuleInterop: false,
+    },
   }).outputText;
   interface MenuSetup {
     openDropdown: (event: MouseEvent, songs: SongInfo[], song: SongInfo, index: number) => void;

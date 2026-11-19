@@ -9,6 +9,10 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    server: {
+      // 该包的 ESM 内部导入省略了扩展名，交给 Vite 解析。
+      deps: { inline: ["@material/material-color-utilities"] },
+    },
     // Offline script checks use node:test and are run separately from Vitest.
     exclude: [
       ...configDefaults.exclude,

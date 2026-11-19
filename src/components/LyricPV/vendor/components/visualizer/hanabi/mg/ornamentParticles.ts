@@ -243,7 +243,7 @@ export const confettiOrnament: OrnamentBuilder = (kit) => {
       const { top, bottom } = fallerLayout(kit, it.site);
       let ox: number;
       let oy: number;
-      let alpha = 1;
+      let alpha: number;
       if (local < burstLife) {
         // 第一程：从落点中心炸开，阻尼 + 重力的闭式解，渐隐交给循环。
         const drag = 2.6;

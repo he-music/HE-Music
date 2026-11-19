@@ -8,7 +8,7 @@ import {
   argbFromHex,
   type Theme,
 } from "@material/material-color-utilities";
-import { rgbToHex } from "@imsyy/color-utils";
+import { rgbToHex } from "./colorFormat";
 import { useSettingStore, useStatusStore } from "@/stores";
 import { argbToRgb } from "./helper";
 import { chunk } from "lodash-es";

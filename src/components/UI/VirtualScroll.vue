@@ -164,7 +164,7 @@ const calculateVisibleRange = (currentScrollTop: number) => {
   if (!vHeight) return; // 容器高度未就绪
 
   let startIndex = props.items.length - 1;
-  let endIndex = 0;
+  let endIndex: number;
 
   if (props.itemFixed) {
     // 定高模式
@@ -395,7 +395,7 @@ const scrollToIndex = (index: number, behavior: ScrollBehavior = "auto") => {
   // 确保索引在有效范围内
   const targetIndex = Math.max(0, Math.min(index, props.items.length - 1));
 
-  let top = 0;
+  let top: number;
   if (props.itemFixed) {
     top = targetIndex * props.itemHeight;
   } else {

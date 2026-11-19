@@ -43,10 +43,9 @@ import {
 } from "naive-ui";
 import { useSettingStore, useStatusStore } from "@/stores";
 import { MONOTONOUS_THEME, setColorSchemes } from "@/utils/color";
-// import { rgbToHex } from "@imsyy/color-utils";
+import { hexToRgb, rgbToHex } from "@/utils/colorFormat";
 import themeColor from "@/assets/data/themeColor.json";
 import { useI18n } from "vue-i18n";
-import { hexToRgb, rgbToHex } from "@imsyy/color-utils";
 import OverlayBackHandler from "./OverlayBackHandler.vue";
 
 const { locale, t } = useI18n();

@@ -4,7 +4,12 @@ import * as Vue from "vue";
 import { compileScript, parse } from "vue/compiler-sfc";
 import ts from "typescript";
 import { gatewayProxyUrl } from "@/platform/gateway";
-import { emitHostEvent, flushSfcHost, type SfcHostNode } from "@/test/productionSfc";
+import {
+  createSfcHostNode as node,
+  emitHostEvent,
+  flushSfcHost,
+  type SfcHostNode,
+} from "@/test/productionSfc";
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
@@ -41,13 +46,6 @@ function mount(src: string | undefined, defaultSrc: string, visible = true) {
   }, exports);
   if (!exports.default) throw new Error("Missing production image component");
   const component = exports.default;
-  const node = (tag: string, text = ""): SfcHostNode => ({
-    tag,
-    text,
-    props: {},
-    children: [],
-    parent: null,
-  });
   const renderer = Vue.createRenderer<SfcHostNode, SfcHostNode>({
     createElement: (tag) => node(tag),
     createText: (text) => node("text", text),
