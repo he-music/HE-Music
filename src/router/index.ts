@@ -38,7 +38,7 @@ router.beforeEach(async (to, from) => {
   if (to.fullPath !== from.fullPath) await closeOverlaysBeforeNavigation();
 });
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, from) => {
   // console.log("前置守卫", to, from);
   // 进度条
   if (platform.kind !== "mygo" && to.path !== from.path) {
@@ -56,22 +56,19 @@ router.beforeEach((to, from, next) => {
         return typeof value !== "string" || !value.trim();
       })
     ) {
-      next({ name: "403" });
-      return;
+      return { name: "403" };
     }
   }
 
   if (to.name === "local-playlist" && (typeof to.query.id !== "string" || !to.query.id.trim())) {
-    next({ name: "403" });
-    return;
+    return { name: "403" };
   }
   // 需要登录
   if (to.meta.needLogin && !isLogin()) {
     if (platform.kind !== "mygo") window.$loadingBar?.error();
     window.$message?.warning(t("message.login_required"));
     openUserLogin();
-    next(false);
-    return;
+    return false;
   }
   // 需要客户端
   // Provider availability permits navigation while shell sessions initialize.
@@ -85,8 +82,7 @@ router.beforeEach((to, from, next) => {
     );
   if (to.meta.needApp && !nativeFilesRoute) {
     window.$message?.warning(t("message.client_only_function"));
-    next("/403");
-    return;
+    return "/403";
   }
 
   // 后台加载平台信息，让主框架先渲染。
@@ -97,7 +93,7 @@ router.beforeEach((to, from, next) => {
     });
   }
 
-  next();
+  return;
 });
 
 // 后置守卫

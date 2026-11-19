@@ -54,6 +54,7 @@ vi.mock("./routes", () => {
         component,
       },
       { path: "/desktop-only", name: "desktop-only", meta: { needApp: true }, component },
+      { path: "/login-required", name: "login-required", meta: { needLogin: true }, component },
     ],
   };
 });
@@ -115,4 +116,23 @@ it("本地歌单独立路由不要求登录，并在每次导航校验歌曲列�
   mocks.platform.kind = "web";
   await router.push({ name: "local-playlist", query: { id: "first" } });
   expect(router.currentRoute.value.name).toBe("403");
+});
+
+it("允许普通导航并取消未登录的导航，且不触发旧式守卫警告", async () => {
+  const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    const router = (await import("./index")).default;
+    await router.push({ name: "local" });
+    expect(router.currentRoute.value.name).toBe("local");
+
+    mocks.loggedIn = false;
+    await router.push({ name: "login-required" });
+    expect(router.currentRoute.value.name).toBe("local");
+    expect(mocks.warning).toHaveBeenCalledWith("message.login_required");
+    expect(warn.mock.calls.flat()).not.toEqual(
+      expect.arrayContaining([expect.stringContaining("VUE_ROUTER_R0025")]),
+    );
+  } finally {
+    warn.mockRestore();
+  }
 });

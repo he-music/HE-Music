@@ -17,20 +17,14 @@ const appRoutes: Array<RouteRecordRaw> = [
     path: "/recommend/song-list",
     name: "recommend-song-list",
     component: () => import("@/views/List/recommendSongList.vue"),
-    beforeEnter: (to, _, next) => {
-      if (!to.query.target_id || !to.query.platform) next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) => (!to.query.target_id || !to.query.platform ? { path: "/403" } : undefined),
   },
   // 搜索
   {
     path: "/search",
     name: "search",
     component: () => import("@/views/Search/layout.vue"),
-    beforeEnter: (to, _, next) => {
-      if (!to.query.keyword) next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) => (!to.query.keyword ? { path: "/403" } : undefined),
     // redirect: "/search/songs",
     // children: [
     //   {
@@ -76,19 +70,13 @@ const appRoutes: Array<RouteRecordRaw> = [
     path: "/new-song",
     name: "new-song",
     component: () => import("@/views/NewSong/layout.vue"),
-    beforeEnter: (to, _, next) => {
-      if (!to.query.platform) next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) => (!to.query.platform ? { path: "/403" } : undefined),
   },
   {
     path: "/new-album",
     name: "new-album",
     component: () => import("@/views/NewAlbum/layout.vue"),
-    beforeEnter: (to, _, next) => {
-      if (!to.query.platform) next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) => (!to.query.platform ? { path: "/403" } : undefined),
   },
   {
     path: "/artists",
@@ -111,10 +99,8 @@ const appRoutes: Array<RouteRecordRaw> = [
   {
     path: "/artist",
     name: "artist",
-    beforeEnter: (to, _, next) => {
-      if (!to.query.id || to.query.id === "0" || !to.query.platform) next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) =>
+      !to.query.id || to.query.id === "0" || !to.query.platform ? { path: "/403" } : undefined,
     component: () => import("@/views/Artist/layout.vue"),
     redirect: "/artist/songs",
     children: [
@@ -139,20 +125,16 @@ const appRoutes: Array<RouteRecordRaw> = [
   {
     path: "/video",
     name: "video",
-    beforeEnter: (to, _, next) => {
-      if (!to.query.id || to.query.id === "0" || !to.query.platform) next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) =>
+      !to.query.id || to.query.id === "0" || !to.query.platform ? { path: "/403" } : undefined,
     component: () => import("@/views/Video.vue"),
   },
   // 歌曲
   {
     path: "/song",
     name: "song",
-    beforeEnter: (to, _, next) => {
-      if (!to.query.id || to.query.id === "0" || !to.query.platform) next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) =>
+      !to.query.id || to.query.id === "0" || !to.query.platform ? { path: "/403" } : undefined,
     component: () => import("@/views/Song.vue"),
   },
   // 歌曲曲谱列表
@@ -171,20 +153,16 @@ const appRoutes: Array<RouteRecordRaw> = [
   {
     path: "/album",
     name: "album",
-    beforeEnter: (to, _, next) => {
-      if (!to.query.id || to.query.id === "0" || !to.query.platform) next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) =>
+      !to.query.id || to.query.id === "0" || !to.query.platform ? { path: "/403" } : undefined,
     component: () => import("@/views/List/album.vue"),
   },
   // 歌单
   {
     path: "/playlist",
     name: "playlist",
-    beforeEnter: (to, _, next) => {
-      if (!to.query.id || to.query.id === "0" || !to.query.platform) next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) =>
+      !to.query.id || to.query.id === "0" || !to.query.platform ? { path: "/403" } : undefined,
     component: () => import("@/views/List/playlist.vue"),
   },
   // 用户歌单
@@ -192,10 +170,7 @@ const appRoutes: Array<RouteRecordRaw> = [
     path: "/user-playlist",
     name: "user-playlist",
     meta: { needLogin: true },
-    beforeEnter: (to, _, next) => {
-      if (!to.query.id || to.query.id === "0") next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) => (!to.query.id || to.query.id === "0" ? { path: "/403" } : undefined),
     component: () => import("@/views/List/userplaylist.vue"),
   },
   {
@@ -212,10 +187,8 @@ const appRoutes: Array<RouteRecordRaw> = [
   {
     path: "/ranking",
     name: "ranking",
-    beforeEnter: (to, _, next) => {
-      if (!to.query.id || to.query.id === "0" || !to.query.platform) next({ path: "/403" });
-      else next();
-    },
+    beforeEnter: (to) =>
+      !to.query.id || to.query.id === "0" || !to.query.platform ? { path: "/403" } : undefined,
     component: () => import("@/views/List/ranking.vue"),
   },
   // 我喜欢的音乐

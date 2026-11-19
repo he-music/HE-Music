@@ -52,6 +52,8 @@ export function createFrontendConfig(mode: string, desktop = false): UserConfig 
       port,
       host: "127.0.0.1",
       strictPort: true,
+      // Web 与桌面共用项目根目录，各自构建时都不应触发开发页重载。
+      watch: { ignored: ["**/dist/**"] },
     },
     preview: { port, host: "127.0.0.1", strictPort: true },
     build: {
