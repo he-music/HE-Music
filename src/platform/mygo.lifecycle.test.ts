@@ -1,18 +1,25 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createMygoPlatform } from "./mygo";
 import type { LyricsClock, LyricsSnapshot, LyricsWindowState } from "./desktopLyrics";
 import type { TrayPlaybackState, TrayRequest } from "./mygo.bindings";
 import { DesktopLyricsSession } from "./desktopLyricsSession";
-const bridge = vi.hoisted(() => ({ call: vi.fn(), on: vi.fn(), os: "darwin" }));
-vi.mock("mygo-runtime", () => ({
-  runtime: () => ({ platform: bridge.os }),
-  currentWindow: {},
-  call: (...args: unknown[]) => bridge.call(...args),
-  event: (name: string) => ({ on: (listener: unknown) => bridge.on(name, listener) }),
-}));
+
+const bridge = { call: vi.fn(), on: vi.fn(), platform: "darwin" };
+
+beforeEach(() => {
+  bridge.platform = "darwin";
+  vi.stubGlobal("mygo", {
+    get platform() {
+      return bridge.platform;
+    },
+    on: bridge.on,
+    callWith: (method: string, args: unknown[]) => bridge.call(method, ...args),
+  });
+});
+
 afterEach(() => {
-  vi.clearAllMocks();
-  bridge.os = "darwin";
+  vi.unstubAllGlobals();
+  vi.resetAllMocks();
 });
 describe("mygo lifecycle capability", () => {
   it("重启请求通过原生生命周期重新启动程序", async () => {
@@ -23,7 +30,7 @@ describe("mygo lifecycle capability", () => {
   });
   it("only exposes Windows taskbar providers and forwards exact deferred native failure events", async () => {
     expect(createMygoPlatform().taskbar).toBeUndefined();
-    bridge.os = "win32";
+    bridge.platform = "win32";
     const adapter = createMygoPlatform();
     const taskbar = adapter.taskbar;
     if (!taskbar?.onFailure) throw new Error("Missing deferred taskbar failure subscription");

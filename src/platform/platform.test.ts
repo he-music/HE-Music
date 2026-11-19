@@ -1,10 +1,9 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createWebPlatform } from "./web";
 import { createMygoPlatform } from "./mygo";
 import { externalHttpURL, systemFromUserAgent } from "./types";
 
-const bridge = vi.hoisted(() => ({
-  platform: "darwin",
+const bridge = {
   off: vi.fn(),
   on: vi.fn(),
   call: vi.fn().mockResolvedValue(undefined),
@@ -13,13 +12,16 @@ const bridge = vi.hoisted(() => ({
   isMaximized: vi.fn().mockResolvedValue(false),
   toggleFullScreen: vi.fn().mockResolvedValue(undefined),
   close: vi.fn().mockResolvedValue(undefined),
-}));
-vi.mock("mygo-runtime", () => ({
-  runtime: () => ({ platform: bridge.platform }),
-  currentWindow: bridge,
-  call: (...args: unknown[]) => bridge.call(...args),
-  event: () => ({ on: (listener: (value: boolean) => void) => bridge.on(listener) }),
-}));
+};
+
+beforeEach(() => {
+  vi.stubGlobal("mygo", {
+    platform: "darwin",
+    window: bridge,
+    on: bridge.on,
+    callWith: (method: string, args: unknown[]) => bridge.call(method, ...args),
+  });
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -44,7 +46,8 @@ describe("platform adapters", () => {
     bridge.on.mockReturnValueOnce(off);
     const listener = vi.fn();
     const stop = shortcuts.onAction(listener);
-    const emit = bridge.on.mock.calls.at(-1)?.[0];
+    expect(bridge.on).toHaveBeenLastCalledWith("desktop:shortcut-action", listener);
+    const emit = bridge.on.mock.calls.at(-1)?.[1];
     if (typeof emit !== "function") throw new Error("No shortcut listener");
     emit({ generation: 7, action: "toggleDesktopLyric" });
     expect(listener).toHaveBeenCalledExactlyOnceWith({
@@ -135,13 +138,13 @@ describe("platform adapters", () => {
     bridge.call.mockClear();
     const fullscreenListener = vi.fn();
     const stopFullscreen = mygo.fullscreen?.onChange(fullscreenListener);
-    expect(bridge.on).toHaveBeenLastCalledWith(fullscreenListener);
+    expect(bridge.on).toHaveBeenLastCalledWith("desktop:window-fullscreen", fullscreenListener);
     stopFullscreen?.();
     expect(bridge.off).toHaveBeenCalledOnce();
     bridge.off.mockClear();
     const listener = vi.fn();
     const off = mygo.window?.onMaximized(listener);
-    expect(bridge.on).toHaveBeenCalledWith(listener);
+    expect(bridge.on).toHaveBeenCalledWith("desktop:window-maximized", listener);
     off?.();
     expect(bridge.off).toHaveBeenCalledOnce();
     await mygo.window?.close();

@@ -1,3 +1,4 @@
+import type { BindingMethods } from "./bindingMethods";
 import type {
   DesktopLyrics,
   LyricsClock,
@@ -19,12 +20,14 @@ export type {
   LyricsWord,
 } from "./mygo.bindings";
 
+type LyricsMethods = BindingMethods<typeof DesktopLyrics>;
+
 /** Native provider with explicit window state, locking and external tray recovery. */
 export interface PlatformDesktopLyrics extends Readonly<
-  Omit<typeof DesktopLyrics, "resetPosition" | "setUnlockRegion">
+  Omit<LyricsMethods, "resetPosition" | "setUnlockRegion">
 > {
-  resetPosition?: typeof DesktopLyrics.resetPosition;
-  setUnlockRegion?: typeof DesktopLyrics.setUnlockRegion;
+  resetPosition?: LyricsMethods["resetPosition"];
+  setUnlockRegion?: LyricsMethods["setUnlockRegion"];
   onWindow(listener: (state: LyricsWindowState) => void): () => void;
   onSnapshot(listener: (snapshot: LyricsSnapshot) => void): () => void;
   onClock(listener: (clock: LyricsClock) => void): () => void;

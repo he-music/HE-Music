@@ -26,8 +26,10 @@ func (*DesktopPlatform) IsFullScreen(ctx context.Context) bool {
 	return win != nil && win.IsFullScreen()
 }
 
-var windowMaximized = mygo.NewEvent[bool]("desktop:window-maximized")
-var windowFullscreen = mygo.NewEvent[bool]("desktop:window-fullscreen")
+var (
+	windowMaximized  = mygo.NewEvent[bool]("desktop:window-maximized")
+	windowFullscreen = mygo.NewEvent[bool]("desktop:window-fullscreen")
+)
 
 func init() {
 	mygo.Bind(&DesktopPlatform{})
