@@ -1025,6 +1025,10 @@ export const DesktopPlatform = {
   deviceName(): Promise<string> {
     return call("DesktopPlatform.DeviceName");
   },
+  /** IsFullScreen reports the native state of the window hosting the caller. */
+  isFullScreen(): Promise<boolean> {
+    return call("DesktopPlatform.IsFullScreen");
+  },
   /** OpenExternal opens HTTP(S) links in the system browser. */
   openExternal(rawURL: string): Promise<void> {
     return call("DesktopPlatform.OpenExternal", rawURL);
@@ -1232,6 +1236,7 @@ export const events = {
   desktopLyricsCommand: event<LyricsCommand>("desktop:lyrics-command"),
   desktopMpv: event<MpvEvent>("desktop:mpv"),
   desktopWindowMaximized: event<boolean>("desktop:window-maximized"),
+  desktopWindowFullscreen: event<boolean>("desktop:window-fullscreen"),
   desktopProtocolIntent: event<ProtocolIntent>("desktop:protocol-intent"),
   desktopShortcutAction: event<ShortcutEvent>("desktop:shortcut-action"),
   desktopSystemMediaCommand: event<SystemMediaCommand>("desktop:system-media-command"),

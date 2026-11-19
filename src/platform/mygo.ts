@@ -74,6 +74,11 @@ export function createMygoPlatform(): PlatformAdapter {
     networkProxy: createNetworkProxyProvider(NetworkProxy),
     gateway: NetworkGateway,
     windowAppearance: WindowAppearanceService,
+    fullscreen: {
+      current: DesktopPlatform.isFullScreen,
+      toggle: currentWindow.toggleFullScreen,
+      onChange: (listener) => events.desktopWindowFullscreen.on(listener),
+    },
     linuxGraphics: os === "linux" ? LinuxGraphics : undefined,
     updates: {
       ...Updates,

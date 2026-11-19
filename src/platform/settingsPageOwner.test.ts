@@ -45,6 +45,7 @@ const platform: { -readonly [K in keyof PlatformAdapter]: PlatformAdapter[K] } =
     localMusic: false,
   },
   window: null,
+  fullscreen: null,
   openExternal: async () => {},
 };
 vi.stubGlobal("localStorage", {});

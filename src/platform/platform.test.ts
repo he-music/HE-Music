@@ -11,6 +11,7 @@ const bridge = vi.hoisted(() => ({
   minimize: vi.fn().mockResolvedValue(undefined),
   toggleMaximize: vi.fn().mockResolvedValue(undefined),
   isMaximized: vi.fn().mockResolvedValue(false),
+  toggleFullScreen: vi.fn().mockResolvedValue(undefined),
   close: vi.fn().mockResolvedValue(undefined),
 }));
 vi.mock("mygo-runtime", () => ({
@@ -68,6 +69,51 @@ describe("platform adapters", () => {
     expect(open).toHaveBeenCalledTimes(1);
   });
 
+  it("Safari 通过 WebKit 接口进入和退出全屏，并从系统事件获取状态", async () => {
+    const root = { webkitRequestFullscreen: vi.fn() };
+    const doc = Object.assign(new EventTarget(), {
+      documentElement: root,
+      webkitExitFullscreen: vi.fn(),
+      webkitFullscreenElement: null as typeof root | null,
+    });
+    vi.stubGlobal("document", doc);
+    const fullscreen = createWebPlatform().fullscreen;
+    if (!fullscreen) throw new Error("No Safari fullscreen");
+
+    const listener = vi.fn();
+    const off = fullscreen.onChange(listener);
+    expect(fullscreen.current()).toBe(false);
+    const entering = fullscreen.toggle();
+    expect(root.webkitRequestFullscreen).toHaveBeenCalledOnce();
+    await entering;
+    doc.webkitFullscreenElement = root;
+    doc.dispatchEvent(new Event("webkitfullscreenchange"));
+    expect(listener).toHaveBeenLastCalledWith(true);
+    await fullscreen.toggle();
+    expect(doc.webkitExitFullscreen).toHaveBeenCalledOnce();
+    doc.webkitFullscreenElement = null;
+    doc.dispatchEvent(new Event("webkitfullscreenchange"));
+    expect(listener).toHaveBeenLastCalledWith(false);
+    off();
+    doc.dispatchEvent(new Event("webkitfullscreenchange"));
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("标准全屏不依赖旧版浏览器的状态属性，且尊重浏览器的全屏权限", async () => {
+    const root = { requestFullscreen: vi.fn() };
+    const doc = Object.assign(new EventTarget(), {
+      documentElement: root,
+      fullscreenEnabled: false,
+      fullscreenElement: null,
+      exitFullscreen: vi.fn(),
+    });
+    vi.stubGlobal("document", doc);
+    expect(createWebPlatform().fullscreen).toBeNull();
+    doc.fullscreenEnabled = true;
+    await createWebPlatform().fullscreen?.toggle();
+    expect(root.requestFullscreen).toHaveBeenCalledOnce();
+  });
+
   it("mygo 系统来自原生运行时，窗口控制不访问 Electron，事件可退订", async () => {
     vi.stubGlobal("window", {});
     vi.stubGlobal("navigator", { userAgent: "Linux" });
@@ -81,6 +127,18 @@ describe("platform adapters", () => {
     await mygo.window?.minimize();
     await mygo.window?.toggleMaximize();
     expect(await mygo.window?.isMaximized()).toBe(false);
+    await mygo.fullscreen?.toggle();
+    expect(bridge.toggleFullScreen).toHaveBeenCalledOnce();
+    bridge.call.mockResolvedValueOnce(true);
+    expect(await mygo.fullscreen?.current()).toBe(true);
+    expect(bridge.call).toHaveBeenCalledWith("DesktopPlatform.IsFullScreen");
+    bridge.call.mockClear();
+    const fullscreenListener = vi.fn();
+    const stopFullscreen = mygo.fullscreen?.onChange(fullscreenListener);
+    expect(bridge.on).toHaveBeenLastCalledWith(fullscreenListener);
+    stopFullscreen?.();
+    expect(bridge.off).toHaveBeenCalledOnce();
+    bridge.off.mockClear();
     const listener = vi.fn();
     const off = mygo.window?.onMaximized(listener);
     expect(bridge.on).toHaveBeenCalledWith(listener);

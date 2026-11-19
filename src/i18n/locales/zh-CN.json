@@ -116,6 +116,7 @@
     "exit_fullscreen": "退出全屏",
     "experimental_function_tip": "实验性功能，请谨慎使用",
     "filename": "文件名",
+    "fullscreen_failed": "无法切换全屏，请重试",
     "global": "全局",
     "hot_comment": "热门评论",
     "hottest": "最热",

@@ -40,6 +40,12 @@ export interface PlatformWindow {
   onMaximized(listener: (maximized: boolean) => void): () => void;
 }
 
+export interface PlatformFullscreen {
+  current(): boolean | Promise<boolean>;
+  toggle(): Promise<void>;
+  onChange(listener: (fullscreen: boolean) => void): () => void;
+}
+
 export interface PlatformLifecycle {
   ready(config: LifecycleConfig): Promise<LifecycleStatus>;
   syncConfig(config: LifecycleConfig): Promise<void>;
@@ -59,6 +65,7 @@ export interface PlatformAdapter {
   readonly os: SystemPlatform;
   readonly capabilities: PlatformCapabilities;
   readonly window: PlatformWindow | null;
+  readonly fullscreen: PlatformFullscreen | null;
   openExternal(url: string, target?: "_self" | "_blank"): Promise<void>;
   readonly deviceName?: () => Promise<string>;
   readonly lifecycle?: PlatformLifecycle;

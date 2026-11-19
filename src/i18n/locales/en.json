@@ -116,6 +116,7 @@
     "exit_fullscreen": "Exit Fullscreen",
     "experimental_function_tip": "Experimental feature, please use with caution",
     "filename": "Filename",
+    "fullscreen_failed": "Could not switch fullscreen. Please try again.",
     "global": "Global",
     "hot_comment": "Hot Comments",
     "hottest": "Hottest",

@@ -1,4 +1,5 @@
 import { externalHttpURL, systemFromUserAgent, type PlatformAdapter } from "./types";
+import { createWebFullscreen } from "./webFullscreen";
 
 export function createWebPlatform(): PlatformAdapter {
   return {
@@ -11,6 +12,7 @@ export function createWebPlatform(): PlatformAdapter {
       localMusic: false,
     },
     window: null,
+    fullscreen: createWebFullscreen(globalThis.document),
     async openExternal(url, target = "_blank") {
       window.open(externalHttpURL(url), target, "noopener,noreferrer");
     },

@@ -26,6 +26,7 @@ const host = vi.hoisted(
         localMusic: false,
       },
       window: null,
+      fullscreen: null,
       openExternal: async () => {},
     },
   }),

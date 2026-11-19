@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"net/url"
 
@@ -19,16 +20,27 @@ func (*DesktopPlatform) OpenExternal(rawURL string) error {
 	return mygo.Shell.OpenExternal(parsed.String())
 }
 
+// IsFullScreen reports the native state of the window hosting the caller.
+func (*DesktopPlatform) IsFullScreen(ctx context.Context) bool {
+	win := mygo.CallerWindow(ctx)
+	return win != nil && win.IsFullScreen()
+}
+
 var windowMaximized = mygo.NewEvent[bool]("desktop:window-maximized")
+var windowFullscreen = mygo.NewEvent[bool]("desktop:window-fullscreen")
 
 func init() {
 	mygo.Bind(&DesktopPlatform{})
 	mygo.App.OnWindowCreated(func(win *mygo.Window) {
 		offMax := win.OnMaximize(func() { _ = windowMaximized.EmitPage(win.Page(), true) })
 		offRestore := win.OnUnmaximize(func() { _ = windowMaximized.EmitPage(win.Page(), false) })
+		offEnter := win.OnEnterFullScreen(func() { _ = windowFullscreen.EmitPage(win.Page(), true) })
+		offLeave := win.OnLeaveFullScreen(func() { _ = windowFullscreen.EmitPage(win.Page(), false) })
 		win.OnClosed(func() {
 			offMax()
 			offRestore()
+			offEnter()
+			offLeave()
 		})
 	})
 	// M2 has no tray or dock activation flow; closing the last window must exit.
