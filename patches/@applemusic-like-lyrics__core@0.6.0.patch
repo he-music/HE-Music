@@ -1,0 +1,44 @@
+diff --git a/dist/amll-core.cjs b/dist/amll-core.cjs
+index fbd090aa45196ed1ba08ac4be703e227fae547f2..49c1411f49c5f54162947e141a984ffb4db76ec4 100644
+--- a/dist/amll-core.cjs
++++ b/dist/amll-core.cjs
+@@ -2481,7 +2481,7 @@ var MeshGradientRenderer = class extends BaseRenderer {
+ 	}
+ 	initializeGLResources() {
+ 		const gl = this.gl;
+-		if (!gl.getExtension("EXT_color_buffer_float")) console.warn("EXT_color_buffer_float not supported");
++		// This WebGL 1 renderer uses RGBA/UNSIGNED_BYTE color attachments.
+ 		if (!gl.getExtension("EXT_float_blend")) console.warn("EXT_float_blend not supported");
+ 		if (!gl.getExtension("OES_texture_float_linear")) console.warn("OES_texture_float_linear not supported");
+ 		if (!gl.getExtension("OES_texture_float")) console.warn("OES_texture_float not supported");
+@@ -2621,7 +2621,7 @@ var MeshGradientRenderer = class extends BaseRenderer {
+ 	}
+ 	onRedraw(tickTime, delta) {
+ 		const latestMeshState = this.meshStates[this.meshStates.length - 1];
+-		let canBeStatic = false;
++		let canBeStatic = !latestMeshState;
+ 		const deltaFactor = delta / 500;
+ 		if (latestMeshState) {
+ 			latestMeshState.mesh.bind();
+diff --git a/dist/amll-core.mjs b/dist/amll-core.mjs
+index b38e570ef34f599d6bbd2e3bdd5191bcc51d5f34..1e2c3e83a88b50d5708a2c674583047af3fe1fe9 100644
+--- a/dist/amll-core.mjs
++++ b/dist/amll-core.mjs
+@@ -2448,7 +2448,7 @@ var MeshGradientRenderer = class extends BaseRenderer {
+ 	}
+ 	initializeGLResources() {
+ 		const gl = this.gl;
+-		if (!gl.getExtension("EXT_color_buffer_float")) console.warn("EXT_color_buffer_float not supported");
++		// This WebGL 1 renderer uses RGBA/UNSIGNED_BYTE color attachments.
+ 		if (!gl.getExtension("EXT_float_blend")) console.warn("EXT_float_blend not supported");
+ 		if (!gl.getExtension("OES_texture_float_linear")) console.warn("OES_texture_float_linear not supported");
+ 		if (!gl.getExtension("OES_texture_float")) console.warn("OES_texture_float not supported");
+@@ -2588,7 +2588,7 @@ var MeshGradientRenderer = class extends BaseRenderer {
+ 	}
+ 	onRedraw(tickTime, delta) {
+ 		const latestMeshState = this.meshStates[this.meshStates.length - 1];
+-		let canBeStatic = false;
++		let canBeStatic = !latestMeshState;
+ 		const deltaFactor = delta / 500;
+ 		if (latestMeshState) {
+ 			latestMeshState.mesh.bind();

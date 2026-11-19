@@ -52,7 +52,24 @@ const wrapperRef = useTemplateRef<HTMLDivElement>("wrapper-ref");
 // 外部类实例
 const bgRenderRef = shallowRef<AbstractBaseRenderer>();
 const documentVisibility = useDocumentVisibility();
-const shouldAnimate = computed(() => props.playing && documentVisibility.value === "visible");
+const animationMode = computed(() => {
+  if (documentVisibility.value !== "visible") return "hidden";
+  return props.playing ? "animated" : "static";
+});
+
+const updateAnimationMode = () => {
+  const renderer = bgRenderRef.value;
+  if (!renderer) return;
+
+  const mode = animationMode.value;
+  if (mode === "hidden") {
+    renderer.pause();
+    return;
+  }
+  // 静态模式会绘制新封面，并在过渡完成后自动停帧。
+  renderer.setStaticMode(mode === "static");
+  renderer.resume();
+};
 
 /**
  * 统一更新状态
@@ -71,12 +88,7 @@ const updateRendererState = () => {
   renderer.setRenderScale(props.renderScale);
   renderer.setLowFreqVolume(props.lowFreqVolume);
   renderer.setHasLyric(props.hasLyric);
-  // 播放状态
-  if (shouldAnimate.value) {
-    renderer.resume();
-  } else {
-    renderer.pause();
-  }
+  updateAnimationMode();
 };
 
 onMounted(() => {
@@ -118,13 +130,7 @@ watch(
   },
 );
 
-watch(shouldAnimate, (isPlaying) => {
-  if (isPlaying) {
-    bgRenderRef.value?.resume();
-  } else {
-    bgRenderRef.value?.pause();
-  }
-});
+watch(animationMode, updateAnimationMode);
 
 watch(
   () => props.flowSpeed,

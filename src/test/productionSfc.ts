@@ -29,7 +29,7 @@ export function mountProductionSfc(
   modules: Record<string, unknown>,
   components: string[],
   scriptImports = "",
-  rootProps: Record<string, unknown> = {},
+  rootProps: Record<string, unknown> | (() => Record<string, unknown>) = {},
 ) {
   const source = readFileSync(file, "utf8").replace(
     '<script setup lang="ts">',
@@ -86,7 +86,11 @@ export function mountProductionSfc(
     },
   });
   const root = createSfcHostNode("root");
-  const app = renderer.createApp(exports.default, rootProps);
+  const component = exports.default;
+  const app =
+    typeof rootProps === "function"
+      ? renderer.createApp({ setup: () => () => Vue.h(component, rootProps()) })
+      : renderer.createApp(component, rootProps);
   for (const name of components) {
     app.component(
       name,

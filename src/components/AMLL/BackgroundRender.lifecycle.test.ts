@@ -19,6 +19,7 @@ function fixture(playing = true) {
     setRenderScale: vi.fn(),
     setLowFreqVolume: vi.fn(),
     setHasLyric: vi.fn(),
+    setStaticMode: vi.fn(),
     resume: vi.fn(),
     pause: vi.fn(),
     dispose: vi.fn(),
@@ -39,7 +40,7 @@ function fixture(playing = true) {
     },
     [],
     'import { computed, shallowRef, useTemplateRef, onMounted, onBeforeUnmount, watch } from "vue";',
-    props,
+    () => ({ ...props }),
   );
   cleanups.push(host.close);
   return { host, props, visibility, renderer, create };
@@ -69,8 +70,40 @@ it("隐藏时暂停、恢复可见时继续运行同一渲染器", async () => {
   expect(create).toHaveBeenCalledTimes(1);
 });
 
-it("暂停状态挂载时不启动动画", () => {
-  const { renderer } = fixture(false);
-  expect(renderer.pause).toHaveBeenCalledTimes(1);
-  expect(renderer.resume).not.toHaveBeenCalled();
+it("暂停时展开或重新展开会绘制封面，并在播放时恢复流动", async () => {
+  for (let count = 0; count < 2; count++) {
+    const { host, props, renderer } = fixture(false);
+    expect(renderer.setStaticMode).toHaveBeenLastCalledWith(true);
+    expect(renderer.resume).toHaveBeenCalledOnce();
+    expect(renderer.pause).not.toHaveBeenCalled();
+    expect(renderer.setAlbum).toHaveBeenCalledWith(props.album, false);
+
+    props.playing = true;
+    await Vue.nextTick();
+    expect(renderer.setStaticMode).toHaveBeenLastCalledWith(false);
+
+    props.playing = false;
+    await Vue.nextTick();
+    expect(renderer.setStaticMode).toHaveBeenLastCalledWith(true);
+    host.close();
+    expect(renderer.dispose).toHaveBeenCalledOnce();
+  }
+});
+
+it("隐藏时保持暂停，恢复可见后绘制暂停期间切换的封面", async () => {
+  const { props, visibility, renderer, create } = fixture(false);
+  visibility.value = "hidden";
+  await Vue.nextTick();
+  expect(renderer.pause).toHaveBeenCalledOnce();
+
+  props.album = "https://images.invalid/next.jpg";
+  await Vue.nextTick();
+  expect(renderer.setAlbum).toHaveBeenLastCalledWith(props.album, false);
+  expect(renderer.resume).toHaveBeenCalledOnce();
+
+  visibility.value = "visible";
+  await Vue.nextTick();
+  expect(renderer.setStaticMode).toHaveBeenLastCalledWith(true);
+  expect(renderer.resume).toHaveBeenCalledTimes(2);
+  expect(create).toHaveBeenCalledOnce();
 });
