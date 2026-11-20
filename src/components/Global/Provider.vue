@@ -47,6 +47,10 @@ import { hexToRgb, rgbToHex } from "@/utils/colorFormat";
 import themeColor from "@/assets/data/themeColor.json";
 import { useI18n } from "vue-i18n";
 import OverlayBackHandler from "./OverlayBackHandler.vue";
+import {
+  appearanceThemeSourceKey,
+  type AppearanceThemeSource,
+} from "@/composables/appearanceThemeSource";
 
 const { locale, t } = useI18n();
 
@@ -76,25 +80,18 @@ const toRGBA = (rgb: string, alpha: number) => `rgba(${rgb}, ${alpha})`;
 // 主题缓存键
 let lastThemeCacheKey: string | null = null;
 
-// 获取明暗模式
-const theme = computed(() => {
-  // 图片模式强制深色
-  if (statusStore.isCustomBackground) return darkTheme;
-  return settingStore.themeMode === "auto"
-    ? // 跟随系统
-      osTheme.value === "dark"
-      ? darkTheme
-      : null
-    : // 自定义
-      settingStore.themeMode === "dark"
-      ? darkTheme
-      : null;
+const baseThemeSource = computed<AppearanceThemeSource>(() => {
+  if (statusStore.isCustomBackground) return "dark";
+  const mode = settingStore.themeMode;
+  return mode === "light" || mode === "dark" ? mode : "system";
 });
+const activeThemeSource = computed(() => activeSkin.value?.mode ?? baseThemeSource.value);
+provide(appearanceThemeSourceKey, activeThemeSource);
 
-const skinThemes = { light: null, dark: darkTheme };
-const activeTheme = computed(() =>
-  activeSkin.value ? skinThemes[activeSkin.value.mode] : theme.value,
-);
+const resolveTheme = (source: AppearanceThemeSource) =>
+  (source === "system" ? osTheme.value : source) === "dark" ? darkTheme : null;
+const theme = computed(() => resolveTheme(baseThemeSource.value));
+const activeTheme = computed(() => resolveTheme(activeThemeSource.value));
 
 // 获取当前主题色数据
 const getThemeMainColor = () => {

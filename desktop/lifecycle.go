@@ -113,6 +113,7 @@ func (l *DesktopLifecycle) Ready(ctx context.Context, config LifecycleConfig) (L
 		l.state.owner = ctx
 		l.state.config = config
 		syncNativeMenuLanguage(config.Language)
+		syncNativeTheme(config.ThemeSource)
 		l.stopOwner = context.AfterFunc(ctx, func() {
 			mygo.RunOnMain(func() {
 				if l.state.owner == ctx {
@@ -134,6 +135,7 @@ func (l *DesktopLifecycle) SyncConfig(ctx context.Context, config LifecycleConfi
 		}
 		l.state.config = config
 		syncNativeMenuLanguage(config.Language)
+		syncNativeTheme(config.ThemeSource)
 		l.updateMenu()
 		return nil
 	})
@@ -221,7 +223,21 @@ func validateLifecycleConfig(config LifecycleConfig) error {
 	if config.Language != "" && config.Language != "zh-CN" && config.Language != "en" {
 		return errors.New("language must be zh-CN or en")
 	}
+	switch mygo.ThemeSource(config.ThemeSource) {
+	case "", mygo.ThemeSystem, mygo.ThemeLight, mygo.ThemeDark:
+	default:
+		return errors.New("themeSource must be system, light or dark")
+	}
 	return nil
+}
+
+func syncNativeTheme(source string) {
+	if source == "" {
+		source = string(mygo.ThemeSystem)
+	}
+	if themeSource := mygo.ThemeSource(source); mygo.Theme.Source() != themeSource {
+		mygo.Theme.SetSource(themeSource)
+	}
 }
 
 func (l *DesktopLifecycle) call(ctx context.Context, ready bool, fn func() error) error {

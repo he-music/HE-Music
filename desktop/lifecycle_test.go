@@ -132,6 +132,17 @@ func TestLifecycleConfigValidation(t *testing.T) {
 	}
 }
 
+func TestLifecycleThemeSource(t *testing.T) {
+	for _, source := range []mygo.ThemeSource{"", mygo.ThemeLight, mygo.ThemeDark, mygo.ThemeSystem} {
+		if err := validateLifecycleConfig(LifecycleConfig{CloseAppMethod: CloseAppExit, ThemeSource: string(source)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if validateLifecycleConfig(LifecycleConfig{CloseAppMethod: CloseAppExit, ThemeSource: "auto"}) == nil {
+		t.Fatal("invalid native theme source accepted")
+	}
+}
+
 func TestLifecycleEmbeddedTrayIcons(t *testing.T) {
 	for name, data := range map[string][]byte{"template": desktopassets.TrayTemplate, "color": desktopassets.TrayColor} {
 		t.Run(name, func(t *testing.T) {

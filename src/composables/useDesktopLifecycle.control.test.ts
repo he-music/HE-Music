@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createRenderer, nextTick, ref } from "vue";
+import { computed, createRenderer, nextTick, ref } from "vue";
 import type { ControlCommand, ControlProvider } from "@/platform/controlSession";
 import type { PlatformLifecycle } from "@/platform/types";
+import type { AppearanceThemeSource } from "./appearanceThemeSource";
 
 const doubles = vi.hoisted(() => {
   type Session = { completed: number; start(): Promise<void>; dispose(): Promise<void> };
@@ -121,13 +122,18 @@ const flush = async () => {
   await nextTick();
 };
 let useHook: typeof import("./useDesktopLifecycle").useDesktopLifecycle;
-function mountShell() {
+let themeSourceKey: typeof import("./appearanceThemeSource").appearanceThemeSourceKey;
+function mountShell(themeSource = ref<AppearanceThemeSource>("system")) {
   const app = renderer.createApp({
     setup() {
       useHook({ showCloseModal: ref(false), rememberNotAsk: ref(false) });
       return () => null;
     },
   });
+  app.provide(
+    themeSourceKey,
+    computed(() => themeSource.value),
+  );
   const unmount = () => {
     if (mounted.delete(unmount)) app.unmount();
   };
@@ -168,7 +174,7 @@ afterEach(async () => {
   await flush();
   vi.restoreAllMocks();
 });
-async function fixture(failure: "start" | "teardown") {
+async function fixture(failure?: "start" | "teardown") {
   let generation = 0,
     epoch = 0;
   const listeners = new Set<(command: ControlCommand) => void>();
@@ -189,7 +195,8 @@ async function fixture(failure: "start" | "teardown") {
   };
   if (failure === "start")
     provider.start.mockRejectedValueOnce(new Error("synthetic Start rejected"));
-  else provider.teardown.mockRejectedValueOnce(new Error("synthetic Teardown rejected"));
+  if (failure === "teardown")
+    provider.teardown.mockRejectedValueOnce(new Error("synthetic Teardown rejected"));
   const subscribe = () => {
     const stop = vi.fn();
     lifecycleOffs.push(stop);
@@ -213,6 +220,7 @@ async function fixture(failure: "start" | "teardown") {
   });
   // One import per test, not per mount: remount must reuse the actual shared
   // shellTransition and cannot escape a rejected queue by resetting modules.
+  themeSourceKey = (await import("./appearanceThemeSource")).appearanceThemeSourceKey;
   useHook = (await import("./useDesktopLifecycle")).useDesktopLifecycle;
   return {
     provider,
@@ -224,6 +232,36 @@ async function fixture(failure: "start" | "teardown") {
       listeners.forEach((listener) => listener({ generation, requestId: 1, action: "play" })),
   };
 }
+
+it("同步启动时的主题和后续变化，卸载后停止同步", async () => {
+  const { lifecycle } = await fixture();
+  let finishReady: (status: { epoch: number; trayAvailable: boolean }) => void = () => {};
+  lifecycle.ready.mockReturnValueOnce(new Promise((resolve) => (finishReady = resolve)));
+  const source = ref<AppearanceThemeSource>("dark");
+  const unmount = mountShell(source);
+  await flush();
+  expect(lifecycle.ready).toHaveBeenCalledWith(expect.objectContaining({ themeSource: "dark" }));
+
+  source.value = "light";
+  finishReady({ epoch: 1, trayAvailable: true });
+  await flush();
+  expect(lifecycle.syncConfig).toHaveBeenNthCalledWith(
+    1,
+    expect.objectContaining({ themeSource: "light" }),
+  );
+
+  source.value = "system";
+  await flush();
+  expect(lifecycle.syncConfig).toHaveBeenNthCalledWith(
+    2,
+    expect.objectContaining({ themeSource: "system" }),
+  );
+
+  unmount();
+  source.value = "dark";
+  await flush();
+  expect(lifecycle.syncConfig).toHaveBeenCalledTimes(2);
+});
 
 describe("useDesktopLifecycle control cleanup on the CPU renderer", () => {
   it.each(["start", "teardown"] as const)(

@@ -1,4 +1,4 @@
-import { nextTick, onBeforeUnmount, onMounted, watch, type Ref } from "vue";
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, watch, type Ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { useSettingStore, useStatusStore } from "@/stores";
 import { platform } from "@/platform";
@@ -19,6 +19,7 @@ import { WindowAppearanceSession } from "@/platform/windowAppearance";
 import { LinuxGraphicsSession } from "@/platform/linuxGraphics";
 import { createMygoDownloadResolver } from "@/utils/localDownloadResolver";
 import { createShellControlSession } from "./shellControl";
+import { appearanceThemeSourceKey } from "./appearanceThemeSource";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -84,6 +85,8 @@ export function useDesktopLifecycle(ui: {
   let disposed = false;
   let requestId: number | null = null;
   let acknowledgement: Promise<void> = Promise.resolve();
+  let syncingConfig = Promise.resolve();
+  let stopConfig: (() => void) | undefined;
   const stops: Array<() => void> = [];
   if (lyrics) {
     stops.push(
@@ -99,10 +102,12 @@ export function useDesktopLifecycle(ui: {
   }
   const subscriptions: Array<() => void> = [];
   const reportFailure = (error: unknown) => console.error("桌面生命周期操作失败", error);
-  const config = (): LifecycleConfig => ({
+  const appearanceThemeSource = inject(appearanceThemeSourceKey, undefined);
+  const config = computed<LifecycleConfig>(() => ({
     showCloseAppTip: setting.showCloseAppTip,
     closeAppMethod: setting.closeAppMethod === "hide" ? "hide" : "exit",
     language: locale.value,
+    themeSource: appearanceThemeSource?.value ?? "system",
     labels: {
       show: t("nav.show_main_window"),
       hide: t("nav.hide_main_window"),
@@ -122,7 +127,7 @@ export function useDesktopLifecycle(ui: {
       shuffle: t("common.play_mode_shuffle"),
       quit: t("nav.quit_app"),
     },
-  });
+  }));
 
   const resolve = async (resolution: CloseResolution) => {
     const remember = ui.rememberNotAsk.value;
@@ -168,7 +173,22 @@ export function useDesktopLifecycle(ui: {
           }),
           lifecycle.onTrayAction(tray.handle),
         );
-        const nativeStatus = await lifecycle.ready(config());
+        const initialConfig = config.value;
+        const nativeStatus = await lifecycle.ready(initialConfig);
+        if (disposed) return;
+        stopConfig = watch(
+          config,
+          (nextConfig) => {
+            if (nextConfig === initialConfig) return;
+            syncingConfig = syncingConfig
+              .then(async () => {
+                if (!disposed) await lifecycle.syncConfig(nextConfig);
+              })
+              .catch(reportFailure);
+          },
+          { immediate: true },
+        );
+        await syncingConfig;
         if (disposed) return;
         await tray.start(nativeStatus.epoch);
         void control
@@ -196,14 +216,10 @@ export function useDesktopLifecycle(ui: {
         void lyrics
           ?.start()
           .catch((error: unknown) => console.error("桌面歌词会话初始化失败", error));
-        stops.push(
-          watch(
-            () => [setting.showCloseAppTip, setting.closeAppMethod, locale.value],
-            () => void lifecycle.syncConfig(config()).catch(reportFailure),
-          ),
-        );
       } catch (error) {
         reportFailure(error);
+        stopConfig?.();
+        await syncingConfig;
         tray.dispose();
         artwork?.dispose();
         appearance?.dispose();
@@ -228,6 +244,7 @@ export function useDesktopLifecycle(ui: {
   );
   onBeforeUnmount(() => {
     disposed = true;
+    stopConfig?.();
     stopQuitHandler();
     artwork?.dispose();
     appearance?.dispose();
@@ -253,6 +270,7 @@ export function useDesktopLifecycle(ui: {
       await shortcutCleanup;
       await mediaCleanup;
       await filesCleanup;
+      await syncingConfig;
       await lifecycle.teardown().catch(reportFailure);
       subscriptions.splice(0).forEach((stop) => stop());
     });

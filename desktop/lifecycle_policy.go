@@ -52,6 +52,7 @@ type LifecycleConfig struct {
 	ShowCloseAppTip bool            `json:"showCloseAppTip"`
 	CloseAppMethod  CloseAppMethod  `json:"closeAppMethod"`
 	Language        string          `json:"language,omitempty"`
+	ThemeSource     string          `json:"themeSource,omitempty"`
 	Labels          LifecycleLabels `json:"labels"`
 }
 
