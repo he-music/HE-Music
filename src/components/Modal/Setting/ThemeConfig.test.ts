@@ -2,6 +2,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { reactive } from "vue";
 import { isEmpty, snakeCase } from "lodash-es";
 import themeColors from "@/assets/data/themeColor.json";
+import { getImmersiveSkin, immersiveSkins, type ImmersiveSkin } from "@/theme/skins";
 import { emitHostEvent, flushSfcHost, mountProductionSfc } from "@/test/productionSfc";
 
 const cleanups: Array<() => void> = [];
@@ -13,6 +14,10 @@ afterEach(() => {
 function fixture(globalColor: boolean, backgroundMode = "color") {
   const setting = reactive({
     themeGlobalColor: globalColor,
+    immersiveSkin: "none" as ImmersiveSkin,
+    get activeSkin() {
+      return getImmersiveSkin(this.immersiveSkin);
+    },
     themeFollowCover: true,
     themeColorType: "default",
     themeCustomColor: "#fe7971",
@@ -57,6 +62,7 @@ function fixture(globalColor: boolean, backgroundMode = "color") {
       "@/utils/blob": {
         default: { revokeBlobURL: vi.fn(), createBlobURL: () => "blob:background" },
       },
+      "@/theme/skins": { immersiveSkins },
     },
     [
       "NScrollbar",
@@ -73,6 +79,14 @@ function fixture(globalColor: boolean, backgroundMode = "color") {
   );
   cleanups.push(host.close);
   const globalSwitch = () => host.all().find((node) => node.tag === "NSwitch");
+  const selectSkin = async (value: typeof setting.immersiveSkin) => {
+    const select = host
+      .all()
+      .find((node) => node.props["aria-label"] === "setting.general.theme_skin");
+    if (!select) throw new Error("Missing skin select");
+    emitHostEvent(select, "onUpdate:value", value);
+    await flushSfcHost();
+  };
   const selectVideo = async () => {
     const input = host.all().find((node) => node.tag === "input");
     if (!input) throw new Error("Missing background file input");
@@ -90,8 +104,23 @@ function fixture(globalColor: boolean, backgroundMode = "color") {
     emitHostEvent(button, "onClick");
     await flushSfcHost();
   };
-  return { setting, status, data, message, globalSwitch, selectVideo, clear };
+  return { setting, status, data, message, globalSwitch, selectSkin, selectVideo, clear };
 }
+
+it("切换预设皮肤时保留现有自定义背景与全局着色偏好", async () => {
+  const { setting, status, data, globalSwitch, selectSkin } = fixture(false, "video");
+  await selectSkin("ice-lake");
+  expect(setting.immersiveSkin).toBe("ice-lake");
+  expect(globalSwitch()).toBeUndefined();
+  expect(status.themeBackgroundMode).toBe("video");
+  expect(status.backgroundImageUrl).toBe("blob:saved");
+  expect(setting.themeGlobalColor).toBe(false);
+
+  await selectSkin("none");
+  expect(setting.immersiveSkin).toBe("none");
+  expect(globalSwitch()?.props).toMatchObject({ value: true, disabled: true });
+  expect(data.clearBackgroundImage).not.toHaveBeenCalled();
+});
 
 it.each([false, true])("选择、更换、清除背景后保留全局着色偏好 %s", async (globalColor) => {
   const { setting, status, globalSwitch, selectVideo, clear } = fixture(globalColor);

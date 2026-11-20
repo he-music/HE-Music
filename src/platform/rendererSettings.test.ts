@@ -49,6 +49,13 @@ describe("rendererSettings", () => {
     );
     expect(() => validateSettingState({ skippedUpdateVersion: 204 })).toThrow();
   });
+  it("persists the immersive skin and defaults to off for older settings", () => {
+    expect(validateSettingState({}).immersiveSkin).toBe("none");
+    const setting = useSettingStore();
+    setting.immersiveSkin = "ice-lake";
+    const saved = serializeRendererSettings(setting.$state, useShortcutStore().$state);
+    expect(validateSettingState(JSON.parse(saved["setting-store"])).immersiveSkin).toBe("ice-lake");
+  });
   it("defaults to preserving audio and persists the strict download preference", () => {
     expect(validateSettingState({}).downloadKeepAudioOnMetadataFailure).toBe(true);
     const setting = useSettingStore();
@@ -161,6 +168,7 @@ describe("rendererSettings", () => {
   });
   it.each<unknown>([
     { themeMode: "invalid" },
+    { immersiveSkin: "invalid" },
     { themeVariant: "invalid" },
     { themeColorType: "invalid" },
     { closeAppMethod: "invalid" },

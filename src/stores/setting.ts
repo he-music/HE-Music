@@ -1,4 +1,5 @@
 import { applicationStorage } from "@/platform/applicationStorage";
+import { getImmersiveSkin, type ImmersiveSkin } from "@/theme/skins";
 import type { PlaybackEngineId } from "@/core/audio-player/IPlaybackEngine";
 import {
   defaultOutputDevices,
@@ -25,6 +26,7 @@ export interface SettingState {
   desktopLyricOptions: DesktopLyricOptions;
   /** 明暗模式 */
   themeMode: "light" | "dark" | "auto";
+  immersiveSkin: ImmersiveSkin;
   themeColorType: ThemeColorType;
   themeCustomColor: string;
   themeGlobalColor: boolean;
@@ -145,6 +147,7 @@ export const createSettingState = (): SettingState => ({
   desktopLyricOptions: createDefaultDesktopLyricOptions(),
   // 个性化
   themeMode: "auto", // 明暗模式
+  immersiveSkin: "none",
   themeColorType: "default", // 主题类别
   themeCustomColor: "#fe7971", // 主题自定义颜色
   themeFollowCover: false, // 主题跟随歌曲封面
@@ -257,6 +260,7 @@ export const createSettingState = (): SettingState => ({
 export const useSettingStore = defineStore("setting", {
   state: createSettingState,
   getters: {
+    activeSkin: (state) => getImmersiveSkin(state.immersiveSkin),
     /**
      * 获取淡入淡出时间
      * @returns 淡入淡出时间

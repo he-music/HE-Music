@@ -3,8 +3,8 @@
   <n-config-provider
     :locale="settingStore.language == 'en' ? enUS : zhCN"
     :date-locale="dateZhCN"
-    :theme="theme"
-    :theme-overrides="themeOverrides"
+    :theme="activeTheme"
+    :theme-overrides="activeThemeOverrides"
     abstract
     inline-theme-disabled
     preflight-style-disabled
@@ -52,6 +52,7 @@ const { locale, t } = useI18n();
 
 const statusStore = useStatusStore();
 const settingStore = useSettingStore();
+const activeSkin = computed(() => settingStore.activeSkin);
 // 自定义背景临时启用全局着色，保留用户在颜色模式下的偏好。
 const isGlobalColor = computed(
   () => statusStore.isCustomBackground || settingStore.themeGlobalColor,
@@ -62,6 +63,14 @@ const osTheme = useOsTheme();
 
 // 全局主题
 const themeOverrides = shallowRef<GlobalThemeOverrides>({});
+const activeThemeOverrides = computed<GlobalThemeOverrides>(() => {
+  const overrides = activeSkin.value?.themeOverrides;
+  if (!overrides) return themeOverrides.value;
+  return {
+    ...overrides,
+    common: { fontFamily: themeOverrides.value.common?.fontFamily, ...overrides.common },
+  };
+});
 // 轻量的 rgba 构造器
 const toRGBA = (rgb: string, alpha: number) => `rgba(${rgb}, ${alpha})`;
 // 主题缓存键
@@ -81,6 +90,11 @@ const theme = computed(() => {
       ? darkTheme
       : null;
 });
+
+const skinThemes = { light: null, dark: darkTheme };
+const activeTheme = computed(() =>
+  activeSkin.value ? skinThemes[activeSkin.value.mode] : theme.value,
+);
 
 // 获取当前主题色数据
 const getThemeMainColor = () => {
@@ -339,13 +353,29 @@ const NaiveProviderContent = defineComponent({
   },
 });
 
-// 应用背景模式类名
+// 文档根节点为主界面和传送到 body 的弹窗提供同一套皮肤变量。
+watch(
+  activeSkin,
+  (skin, _, onCleanup) => {
+    if (!skin) return;
+    const root = document.documentElement;
+    const variables = Object.entries(skin.cssVariables);
+    for (const [name, value] of variables) root.style.setProperty(name, value);
+    root.dataset.skin = skin.id;
+
+    onCleanup(() => {
+      for (const [name] of variables) root.style.removeProperty(name);
+      delete root.dataset.skin;
+    });
+  },
+  { immediate: true },
+);
+
 const applyThemeBackgroundMode = () => {
-  if (statusStore.isCustomBackground) {
-    document.documentElement.classList.add("image");
-  } else {
-    document.documentElement.classList.remove("image");
-  }
+  document.documentElement.classList.toggle(
+    "image",
+    statusStore.isCustomBackground && !activeSkin.value,
+  );
 };
 
 watch(
@@ -366,6 +396,7 @@ watch(
     settingStore.globalFont,
     statusStore.songCoverTheme?.main,
     statusStore.themeBackgroundMode,
+    activeSkin.value,
     statusStore.backgroundConfig.themeColor,
     statusStore.backgroundConfig.useCustomColor,
     statusStore.backgroundConfig.customColor,

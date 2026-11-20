@@ -1,0 +1,78 @@
+:root[data-skin="ice-lake"] body {
+  --skin-scene: url("@/assets/skins/ice-lake.webp") 60% center / cover no-repeat;
+  --skin-ink: #23182d;
+  --skin-chip: #30344a;
+  --skin-edge-tint-rgb: var(--skin-pink);
+  --skin-peach: 255, 185, 158;
+  --skin-pink: 248, 167, 201;
+  --skin-violet: 222, 178, 248;
+  --skin-accent: linear-gradient(
+    105deg,
+    rgb(var(--skin-primary-rgb)),
+    rgb(var(--skin-peach)) 36%,
+    rgb(var(--skin-pink)) 74%,
+    rgb(var(--skin-violet))
+  );
+  --skin-hover: linear-gradient(
+    100deg,
+    rgba(var(--skin-primary-rgb), 0.08),
+    rgba(var(--skin-pink), 0.09) 48%,
+    transparent 90%
+  );
+  --skin-selected: linear-gradient(
+    100deg,
+    rgba(var(--skin-primary-rgb), 0.18),
+    rgba(var(--skin-peach), 0.13) 38%,
+    rgba(var(--skin-pink), 0.1) 76%,
+    rgba(var(--skin-violet), 0.08)
+  );
+  --skin-scene-scrim: linear-gradient(
+    180deg,
+    rgb(9 13 25 / 58%),
+    rgb(9 13 25 / 32%) 53%,
+    rgb(9 13 25 / 64%)
+  );
+  --skin-content: radial-gradient(
+    ellipse at 67% 55%,
+    rgb(12 17 34 / 25%),
+    rgb(12 17 34 / 36%) 48%,
+    rgb(12 17 34 / 62%)
+  );
+  --skin-list-scrim: linear-gradient(
+    180deg,
+    rgb(11 16 31 / 18%),
+    rgb(11 16 31 / 8%) 52%,
+    rgb(11 16 31 / 26%)
+  );
+  --skin-glass-light: rgb(21 27 44 / 59%);
+  --skin-glass-deep: rgb(14 20 37 / 86%);
+  --skin-card-surface: linear-gradient(145deg, rgb(27 35 55 / 93%), rgb(17 23 41 / 94%));
+  --skin-blur: blur(20px);
+  --skin-edge: rgb(223 213 246 / 16%);
+  --skin-row-edge: rgb(223 213 246 / 9%);
+  --skin-focus: #ffe0b5;
+  --skin-rail: rgb(224 227 244 / 28%);
+
+  --skin-sticky-surface: linear-gradient(180deg, rgb(15 20 35 / 94%), rgb(15 20 35 / 86%));
+  --skin-row-scrim-rgb: 10 15 29;
+  --skin-row-edge-opacity: 0.24;
+  --skin-row-center-opacity: 0.06;
+  --skin-row-hover-opacity: 0.22;
+  --skin-row-playing-edge-opacity: 0.5;
+  --skin-row-playing-center-opacity: 0.45;
+  --skin-master-background: #35283b;
+  --skin-master-text: #f1ceba;
+  --skin-play-shine: rgb(255 244 223 / 50%);
+  --skin-markdown-code: #1c2439;
+  --skin-markdown-inline-code: rgb(191 204 236 / 14%);
+
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    --skin-glass-light: #171d31;
+    --skin-glass-deep: #0e1324;
+    --skin-card-surface: linear-gradient(145deg, #202841, #141b2f);
+    --skin-content: linear-gradient(180deg, #11162a, #0e1324);
+    --skin-blur: none;
+    --skin-edge: rgb(223 213 246 / 42%);
+    --skin-sticky-surface: var(--skin-panel);
+  }
+}

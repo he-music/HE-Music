@@ -13,6 +13,9 @@ import { finishStartupLoading } from "./startupLoading";
 import { disposeOverlayHistory } from "@/utils/overlayHistory";
 import "@/style/main.scss";
 import "@/style/animate.scss";
+import "@/style/immersiveSkin.scss";
+
+import.meta.glob("../theme/skins/*.scss", { eager: true });
 
 /** 主窗口保留原有插件和路由初始化顺序。 */
 export async function mountMainWindow(): Promise<void> {

@@ -160,9 +160,17 @@ export const useAppearanceSettings = (): SettingConfig => {
               set: (v) => (settingStore.themeMode = v),
             }),
             forceIf: {
-              condition: () => statusStore.isCustomBackground,
-              forcedValue: "auto",
-              forcedDescription: t("setting.general.theme_mode_disabled"),
+              condition: () => Boolean(settingStore.activeSkin) || statusStore.isCustomBackground,
+              forcedValue: computed(() => settingStore.activeSkin?.mode ?? "auto"),
+              forcedDescription: computed(() => {
+                const skin = settingStore.activeSkin;
+                return skin
+                  ? t("setting.general.theme_mode_skin_disabled", {
+                      skin: t(skin.labelKey),
+                      mode: t(`setting.general.theme_mode_value_${skin.mode}`),
+                    })
+                  : t("setting.general.theme_mode_disabled");
+              }),
             },
           },
           {

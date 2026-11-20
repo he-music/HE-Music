@@ -82,8 +82,7 @@ export const setGlobalColor = (name: string, colorValue: string): void => {
   if (!name.startsWith("--")) {
     throw new Error("Variable name must start with '--'");
   }
-  const root = document.body;
-  root.style.setProperty(name, colorValue);
+  document.documentElement.style.setProperty(name, colorValue);
 };
 
 // 设置动态配色

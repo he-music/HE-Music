@@ -1,4 +1,5 @@
 import { createSettingState, type SettingState } from "@/stores/setting";
+import { immersiveSkins } from "@/theme/skins";
 import { migratePlaybackSettings } from "@/utils/playbackSettings";
 import { createShortcutState, type ShortcutStore, type ShortcutType } from "@/stores/shortcut";
 import type { FontStyleSelection } from "@/types/global";
@@ -63,6 +64,7 @@ const settingSchema: Schema<SettingState> = {
   desktopLyricStyle: (value) => parseDesktopLyricStyle(value) ?? invalid(),
   desktopLyricOptions: (value) => parseDesktopLyricOptions(value) ?? invalid(),
   themeMode: enumeration("light", "dark", "auto"),
+  immersiveSkin: enumeration("none", ...immersiveSkins.map(({ id }) => id)),
   themeColorType: enumeration(
     "default",
     "red",

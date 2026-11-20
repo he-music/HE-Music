@@ -45,7 +45,13 @@
           </div>
           <n-flex :size="4" :wrap="false" class="desc" align="center">
             <!-- 音质 -->
-            <n-tag v-if="quality.name" :bordered="false" :type="quality.type || 'default'" round>
+            <n-tag
+              v-if="quality.name"
+              :data-quality="quality.name"
+              :bordered="false"
+              :type="quality.type || 'default'"
+              round
+            >
               {{ quality.name }}
             </n-tag>
             <slot name="tags" />

@@ -10,6 +10,20 @@
     <div class="config-section">
       <n-card class="set-item">
         <div class="label">
+          <n-text class="name">{{ t("setting.general.theme_skin") }}</n-text>
+        </div>
+        <n-select
+          v-model:value="settingStore.immersiveSkin"
+          :aria-label="t('setting.general.theme_skin')"
+          :options="skinOptions"
+          class="set skin-select"
+          size="small"
+        />
+      </n-card>
+    </div>
+    <div v-if="!settingStore.activeSkin" class="config-section">
+      <n-card class="set-item">
+        <div class="label">
           <n-text class="name">{{ t("setting.general.theme_global_color") }}</n-text>
           <n-text class="tip" :depth="3">{{ t("setting.general.theme_global_color_tip") }}</n-text>
         </div>
@@ -79,7 +93,7 @@
     </div>
     <!-- 颜色模式：选择主题色 -->
     <div
-      v-if="!isCustomBackground"
+      v-if="!settingStore.activeSkin && !isCustomBackground"
       class="color-section"
       :class="{ disabled: settingStore.themeFollowCover }"
     >
@@ -137,7 +151,7 @@
       </div>
     </div>
     <!-- 自定义背景模式：背景配置 -->
-    <div v-else class="config-section">
+    <div v-if="!settingStore.activeSkin && isCustomBackground" class="config-section">
       <n-card class="set-item">
         <div class="label">
           <n-text class="name">{{ t("common.scale") }}</n-text>
@@ -181,7 +195,7 @@
       </n-card>
     </div>
     <!-- 自定义背景模式：选择主题色 -->
-    <div v-if="isCustomBackground" class="color-section">
+    <div v-if="!settingStore.activeSkin && isCustomBackground" class="color-section">
       <n-text class="section-title" :depth="2">{{ t("setting.general.theme_color") }}</n-text>
       <div class="color-grid">
         <!-- 自动提取的颜色 -->
@@ -264,6 +278,7 @@
 
 <script setup lang="ts">
 import { useSettingStore, useStatusStore, useDataStore } from "@/stores";
+import { immersiveSkins } from "@/theme/skins";
 import { useMusicStore } from "@/stores/music";
 import { isEmpty, snakeCase } from "lodash-es";
 import themeColor from "@/assets/data/themeColor.json";
@@ -275,6 +290,10 @@ import blobURLManager from "@/utils/blob";
 const { t } = useI18n();
 const musicStore = useMusicStore();
 const settingStore = useSettingStore();
+const skinOptions = computed(() => [
+  { label: t("setting.general.theme_skin_none"), value: "none" },
+  ...immersiveSkins.map(({ id, labelKey }) => ({ label: t(labelKey), value: id })),
+]);
 const statusStore = useStatusStore();
 const dataStore = useDataStore();
 
@@ -398,6 +417,10 @@ const clearBackgroundImage = async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  .skin-select {
+    width: min(170px, 55%);
+  }
+
   .set-item {
     border-radius: 8px;
     :deep(.n-card-content) {

@@ -1,0 +1,315 @@
+// 皮肤预设通过语义变量提供颜色和材质，界面规则在各皮肤间复用。
+:root[data-skin] body {
+  --skin-base: rgb(var(--skin-base-rgb));
+  --skin-panel: rgb(var(--skin-panel-rgb));
+  --primary: var(--skin-primary-rgb);
+  --primary-hex: rgb(var(--primary));
+  --background: var(--skin-base-rgb);
+  --background-hex: var(--skin-base);
+  --surface-container: var(--skin-panel-rgb);
+  --surface-container-hex: var(--skin-panel);
+  --sticky-surface-background: var(--skin-sticky-surface);
+  --sticky-surface-filter: var(--skin-blur);
+}
+
+:root[data-skin] #app-layout {
+  color: var(--skin-text);
+  background: var(--skin-scene-scrim), var(--skin-scene), var(--skin-base);
+
+  #main,
+  #main-layout {
+    background: transparent;
+  }
+
+  #main-content {
+    background: var(--skin-content);
+  }
+
+  #main-sider,
+  #main-header,
+  > .main-player {
+    --skin-glass-fill: linear-gradient(
+      var(--skin-glass-direction, 180deg),
+      var(--skin-glass-deep),
+      var(--skin-glass-light)
+    );
+
+    background: var(--skin-glass-fill);
+    -webkit-backdrop-filter: var(--skin-blur);
+    backdrop-filter: var(--skin-blur);
+  }
+
+  #main-sider {
+    --skin-glass-direction: 105deg;
+
+    .n-layout-sider__border {
+      background: linear-gradient(
+        180deg,
+        transparent,
+        var(--skin-edge) 34%,
+        rgba(var(--skin-edge-tint-rgb), 0.16) 61%,
+        transparent
+      );
+    }
+
+    .n-menu-item-content--selected::before {
+      background: var(--skin-selected);
+      border-left-color: var(--primary-hex);
+    }
+  }
+
+  #main-header {
+    background:
+      linear-gradient(
+          90deg,
+          transparent,
+          var(--skin-edge) 34%,
+          rgba(var(--skin-edge-tint-rgb), 0.13),
+          transparent
+        )
+        bottom / 100% 1px no-repeat,
+      var(--skin-glass-fill);
+
+    // 毛玻璃让顶栏形成独立的层叠上下文，搜索展开时需置于主内容上方。
+    &:has(.search.focus) {
+      position: relative;
+      z-index: 2;
+    }
+
+    .search-input.n-input {
+      --n-border: 1px solid var(--skin-row-edge);
+      --n-border-hover: 1px solid var(--skin-edge);
+      --n-border-focus: 1px solid rgba(var(--skin-primary-rgb), 0.58);
+      --n-box-shadow-focus: 0 0 0 2px rgba(var(--skin-primary-rgb), 0.13);
+      --n-placeholder-color: var(--skin-secondary);
+
+      background: var(--skin-card-surface);
+    }
+
+    .n-card:is(.search-default, .search-suggest) {
+      background-color: var(--skin-panel);
+      background-image: var(--skin-card-surface);
+      border-color: var(--skin-edge);
+    }
+  }
+
+  #main-content {
+    .song-data-card,
+    .song-page .hero .meta-item,
+    .comprehensive-search .best-match :is(.primary-card, .recommendations) {
+      background-color: var(--skin-panel);
+      background-image: var(--skin-card-surface);
+      border-color: var(--skin-row-edge);
+    }
+
+    .comprehensive-search .best-match .primary-card:hover {
+      background-image: var(--skin-hover), var(--skin-card-surface);
+      border-color: rgba(var(--skin-primary-rgb), 0.35);
+    }
+  }
+
+  .song-list .virtual-list-wrapper {
+    background: var(--skin-list-scrim);
+  }
+
+  .song-list .sticky-header {
+    box-shadow: inset 0 -1px var(--skin-edge);
+
+    .n-text {
+      color: var(--skin-secondary);
+      opacity: 1;
+    }
+  }
+
+  #main-content .song-card .song-content {
+    --skin-row-edge-alpha: var(--skin-row-edge-opacity);
+    --skin-row-center-alpha: var(--skin-row-center-opacity);
+    --skin-row-scrim: linear-gradient(
+      90deg,
+      rgb(var(--skin-row-scrim-rgb) / var(--skin-row-edge-alpha)),
+      rgb(var(--skin-row-scrim-rgb) / var(--skin-row-center-alpha)) 62%,
+      rgb(var(--skin-row-scrim-rgb) / var(--skin-row-edge-alpha))
+    );
+    background: var(--skin-row-highlight, none), var(--skin-row-scrim);
+    border-color: var(--skin-row-border, var(--skin-row-edge));
+    transition: border-color 160ms ease-out;
+
+    .name-text {
+      color: var(--skin-text);
+    }
+
+    &:focus-within {
+      --skin-row-highlight: var(--skin-hover);
+      --skin-row-center-alpha: var(--skin-row-hover-opacity);
+      --skin-row-border: var(--skin-edge);
+    }
+
+    @media (hover: hover) {
+      &:hover {
+        --skin-row-highlight: var(--skin-hover);
+        --skin-row-center-alpha: var(--skin-row-hover-opacity);
+        --skin-row-border: var(--skin-edge);
+      }
+    }
+
+    &.play {
+      --skin-row-highlight: var(--skin-selected);
+      --skin-row-edge-alpha: var(--skin-row-playing-edge-opacity);
+      --skin-row-center-alpha: var(--skin-row-playing-center-opacity);
+      --skin-row-border: rgba(var(--skin-primary-rgb), 0.42);
+
+      box-shadow: inset 2px 0 rgba(var(--skin-primary-rgb), 0.78);
+
+      .name-text {
+        color: var(--primary-hex);
+      }
+    }
+
+    :is(.ar, .alia, .album-text, .meta) {
+      opacity: 1;
+      color: var(--skin-secondary);
+    }
+
+    :is(.ar, .album-text):hover {
+      color: var(--primary-hex);
+    }
+
+    .meta {
+      font-variant-numeric: tabular-nums;
+    }
+  }
+
+  #main-content .song-card.unavailable .name-text {
+    opacity: 1;
+    color: var(--skin-secondary);
+  }
+
+  .song-content .cover,
+  .main-player .play-data .cover {
+    outline: 1px solid var(--skin-edge);
+    outline-offset: -1px;
+  }
+
+  .song-content .desc .n-tag:is([data-quality], .mv) {
+    background-color: var(--skin-chip);
+    color: var(--skin-secondary);
+  }
+
+  .song-content .desc .n-tag[data-quality="MASTER"] {
+    background-color: var(--skin-master-background);
+    box-shadow: inset 0 0 0 1px rgba(var(--skin-edge-tint-rgb), 0.28);
+    color: var(--skin-master-text);
+    font-weight: 600;
+  }
+
+  > .main-player {
+    --skin-glass-direction: 0deg;
+
+    box-shadow: inset 0 1px var(--skin-edge);
+
+    .play-data :is(.name, .lyric) {
+      color: var(--skin-text);
+    }
+
+    :is(.ar-item, .time .n-text) {
+      color: var(--skin-secondary);
+      opacity: 1;
+    }
+
+    .time {
+      font-variant-numeric: tabular-nums;
+    }
+
+    .play-pause {
+      background-image: var(--skin-accent);
+      box-shadow:
+        inset 0 1px var(--skin-play-shine),
+        0 2px 14px rgba(var(--skin-edge-tint-rgb), 0.24);
+
+      .n-icon {
+        color: var(--skin-ink);
+      }
+    }
+
+    .player-slider {
+      .n-slider-rail {
+        background-color: var(--skin-rail);
+      }
+
+      .n-slider-rail__fill {
+        background-image: var(--skin-accent);
+      }
+
+      .n-slider-handle {
+        background-color: var(--primary-hex);
+      }
+    }
+  }
+
+  :is(#main-sider, #main-header, #main-content, .main-player) {
+    :is(button, a, [tabindex]):focus-visible {
+      outline: 2px solid var(--skin-focus);
+      outline-offset: 2px;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    #main-content .song-card .song-content,
+    > .main-player .play-control .play-pause {
+      transition: none;
+    }
+
+    > .main-player .play-control .play-pause:hover {
+      transform: none;
+    }
+  }
+}
+
+:root[data-skin] {
+  .video .player {
+    --plyr-video-background: var(--skin-base);
+
+    background-color: var(--skin-base);
+
+    .player-state {
+      background-color: var(--skin-base);
+      background-image: var(--skin-card-surface);
+    }
+  }
+
+  .video-comments-drawer.n-drawer {
+    background-color: var(--skin-panel);
+  }
+
+  :is(.video .comment, .video-comments-drawer) .comment-list .comments {
+    background-color: var(--skin-panel);
+    background-image: var(--skin-card-surface);
+    border-color: var(--skin-row-edge);
+  }
+}
+
+:root[data-skin] .main-setting {
+  background: var(--skin-base);
+
+  .set-left {
+    background: linear-gradient(105deg, var(--skin-glass-deep), var(--skin-glass-light));
+    box-shadow: inset -1px 0 var(--skin-edge);
+  }
+
+  .set-right {
+    background: var(--skin-content);
+  }
+}
+
+// 更新日志正文沿用卡片底色，表格交替行和代码块用独立深色层。
+:root[data-skin] .update-data .markdown-body {
+  --bgColor-default: transparent !important;
+  --bgColor-muted: var(--skin-markdown-code) !important;
+  --bgColor-neutral-muted: var(--skin-markdown-inline-code);
+  --fgColor-default: var(--skin-text) !important;
+  --fgColor-muted: var(--skin-secondary);
+  --fgColor-accent: var(--primary-hex);
+  --borderColor-default: var(--skin-edge);
+  --borderColor-muted: var(--skin-row-edge);
+  --focus-outlineColor: var(--skin-focus);
+}

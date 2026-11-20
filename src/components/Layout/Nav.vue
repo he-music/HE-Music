@@ -213,6 +213,7 @@ const setOptions = computed<DropdownOption[]>(() => [
           ? t("setting.general.theme_mode_value_dark")
           : t("setting.general.theme_mode_value_auto"),
     key: "themeMode",
+    show: !settingStore.activeSkin,
     icon: renderIcon(
       settingStore.themeMode === "auto"
         ? "LightTheme"

@@ -4,6 +4,7 @@
     <Transition name="fade">
       <div
         v-if="
+          !settingStore.activeSkin &&
           (statusStore.themeBackgroundMode === 'image' ||
             statusStore.themeBackgroundMode === 'video') &&
           statusStore.backgroundImageUrl

@@ -38,7 +38,7 @@ beforeEach(() => {
   setting.themeGlobalColor = false;
   status.isCustomBackground = false;
   setProperty.mockClear();
-  vi.stubGlobal("document", { body: { style: { setProperty } } });
+  vi.stubGlobal("document", { documentElement: { style: { setProperty } } });
 });
 afterEach(() => vi.unstubAllGlobals());
 

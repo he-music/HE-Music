@@ -205,6 +205,7 @@
       />
       <n-drawer
         v-model:show="commentsOpen"
+        class="video-comments-drawer"
         :placement="narrowScreen ? 'bottom' : 'right'"
         :width="420"
         height="60dvh"
