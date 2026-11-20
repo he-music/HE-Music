@@ -1,6 +1,6 @@
 <template>
   <div class="playlist-square platform-page">
-    <PagePlatformTabs :value="platform" @update:value="platformChange">
+    <PagePlatformTabs :value="activePlatform" @update:value="platformChange">
       <n-tab-pane
         v-for="platform in supportPlatforms"
         :key="`playlist-square-${platform.id}`"
@@ -11,7 +11,9 @@
       >
         <PlaylistSquareResult
           :platform="platform.id"
-          :category_id="category_id"
+          :category_id="
+            platform.id === activePlatform ? categoryId : selectedCategories.get(platform.id)
+          "
           @change="tagChange"
         />
       </n-tab-pane>
@@ -33,32 +35,47 @@ const platformStore = usePlatformStore();
 const supportPlatforms = computed<PlatformInfo[]>(
   () => platformStore.featureSupportList(FeatureSupportFlag.GetTagList) || [],
 );
-// 搜索分类
-const platform = computed<string>(() => {
-  // 只有当前路由是 ranking-list 时才返回 platform，否则返回空字符串
-  const currentRoute = router.currentRoute.value;
-  if (currentRoute.name !== "playlist-square") {
-    return "";
-  }
-  return currentRoute.query.platform as string;
+const selectedCategories = reactive(new Map<string, string>());
+const playlistQuery = computed(() => {
+  const route = router.currentRoute.value;
+  return route.name === "playlist-square" ? route.query : {};
 });
-const category_id = computed<string>(() => router.currentRoute.value.query.category_id as string);
+const activePlatform = computed(() => {
+  const value = playlistQuery.value.platform;
+  return typeof value === "string" ? value : undefined;
+});
+const categoryId = computed(() => {
+  const value = playlistQuery.value.category_id;
+  return typeof value === "string" ? value : undefined;
+});
+
+watch(
+  [activePlatform, categoryId],
+  ([platform, category]) => {
+    if (!platform) return;
+    if (category) selectedCategories.set(platform, category);
+    else selectedCategories.delete(platform);
+  },
+  { immediate: true },
+);
 
 const platformChange = (value: string) => {
+  if (value === activePlatform.value) return;
   router.replace({
     name: "playlist-square",
     query: {
       platform: value,
+      category_id: selectedCategories.get(value),
     },
   });
 };
 
-const tagChange = (category_id: string) => {
+const tagChange = (categoryId: string) => {
   router.replace({
     name: "playlist-square",
     query: {
-      platform: platform.value,
-      category_id: category_id,
+      platform: activePlatform.value,
+      category_id: categoryId,
     },
   });
 };
@@ -76,7 +93,7 @@ onBeforeRouteUpdate((to) => {
 onActivated(() => {
   if (
     supportPlatforms.value.length > 0 &&
-    !supportPlatforms.value.find((p) => p.id === platform.value && p.status === 1)
+    !supportPlatforms.value.find((p) => p.id === activePlatform.value && p.status === 1)
   ) {
     platformChange(supportPlatforms.value[0]?.id);
   }
@@ -88,7 +105,7 @@ const watcher = watch(
     watcher.stop();
     if (
       supportPlatforms.value.length > 0 &&
-      !supportPlatforms.value.find((p) => p.id === platform.value && p.status === 1)
+      !supportPlatforms.value.find((p) => p.id === activePlatform.value && p.status === 1)
     ) {
       platformChange(supportPlatforms.value[0]?.id);
     }

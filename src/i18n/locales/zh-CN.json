@@ -618,6 +618,8 @@
   },
   "playlist": {
     "category": "歌单分类",
+    "all_categories": "全部分类",
+    "all_categories_short": "全部",
     "empty_description": "暂无简介",
     "my_collected": "我收藏的",
     "my_created": "我创建的",

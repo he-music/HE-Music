@@ -618,6 +618,8 @@
   },
   "playlist": {
     "category": "Playlist Categories",
+    "all_categories": "All Categories",
+    "all_categories_short": "All",
     "empty_description": "No description",
     "my_collected": "Saved playlists",
     "my_created": "Created playlists",
