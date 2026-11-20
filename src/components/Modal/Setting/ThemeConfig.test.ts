@@ -107,10 +107,14 @@ function fixture(globalColor: boolean, backgroundMode = "color") {
   return { setting, status, data, message, globalSwitch, selectSkin, selectVideo, clear };
 }
 
-it("切换预设皮肤时保留现有自定义背景与全局着色偏好", async () => {
+it.each([
+  ["ice-lake", "dark"],
+  ["apricot-bloom", "light"],
+] as const)("切换预设皮肤 %s 时保留现有自定义背景与全局着色偏好", async (skin, mode) => {
   const { setting, status, data, globalSwitch, selectSkin } = fixture(false, "video");
-  await selectSkin("ice-lake");
-  expect(setting.immersiveSkin).toBe("ice-lake");
+  await selectSkin(skin);
+  expect(setting.immersiveSkin).toBe(skin);
+  expect(setting.activeSkin?.mode).toBe(mode);
   expect(globalSwitch()).toBeUndefined();
   expect(status.themeBackgroundMode).toBe("video");
   expect(status.backgroundImageUrl).toBe("blob:saved");

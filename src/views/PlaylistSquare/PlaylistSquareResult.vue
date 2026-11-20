@@ -151,10 +151,7 @@ watch(() => [props.platform, props.category_id], reset, { immediate: true });
 <style lang="scss" scoped>
 .discover-playlists {
   .menu {
-    padding: 12px 0;
-    .n-button {
-      height: 40px;
-    }
+    padding-block: 8px;
     .n-tabs {
       height: 40px;
       width: 140px;

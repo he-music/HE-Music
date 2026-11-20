@@ -2,12 +2,16 @@
   <div :key="searchKeyword" ref="searchPageRef" class="search">
     <template v-if="!platformStore.loginRequired">
       <div class="search-filters">
-        <n-tabs :value="searchType" class="tabs" type="segment" @update:value="tabChange">
+        <PageTabs :value="searchType" category @update:value="tabChange">
           <n-tab v-for="tab in searchTabs" :key="tab.type" :name="tab.type">
             {{ t(tab.label) }}
           </n-tab>
-        </n-tabs>
-        <n-tabs :value="searchPlatform" class="tabs" type="bar" @update:value="platformChange">
+        </PageTabs>
+        <PageTabs
+          :value="searchPlatform"
+          class="search-platform-tabs"
+          @update:value="platformChange"
+        >
           <n-tab
             v-for="platform in supportedPlatforms"
             :key="platform.id"
@@ -16,7 +20,7 @@
           >
             {{ platform.shortname }}
           </n-tab>
-        </n-tabs>
+        </PageTabs>
       </div>
       <div class="search-results">
         <KeepAlive>
@@ -37,6 +41,7 @@
 <script setup lang="ts">
 import { usePlatformStore } from "@/stores";
 import PlatformAccessEmpty from "@/components/Page/PlatformAccessEmpty.vue";
+import PageTabs from "@/components/Page/PageTabs.vue";
 import Songs from "@/views/Search/songs.vue";
 import Lyrics from "@/views/Search/lyrics.vue";
 import Playlists from "@/views/Search/playlists.vue";
@@ -177,12 +182,8 @@ watch(
     position: sticky;
     top: 0;
     z-index: 20;
-    padding-top: 8px;
-    background: var(--sticky-surface-background, rgb(var(--background)));
-    backdrop-filter: var(--sticky-surface-filter, none);
-  }
-  .tabs {
     width: 100%;
+    background: var(--page-toolbar-background, rgb(var(--background)));
   }
   .search-results {
     padding-top: 12px;

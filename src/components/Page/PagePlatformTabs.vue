@@ -4,13 +4,14 @@
     class="page-platform-tabs"
     :style="{ '--platform-tabs-height': `${platformTabsHeight}px` }"
   >
-    <n-tabs :value="value" type="bar" @update:value="updateValue">
+    <PageTabs :value="value" @update:value="emit('update:value', $event)">
       <slot />
-    </n-tabs>
+    </PageTabs>
   </div>
 </template>
 
 <script setup lang="ts">
+import PageTabs from "./PageTabs.vue";
 const props = defineProps<{ value?: string }>();
 const emit = defineEmits<{ "update:value": [value: string] }>();
 const rootRef = ref<HTMLElement | null>(null);
@@ -22,8 +23,6 @@ const { height: platformTabsHeight } = useElementSize(
   { width: 0, height: 0 },
   { box: "border-box" },
 );
-
-const updateValue = (value: string | number) => emit("update:value", String(value));
 
 watch(
   () => props.value,
@@ -39,21 +38,30 @@ watch(
 .page-platform-tabs {
   width: 100%;
 
-  :deep(> .n-tabs > .n-tabs-nav) {
+  :deep(> .n-tabs > .n-tabs-nav),
+  :deep(.page-filters),
+  :deep(.page-secondary-tabs > .n-tabs-nav) {
     position: sticky;
+    background: var(
+      --page-toolbar-background,
+      var(--sticky-surface-background, rgb(var(--background)))
+    );
+    backdrop-filter: var(--sticky-surface-filter, none);
+  }
+
+  :deep(> .n-tabs > .n-tabs-nav) {
     top: 0;
     z-index: 20;
-    background: var(--sticky-surface-background, rgb(var(--background)));
-    backdrop-filter: var(--sticky-surface-filter, none);
+  }
+
+  :deep(.page-filters) {
+    padding-inline: 16px;
   }
 
   :deep(.page-filters),
   :deep(.page-secondary-tabs > .n-tabs-nav) {
-    position: sticky;
     top: var(--platform-tabs-height);
     z-index: 19;
-    background: var(--sticky-surface-background, rgb(var(--background)));
-    backdrop-filter: var(--sticky-surface-filter, none);
   }
 }
 </style>

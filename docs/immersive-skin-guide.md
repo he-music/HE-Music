@@ -10,7 +10,7 @@
 4. 在 `src/theme/skins/` 增加一份同名 SCSS，把变量定义放在 `:root[data-skin="night-aurora"] body` 下。选择器中的 ID 应与预设一致。主窗口会自动载入这个目录第一层的 `*.scss` 文件。 [样式范例](../src/theme/skins/iceLake.scss) · [主窗口入口](../src/bootstrap/mainWindow.ts)
 5. 在中英文语言文件的 `setting.general` 下添加同一个名称键，例如 `theme_skin_night_aurora`。将预设的 `labelKey` 写成完整路径 `setting.general.theme_skin_night_aurora`。启动后，通过右上角 **设置 → 主题配置 → 沉浸皮肤** 选择新皮肤。 [简体中文](../src/i18n/locales/zh-CN.json) · [English](../src/i18n/locales/en.json)
 
-新皮肤的色值、底图、材质和交互高亮集中在自己的 `.ts` 和 `.scss`。现有页面、布局和控件样式通过共享规则读取变量。若发现多个皮肤都缺少某个区域的覆盖，在共享样式加一条使用语义变量的规则，保持 Vue 组件和主题逻辑按注册表工作。 [共享样式](../src/style/immersiveSkin.scss)
+新皮肤的色值、底图、材质和交互高亮集中在自己的 `.ts` 和 `.scss`。主窗口只绘制一张底图，顶栏、侧栏、内容区和播放栏共用这张图。共享界面调整默认覆盖全部沉浸皮肤。 [共享样式](../src/style/immersiveSkin.scss)
 
 ## 变量怎么填
 
@@ -20,8 +20,8 @@ TypeScript 预设里的 `--skin-primary-rgb`、`--skin-base-rgb` 和 `--skin-pan
 
 | 区域 | 变量 | 调整重点 |
 | --- | --- | --- |
-| 底图与主内容 | `--skin-scene`、`--skin-scene-scrim`、`--skin-content`、`--skin-list-scrim` | `--skin-scene` 填写一层背景，例如 `url("@/assets/skins/night-aurora.webp") 60% center / cover no-repeat`。调整裁切与遮罩，保留风景层次和文字对比。 |
-| 玻璃与边缘 | `--skin-glass-light`、`--skin-glass-deep`、`--skin-blur`、`--skin-edge`、`--skin-row-edge`、`--skin-edge-tint-rgb` | 顶栏、侧栏和播放栏共用材质。边缘色用少量风景色，最后一项使用逗号分隔的 RGB 通道。 |
+| 底图与列表 | `--skin-scene`、`--skin-scene-scrim`、`--skin-list-scrim` | `--skin-scene` 填写一层背景，例如 `url("@/assets/skins/night-aurora.webp") 60% center / cover no-repeat`。用一张底图和一层全窗口遮罩保持画面连续，列表可以增加局部遮罩。 |
+| 设置、置顶区域与边缘 | `--skin-glass-light`、`--skin-glass-deep`、`--skin-settings-surface`、`--skin-blur`、`--skin-edge`、`--skin-row-edge`、`--skin-edge-tint-rgb` | 前三项用于设置弹窗，模糊用于置顶区域。边缘色用少量风景色，最后一项使用逗号分隔的 RGB 通道。 |
 | 卡片与浮层 | `--skin-card-surface`、`--skin-sticky-surface` | 前者用于搜索弹层、歌曲信息、综合搜索实体和评论等卡片。弹层的色层叠在预设的面板底色上。后者用于置顶表头等滚动区域。 |
 | 列表对比与反馈 | `--skin-row-scrim-rgb`、`--skin-row-edge-opacity`、`--skin-row-center-opacity`、`--skin-row-hover-opacity`、`--skin-row-playing-edge-opacity`、`--skin-row-playing-center-opacity`、`--skin-hover`、`--skin-selected` | 行遮罩的 RGB 通道用空格分隔，不透明度在 `0` 到 `1` 之间。可单独加深悬停和播放行，避免背景亮处吞掉歌手、专辑与时长。 |
 | 播放控件 | `--skin-accent`、`--skin-ink`、`--skin-rail`、`--skin-play-shine`、`--skin-focus` | 渐变集中在播放按钮和已播放进度。检查按钮图标和键盘焦点的辨识度。 |
@@ -32,7 +32,7 @@ TypeScript 预设里的 `--skin-primary-rgb`、`--skin-base-rgb` 和 `--skin-pan
 
 ## 验收清单
 
-- [ ] 在桌面和窄屏实际打开皮肤。检查底图裁切、顶栏、侧栏、列表与播放栏，并确认歌名、歌手、专辑、时长和音质标签在底图亮处仍清晰。普通文字以至少 `4.5:1` 的对比度为目标，按背景、遮罩与行状态实际叠加后的颜色检查。
+- [ ] 在桌面和窄屏实际打开皮肤。检查同一张底图在顶栏、侧栏、内容区与播放栏之间是否连续。确认歌名、歌手、专辑、时长和音质标签在底图亮处仍清晰。普通文字以至少 `4.5:1` 的对比度为目标，按背景、遮罩与行状态实际叠加后的颜色检查。
 - [ ] 检查默认搜索面板、搜索建议和综合搜索的匹配卡片。搜索弹层应盖住下方内容，里面的选项能点击。
 - [ ] 检查歌曲详情顶部信息、视频加载层、普通视频评论和沉浸观看评论抽屉。检查「关于」中新版及历史更新日志的正文、链接、表格和代码块。
 - [ ] 刷新后仍选中该皮肤。关闭后恢复原来的明暗模式或自定义背景，切回其他预设时也使用对应配色。

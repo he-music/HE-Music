@@ -8,11 +8,11 @@
   --skin-selected: linear-gradient(100deg, rgb(183 220 157 / 22%), rgb(149 201 176 / 10%) 68%);
   --skin-scene-scrim: linear-gradient(
     180deg,
-    rgb(10 21 17 / 30%),
-    rgb(10 21 17 / 6%) 44%,
-    rgb(10 21 17 / 60%)
+    rgb(10 21 17 / 18%),
+    rgb(10 21 17 / 14%) 44%,
+    rgb(10 21 17 / 23%)
   );
-  --skin-content: radial-gradient(
+  --skin-settings-surface: radial-gradient(
     ellipse at 70% 40%,
     rgb(10 21 17 / 10%),
     rgb(10 21 17 / 26%) 55%,
@@ -45,7 +45,7 @@
     --skin-glass-light: #1d3129;
     --skin-glass-deep: #101f19;
     --skin-card-surface: linear-gradient(145deg, #253d32, #13251d);
-    --skin-content: linear-gradient(180deg, #162820, #0e1d17);
+    --skin-settings-surface: linear-gradient(180deg, #162820, #0e1d17);
     --skin-blur: none;
     --skin-edge: rgb(182 218 198 / 48%);
     --skin-row-edge: rgb(182 218 198 / 34%);

@@ -49,13 +49,16 @@ describe("rendererSettings", () => {
     );
     expect(() => validateSettingState({ skippedUpdateVersion: 204 })).toThrow();
   });
-  it("persists the immersive skin and defaults to off for older settings", () => {
-    expect(validateSettingState({}).immersiveSkin).toBe("none");
-    const setting = useSettingStore();
-    setting.immersiveSkin = "ice-lake";
-    const saved = serializeRendererSettings(setting.$state, useShortcutStore().$state);
-    expect(validateSettingState(JSON.parse(saved["setting-store"])).immersiveSkin).toBe("ice-lake");
-  });
+  it.each(["ice-lake", "apricot-bloom"] as const)(
+    "persists immersive skin %s and defaults to off for older settings",
+    (skin) => {
+      expect(validateSettingState({}).immersiveSkin).toBe("none");
+      const setting = useSettingStore();
+      setting.immersiveSkin = skin;
+      const saved = serializeRendererSettings(setting.$state, useShortcutStore().$state);
+      expect(validateSettingState(JSON.parse(saved["setting-store"])).immersiveSkin).toBe(skin);
+    },
+  );
   it("defaults to preserving audio and persists the strict download preference", () => {
     expect(validateSettingState({}).downloadKeepAudioOnMetadataFailure).toBe(true);
     const setting = useSettingStore();

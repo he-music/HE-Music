@@ -1,6 +1,6 @@
 <template>
   <AsyncContent class="radio" :failed="failed" :loading="loading" @retry="retry">
-    <n-tabs v-if="!loading" v-model:value="tabValue" class="tabs page-secondary-tabs" type="card">
+    <PageTabs v-if="!loading" v-model:value="tabValue" category class="tabs page-secondary-tabs">
       <n-tab-pane
         v-for="tab in radioListData"
         :key="`radio-group-${props.platform}-${tab.name}`"
@@ -10,13 +10,13 @@
       >
         <RadioList :data="tab.radios" />
       </n-tab-pane>
-    </n-tabs>
+    </PageTabs>
     <div v-else class="skeleton-container" aria-hidden="true" inert>
-      <n-tabs :value="0" class="tabs page-secondary-tabs" type="card">
+      <PageTabs value="0" category class="tabs page-secondary-tabs">
         <n-tab-pane
           v-for="(width, index) in categorySkeletonWidths"
           :key="index"
-          :name="index"
+          :name="String(index)"
           display-directive="show:lazy"
         >
           <template #tab>
@@ -26,13 +26,14 @@
           </template>
           <RadioList :data="[]" loading />
         </n-tab-pane>
-      </n-tabs>
+      </PageTabs>
     </div>
   </AsyncContent>
 </template>
 
 <script setup lang="ts">
 import AsyncContent from "@/components/Page/AsyncContent.vue";
+import PageTabs from "@/components/Page/PageTabs.vue";
 import { useAsyncRequest } from "@/composables/useAsyncRequest";
 import type { RadioInfo } from "@/types/main.hemusic";
 

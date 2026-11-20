@@ -16,32 +16,27 @@
   color: var(--skin-text);
   background: var(--skin-scene-scrim), var(--skin-scene), var(--skin-base);
 
+  // 主界面的各区域共用窗口底图，保留卡片、浮层和控件自己的材质。
   #main,
-  #main-layout {
-    background: transparent;
-  }
-
-  #main-content {
-    background: var(--skin-content);
-  }
-
+  #main-layout,
+  #main-content,
   #main-sider,
   #main-header,
   > .main-player {
-    --skin-glass-fill: linear-gradient(
-      var(--skin-glass-direction, 180deg),
-      var(--skin-glass-deep),
-      var(--skin-glass-light)
-    );
+    background: transparent;
+  }
 
-    background: var(--skin-glass-fill);
-    -webkit-backdrop-filter: var(--skin-blur);
-    backdrop-filter: var(--skin-blur);
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    background: var(--skin-base);
+
+    #main-sider,
+    #main-header,
+    > .main-player {
+      background-color: var(--skin-panel);
+    }
   }
 
   #main-sider {
-    --skin-glass-direction: 105deg;
-
     .n-layout-sider__border {
       background: linear-gradient(
         180deg,
@@ -59,22 +54,16 @@
   }
 
   #main-header {
-    background:
-      linear-gradient(
-          90deg,
-          transparent,
-          var(--skin-edge) 34%,
-          rgba(var(--skin-edge-tint-rgb), 0.13),
-          transparent
-        )
-        bottom / 100% 1px no-repeat,
-      var(--skin-glass-fill);
-
-    // 毛玻璃让顶栏形成独立的层叠上下文，搜索展开时需置于主内容上方。
-    &:has(.search.focus) {
-      position: relative;
-      z-index: 2;
-    }
+    background-image: linear-gradient(
+      90deg,
+      transparent,
+      var(--skin-edge) 34%,
+      rgba(var(--skin-edge-tint-rgb), 0.13),
+      transparent
+    );
+    background-position: bottom;
+    background-repeat: no-repeat;
+    background-size: 100% 1px;
 
     .search-input.n-input {
       --n-border: 1px solid var(--skin-row-edge);
@@ -94,6 +83,18 @@
   }
 
   #main-content {
+    .page-platform-tabs {
+      --page-toolbar-background: rgba(var(--skin-panel-rgb), 0.56);
+
+      @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+        --page-toolbar-background: var(--skin-panel);
+      }
+    }
+
+    .search-filters {
+      --page-toolbar-background: var(--skin-panel);
+    }
+
     .song-data-card,
     .song-page .hero .meta-item,
     .comprehensive-search .best-match :is(.primary-card, .recommendations) {
@@ -203,8 +204,6 @@
   }
 
   > .main-player {
-    --skin-glass-direction: 0deg;
-
     box-shadow: inset 0 1px var(--skin-edge);
 
     .play-data :is(.name, .lyric) {
@@ -297,7 +296,7 @@
   }
 
   .set-right {
-    background: var(--skin-content);
+    background: var(--skin-settings-surface);
   }
 }
 

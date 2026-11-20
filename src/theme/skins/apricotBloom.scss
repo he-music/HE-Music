@@ -1,0 +1,55 @@
+:root[data-skin="apricot-bloom"] body {
+  // 整个窗口共用同一处裁切，让花枝延伸到顶栏、侧栏和播放条。
+  --skin-scene-x: 56%;
+  --skin-scene: url("@/assets/skins/apricot-bloom.webp") var(--skin-scene-x) top / max(100%, 290vh)
+    auto no-repeat;
+  --skin-ink: #fff;
+  --skin-chip: #f3e7e5;
+  --skin-edge-tint-rgb: 154, 91, 99;
+  --skin-accent: linear-gradient(105deg, rgb(var(--skin-primary-rgb)), #985039);
+  --skin-hover: linear-gradient(100deg, rgb(125 56 71 / 9%), rgb(152 80 57 / 4%) 76%);
+  --skin-selected: linear-gradient(100deg, rgb(125 56 71 / 15%), rgb(152 80 57 / 8%) 76%);
+  --skin-scene-scrim: linear-gradient(
+    180deg,
+    rgb(255 249 239 / 64%),
+    rgb(255 248 240 / 56%) 48%,
+    rgb(250 244 236 / 62%)
+  );
+  --skin-settings-surface: linear-gradient(105deg, #fffcf6, #fff8f0);
+  --skin-list-scrim: linear-gradient(180deg, rgb(255 252 247 / 30%), rgb(255 252 247 / 13%));
+  --skin-glass-light: rgb(251 242 233 / 79%);
+  --skin-glass-deep: rgb(255 252 247 / 94%);
+  --skin-card-surface: linear-gradient(145deg, #fffcf8, #f8efe7);
+  --skin-blur: blur(18px);
+  --skin-edge: rgb(119 72 79 / 27%);
+  --skin-row-edge: rgb(119 72 79 / 16%);
+  --skin-focus: #773247;
+  --skin-rail: #9a7780;
+
+  --skin-sticky-surface: linear-gradient(180deg, rgb(255 251 245 / 98%), rgb(250 241 233 / 95%));
+  --skin-row-scrim-rgb: 255 252 247;
+  --skin-row-edge-opacity: 0.76;
+  --skin-row-center-opacity: 0.52;
+  --skin-row-hover-opacity: 0.86;
+  --skin-row-playing-edge-opacity: 0.96;
+  --skin-row-playing-center-opacity: 0.9;
+  --skin-master-background: #efdfcc;
+  --skin-master-text: #624526;
+  --skin-play-shine: rgb(255 255 255 / 40%);
+  --skin-markdown-code: #f4e9df;
+  --skin-markdown-inline-code: rgb(125 56 71 / 10%);
+
+  @media (max-width: 639px) {
+    --skin-scene-x: 74%;
+  }
+
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    --skin-glass-light: #f8ede4;
+    --skin-glass-deep: #fffcf7;
+    --skin-settings-surface: linear-gradient(105deg, #fffcf7, #f9eee6);
+    --skin-blur: none;
+    --skin-edge: rgb(119 72 79 / 57%);
+    --skin-row-edge: rgb(119 72 79 / 43%);
+    --skin-sticky-surface: var(--skin-panel);
+  }
+}

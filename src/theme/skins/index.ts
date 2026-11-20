@@ -1,4 +1,5 @@
 import type { GlobalThemeOverrides } from "naive-ui";
+import { apricotBloom } from "./apricotBloom";
 import { iceLake } from "./iceLake";
 import { pineAfterRain } from "./pineAfterRain";
 
@@ -13,6 +14,7 @@ interface ImmersiveSkinPreset {
 export const immersiveSkins = [
   iceLake,
   pineAfterRain,
+  apricotBloom,
 ] as const satisfies readonly ImmersiveSkinPreset[];
 export type ImmersiveSkin = "none" | (typeof immersiveSkins)[number]["id"];
 

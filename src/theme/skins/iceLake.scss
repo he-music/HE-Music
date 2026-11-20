@@ -28,11 +28,11 @@
   );
   --skin-scene-scrim: linear-gradient(
     180deg,
-    rgb(9 13 25 / 58%),
-    rgb(9 13 25 / 32%) 53%,
-    rgb(9 13 25 / 64%)
+    rgb(9 13 25 / 24%),
+    rgb(9 13 25 / 49%) 54%,
+    rgb(9 13 25 / 31%)
   );
-  --skin-content: radial-gradient(
+  --skin-settings-surface: radial-gradient(
     ellipse at 67% 55%,
     rgb(12 17 34 / 25%),
     rgb(12 17 34 / 36%) 48%,
@@ -70,7 +70,7 @@
     --skin-glass-light: #171d31;
     --skin-glass-deep: #0e1324;
     --skin-card-surface: linear-gradient(145deg, #202841, #141b2f);
-    --skin-content: linear-gradient(180deg, #11162a, #0e1324);
+    --skin-settings-surface: linear-gradient(180deg, #11162a, #0e1324);
     --skin-blur: none;
     --skin-edge: rgb(223 213 246 / 42%);
     --skin-sticky-surface: var(--skin-panel);
