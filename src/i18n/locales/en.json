@@ -756,6 +756,7 @@
       "theme_skin": "Immersive skin",
       "theme_skin_none": "Off",
       "theme_skin_ice_lake": "Ice Lake at Dusk",
+      "theme_skin_pine_after_rain": "Pines After Rain",
       "theme_mode_skin_disabled": "{skin} uses {mode}.",
       "theme_config_tip": "Choose an immersive skin, theme color, or custom background",
       "theme_follow_cover": "Dynamic Color from Cover",

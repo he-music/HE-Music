@@ -1,0 +1,54 @@
+:root[data-skin="pine-after-rain"] body {
+  --skin-scene: url("@/assets/skins/pine-after-rain.webp") 64% center / cover no-repeat;
+  --skin-ink: #102117;
+  --skin-chip: #2c4338;
+  --skin-edge-tint-rgb: 149, 201, 176;
+  --skin-accent: linear-gradient(105deg, rgb(var(--skin-primary-rgb)), #97d0b5);
+  --skin-hover: linear-gradient(100deg, rgb(183 220 157 / 12%), rgb(149 201 176 / 7%) 65%);
+  --skin-selected: linear-gradient(100deg, rgb(183 220 157 / 22%), rgb(149 201 176 / 10%) 68%);
+  --skin-scene-scrim: linear-gradient(
+    180deg,
+    rgb(10 21 17 / 30%),
+    rgb(10 21 17 / 6%) 44%,
+    rgb(10 21 17 / 60%)
+  );
+  --skin-content: radial-gradient(
+    ellipse at 70% 40%,
+    rgb(10 21 17 / 10%),
+    rgb(10 21 17 / 26%) 55%,
+    rgb(10 21 17 / 52%)
+  );
+  --skin-list-scrim: linear-gradient(180deg, rgb(10 21 17 / 22%), rgb(10 21 17 / 12%) 52%);
+  --skin-glass-light: rgb(27 47 39 / 54%);
+  --skin-glass-deep: rgb(13 27 22 / 87%);
+  --skin-card-surface: linear-gradient(145deg, rgb(34 56 46 / 96%), rgb(19 34 28 / 97%));
+  --skin-blur: blur(18px);
+  --skin-edge: rgb(182 218 198 / 23%);
+  --skin-row-edge: rgb(182 218 198 / 12%);
+  --skin-focus: #d7efc0;
+  --skin-rail: rgb(186 223 199 / 32%);
+
+  --skin-sticky-surface: linear-gradient(180deg, rgb(17 33 26 / 96%), rgb(17 33 26 / 90%));
+  --skin-row-scrim-rgb: 10 21 17;
+  --skin-row-edge-opacity: 0.34;
+  --skin-row-center-opacity: 0.32;
+  --skin-row-hover-opacity: 0.45;
+  --skin-row-playing-edge-opacity: 0.57;
+  --skin-row-playing-center-opacity: 0.49;
+  --skin-master-background: #3b4331;
+  --skin-master-text: #d9e6b9;
+  --skin-play-shine: rgb(239 255 220 / 60%);
+  --skin-markdown-code: #243a30;
+  --skin-markdown-inline-code: rgb(186 223 199 / 14%);
+
+  @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+    --skin-glass-light: #1d3129;
+    --skin-glass-deep: #101f19;
+    --skin-card-surface: linear-gradient(145deg, #253d32, #13251d);
+    --skin-content: linear-gradient(180deg, #162820, #0e1d17);
+    --skin-blur: none;
+    --skin-edge: rgb(182 218 198 / 48%);
+    --skin-row-edge: rgb(182 218 198 / 34%);
+    --skin-sticky-surface: var(--skin-panel);
+  }
+}
