@@ -841,7 +841,7 @@ export const DesktopLog = {
 
 /**
  * DesktopLyrics owns an independent web window with a native external unlock path.
- * It never owns audio, claims lifecycle readiness, writes settings, or accepts arbitrary IPC.
+ * It never owns audio, claims lifecycle readiness, or accepts arbitrary IPC.
  */
 export const DesktopLyrics = {
   /**
