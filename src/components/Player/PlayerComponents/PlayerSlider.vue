@@ -13,6 +13,7 @@
     @mouseleave="showSliderTooltip = false"
     @dragstart="startDrag"
     @dragend="endDrag"
+    @touchcancel="cancelDrag"
   />
 </template>
 
@@ -20,6 +21,7 @@
 import { useStatusStore } from "@/stores";
 import { msToTime } from "@/utils/time";
 import { usePlayer } from "@/utils/player";
+import { useEventListener } from "@vueuse/core";
 
 withDefaults(defineProps<{ showTooltip?: boolean }>(), { showTooltip: true });
 
@@ -30,6 +32,7 @@ const statusStore = useStatusStore();
 const dragValue = ref(0);
 // 是否拖动
 const isDragging = ref(false);
+let finishDrag: ReturnType<typeof player.beginProgressDrag> | undefined;
 // 是否显示提示
 const showSliderTooltip = ref(false);
 
@@ -59,14 +62,23 @@ const startDrag = () => {
   isDragging.value = true;
   // 立即赋值当前时间
   dragValue.value = statusStore.currentTime;
+  finishDrag = player.beginProgressDrag();
 };
 
-// 结束拖拽
-const endDrag = () => {
+const finishPointerDrag = (time?: number) => {
   isDragging.value = false;
-  // 直接更改进度
-  player.setSeek(dragValue.value);
+  const finish = finishDrag;
+  finishDrag = undefined;
+  finish?.(time);
 };
+
+const endDrag = () => finishPointerDrag(dragValue.value);
+const cancelDrag = () => {
+  showSliderTooltip.value = false;
+  finishPointerDrag();
+};
+useEventListener(window, "blur", cancelDrag);
+onBeforeUnmount(cancelDrag);
 
 // 格式化提示
 const formatTooltip = (value: number) => {

@@ -44,6 +44,7 @@ type ScanEntry struct {
 	Filename     string        `json:"filename"`
 	Size         int64         `json:"size"`
 	Metadata     metadata.Info `json:"metadata"`
+	Cue          *CueSheet     `json:"cue,omitzero"`
 }
 type ScanIssue struct {
 	RelativePath string `json:"relativePath"`
@@ -280,8 +281,7 @@ func (j *fileScan) run() {
 	defer j.lease.Release()
 	defer close(j.queue)
 	items := 0
-	var bytes int64
-	j.walk("", 0, &items, &bytes)
+	j.walk("", 0, &items)
 	if j.ctx.Err() == nil {
 		if err := flushLibraryIndex(); err != nil {
 			j.issue("", "index-save-failed")
@@ -289,7 +289,7 @@ func (j *fileScan) run() {
 	}
 }
 
-func (j *fileScan) walk(relative string, depth int, items *int, bytes *int64) bool {
+func (j *fileScan) walk(relative string, depth int, items *int) bool {
 	if j.ctx.Err() != nil {
 		return false
 	}
@@ -320,6 +320,7 @@ func (j *fileScan) walk(relative string, depth int, items *int, bytes *int64) bo
 	if err != nil || !os.SameFile(before, after) {
 		return j.issue(relative, "changed")
 	}
+	cues := j.directoryCues(dir, relative, scanMaxItems-*items)
 	file, err := dir.Open(".")
 	if err != nil {
 		return j.issue(relative, "read-directory")
@@ -331,7 +332,7 @@ func (j *fileScan) walk(relative string, depth int, items *int, bytes *int64) bo
 		}
 		entries, readErr := file.ReadDir(scanPageSize)
 		for _, entry := range entries {
-			if !j.scanEntry(relative, depth, entry, items, bytes) {
+			if !j.scanEntry(relative, depth, entry, items, cues) {
 				return false
 			}
 		}
@@ -344,7 +345,7 @@ func (j *fileScan) walk(relative string, depth int, items *int, bytes *int64) bo
 	}
 }
 
-func (j *fileScan) scanEntry(relative string, depth int, entry os.DirEntry, items *int, bytes *int64) bool {
+func (j *fileScan) scanEntry(relative string, depth int, entry os.DirEntry, items *int, cues map[string]*CueSheet) bool {
 	if strings.HasPrefix(entry.Name(), metadataPrivatePrefix) || strings.HasPrefix(entry.Name(), downloadPrivatePrefix) {
 		return true
 	}
@@ -374,15 +375,15 @@ func (j *fileScan) scanEntry(relative string, depth int, entry os.DirEntry, item
 		if depth >= scanMaxDepth {
 			return j.issue(rel, "depth-limit")
 		}
-		return j.walk(rel, depth+1, items, bytes)
+		return j.walk(rel, depth+1, items)
 	}
 	if !info.Mode().IsRegular() {
 		return j.issue(rel, "special-file")
 	}
-	return j.scanFile(rel, entry.Name(), bytes)
+	return j.scanFile(rel, entry.Name(), cues[entry.Name()])
 }
 
-func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
+func (j *fileScan) scanFile(relative, filename string, cue *CueSheet) bool {
 	// Match the Electron audio glob before parsing or consulting a legacy index.
 	// Traversal remains bound to the authorized directory lease.
 	matched, err := doublestar.Match(scanAudioGlobPattern, strings.ToLower(relative))
@@ -439,6 +440,7 @@ func (j *fileScan) scanFile(relative, filename string, bytes *int64) bool {
 		Filename:     filename,
 		Size:         before.Size(),
 		Metadata:     info,
+		Cue:          cueWithinDuration(cue, info.DurationSeconds),
 	}})
 }
 

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { shallowRef } from "vue";
 import { FilesSession } from "./filesSession";
 import { LocalFilesSession, localSongID, nativeLocalEntry } from "./localFilesSession";
+import { createLibrarySongRows } from "./librarySongRows";
 import type { PlatformFiles } from "./files";
 import type { ScanEntry, ScanPage } from "./mygo.bindings";
 
@@ -84,6 +85,46 @@ async function flush() {
 }
 
 describe("LocalFilesSession", () => {
+  it("lists each CUE track but resolves it and the original song ID to the same current file", async () => {
+    const f = await fixture();
+    const file = entry();
+    file.cue = {
+      title: "整轨专辑",
+      performer: "专辑歌手",
+      tracks: [
+        { number: 1, title: "第一轨", startFrame: 0 },
+        { number: 3, title: "第三轨", performer: "轨道歌手", startFrame: 100 },
+      ],
+    };
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce(page([file]));
+    const rows = createLibrarySongRows(f.local.entries);
+    await f.local.scan();
+    const base = localSongID(file);
+    expect(rows.value).toEqual([
+      expect.objectContaining({
+        id: base + ":cue:1",
+        name: "第一轨",
+        artists: "专辑歌手",
+        duration: 100 / 75,
+      }),
+      expect.objectContaining({
+        id: base + ":cue:3",
+        subtitle: "03",
+        name: "第三轨",
+        artists: "轨道歌手",
+        album: "整轨专辑",
+        duration: expect.closeTo(2 / 3),
+      }),
+    ]);
+    expect(nativeLocalEntry(base)).toBe(file);
+    expect(nativeLocalEntry(rows.value[1].id)).toBe(file);
+
+    const withoutCue = entry();
+    vi.mocked(f.provider.readScanPage!).mockResolvedValueOnce(page([withoutCue]));
+    await f.local.scan(undefined, true);
+    expect(nativeLocalEntry(base + ":cue:3")).toBeUndefined();
+    expect(rows.value.map((song) => song.id)).toEqual([base]);
+  });
   it("publishes a native-confirmed download immediately and retains it across partial scans", async () => {
     const f = await fixture();
     const file = entry();

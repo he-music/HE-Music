@@ -5,6 +5,7 @@ import { type LyricLine } from "@applemusic-like-lyrics/lyric";
 import { isWordLyric, parseLineLyric, parseWordLyric, splitLocalLyrics } from "@/utils/lyric";
 import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
+import { isCueTrack } from "@/platform/cueTracks";
 import { filesSession } from "@/platform/filesSession";
 import { readLocalLyrics } from "@/platform/localResource";
 import type { ScanEntry } from "@/platform/mygo.bindings";
@@ -52,6 +53,8 @@ class LyricManager {
     songID: string,
     downloadedEntry?: ScanEntry,
   ): Promise<SongLyric> {
+    // 整轨的旁挂歌词没有分轨映射，不能当作每首曲目从零开始的歌词。
+    if (isCueTrack(songID)) return { lrcData: [], yrcData: [] };
     try {
       const entry = downloadedEntry ?? nativeLocalEntry(songID);
       const owner = filesSession.value;

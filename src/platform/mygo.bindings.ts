@@ -35,6 +35,20 @@ export interface ControlSession {
   port: number;
 }
 
+export interface CueSheet {
+  title?: string;
+  performer?: string;
+  tracks: CueTrack[];
+}
+
+/** CueTrack is a section of the authorized audio file, not a separate file. */
+export interface CueTrack {
+  number: number;
+  title?: string;
+  performer?: string;
+  startFrame: number;
+}
+
 export type DefaultDirectoryKind = "music" | "downloads";
 
 export interface DefaultDirectoryResult {
@@ -526,6 +540,7 @@ export interface ScanEntry {
   filename: string;
   size: number;
   metadata: Info;
+  cue?: CueSheet;
 }
 
 export interface ScanIssue {

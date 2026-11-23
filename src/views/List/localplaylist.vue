@@ -222,7 +222,12 @@ const songs = computed(
   () => playlist.value?.songs.map((song) => byID.value.get(song.id) ?? song) ?? [],
 );
 const unavailableSongIDs = computed(
-  () => new Set(songs.value.filter((song) => !byID.value.has(song.id)).map((song) => song.id)),
+  () =>
+    new Set(
+      songs.value
+        .filter((song) => !byID.value.has(song.id) && !localFilesSession.value?.findEntry(song.id))
+        .map((song) => song.id),
+    ),
 );
 const searchResults = useSongSearch(songs, search);
 const visibleSongs = computed(() => (search.value.trim() ? searchResults.value : songs.value));

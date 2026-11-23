@@ -184,7 +184,10 @@ const playFiltered = () => {
 const scan = () => void session.value?.scan();
 const allMusicSize = computed(() =>
   Number(
-    (allSongs.value.reduce((total, song) => total + (song.size || 0), 0) / 1024 ** 3).toFixed(2),
+    (
+      (session.value?.entries.value.reduce((total, entry) => total + entry.size, 0) ?? 0) /
+      1024 ** 3
+    ).toFixed(2),
   ),
 );
 const moreOptions = computed<DropdownOption[]>(() => [

@@ -160,6 +160,11 @@ func TestMpvBundledProductionGatewayContainers(t *testing.T) {
 	if output, err := generate.CombinedOutput(); err != nil {
 		t.Fatalf("生成 WebM 音频: %v\n%s", err, output)
 	}
+	flac := filepath.Join(directory, "合成.flac")
+	generate = exec.CommandContext(t.Context(), "ffmpeg", "-hide_banner", "-loglevel", "error", "-i", filepath.Join(directory, "合成 sample.wav"), "-c:a", "flac", flac)
+	if output, err := generate.CombinedOutput(); err != nil {
+		t.Fatalf("生成 FLAC 音频: %v\n%s", err, output)
+	}
 	upstream := httptest.NewServer(http.FileServer(http.Dir(directory)))
 	t.Cleanup(upstream.Close)
 	prefix, err := newDirectoryToken()
@@ -180,13 +185,19 @@ func TestMpvBundledProductionGatewayContainers(t *testing.T) {
 	s.mu.Unlock()
 	requireTestNoError(t, err)
 	t.Cleanup(func() { s.mu.Lock(); s.destroyLocked(); s.mu.Unlock() })
-	for _, name := range []string{"合成 sample.wav", "合成.dsf", "合成.dff", "合成.webm"} {
-		t.Run(filepath.Ext(name), func(t *testing.T) {
+	for _, fixture := range []struct {
+		name  string
+		start float64
+	}{
+		{"合成 sample.wav", 1.5}, {"合成.flac", 1.5}, {"合成.dsf", 0}, {"合成.dff", 0}, {"合成.webm", 0},
+	} {
+		t.Run(filepath.Ext(fixture.name), func(t *testing.T) {
 			// owner context 与初始化一致；子测试的 context 不能冒充会话 owner。
 			ctx := s.owner
 			loaded, err := p.Load(ctx, lifecycle, MpvLoadRequest{
-				URL:    server.URL + gateway.prefix + "/__proxy/" + upstream.URL + "/" + url.PathEscape(name),
-				Format: strings.TrimPrefix(filepath.Ext(name), "."),
+				URL:    server.URL + gateway.prefix + "/__proxy/" + upstream.URL + "/" + url.PathEscape(fixture.name),
+				Format: strings.TrimPrefix(filepath.Ext(fixture.name), "."),
+				Start:  fixture.start,
 			})
 			requireTestNoError(t, err)
 			wait := func(label string, predicate func(MpvSnapshot) bool) {
@@ -206,8 +217,12 @@ func TestMpvBundledProductionGatewayContainers(t *testing.T) {
 				t.Fatalf("等待 %s 超时", label)
 			}
 			wait("暂停载入", func(value MpvSnapshot) bool { return value.State == "paused" && value.Duration > 5.5 })
+			if fixture.start > 0 {
+				// 等效于从整轨 CUE 的非首轨开始；验证引擎的文件起点 seek。
+				wait("从文件中段开始", func(value MpvSnapshot) bool { return math.Abs(value.Position-fixture.start) < 0.3 })
+			}
 			requireTestNoError(t, p.Play(ctx, lifecycle, loaded.Session))
-			wait("生产播放时钟", func(value MpvSnapshot) bool { return value.Position > 0.3 })
+			wait("生产播放时钟", func(value MpvSnapshot) bool { return value.Position > fixture.start+0.3 })
 			requireTestNoError(t, p.Pause(ctx, lifecycle, loaded.Session))
 			requireTestNoError(t, p.Seek(ctx, lifecycle, loaded.Session, 3))
 			wait("生产 seek", func(value MpvSnapshot) bool { return math.Abs(value.Position-3) < 0.3 })

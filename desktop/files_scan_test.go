@@ -375,8 +375,8 @@ func TestScanLimitsAndBoundedMetadata(t *testing.T) {
 		t.Fatal(err)
 	}
 	job := &fileScan{state: actor.state, lease: lease, ctx: lease.Context(), queue: make(chan scanEvent, 2)}
-	items, bytes := scanMaxItems, int64(1<<40)
-	if job.walk("", 0, &items, &bytes) {
+	items := scanMaxItems
+	if job.walk("", 0, &items) {
 		t.Fatal("item limit ignored")
 	}
 	event := <-job.queue

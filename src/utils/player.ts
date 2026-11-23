@@ -12,7 +12,9 @@ import {
   registerLocalAudioStopper,
   type LocalAudioBlockTarget,
 } from "@/platform/localAudioSession";
-import { nativeLocalEntry } from "@/platform/localFilesSession";
+import { localSongID, nativeLocalEntry } from "@/platform/localFilesSession";
+import { cueRangeFor, type CueRange } from "@/platform/cueTracks";
+import type { ScanEntry } from "@/platform/mygo.bindings";
 import lyricManager from "./lyricManager";
 import audioManager, { AudioEventType } from "./audioManager";
 import type { AudioSourceInfo } from "./audioCapability";
@@ -32,6 +34,13 @@ import { resolveDownloadedPlayback, type DownloadedPlayback } from "@/platform/d
 import { gatewayProxyUrl } from "@/platform/gateway";
 
 class PlaybackOutputError extends Error {}
+
+interface CuePlayback {
+  entry: ScanEntry;
+  range: CueRange;
+  seekTarget?: number;
+  stoppedAtEnd: boolean;
+}
 /**
  * 播放器核心
  * 基于 AudioManager 实现
@@ -39,6 +48,9 @@ class PlaybackOutputError extends Error {}
 class Player {
   private readonly mediaSession = new BrowserMediaSession();
   private downloadedPlayback?: DownloadedPlayback;
+  private cuePlayback?: CuePlayback;
+  private cueScrub?: { ended: boolean };
+  private cueTimer: ReturnType<typeof setTimeout> | undefined;
   private readonly failedDownloads = new Set<string>();
   /** 自动关闭定时器 */
   private autoCloseInterval: ReturnType<typeof setInterval> | undefined;
@@ -114,6 +126,7 @@ class Player {
         return;
       ++this.playRequestId;
       this.downloadedPlayback = undefined;
+      this.clearCuePlayback();
       this.recovery.closeMpvDialog();
       this.recovery.clearAttempt();
       this.pendingAutoPlay = undefined;
@@ -180,6 +193,7 @@ class Player {
       const statusStore = useStatusStore();
       statusStore.playStatus = true;
       statusStore.playLoading = false;
+      this.scheduleCueBoundary();
     };
     audioManager.on("playing", playingCallback);
     this.eventCallbacks.set("playing", playingCallback);
@@ -188,6 +202,7 @@ class Player {
       // A stalled network request can coexist with enough buffered audio.
       if (event.type === "stalled" && audioManager.readyState >= 3) return;
       useStatusStore().playLoading = true;
+      this.cancelCueTimer();
     };
     for (const event of ["waiting", "stalled"] as const) {
       audioManager.on(event, bufferingCallback);
@@ -195,6 +210,7 @@ class Player {
     }
     // 暂停
     const pauseCallback = () => {
+      this.cancelCueTimer();
       const statusStore = useStatusStore();
       statusStore.playStatus = false;
       statusStore.playLoading = false;
@@ -205,18 +221,13 @@ class Player {
     this.eventCallbacks.set("pause", pauseCallback);
     // 结束
     const endedCallback = () => {
-      const statusStore = useStatusStore();
       console.log(`⏹️ song end: ${this.getSongLogInfo()}`);
-      // 检查自动关闭
-      if (
-        statusStore.autoClose.enable &&
-        statusStore.autoClose.waitSongEnd &&
-        statusStore.autoClose.remainTime <= 0
-      ) {
-        this.executeAutoClose();
+      this.cancelCueTimer();
+      if (this.cueScrub) {
+        this.cueScrub.ended = true;
         return;
       }
-      this.nextOrPrev("next", true, true);
+      if (!this.cuePlayback?.stoppedAtEnd) this.handleTrackEnd(false);
     };
     audioManager.on("ended", endedCallback);
     this.eventCallbacks.set("ended", endedCallback);
@@ -245,21 +256,20 @@ class Player {
     this.eventCallbacks.set("error", errorCallback);
     // 进度更新
     const timeupdateCallback = () => {
-      const statusStore = useStatusStore();
-      // 计算进度条距离
-      const currentTime = Math.floor(audioManager.currentTime * 1000);
-      const duration = Math.floor(audioManager.duration * 1000) || statusStore.duration;
-      // 计算进度条
-      const progress = calculateProgress(currentTime, duration);
-      // 计算歌词索引
-      const lyricIndex = lyricManager.calculateLyricIndex(currentTime);
-      // 更新状态
-      statusStore.$patch({ currentTime, duration, progress, lyricIndex });
-      // 更新 MediaSession
-      this.mediaSession.updatePosition(duration, currentTime);
+      this.confirmCueSeek();
+      this.publishPosition();
+      this.scheduleCueBoundary();
     };
     audioManager.on("timeupdate", timeupdateCallback);
     this.eventCallbacks.set("timeupdate", timeupdateCallback);
+    const seekedCallback = () => {
+      if (!this.cuePlayback) return;
+      this.confirmCueSeek();
+      this.publishPosition();
+      this.scheduleCueBoundary();
+    };
+    audioManager.on("seeked", seekedCallback);
+    this.eventCallbacks.set("seeked", seekedCallback);
     // 加载开始
     const loadstartCallback = () => {
       const statusStore = useStatusStore();
@@ -286,6 +296,110 @@ class Player {
     audioManager.on("canplay", canplayCallback);
     this.eventCallbacks.set("canplay", canplayCallback);
   }
+
+  private publishPosition() {
+    const status = useStatusStore();
+    const currentTime = this.getSeek();
+    const duration = this.getDuration() || status.duration;
+    const progress = calculateProgress(currentTime, duration);
+    const lyricIndex = lyricManager.calculateLyricIndex(currentTime);
+    status.$patch({ currentTime, duration, progress, lyricIndex });
+    this.mediaSession.updatePosition(duration, currentTime);
+  }
+
+  private cancelCueTimer() {
+    clearTimeout(this.cueTimer);
+    this.cueTimer = undefined;
+  }
+
+  private clearCuePlayback() {
+    this.cancelCueTimer();
+    this.cuePlayback = undefined;
+    this.cueScrub = undefined;
+  }
+
+  private confirmCueSeek() {
+    const cue = this.cuePlayback;
+    if (cue?.seekTarget === undefined) return;
+    // 原生时钟确认可能晚于命令返回；不让上一轨的迟到进度触发重复切轨。
+    if (Math.abs(audioManager.currentTime * 1000 - cue.seekTarget) < 350) {
+      cue.seekTarget = undefined;
+    }
+  }
+
+  private scheduleCueBoundary() {
+    const cue = this.cuePlayback;
+    if (!cue || this.cueScrub || cue.range.last || cue.seekTarget !== undefined || cue.stoppedAtEnd)
+      return;
+    const status = useStatusStore();
+    if (
+      this.initializingRequestId !== undefined ||
+      audioManager.paused ||
+      status.playLoading ||
+      !status.playStatus
+    )
+      return;
+    const remaining = cue.range.end - audioManager.currentTime * 1000;
+    if (remaining <= 0) {
+      this.cancelCueTimer();
+      this.handleTrackEnd(true);
+    } else if (this.cueTimer === undefined) {
+      // 定时器只唤醒检查，始终以引擎播放时钟为准，暂停或缓冲时不会越轨。
+      this.cueTimer = setTimeout(
+        () => {
+          this.cueTimer = undefined;
+          this.scheduleCueBoundary();
+        },
+        Math.max(16, remaining / status.playRate),
+      );
+    }
+  }
+
+  private handleTrackEnd(cueBoundary: boolean) {
+    const status = useStatusStore();
+    const cue = this.cuePlayback;
+    if (
+      status.autoClose.enable &&
+      status.autoClose.waitSongEnd &&
+      status.autoClose.remainTime <= 0
+    ) {
+      if (cue) cue.stoppedAtEnd = true;
+      this.executeAutoClose();
+      return;
+    }
+    if (cue) {
+      const data = useDataStore();
+      if (status.playSongMode === "repeat-once" || data.playList.length === 1) {
+        if (cueBoundary) this.setSeek(0);
+        else void this.initPlayer(true);
+        return;
+      }
+      const index = (status.playIndex + 1) % data.playList.length;
+      const next = data.playList[index];
+      const entry = next?.path ? nativeLocalEntry(next.id) : undefined;
+      const range = entry && cueRangeFor(entry, next.id);
+      if (
+        cueBoundary &&
+        next &&
+        entry &&
+        range &&
+        range.start === cue.range.end &&
+        cue.entry.ref.fileId === entry.ref.fileId &&
+        cue.entry.ref.version === entry.ref.version
+      ) {
+        this.cuePlayback = { ...cue, range };
+        status.playIndex = index;
+        useMusicStore().playSong = next;
+        this.recovery.clearAttempt();
+        const { name, artist } = songManager.getPlayerInfoObj() || {};
+        window.document.title = `${name} - ${artist} | HE-Music`;
+        this.onTrackSelected();
+        this.scheduleCueBoundary();
+        return;
+      }
+    }
+    void this.nextOrPrev("next", true, true);
+  }
   /**
    * 创建播放器并播放
    * @param src 播放地址
@@ -299,12 +413,9 @@ class Player {
     canAutoPlay = this.autoPlayOwner,
     source?: AudioSourceInfo,
   ) {
-    // 获取数据
-    const dataStore = useDataStore();
-    const musicStore = useMusicStore();
     const statusStore = useStatusStore();
-    // 播放信息
-    const { id, platform, path } = musicStore.playSong;
+    const cue = this.cuePlayback;
+    const sourceSeek = (seek + (cue?.range.start ?? 0)) / 1000;
     // 设置音量和速率
     const requestId = this.playRequestId;
     await this.toggleOutputDevice();
@@ -327,7 +438,7 @@ class Player {
       // A getter keeps explicit pause and owner revocation effective during it.
       await audioManager.play(src, {
         fadeIn: false,
-        ...(seek > 0 ? { seek: seek / 1000 } : {}),
+        ...(sourceSeek > 0 ? { seek: sourceSeek } : {}),
         ...(source ? { source } : {}),
         get autoPlay() {
           return allowsAutoPlay();
@@ -335,8 +446,8 @@ class Player {
       });
       if (requestId !== this.playRequestId) return;
       // 恢复进度
-      if (seek && seek > 0) {
-        await audioManager.seek(seek / 1000);
+      if (sourceSeek > 0) {
+        if (!cue) await audioManager.seek(sourceSeek);
         this.notifySeek();
       }
     } catch (error) {
@@ -345,11 +456,17 @@ class Player {
         this.logPlaybackError("Player create failed:", error);
         throw error;
       }
-      if (seek > 0) {
-        audioManager.seek(seek / 1000);
+      if (sourceSeek > 0) {
+        if (!cue) audioManager.seek(sourceSeek);
         this.notifySeek();
       }
     }
+    if (requestId === this.playRequestId) this.onTrackSelected();
+  }
+
+  private onTrackSelected() {
+    const musicStore = useMusicStore();
+    const { id, platform, path } = musicStore.playSong;
     // 获取歌词数据
     if (this.downloadedPlayback) {
       lyricManager.handleLyric(id, platform, undefined, this.downloadedPlayback.entry);
@@ -357,11 +474,12 @@ class Player {
       lyricManager.handleLyric(id, platform, path);
     }
     // 新增播放历史
-    dataStore.setHistory(musicStore.playSong);
+    void useDataStore().setHistory(musicStore.playSong);
     // 获取歌曲封面主色
     if (!path) songManager.getCoverColor(musicStore.songCover);
     // 更新 MediaSession
-    if (!path) this.mediaSession.updateMetadata();
+    if (!path || this.cuePlayback) this.mediaSession.updateMetadata();
+    if (this.cuePlayback) this.publishPosition();
   }
   /**
    * 获取频谱数据
@@ -435,6 +553,7 @@ class Player {
     if (!preserveIntent) this.autoPlayIntent = autoPlay;
     this.autoPlayOwner = canAutoPlay;
     const currentRequestId = ++this.playRequestId;
+    this.clearCuePlayback();
     this.initializingRequestId = currentRequestId;
     this.pendingAutoPlay = canAutoPlay
       ? { owner: canAutoPlay, requestId: currentRequestId }
@@ -488,6 +607,11 @@ class Player {
           }
           const url = localResourceURL("audio", nativeEntry);
           if (!url || currentRequestId !== this.playRequestId) return;
+          const range = cueRangeFor(nativeEntry, id);
+          if (range) {
+            this.cuePlayback = { entry: nativeEntry, range, stoppedAtEnd: false };
+            seek = this.clampCueSeek(seek);
+          }
           const source: AudioSourceInfo | undefined =
             engine === "mpv"
               ? {
@@ -497,7 +621,7 @@ class Player {
                   fileEpoch: filesSession.value?.directories.value.find(
                     (grant) => grant.token === nativeEntry.ref.grantToken,
                   )?.epoch,
-                  identity: id,
+                  identity: range ? localSongID(nativeEntry) : id,
                 }
               : /\.flac$/i.test(nativeEntry.path)
                 ? { platform: "local", format: "flac" }
@@ -650,7 +774,10 @@ class Player {
       window.$message.error(t("message.song_play_fail"));
       await this.recovery.handlePlaybackError(undefined);
     } finally {
-      if (this.initializingRequestId === currentRequestId) this.initializingRequestId = undefined;
+      if (this.initializingRequestId === currentRequestId) {
+        this.initializingRequestId = undefined;
+        this.scheduleCueBoundary();
+      }
     }
   }
   /**
@@ -665,11 +792,18 @@ class Player {
     this.autoPlayIntent = true;
     this.autoPlayOwner = canAutoPlay;
     if (this.initializingRequestId !== undefined && !audioManager.src) return;
+    const cue = this.cuePlayback;
+    if (cue?.stoppedAtEnd) {
+      await this.initPlayer(true, 0, "", canAutoPlay);
+      return;
+    }
     if (
       useMusicStore().playSong?.path &&
       (localAudioBlocked() ||
         (audioManager.src &&
           audioManager.src !== useMusicStore().playSong.id &&
+          (!cue || audioManager.src !== localSongID(cue.entry)) &&
+          (!cue || audioManager.src !== localResourceURL("audio", cue.entry)) &&
           audioManager.src !==
             localResourceURL("audio", nativeLocalEntry(useMusicStore().playSong.id))))
     ) {
@@ -729,6 +863,7 @@ class Player {
    * @param changeStatus 是否更改播放状态
    */
   public async pause(changeStatus: boolean = true) {
+    this.cancelCueTimer();
     const statusStore = useStatusStore();
     const settingStore = useSettingStore();
     if (changeStatus) {
@@ -737,7 +872,7 @@ class Player {
       statusStore.playStatus = false;
     }
     // 淡出
-    const fadeTime = settingStore.getFadeTime ? settingStore.getFadeTime / 1000 : 0;
+    const fadeTime = this.cuePlayback?.stoppedAtEnd ? 0 : (settingStore.getFadeTime || 0) / 1000;
     await audioManager.pause({ fadeOut: !!fadeTime, fadeDuration: fadeTime });
   }
   /**
@@ -935,41 +1070,109 @@ class Player {
     statusStore.playSongMode = targetMode;
     return undefined;
   }
+  /** 拖动绑定到开始操作时的曲目。CUE 拖动期间暂停整轨，避免松手前越过轨道边界。 */
+  public beginProgressDrag(): (time?: number) => void {
+    const requestId = this.playRequestId;
+    const cue = this.cuePlayback;
+    if (!cue) {
+      return (time) => {
+        if (time !== undefined && requestId === this.playRequestId) this.setSeek(time);
+      };
+    }
+    if (this.cueScrub || this.initializingRequestId !== undefined) return () => {};
+
+    const scrub = { ended: false };
+    const initialTime = this.getSeek();
+    const shouldResume = this.autoPlayIntent && !audioManager.paused;
+    const autoPlayOwner = this.autoPlayOwner;
+    this.cueScrub = scrub;
+    this.cancelCueTimer();
+    if (shouldResume) {
+      // 只暂停引擎，不覆盖用户的播放意图。用户在拖动时主动暂停仍然优先。
+      void audioManager
+        .pause()
+        .catch((error: unknown) => this.logPlaybackError("暂停拖动失败", error));
+    }
+
+    return (time) => {
+      if (this.cueScrub !== scrub || requestId !== this.playRequestId) return;
+      this.cueScrub = undefined;
+      const resume = shouldResume && this.autoPlayIntent && (!autoPlayOwner || autoPlayOwner());
+      if (scrub.ended) {
+        void this.initPlayer(resume, time ?? initialTime, "", autoPlayOwner);
+        return;
+      }
+      if (time !== undefined) this.setSeek(time);
+      if (resume && audioManager.paused) {
+        void this.play(autoPlayOwner).catch((error: unknown) =>
+          this.logPlaybackError("拖动后恢复失败", error),
+        );
+      }
+    };
+  }
+
   /**
    * 设置播放进度
    * @param time 播放进度（单位：毫秒）
    */
   public setSeek(time: number) {
     const statusStore = useStatusStore();
-    if (time < 0 || time > this.getDuration()) {
+    const cue = this.cuePlayback;
+    if (cue) {
+      time = this.clampCueSeek(time);
+      this.cancelCueTimer();
+      cue.seekTarget = time + cue.range.start;
+      cue.stoppedAtEnd = false;
+    } else if (time < 0 || time > this.getDuration()) {
       time = Math.max(0, Math.min(time, this.getDuration()));
     }
-    audioManager.seek(time / 1000);
+    const pending = audioManager.seek((time + (cue?.range.start ?? 0)) / 1000);
+    if (cue) {
+      const target = cue.seekTarget;
+      void Promise.resolve(pending).catch((error: unknown) => {
+        if (cue === this.cuePlayback && cue.seekTarget === target) cue.seekTarget = undefined;
+        this.logPlaybackError("CUE 跳转失败", error);
+      });
+    }
     statusStore.currentTime = time;
     statusStore.$persist?.();
     this.notifySeek();
+  }
+
+  private clampCueSeek(time: number) {
+    // 拖动到 100% 也不能跳进下一轨。
+    if (!Number.isFinite(time)) return 0;
+    return Math.min(Math.max(0, time), Math.max(0, this.getDuration() - 1));
   }
   /**
    * 获取播放进度
    * @returns 播放进度（单位：毫秒）
    */
   public getSeek(): number {
-    return Math.floor(audioManager.currentTime * 1000);
+    const cue = this.cuePlayback;
+    const time = cue?.seekTarget ?? audioManager.currentTime * 1000;
+    const range = cue?.range;
+    return Math.floor(range ? Math.max(0, Math.min(time, range.end) - range.start) : time);
   }
   /**
    * 获取播放时长
    * @returns 播放时长（单位：毫秒）
    */
   public getDuration(): number {
-    return Math.floor(audioManager.duration * 1000);
+    const range = this.cuePlayback?.range;
+    return Math.floor(range ? range.end - range.start : audioManager.duration * 1000);
   }
   /**
    * 设置播放速率
    */
   public setRate(rate: number) {
     const statusStore = useStatusStore();
-    audioManager.setRate(rate);
+    const changed = audioManager.setRate(rate);
     statusStore.playRate = rate;
+    if (this.cuePlayback) {
+      this.cancelCueTimer();
+      void Promise.resolve(changed).then(() => this.scheduleCueBoundary());
+    }
   }
 
   /**
@@ -1237,6 +1440,7 @@ class Player {
    */
   public async cleanPlayList() {
     this.radioOperation = undefined;
+    this.clearCuePlayback();
     ++this.playRequestId;
     await audioManager.clearSource();
     this.recovery.closeHttpDialog();
@@ -1460,7 +1664,6 @@ class Player {
       statusStore.autoClose.remainTime--;
     }, 1000);
   }
-
   /**
    * 执行自动关闭
    */

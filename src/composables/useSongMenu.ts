@@ -20,6 +20,7 @@ import { getSizeCover } from "@/utils/songCover";
 import { isMygo } from "@/utils/env";
 import { filesSession } from "@/platform/filesSession";
 import { nativeLocalEntry, localFilesSession } from "@/platform/localFilesSession";
+import { isCueTrack } from "@/platform/cueTracks";
 import { LocalFileActions } from "@/platform/localFileActions";
 import { mygoSongDownload } from "./mygoSongDownload";
 import { useLocalPlaylistStore } from "@/stores/localPlaylists";
@@ -303,7 +304,7 @@ export const useSongMenu = () => {
           {
             key: "meta-edit",
             label: t("menu.music_tag_edit"),
-            show: isLocal,
+            show: isLocal && !isCueTrack(song.id),
             props: {
               onClick: () => {
                 if (song.path) openSongInfoEditor(song);
@@ -373,7 +374,7 @@ export const useSongMenu = () => {
       {
         key: "delete-file",
         label: t("menu.delete_file"),
-        show: isLocal && isMygo && !songEqual(musicStore.playSong, song),
+        show: isLocal && isMygo && !isCueTrack(song.id) && !songEqual(musicStore.playSong, song),
         props: {
           onClick: () => deleteLocalSong(song, emit),
         },

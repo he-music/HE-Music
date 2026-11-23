@@ -2,6 +2,7 @@ import { computed, shallowRef, watch, type Ref } from "vue";
 import { isEqual } from "lodash-es";
 import type { FileScanAccess, FilesSession } from "./filesSession";
 import type { ScanEntry, ScanIssue } from "./mygo.bindings";
+import { cueTrackID } from "./cueTracks";
 
 interface DirectoryScanIssue extends ScanIssue {
   grantToken: string;
@@ -76,6 +77,10 @@ export class LocalFilesSession {
       }
       for (const id of ids) {
         if (!index.has(id)) index.set(id, entry);
+        for (const track of entry.cue?.tracks ?? []) {
+          const trackID = cueTrackID(id, track.number);
+          if (!index.has(trackID)) index.set(trackID, entry);
+        }
       }
     }
     return index;
