@@ -1,4 +1,10 @@
 {
+  "play_queue": {
+    "reorder": "调整《{name}》的顺序",
+    "keyboard": "用上、下方向键移动",
+    "position": "已移到第 {position} 首",
+    "save_failed": "未能保存播放顺序"
+  },
   "local_playlists": {
     "cover": "歌单封面",
     "choose_cover": "选择本地图片",

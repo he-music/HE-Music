@@ -124,6 +124,26 @@ it.each([
   expect(initialize).not.toHaveBeenCalled();
 });
 
+it.each([false, true])("reorders only the live queue on web and desktop (%s)", async (mygo) => {
+  mocks.mygo = mygo;
+  status.playSongMode = "shuffle";
+  status.currentTime = 3456;
+  status.playStatus = true;
+  data.originalPlayList = [c, a, b];
+  const revision = data.playbackRevision;
+  const initialize = vi.spyOn(player, "initPlayer").mockResolvedValue();
+  await expect(player.moveQueueItem(1, 2, revision)).resolves.toBe(true);
+  expect(data.playList).toEqual([a, c, b]);
+  expect(data.originalPlayList).toEqual([c, a, b]);
+  expect(status).toMatchObject({ playIndex: 2, currentTime: 3456, playStatus: true });
+  expect(initialize).not.toHaveBeenCalled();
+  expect(bucket("music-data").get("playList")).toEqual([a, c, b]);
+  await expect(player.moveQueueItem(0, 1, revision)).resolves.toBe(false);
+  await expect(player.moveQueueItem(0, 2, data.playbackRevision)).resolves.toBe(true);
+  expect(data.playList).toEqual([c, b, a]);
+  expect(status.playIndex).toBe(1);
+});
+
 it("persists a searchable song through the shuffle original-list path", async () => {
   status.playSongMode = "shuffle";
   data.originalPlayList = [a, b, c];

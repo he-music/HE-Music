@@ -1,4 +1,10 @@
 {
+  "play_queue": {
+    "reorder": "Reorder {name}",
+    "keyboard": "Use the Up and Down arrow keys to move",
+    "position": "Moved to position {position}",
+    "save_failed": "Could not save the queue order"
+  },
   "local_playlists": {
     "cover": "Playlist cover",
     "choose_cover": "Choose local image",

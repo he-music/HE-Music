@@ -1202,6 +1202,36 @@ class Player {
       this.initPlayer(statusStore.playStatus);
     }
   }
+
+  /** 只调整实际播放队列，保留当前音源、当前索引所指条目和随机前的原始顺序。 */
+  public async moveQueueItem(from: number, to: number, revision: symbol): Promise<boolean> {
+    const data = useDataStore();
+    const status = useStatusStore();
+    if (
+      revision !== data.playbackRevision ||
+      !Number.isInteger(from) ||
+      !Number.isInteger(to) ||
+      from === to ||
+      from < 0 ||
+      to < 0 ||
+      from >= data.playList.length ||
+      to >= data.playList.length
+    )
+      return false;
+
+    const queue = [...data.playList];
+    const [item] = queue.splice(from, 1);
+    queue.splice(to, 0, item);
+    const current = status.playIndex;
+    let nextIndex = current;
+    if (current === from) nextIndex = to;
+    else if (from < current && current <= to) nextIndex--;
+    else if (to <= current && current < from) nextIndex++;
+    const saved = data.setPlayList(queue);
+    status.playIndex = nextIndex;
+    await saved;
+    return true;
+  }
   /**
    * 清空播放列表
    */
@@ -1430,6 +1460,7 @@ class Player {
       statusStore.autoClose.remainTime--;
     }, 1000);
   }
+
   /**
    * 执行自动关闭
    */

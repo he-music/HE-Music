@@ -23,60 +23,74 @@
       </template>
       <Transition name="fade" mode="out-in">
         <!-- 播放列表 -->
-        <n-virtual-list
+        <div
           v-if="dataStore.playList.length"
-          ref="playListRef"
-          :item-size="80"
-          :items="playListData"
-          :default-scroll-index="statusStore.playIndex"
-          class="playlist-list"
-          style="max-height: calc(100vh - 142px)"
+          ref="queueViewport"
+          class="queue-viewport"
+          :class="{ sorting: lifted }"
+          :style="{ '--queue-row-height': rowHeight + 'px' }"
         >
-          <template #default="{ item: songData, index }">
-            <div
-              :key="index"
-              v-debounce="
-                () => {
-                  player.togglePlayIndex(index, true);
-                  statusStore.playListShow = false;
-                }
-              "
-              :class="['song-item', { on: statusStore.playIndex === index }]"
-            >
-              <!-- 序号 -->
-              <div class="index">
-                <n-text
-                  v-if="statusStore.playIndex !== index"
-                  :class="['num', { big: index + 1 > 9999 }]"
-                  depth="3"
+          <n-virtual-list
+            ref="playListRef"
+            :item-size="rowHeight"
+            :items="playListData"
+            :default-scroll-index="statusStore.playIndex"
+            class="playlist-list"
+          >
+            <template #default="{ item: songData, index }">
+              <div class="queue-slot" :data-queue-index="index" :class="slotClass(index)">
+                <div
+                  v-debounce="() => playItem(index)"
+                  class="song-item"
+                  :class="{ on: statusStore.playIndex === index }"
                 >
-                  {{ index + 1 }}
-                </n-text>
-                <SvgIcon v-else :size="20" name="Music" />
-              </div>
-              <!-- 信息 -->
-              <div class="data">
-                <n-text class="name text-hidden">
-                  {{ songData.name }}
-                </n-text>
-                <div v-if="Array.isArray(songData?.artists)" class="artists">
-                  <n-text v-for="ar in songData.artists" :key="ar.id" depth="3" class="ar">
-                    {{ ar.name }}
-                  </n-text>
+                  <QueueSongDetails
+                    :song="songData"
+                    :position="index + 1"
+                    :playing="statusStore.playIndex === index"
+                  />
+                  <button
+                    v-if="playListData.length > 1"
+                    type="button"
+                    class="reorder"
+                    :aria-label="t('play_queue.reorder', { name: songData.name })"
+                    :aria-description="t('play_queue.keyboard')"
+                    aria-keyshortcuts="ArrowUp ArrowDown"
+                    @click.stop
+                    @pointerdown.stop="startDrag($event, index)"
+                    @keydown.up.prevent.stop="moveItem(index, index - 1)"
+                    @keydown.down.prevent.stop="moveItem(index, index + 1)"
+                  >
+                    <SvgIcon :size="20" name="GripVertical" />
+                  </button>
+                  <div class="remove" @click.stop="player.removeSongIndex(index)">
+                    <SvgIcon :size="20" name="Delete" />
+                  </div>
                 </div>
-                <div v-else class="artists">
-                  <n-text class="ar" depth="3">
-                    {{ songData?.artists || t("common.unknown_artist") }}
-                  </n-text>
-                </div>
               </div>
-              <!-- 移除 -->
-              <div class="remove" @click.stop="player.removeSongIndex(index)">
-                <SvgIcon :size="20" name="Delete" />
-              </div>
-            </div>
-          </template>
-        </n-virtual-list>
+            </template>
+          </n-virtual-list>
+          <div
+            v-if="lifted"
+            ref="previewRow"
+            class="song-item lifted-row"
+            :class="{ on: statusStore.playIndex === lifted.from }"
+            :style="{
+              left: lifted.left + 'px',
+              width: lifted.width + 'px',
+              '--queue-lift-origin': lifted.top + 'px',
+            }"
+            aria-hidden="true"
+          >
+            <QueueSongDetails
+              :song="lifted.song"
+              :position="(dropIndex ?? lifted.from) + 1"
+              :playing="statusStore.playIndex === lifted.from"
+            />
+            <span class="reorder"><SvgIcon :size="20" name="GripVertical" /></span>
+            <span class="remove"><SvgIcon :size="20" name="Delete" /></span>
+          </div>
+        </div>
         <n-empty
           v-else
           :description="t('play.no_songs')"
@@ -85,6 +99,7 @@
           style="margin-top: 60px"
         />
       </Transition>
+      <span class="queue-announcement" role="status">{{ announcement }}</span>
       <template #footer>
         <n-grid :cols="2" x-gap="16" class="playlist-menu">
           <n-gi>
@@ -117,11 +132,13 @@
 
 <script setup lang="ts">
 import { useStatusStore, useDataStore } from "@/stores";
-import type { VirtualListInst } from "naive-ui";
+import { NVirtualList } from "naive-ui";
 import { usePlayer } from "@/utils/player";
 import { useI18n } from "vue-i18n";
 import { useMobile } from "@/composables/useMobile";
 import { useOverlayBack } from "@/composables/useOverlayBack";
+import type { SongInfo } from "@/types/main.hemusic";
+import QueueSongDetails from "./QueueSongDetails.vue";
 const { t } = useI18n();
 const player = usePlayer();
 const dataStore = useDataStore();
@@ -134,16 +151,216 @@ useOverlayBack(
   },
 );
 
-const playListRef = ref<VirtualListInst | null>(null);
+const playListRef = ref<InstanceType<typeof NVirtualList> | null>(null);
+const queueViewport = ref<HTMLDivElement | null>(null);
+const previewRow = ref<HTMLDivElement | null>(null);
+const rowHeight = 80;
+const announcement = ref("");
+const dropIndex = ref<number | null>(null);
+const lifted = shallowRef<{
+  song: SongInfo;
+  from: number;
+  left: number;
+  top: number;
+  width: number;
+}>();
+let drag:
+  | {
+      id: number;
+      from: number;
+      revision: symbol;
+      scroller: HTMLElement;
+      firstRow: number;
+      grabOffset: number;
+      height: number;
+      startY: number;
+      y: number;
+    }
+  | undefined;
+let frame = 0;
+let settle: Animation | undefined;
 
 // 播放列表数据
 const playListData = computed(() => {
-  return dataStore.playList.map((item, index) => {
-    return {
-      ...item,
-      key: index,
-    };
+  const occurrences = new Map<string, number>();
+  return dataStore.playList.map((item) => {
+    const identity = JSON.stringify([item.platform, item.id]);
+    const occurrence = occurrences.get(identity) ?? 0;
+    occurrences.set(identity, occurrence + 1);
+    return { ...item, key: identity + ":" + occurrence };
   });
+});
+
+async function moveItem(from: number, to: number, revision = dataStore.playbackRevision) {
+  try {
+    if (await player.moveQueueItem(from, to, revision)) {
+      announcement.value = t("play_queue.position", { position: to + 1 });
+    }
+  } catch {
+    window.$message.error(t("play_queue.save_failed"));
+  }
+}
+
+function playItem(index: number) {
+  if (drag) return;
+  void player.togglePlayIndex(index, true);
+  statusStore.playListShow = false;
+}
+
+function slotClass(index: number) {
+  const from = lifted.value?.from;
+  const to = dropIndex.value;
+  if (from === undefined || to === null) return;
+  if (index === from) return "vacant";
+  if (from < index && index <= to) return "shift-up";
+  if (to <= index && index < from) return "shift-down";
+  return undefined;
+}
+
+function startDrag(event: PointerEvent, from: number) {
+  if (
+    drag ||
+    !event.isPrimary ||
+    event.button !== 0 ||
+    !(event.currentTarget instanceof HTMLElement) ||
+    !queueViewport.value
+  )
+    return;
+  const handle = event.currentTarget;
+  const row = handle.closest(".song-item");
+  const slot = handle.closest(".queue-slot");
+  const scroller = playListRef.value?.getScrollContainer();
+  if (!row || !slot || !scroller) return;
+  const rect = row.getBoundingClientRect();
+  const firstRow =
+    slot.getBoundingClientRect().top -
+    scroller.getBoundingClientRect().top +
+    scroller.scrollTop -
+    from * rowHeight;
+  drag = {
+    id: event.pointerId,
+    from,
+    revision: dataStore.playbackRevision,
+    scroller,
+    firstRow,
+    grabOffset: event.clientY - rect.top,
+    height: rect.height,
+    startY: event.clientY,
+    y: event.clientY,
+  };
+  scroller.addEventListener("pointermove", moveDrag);
+  scroller.addEventListener("pointerup", dropDrag);
+  scroller.addEventListener("pointercancel", cancelDrag);
+  scroller.addEventListener("lostpointercapture", cancelDrag);
+  scroller.setPointerCapture(event.pointerId);
+}
+
+function targetIndex(y: number, activeDrag: NonNullable<typeof drag>, scrollerTop: number) {
+  const { scroller, grabOffset, firstRow } = activeDrag;
+  const offset = y - grabOffset - scrollerTop + scroller.scrollTop;
+  return Math.max(
+    0,
+    Math.min(playListData.value.length - 1, Math.round((offset - firstRow) / rowHeight)),
+  );
+}
+
+function updateDrop() {
+  frame = 0;
+  if (!drag || !lifted.value || !queueViewport.value) return;
+  const { scroller, y, grabOffset, height } = drag;
+  const { top, bottom } = scroller.getBoundingClientRect();
+  const viewport = queueViewport.value.getBoundingClientRect();
+  const scroll = y < top + 32 ? -8 : y > bottom - 32 ? 8 : 0;
+  const previous = scroller.scrollTop;
+  if (scroll) scroller.scrollTop += scroll;
+  dropIndex.value = targetIndex(y, drag, top);
+  const previewY = Math.max(0, Math.min(viewport.height - height, y - grabOffset - viewport.top));
+  // 像素级位移写入浮层，不让整列跟随每一帧重新渲染。
+  if (previewRow.value) previewRow.value.style.transform = "translateY(" + previewY + "px)";
+  if (scroller.scrollTop !== previous) frame = requestAnimationFrame(updateDrop);
+}
+
+function moveDrag(event: PointerEvent) {
+  if (!drag || event.pointerId !== drag.id || !queueViewport.value) return;
+  drag.y = event.clientY;
+  if (!lifted.value) {
+    if (Math.abs(drag.y - drag.startY) < 6) return;
+    const row = drag.scroller.querySelector('[data-queue-index="' + drag.from + '"] .song-item');
+    const song = playListData.value[drag.from];
+    if (!row || !song) {
+      cancelDrag();
+      return;
+    }
+    const rect = row.getBoundingClientRect();
+    const viewport = queueViewport.value.getBoundingClientRect();
+    lifted.value = {
+      song,
+      from: drag.from,
+      left: rect.left - viewport.left,
+      top: drag.y - drag.grabOffset - viewport.top,
+      width: rect.width,
+    };
+    dropIndex.value = drag.from;
+    settle?.cancel();
+    settle = undefined;
+  }
+  if (!frame) frame = requestAnimationFrame(updateDrop);
+}
+
+function cancelDrag(event?: PointerEvent) {
+  if (!drag || (event && event.pointerId !== drag.id)) return;
+  const { id, scroller } = drag;
+  drag = undefined;
+  scroller.removeEventListener("pointermove", moveDrag);
+  scroller.removeEventListener("pointerup", dropDrag);
+  scroller.removeEventListener("pointercancel", cancelDrag);
+  scroller.removeEventListener("lostpointercapture", cancelDrag);
+  if (scroller.hasPointerCapture(id)) scroller.releasePointerCapture(id);
+  cancelAnimationFrame(frame);
+  frame = 0;
+  lifted.value = undefined;
+  dropIndex.value = null;
+}
+
+function dropDrag(event: PointerEvent) {
+  if (!drag || event.pointerId !== drag.id) return;
+  const { from, revision, scroller } = drag;
+  const to = lifted.value
+    ? targetIndex(event.clientY, drag, scroller.getBoundingClientRect().top)
+    : null;
+  const previewTop = previewRow.value?.getBoundingClientRect().top;
+  cancelDrag();
+  if (to === null || revision !== dataStore.playbackRevision) return;
+  void moveItem(from, to, revision);
+  const committedRevision = dataStore.playbackRevision;
+  if (previewTop === undefined || window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+    return;
+  void nextTick(() => {
+    if (drag || dataStore.playbackRevision !== committedRevision) return;
+    const row = scroller.querySelector('[data-queue-index="' + to + '"] .song-item');
+    if (!row) return;
+    const delta = previewTop - row.getBoundingClientRect().top;
+    if (Math.abs(delta) < 1) return;
+    settle = row.animate([{ transform: "translateY(" + delta + "px)" }, { transform: "none" }], {
+      duration: 160,
+      easing: "cubic-bezier(0.16, 1, 0.3, 1)",
+    });
+  });
+}
+
+watch(
+  () => dataStore.playbackRevision,
+  () => cancelDrag(),
+);
+watch(
+  () => statusStore.playListShow,
+  (shown) => {
+    if (!shown) cancelDrag();
+  },
+);
+onBeforeUnmount(() => {
+  cancelDrag();
+  settle?.cancel();
 });
 
 // 滚动至指定元素
@@ -175,90 +392,110 @@ const cleanPlayList = () => {
     font-size: 12px;
   }
 }
+.queue-viewport {
+  position: relative;
+  isolation: isolate;
+  height: 100%;
+  max-height: calc(100vh - 142px);
+  overflow: hidden;
+}
 .playlist-list {
   height: 100%;
   padding: 16px;
-  .song-item {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    flex-direction: row;
-    min-height: 64px;
-    overflow: hidden;
-    border-radius: 8px;
-    margin-bottom: 16px;
-    padding: 0 12px;
-    border: 1px solid transparent;
-    background-color: rgba(var(--primary), 0.08);
-    cursor: pointer;
-    transition:
-      transform 0.3s,
-      border-color 0.3s,
-      box-shadow 0.3s,
-      background-color 0.3s;
-    .index {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 36px;
-      min-width: 36px;
-      margin-right: 12px;
-      .num {
-        &.big {
-          font-size: 12px;
-        }
-      }
-    }
-    .data {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      width: 100%;
-      height: 100%;
-      padding: 8px 0;
-      .artists {
-        display: -webkit-box;
-        line-clamp: 1;
-        -webkit-box-orient: vertical;
-        -webkit-line-clamp: 1;
-        overflow: hidden;
-        word-break: break-all;
-        .ar {
-          font-size: 12px;
-          display: inline;
-          &::after {
-            content: "/";
-            margin: 0 4px;
-          }
-          &:last-child {
-            &::after {
-              display: none;
-            }
-          }
-        }
-      }
-    }
-    .remove {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 8px;
-      border-radius: 8px;
-      transition: background-color 0.3s;
-      cursor: pointer;
-      &:hover {
-        background-color: rgba(var(--primary), 0.29);
-      }
-    }
-    &.on {
-      border-color: var(--primary-hex);
-      background-color: rgba(var(--primary), 0.29);
-    }
-    &:hover {
-      border-color: var(--primary-hex);
-    }
+}
+.queue-slot {
+  height: var(--queue-row-height);
+}
+.song-item {
+  display: flex;
+  align-items: center;
+  height: 64px;
+  overflow: hidden;
+  border-radius: 8px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  background-color: rgba(var(--primary), 0.08);
+  cursor: pointer;
+
+  &.on {
+    background-color: rgba(var(--primary), 0.29);
   }
+  &.on,
+  &:hover {
+    border-color: var(--primary-hex);
+  }
+}
+.remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border-radius: 8px;
+  &:hover {
+    background-color: rgba(var(--primary), 0.29);
+  }
+}
+.sorting {
+  user-select: none;
+
+  .queue-slot .song-item {
+    transition: transform 160ms cubic-bezier(0.2, 0.8, 0.25, 1);
+  }
+  .vacant .song-item {
+    opacity: 0;
+  }
+  .shift-up .song-item {
+    transform: translateY(calc(0px - var(--queue-row-height)));
+  }
+  .shift-down .song-item {
+    transform: translateY(var(--queue-row-height));
+  }
+}
+.song-item.lifted-row {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  pointer-events: none;
+  transform: translateY(var(--queue-lift-origin));
+  background-color: rgb(var(--background));
+  background-color: color-mix(in srgb, rgb(var(--background)) 92%, var(--primary-hex));
+  border-color: rgba(var(--primary), 0.6);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
+  will-change: transform;
+
+  .reorder {
+    background: rgba(var(--primary), 0.16);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sorting .queue-slot .song-item {
+    transition: none;
+  }
+}
+.reorder {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  color: inherit;
+  background: transparent;
+  cursor: grab;
+  touch-action: none;
+  &:active {
+    cursor: grabbing;
+    background: rgba(var(--primary), 0.16);
+  }
+}
+.queue-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 .playlist-menu {
   height: 40px;
@@ -296,6 +533,14 @@ const cleanPlayList = () => {
     span,
     .n-icon {
       color: rgb(var(--main-cover-color));
+    }
+    .lifted-row {
+      background-color: Canvas;
+      background-color: color-mix(in srgb, Canvas 94%, var(--primary-hex));
+      span,
+      .n-icon {
+        color: CanvasText;
+      }
     }
     .n-button {
       --n-color: rgba(var(--main-cover-color), 0.08);
