@@ -6,11 +6,14 @@
     :max="statusStore.duration"
     :keyboard="false"
     :format-tooltip="formatTooltip"
-    :tooltip="showTooltip"
+    :tooltip="showTooltip && showSliderTooltip"
     :show-tooltip="showSliderTooltip"
-    :class="['player-slider', { drag: isDragging }]"
+    :class="['player-slider', { drag: isDragging, 'pointer-focus': pointerFocus }]"
     @mouseenter="showSliderTooltip = true"
     @mouseleave="showSliderTooltip = false"
+    @pointerdown.capture="pointerFocus = true"
+    @keydown.capture="pointerFocus = false"
+    @focusout="pointerFocus = false"
     @dragstart="startDrag"
     @dragend="endDrag"
     @touchcancel="cancelDrag"
@@ -35,6 +38,7 @@ const isDragging = ref(false);
 let finishDrag: ReturnType<typeof player.beginProgressDrag> | undefined;
 // 是否显示提示
 const showSliderTooltip = ref(false);
+const pointerFocus = ref(false);
 
 // 节流处理点击/改变进度
 const throttledSeek = useThrottleFn((value: number) => {

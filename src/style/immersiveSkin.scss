@@ -265,7 +265,10 @@
   }
 
   :is(#main-sider, #main-header, #main-content, .main-player) {
-    :is(button, a, [tabindex]):focus-visible {
+    // 滑块组件会在按下滑轨时主动聚焦滑块；不要把这次指针操作画成键盘焦点框。
+    :is(button, a, [tabindex]):focus-visible:not(
+        :where(.player-slider.pointer-focus [role="slider"])
+      ) {
       outline: 2px solid var(--skin-focus);
       outline-offset: 2px;
     }
