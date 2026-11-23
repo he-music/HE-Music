@@ -9,7 +9,9 @@
         :disabled="platform.status !== 1"
         display-directive="show:lazy"
       >
-        <VideosResult :platform="platform.id" />
+        <PagePlatformScroll>
+          <VideosResult :platform="platform.id" />
+        </PagePlatformScroll>
       </n-tab-pane>
     </PagePlatformTabs>
   </div>
@@ -17,6 +19,7 @@
 
 <script setup lang="ts">
 import PagePlatformTabs from "@/components/Page/PagePlatformTabs.vue";
+import PagePlatformScroll from "@/components/Page/PagePlatformScroll.vue";
 import { usePlatformStore } from "@/stores";
 import { onBeforeRouteUpdate } from "vue-router";
 import { computed, onActivated, watch } from "vue";

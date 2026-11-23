@@ -1,45 +1,48 @@
 <template>
-  <div class="recommend-online">
-    <PageSectionList v-if="sections.length" :sections="sections" :platform="platform" />
-    <PageSectionSkeleton v-else-if="initialLoading" />
-    <n-result
-      v-else-if="initialError"
-      status="error"
-      :title="t('page_section.load_failed')"
-      :description="t('page_section.load_failed_description')"
-    >
-      <template #footer>
-        <n-button secondary type="primary" @click="loadPage(1)">
+  <PagePlatformScroll :loading="initialLoading">
+    <div class="recommend-online">
+      <PageSectionList v-if="sections.length" :sections="sections" :platform="platform" />
+      <PageSectionSkeleton v-else-if="initialLoading" />
+      <n-result
+        v-else-if="initialError"
+        status="error"
+        :title="t('page_section.load_failed')"
+        :description="t('page_section.load_failed_description')"
+      >
+        <template #footer>
+          <n-button secondary type="primary" @click="loadPage(1)">
+            {{ t("page_section.retry") }}
+          </n-button>
+        </template>
+      </n-result>
+      <n-empty v-else :description="t('page_section.empty')" size="large" />
+
+      <div v-if="sections.length" class="pagination-state">
+        <div ref="loadMoreTrigger" class="load-more-trigger" aria-hidden="true" />
+        <n-flex v-if="loadingMore" align="center" justify="center" class="status-line">
+          <n-spin size="small" />
+          <n-text depth="3">{{ t("page_section.loading_more") }}</n-text>
+        </n-flex>
+        <n-button
+          v-else-if="loadMoreError"
+          secondary
+          type="primary"
+          class="retry-button"
+          @click="loadNextPage"
+        >
           {{ t("page_section.retry") }}
         </n-button>
-      </template>
-    </n-result>
-    <n-empty v-else :description="t('page_section.empty')" size="large" />
-
-    <div v-if="sections.length" class="pagination-state">
-      <div ref="loadMoreTrigger" class="load-more-trigger" aria-hidden="true" />
-      <n-flex v-if="loadingMore" align="center" justify="center" class="status-line">
-        <n-spin size="small" />
-        <n-text depth="3">{{ t("page_section.loading_more") }}</n-text>
-      </n-flex>
-      <n-button
-        v-else-if="loadMoreError"
-        secondary
-        type="primary"
-        class="retry-button"
-        @click="loadNextPage"
-      >
-        {{ t("page_section.retry") }}
-      </n-button>
-      <n-divider v-else-if="!hasMore" dashed>
-        {{ t("common.no_more_data") }}
-      </n-divider>
+        <n-divider v-else-if="!hasMore" dashed>
+          {{ t("common.no_more_data") }}
+        </n-divider>
+      </div>
     </div>
-  </div>
+  </PagePlatformScroll>
 </template>
 
 <script setup lang="ts">
 import { recommendPage } from "@/api/page";
+import PagePlatformScroll from "@/components/Page/PagePlatformScroll.vue";
 import PageSectionList from "@/components/Page/PageSectionList.vue";
 import PageSectionSkeleton from "@/components/Page/PageSectionSkeleton.vue";
 import type { NormalizedPageSection } from "@/types/page";

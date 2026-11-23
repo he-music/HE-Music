@@ -1,6 +1,6 @@
 <template>
   <div class="discover-playlists">
-    <div v-if="quickCategories.length" class="category-bar page-filters">
+    <div v-if="quickCategories.length" class="category-bar">
       <div
         ref="categoryStrip"
         class="category-strip"
@@ -37,19 +37,28 @@
         {{ t("playlist.all_categories_short") }}
       </n-button>
     </div>
-    <AsyncContent
-      :failed="failed"
-      :loading="loading"
-      :has-data="!!playlistData.length"
-      @retry="retry"
-    >
-      <PlaylistList
-        :data="playlistData"
+    <div v-else-if="loading" class="category-bar" aria-hidden="true">
+      <div class="category-strip category-strip--placeholder">
+        <n-skeleton v-for="index in 10" :key="index" width="56px" height="28px" round />
+      </div>
+      <n-skeleton class="all-categories" width="80px" height="28px" round />
+    </div>
+    <PagePlatformScroll :reset-key="category_id" :loading="loading && !playlistData.length">
+      <AsyncContent
+        :failed="failed"
         :loading="loading"
-        :load-more="hasMore && !failed"
-        @load-more="loadMore"
-      />
-    </AsyncContent>
+        :has-data="!!playlistData.length"
+        @retry="retry"
+      >
+        <PlaylistList
+          :data="playlistData"
+          :loading-num="18"
+          :loading="loading"
+          :load-more="hasMore && !failed"
+          @load-more="loadMore"
+        />
+      </AsyncContent>
+    </PagePlatformScroll>
     <n-modal
       v-model:show="catChangeShow"
       display-directive="show"
@@ -86,6 +95,7 @@
 
 <script setup lang="ts">
 import AsyncContent from "@/components/Page/AsyncContent.vue";
+import PagePlatformScroll from "@/components/Page/PagePlatformScroll.vue";
 import { usePagedRequest } from "@/composables/usePagedRequest";
 import { useDataStore } from "@/stores";
 import type { PlaylistInfo, CategoryInfo } from "@/types/main.hemusic";
@@ -174,12 +184,20 @@ watch(() => [props.platform, props.category_id], reset, { immediate: true });
 </script>
 
 <style lang="scss" scoped>
+.discover-playlists {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .category-bar {
   --category-strip-inset: 2px;
   display: flex;
   align-items: flex-start;
   gap: 12px;
-  padding-block: 6px;
+  flex: none;
+  padding: 6px 16px;
 }
 
 .category-strip {
@@ -192,6 +210,14 @@ watch(() => [props.platform, props.category_id], reset, { immediate: true });
   scrollbar-width: thin;
 
   > .n-button {
+    flex: none;
+  }
+}
+
+.category-strip--placeholder {
+  overflow: hidden;
+
+  > .n-skeleton {
     flex: none;
   }
 }

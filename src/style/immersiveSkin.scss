@@ -82,12 +82,31 @@
     }
   }
 
-  #main-content {
-    .page-platform-tabs {
-      --page-toolbar-background: rgba(var(--skin-panel-rgb), 0.56);
+  #main-layout:has(.router-view.platform-page) #main-header {
+    background-image: none;
+  }
 
-      @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
-        --page-toolbar-background: var(--skin-panel);
+  #main-content {
+    .page-platform-tabs > .page-tabs > .n-tabs-nav {
+      .n-tabs-bar {
+        visibility: hidden;
+      }
+
+      .n-tabs-tab--active:not(.n-tabs-tab--disabled) .n-tabs-tab__label {
+        position: relative;
+
+        &::after {
+          content: "";
+          position: absolute;
+          inset-inline: 0;
+          bottom: -5px;
+          width: min(24px, 100%);
+          height: 2px;
+          margin-inline: auto;
+          border-radius: 1px;
+          background: currentColor;
+          pointer-events: none;
+        }
       }
     }
 

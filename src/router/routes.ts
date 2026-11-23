@@ -70,13 +70,11 @@ const appRoutes: Array<RouteRecordRaw> = [
     path: "/new-song",
     name: "new-song",
     component: () => import("@/views/NewSong/layout.vue"),
-    beforeEnter: (to) => (!to.query.platform ? { path: "/403" } : undefined),
   },
   {
     path: "/new-album",
     name: "new-album",
     component: () => import("@/views/NewAlbum/layout.vue"),
-    beforeEnter: (to) => (!to.query.platform ? { path: "/403" } : undefined),
   },
   {
     path: "/artists",

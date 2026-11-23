@@ -1,9 +1,5 @@
 <template>
-  <div
-    ref="rootRef"
-    class="page-platform-tabs"
-    :style="{ '--platform-tabs-height': `${platformTabsHeight}px` }"
-  >
+  <div ref="rootRef" class="page-platform-tabs">
     <PageTabs :value="value" @update:value="emit('update:value', $event)">
       <slot />
     </PageTabs>
@@ -15,20 +11,15 @@ import PageTabs from "./PageTabs.vue";
 const props = defineProps<{ value?: string }>();
 const emit = defineEmits<{ "update:value": [value: string] }>();
 const rootRef = ref<HTMLElement | null>(null);
-const navRef = computed(
-  () => rootRef.value?.querySelector<HTMLElement>(":scope > .n-tabs > .n-tabs-nav") ?? null,
-);
-const { height: platformTabsHeight } = useElementSize(
-  navRef,
-  { width: 0, height: 0 },
-  { box: "border-box" },
-);
 
 watch(
   () => props.value,
   (value) => {
     if (!value) return;
-    rootRef.value?.closest<HTMLElement>(".n-scrollbar-container")?.scrollTo({ top: 0 });
+    const scrollContainers = rootRef.value?.querySelectorAll<HTMLElement>(
+      ".page-platform-scroll > .n-scrollbar-container",
+    );
+    scrollContainers?.forEach((container) => container.scrollTo({ top: 0 }));
   },
   { flush: "post" },
 );
@@ -36,32 +27,24 @@ watch(
 
 <style lang="scss" scoped>
 .page-platform-tabs {
-  width: 100%;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 
-  :deep(> .n-tabs > .n-tabs-nav),
-  :deep(.page-filters),
+  :deep(> .page-tabs),
+  :deep(> .page-tabs > .n-tab-pane),
+  :deep(.page-secondary-tabs),
+  :deep(.page-secondary-tabs > .n-tab-pane) {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  :deep(> .page-tabs > .n-tabs-nav),
   :deep(.page-secondary-tabs > .n-tabs-nav) {
-    position: sticky;
-    background: var(
-      --page-toolbar-background,
-      var(--sticky-surface-background, rgb(var(--background)))
-    );
-    backdrop-filter: var(--sticky-surface-filter, none);
-  }
-
-  :deep(> .n-tabs > .n-tabs-nav) {
-    top: 0;
-    z-index: 20;
-  }
-
-  :deep(.page-filters) {
-    padding-inline: 16px;
-  }
-
-  :deep(.page-filters),
-  :deep(.page-secondary-tabs > .n-tabs-nav) {
-    top: var(--platform-tabs-height);
-    z-index: 19;
+    flex: none;
   }
 }
 </style>

@@ -8,7 +8,9 @@
         :tab="tab.name"
         display-directive="show:lazy"
       >
-        <RadioList :data="tab.radios" />
+        <PagePlatformScroll :reset-key="tabValue">
+          <RadioList :data="tab.radios" />
+        </PagePlatformScroll>
       </n-tab-pane>
     </PageTabs>
     <div v-else class="skeleton-container" aria-hidden="true" inert>
@@ -24,7 +26,9 @@
               <n-skeleton :width="width" height="16px" :sharp="false" />
             </span>
           </template>
-          <RadioList :data="[]" loading />
+          <PagePlatformScroll loading>
+            <RadioList :data="[]" loading />
+          </PagePlatformScroll>
         </n-tab-pane>
       </PageTabs>
     </div>
@@ -33,6 +37,7 @@
 
 <script setup lang="ts">
 import AsyncContent from "@/components/Page/AsyncContent.vue";
+import PagePlatformScroll from "@/components/Page/PagePlatformScroll.vue";
 import PageTabs from "@/components/Page/PageTabs.vue";
 import { useAsyncRequest } from "@/composables/useAsyncRequest";
 import type { RadioInfo } from "@/types/main.hemusic";
@@ -83,14 +88,15 @@ watch(
 </script>
 
 <style lang="scss" scoped>
-.radio {
+.radio,
+.skeleton-container {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  .skeleton-container {
-    width: 100%;
-    min-width: 0;
-  }
+  min-height: 0;
+}
 
+.radio {
   .category-skeleton-label {
     display: inline-flex;
     align-items: center;

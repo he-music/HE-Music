@@ -16,17 +16,24 @@
         <RecommendOnline :platform="item.id" />
       </n-tab-pane>
     </PagePlatformTabs>
-    <PageSectionSkeleton v-else-if="platformStore.loading" />
+    <template v-else-if="platformStore.loading">
+      <PageTabSkeleton />
+      <PagePlatformScroll loading class="initial-content">
+        <PageSectionSkeleton />
+      </PagePlatformScroll>
+    </template>
     <PlatformAccessEmpty v-else />
   </div>
 </template>
 
 <script setup lang="ts">
 import PagePlatformTabs from "@/components/Page/PagePlatformTabs.vue";
+import PagePlatformScroll from "@/components/Page/PagePlatformScroll.vue";
 import { FeatureSupportFlag } from "@/api/platform";
 import { usePlatformStore } from "@/stores";
 import type { PlatformInfo } from "@/types/main.hemusic";
 import PageSectionSkeleton from "@/components/Page/PageSectionSkeleton.vue";
+import PageTabSkeleton from "@/components/Page/PageTabSkeleton.vue";
 import PlatformAccessEmpty from "@/components/Page/PlatformAccessEmpty.vue";
 import RecommendOnline from "./RecommendOnline.vue";
 
@@ -70,6 +77,10 @@ watch(
 .home-page {
   width: 100%;
   margin: 0 auto;
+
+  > .initial-content {
+    margin-top: 12px;
+  }
 
   > .n-empty {
     margin-top: 72px;

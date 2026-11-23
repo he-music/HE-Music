@@ -229,7 +229,12 @@ onMounted(() => {
     .router-view {
       position: relative;
       height: 100%;
-      &.platform-page,
+      &.platform-page {
+        display: flex;
+        flex-direction: column;
+        height: calc(var(--layout-height) * 1px);
+        overflow: hidden;
+      }
       &.search {
         height: auto;
       }

@@ -1,51 +1,20 @@
 <template>
-  <AsyncContent class="new-song" :failed="failed" :loading="loading" @retry="retry">
-    <n-skeleton v-if="loading" height="40px" />
-    <n-tabs
-      v-else
-      v-model:value="tab_id"
-      class="tabs"
-      type="bar"
-      animated
-      @update:value="tagChange"
-    >
-      <n-tab-pane
-        v-for="tab in tabs"
-        :key="`new-song-${tab.platform}-${tab.id}`"
-        :name="tab.id"
-        :tab="tab.name"
-        display-directive="show:lazy"
-      >
-        <NewSongResult :platform="tab.platform" :tab_id="tab.id" />
-      </n-tab-pane>
-    </n-tabs>
-  </AsyncContent>
+  <PageReleaseTabs route-name="new-song" :required-flags="requiredFlags" :fetch-tabs="newSongTabs">
+    <template #default="{ platform, tabId }">
+      <NewSongResult :platform="platform" :tab_id="tabId" />
+    </template>
+    <template #skeleton>
+      <NewSongSkeleton />
+    </template>
+  </PageReleaseTabs>
 </template>
 
 <script setup lang="ts">
-import AsyncContent from "@/components/Page/AsyncContent.vue";
-import { usePlatformTabs } from "@/composables/usePlatformTabs";
+import { FeatureSupportFlag } from "@/api/platform";
 import { newSongTabs } from "@/api/song";
-import NewSongResult from "@/views/NewSong/NewSongResult.vue";
+import PageReleaseTabs from "@/components/Page/PageReleaseTabs.vue";
+import NewSongResult from "./NewSongResult.vue";
+import NewSongSkeleton from "./NewSongSkeleton.vue";
 
-const { tab_id, tabs, loading, failed, retry, tagChange } = usePlatformTabs(
-  "new-song",
-  newSongTabs,
-);
+const requiredFlags = FeatureSupportFlag.GetNewSongTabList | FeatureSupportFlag.GetNewSongList;
 </script>
-
-<style lang="scss" scoped>
-.new-song {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  overflow: hidden;
-  .tabs {
-    width: 100%;
-    overflow: hidden;
-    :deep(.n-tabs-pane-wrapper) {
-      overflow: hidden;
-    }
-  }
-}
-</style>
