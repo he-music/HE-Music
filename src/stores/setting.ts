@@ -1,4 +1,5 @@
 import { applicationStorage } from "@/platform/applicationStorage";
+import type { LocalLyricSource } from "@/platform/localResource";
 import { getImmersiveSkin, type ImmersiveSkin } from "@/theme/skins";
 import type { PlaybackEngineId } from "@/core/audio-player/IPlaybackEngine";
 import {
@@ -122,6 +123,7 @@ export interface SettingState {
   localFilesPath: string[];
   localSeparators: string[];
   showLocalCover: boolean;
+  localLyricPriority: LocalLyricSource;
   routeAnimation: "none" | "fade" | "zoom" | "slide" | "up";
   playerExpandAnimation: "up" | "flow";
   useRealIP: boolean;
@@ -236,6 +238,7 @@ export const createSettingState = (): SettingState => ({
   showDefaultLocalPath: true, // 显示默认本地路径
   localSeparators: ["/", "&"],
   showLocalCover: true,
+  localLyricPriority: "sidecar",
   // 下载
   downloadPath: "", // 默认下载路径
   fileNameFormat: "title-artist",

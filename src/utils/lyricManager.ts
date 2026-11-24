@@ -7,7 +7,7 @@ import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
 import { isCueTrack } from "@/platform/cueTracks";
 import { filesSession } from "@/platform/filesSession";
-import { readLocalLyrics } from "@/platform/localResource";
+import { readLocalLyrics, type LocalLyricSource } from "@/platform/localResource";
 import type { ScanEntry } from "@/platform/mygo.bindings";
 
 class LyricManager {
@@ -51,6 +51,8 @@ class LyricManager {
   private async handleLocalLyric(
     path: string,
     songID: string,
+    preferred: LocalLyricSource,
+    isCurrent: () => boolean,
     downloadedEntry?: ScanEntry,
   ): Promise<SongLyric> {
     // 整轨的旁挂歌词没有分轨映射，不能当作每首曲目从零开始的歌词。
@@ -67,34 +69,35 @@ class LyricManager {
         return { lrcData: [], yrcData: [] };
       }
       const ref = { ...entry.ref };
-      // 扫描字段是最多1024字节的展示预览，播放时通过 HTTP 读取完整歌词。
-      const lyric = await readLocalLyrics(entry);
-      const current = downloadedEntry
-        ? owner.libraryEntries.find(
-            (item) => item.ref.fileId === ref.fileId && item.ref.grantToken === ref.grantToken,
-          )
-        : nativeLocalEntry(songID);
-      if (
-        filesSession.value !== owner ||
-        !owner.ready.value ||
-        !current ||
-        current.relativePath !== path ||
-        current.ref.grantToken !== ref.grantToken ||
-        current.ref.relativePath !== ref.relativePath ||
-        current.ref.fileId !== ref.fileId ||
-        current.ref.version !== ref.version
-      )
-        return { lrcData: [], yrcData: [] };
-      if (!lyric) return { lrcData: [], yrcData: [] };
+      const fallback: LocalLyricSource = preferred === "embedded" ? "sidecar" : "embedded";
+      for (const source of [preferred, fallback]) {
+        // 扫描标签只含歌词预览，播放时通过 HTTP 读取完整歌词。
+        const lyric = await readLocalLyrics(entry, source);
+        if (!isCurrent() || filesSession.value !== owner || !owner.ready.value) break;
+        const current = downloadedEntry
+          ? owner.libraryEntries.find(
+              (item) => item.ref.fileId === ref.fileId && item.ref.grantToken === ref.grantToken,
+            )
+          : nativeLocalEntry(songID);
+        if (
+          !current ||
+          current.relativePath !== path ||
+          current.ref.grantToken !== ref.grantToken ||
+          current.ref.relativePath !== ref.relativePath ||
+          current.ref.fileId !== ref.fileId ||
+          current.ref.version !== ref.version
+        )
+          break;
 
-      const splitLyric = splitLocalLyrics(lyric);
-      // 解析
-      const lrcLines: LyricLine[] = parseLineLyric(splitLyric).line;
-
-      return { lrcData: lrcLines, yrcData: [] };
+        const lines = parseLineLyric(splitLocalLyrics(lyric)).line;
+        if (lines.some((line) => line.words.some((word) => word.word.trim()))) {
+          return { lrcData: lines, yrcData: [] };
+        }
+      }
     } catch {
       return { lrcData: [], yrcData: [] };
     }
+    return { lrcData: [], yrcData: [] };
   }
   /**
    * 处理歌词排除
@@ -171,19 +174,28 @@ class LyricManager {
     platform: string,
     path?: string,
     downloadedEntry?: ScanEntry,
+    isSourceCurrent?: () => boolean,
   ) {
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
     const settingStore = useSettingStore();
     const requestId = ++this.lyricRequest;
+    const isCurrent = () =>
+      requestId === this.lyricRequest &&
+      musicStore.playSong.id === id &&
+      musicStore.playSong.platform === platform &&
+      (!isSourceCurrent || isSourceCurrent());
+    const isLocal = Boolean(path || downloadedEntry);
     try {
       // 歌词加载状态
       statusStore.lyricLoading = true;
       let lyricData;
-      if (path || downloadedEntry) {
+      if (isLocal) {
         lyricData = await this.handleLocalLyric(
           path || downloadedEntry?.relativePath || "",
           id,
+          settingStore.localLyricPriority === "embedded" ? "embedded" : "sidecar",
+          isCurrent,
           downloadedEntry,
         );
         // 排除本地歌词内容
@@ -198,20 +210,11 @@ class LyricManager {
         }
       }
       // 校验请求有效性：如果期间发生切歌或发起了新的歌词请求，丢弃旧结果
-      if (
-        requestId !== this.lyricRequest ||
-        musicStore.playSong.id !== id ||
-        musicStore.playSong.platform !== platform
-      ) {
-        return;
-      }
+      if (!isCurrent()) return;
       this.setFinalLyric(lyricData);
+      if (isLocal) statusStore.lyricIndex = this.calculateLyricIndex(statusStore.currentTime);
     } catch (error) {
-      if (
-        requestId === this.lyricRequest &&
-        musicStore.playSong.id === id &&
-        musicStore.playSong.platform === platform
-      ) {
+      if (isCurrent()) {
         console.error("❌ 处理歌词失败:", error);
         // 重置歌词
         this.resetSongLyric();

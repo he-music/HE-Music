@@ -1,16 +1,18 @@
 import { afterEach, expect, it, vi } from "vitest";
 import type { SongLyric } from "@/types/lyric";
 import type { ScanEntry } from "@/platform/mygo.bindings";
+import type { LocalLyricSource } from "@/platform/localResource";
 
 const mocks = vi.hoisted(() => {
-  const read = vi.fn<(entry: ScanEntry) => Promise<string>>();
+  const read = vi.fn<(entry: ScanEntry, source: LocalLyricSource) => Promise<string>>();
   const createSource = () => ({ ready: { value: true } });
   return {
     read,
+    settings: { enableLocalLyricsExclude: false, localLyricPriority: "sidecar" },
     createSource,
     source: { value: createSource() },
     setSongLyric: vi.fn<(data: Partial<SongLyric>, merge: boolean) => void>(),
-    status: { lyricLoading: false, lyricIndex: -1 },
+    status: { lyricLoading: false, lyricIndex: -1, currentTime: 1200, getSongOffset: () => 0 },
     online: vi.fn(),
     lookup: vi.fn<(songID: string) => ScanEntry | undefined>(),
   };
@@ -19,9 +21,10 @@ vi.mock("@/stores", () => ({
   useMusicStore: () => ({
     playSong: { id: "mygo-local:file", platform: "local" },
     setSongLyric: mocks.setSongLyric,
+    songLyric: mocks.setSongLyric.mock.lastCall?.[0],
   }),
   useStatusStore: () => mocks.status,
-  useSettingStore: () => ({ enableLocalLyricsExclude: false }),
+  useSettingStore: () => mocks.settings,
 }));
 vi.mock("./env", () => ({ isElectron: false }));
 vi.mock("@/api/song", () => ({ songLyric: mocks.online }));
@@ -35,6 +38,7 @@ afterEach(() => {
   mocks.lookup.mockReset();
   mocks.read.mockReset();
   mocks.source.value = mocks.createSource();
+  mocks.settings.localLyricPriority = "sidecar";
 });
 
 it("mygo local lyrics clear the current view without reading Electron or requesting an online song", async () => {
@@ -130,7 +134,7 @@ it("reads full embedded lyrics instead of the bounded 1024-byte scan preview", a
   expect(
     data?.lrcData?.some((line) => line.words.map((word) => word.word).join("") === "完整歌词末句"),
   ).toBe(true);
-  expect(mocks.read).toHaveBeenCalledWith(entry);
+  expect(mocks.read).toHaveBeenCalledWith(entry, "sidecar");
   expect(vi.mocked(console.log).mock.calls.length).toBe(0);
 });
 
@@ -151,5 +155,58 @@ it.each(["removed", "version", "owner"])(
     const lyricManager = (await import("./lyricManager")).default;
     await lyricManager.handleLyric("mygo-local:file", "local", "album/song.mp3");
     expect(mocks.setSongLyric).toHaveBeenLastCalledWith({ lrcData: [], yrcData: [] }, true);
+    expect(mocks.read).toHaveBeenCalledOnce();
   },
 );
+
+it("快速切换优先级时忽略迟到的歌词", async () => {
+  let finish!: (value: string) => void;
+  const pending = new Promise<string>((resolve) => {
+    finish = resolve;
+  });
+  const entry = embeddedEntry("");
+  mocks.lookup.mockReturnValue(entry);
+  mocks.read.mockReturnValueOnce(pending).mockResolvedValueOnce("[00:00.00]新优先级的歌词");
+  const manager = (await import("./lyricManager")).default;
+  const previous = manager.handleLyric("mygo-local:file", "local", "album/song.mp3");
+  mocks.settings.localLyricPriority = "embedded";
+  await manager.handleLyric("mygo-local:file", "local", "album/song.mp3");
+  finish("[00:00.00]迟到的歌词");
+  await previous;
+  expect(mocks.setSongLyric).toHaveBeenCalledOnce();
+  expect(mocks.setSongLyric.mock.lastCall?.[0].lrcData?.[0].words[0].word).toBe("新优先级的歌词");
+});
+
+it.each([
+  {
+    priority: "sidecar",
+    first: "[00:00.00]外部歌词\n[00:01.00]第二句",
+    fallback: "embedded",
+    want: "外部歌词",
+  },
+  {
+    priority: "embedded",
+    first: "[00:00.00]内嵌歌词\n[00:01.00]第二句",
+    fallback: "sidecar",
+    want: "内嵌歌词",
+  },
+  { priority: "sidecar", first: "[ar:无时间轴]", fallback: "embedded", want: "备用歌词" },
+  { priority: "embedded", first: "", fallback: "sidecar", want: "备用歌词" },
+])("$priority 优先，缺少可用歌词时回退（$want）", async ({ priority, first, fallback, want }) => {
+  mocks.settings.localLyricPriority = priority;
+  const entry = embeddedEntry("");
+  mocks.lookup.mockReturnValue(entry);
+  mocks.read.mockResolvedValueOnce(first).mockResolvedValueOnce("[00:01.00]备用歌词");
+  const manager = (await import("./lyricManager")).default;
+  await manager.handleLyric("mygo-local:file", "local", "album/song.mp3");
+  expect(mocks.read).toHaveBeenNthCalledWith(1, entry, priority);
+  expect(mocks.setSongLyric.mock.lastCall?.[0].lrcData?.[0].words[0].word).toBe(want);
+  if (want === "备用歌词") {
+    expect(mocks.read).toHaveBeenNthCalledWith(2, entry, fallback);
+    expect(mocks.read).toHaveBeenCalledTimes(2);
+    expect(mocks.status.lyricIndex).toBe(0);
+  } else {
+    expect(mocks.read).toHaveBeenCalledOnce();
+    expect(mocks.status.lyricIndex).toBe(1);
+  }
+});

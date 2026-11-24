@@ -38,6 +38,17 @@ const partial = (setting: unknown = {}, shortcut: unknown = {}) => ({
 });
 
 describe("rendererSettings", () => {
+  it("保留默认 .lrc 优先，并支持导入内嵌歌词优先", () => {
+    expect(validateSettingState({}).localLyricPriority).toBe("sidecar");
+    const setting = useSettingStore();
+    setting.localLyricPriority = "embedded";
+    const saved = serializeRendererSettings(setting.$state, useShortcutStore().$state);
+    expect(parseRendererSettings(saved)).toEqual(saved);
+    expect(validateSettingState(JSON.parse(saved["setting-store"])).localLyricPriority).toBe(
+      "embedded",
+    );
+    expect(() => validateSettingState({ localLyricPriority: "invalid" })).toThrow();
+  });
   it("persists skipped update versions and supplies an empty value for older settings", () => {
     expect(validateSettingState({}).skippedUpdateVersion).toBe("");
     const setting = useSettingStore();

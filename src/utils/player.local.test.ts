@@ -86,6 +86,27 @@ describe("Player local file audio", () => {
     await player.initPlayer();
     expect(mocks.audio.play).not.toHaveBeenCalled();
     expect(mocks.status.playLoading).toBe(false);
+    await player.reloadLocalLyrics();
+    expect(mocks.lyrics).not.toHaveBeenCalled();
+  });
+
+  it("切换歌词优先级只重新加载当前歌词，不改变音源或进度", async () => {
+    const player = (await import("./player")).usePlayer();
+    await player.initPlayer(false, 5000);
+    await player.reloadLocalLyrics();
+    expect(mocks.lyrics).toHaveBeenCalledTimes(2);
+    expect(mocks.lyrics).toHaveBeenLastCalledWith(
+      mocks.song.id,
+      "local",
+      "song.mp3",
+      undefined,
+      expect.any(Function),
+    );
+    expect(mocks.audio.play).toHaveBeenCalledOnce();
+    expect(mocks.audio.clearSource).toHaveBeenCalledOnce();
+    expect(mocks.audio.pause).toHaveBeenCalledOnce();
+    expect(mocks.audio.seek).toHaveBeenCalledExactlyOnceWith(5);
+    expect(mocks.history).toHaveBeenCalledOnce();
   });
   it("passes the FLAC container hint to the browser driver", async () => {
     mocks.song.path = "我怀念的-孙燕姿.flac";

@@ -72,6 +72,7 @@ class Player {
   private playRequestId = 0;
   /** 独立于界面加载状态，防止获取音源期间重复初始化。 */
   private initializingRequestId?: number;
+  private lyricTrackRequestId?: number;
   /** radio API 等待期尚无新 source request，须单独标识这次操作。 */
   private radioOperation?: symbol;
   // Playback intent is separate from source ownership: pause must not discard
@@ -466,13 +467,10 @@ class Player {
 
   private onTrackSelected() {
     const musicStore = useMusicStore();
-    const { id, platform, path } = musicStore.playSong;
+    const { path } = musicStore.playSong;
     // 获取歌词数据
-    if (this.downloadedPlayback) {
-      lyricManager.handleLyric(id, platform, undefined, this.downloadedPlayback.entry);
-    } else {
-      lyricManager.handleLyric(id, platform, path);
-    }
+    this.lyricTrackRequestId = this.playRequestId;
+    void this.loadTrackLyrics();
     // 新增播放历史
     void useDataStore().setHistory(musicStore.playSong);
     // 获取歌曲封面主色
@@ -480,6 +478,31 @@ class Player {
     // 更新 MediaSession
     if (!path || this.cuePlayback) this.mediaSession.updateMetadata();
     if (this.cuePlayback) this.publishPosition();
+  }
+
+  private loadTrackLyrics() {
+    const { id, platform, path } = useMusicStore().playSong;
+    const downloadedEntry = this.downloadedPlayback?.entry;
+    if (!path && !downloadedEntry) return lyricManager.handleLyric(id, platform, path);
+    const requestId = this.playRequestId;
+    return lyricManager.handleLyric(
+      id,
+      platform,
+      path,
+      downloadedEntry,
+      () => requestId === this.playRequestId,
+    );
+  }
+
+  public async reloadLocalLyrics(): Promise<void> {
+    const { id, path } = useMusicStore().playSong;
+    if (
+      !id ||
+      this.lyricTrackRequestId !== this.playRequestId ||
+      (!path && !this.downloadedPlayback)
+    )
+      return;
+    await this.loadTrackLyrics();
   }
   /**
    * 获取频谱数据

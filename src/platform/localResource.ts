@@ -1,6 +1,8 @@
 import { mygoGatewayOrigin } from "./gateway";
 import type { ScanEntry } from "./mygo.bindings";
 
+export type LocalLyricSource = "sidecar" | "embedded";
+
 const pageRevision = Math.random().toString(36).slice(2);
 const revisions = new WeakMap<ScanEntry, number>();
 let revision = 0;
@@ -21,9 +23,9 @@ export function localResourceURL(
   return `${gateway}/__local/${kind}?${query}`;
 }
 
-export async function readLocalLyrics(entry: ScanEntry): Promise<string> {
+export async function readLocalLyrics(entry: ScanEntry, source: LocalLyricSource): Promise<string> {
   const url = localResourceURL("lyrics", entry);
   if (!url) return "";
-  const response = await fetch(url, { credentials: "omit" });
+  const response = await fetch(`${url}&source=${source}`, { credentials: "omit" });
   return response.ok ? response.text() : "";
 }

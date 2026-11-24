@@ -78,6 +78,23 @@ func TestLocalGatewayEmbeddedArtworkIgnoresIncorrectMIMEAndUsesSidecarLyrics(t *
 	if body != "[00:00.00]sidecar" {
 		t.Fatal("sidecar did not override embedded lyrics")
 	}
+	for _, tc := range []struct {
+		source string
+		lyrics string
+	}{
+		{"embedded", lyrics},
+		{"sidecar", "[00:00.00]sidecar"},
+	} {
+		response, body = gatewayRequest(t, "GET", base+"/__local/lyrics?"+query+"&source="+tc.source, "", nil)
+		if response.StatusCode != http.StatusOK || body != tc.lyrics {
+			t.Fatalf("source %s: got %d %q, want %q", tc.source, response.StatusCode, body, tc.lyrics)
+		}
+	}
+	requireTestNoError(t, os.Remove(filepath.Join(directory, "song.lrc")))
+	response, _ = gatewayRequest(t, "GET", base+"/__local/lyrics?"+query+"&source=sidecar", "", nil)
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatal("explicit sidecar request must not return embedded lyrics")
+	}
 }
 
 func TestLocalGatewayBrowserImageFormats(t *testing.T) {

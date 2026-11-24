@@ -186,6 +186,7 @@ const settingSchema: Schema<SettingState> = {
   localFilesPath: strings,
   localSeparators: strings,
   showLocalCover: bool,
+  localLyricPriority: enumeration("sidecar", "embedded"),
   routeAnimation: enumeration("none", "fade", "zoom", "slide", "up"),
   playerExpandAnimation: enumeration("up", "flow"),
   useRealIP: bool,

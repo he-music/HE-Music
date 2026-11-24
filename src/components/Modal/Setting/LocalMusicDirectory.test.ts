@@ -14,6 +14,7 @@ const rawSetting = vi.hoisted(() => ({
   localFilesPath: ["/synthetic/imported"],
   downloadPath: "/synthetic/imported-download",
   showLocalCover: true,
+  localLyricPriority: "sidecar",
   showDefaultLocalPath: true,
   downloadMeta: true,
   downloadCover: true,
@@ -24,6 +25,7 @@ const rawSetting = vi.hoisted(() => ({
 }));
 const setting = Vue.reactive(rawSetting);
 const legacy = vi.hoisted(() => ({ change: vi.fn(), open: vi.fn() }));
+const reloadLocalLyrics = vi.hoisted(() => vi.fn());
 vi.mock("@/stores", () => ({ useSettingStore: () => setting }));
 vi.mock("@/utils/env", () => ({
   get isElectron() {
@@ -34,6 +36,7 @@ vi.mock("@/utils/env", () => ({
   },
 }));
 vi.mock("@/utils/modal", () => ({ openLocalMusicDirectoryModal: legacy.open }));
+vi.mock("@/utils/player", () => ({ usePlayer: () => ({ reloadLocalLyrics }) }));
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
 import { useLocalSettings } from "@/components/Setting/config/local";
 
@@ -199,6 +202,7 @@ afterEach(async () => {
   host.mygo = true;
   setting.localFilesPath = ["/synthetic/imported"];
   setting.showLocalCover = true;
+  setting.localLyricPriority = "sidecar";
   vi.clearAllMocks();
 });
 it("updates dependent download switches and clears the configured path without revoking grants", async () => {
@@ -224,12 +228,13 @@ it("updates dependent download switches and clears the configured path without r
 });
 
 describe("LocalMusicDirectory真实SFC", () => {
-  it("设置入口开放授权目录与本地封面，Web隐藏", () => {
+  it("设置入口开放授权目录、本地封面和歌词来源优先级，Web 隐藏", () => {
     const config = useLocalSettings();
     expect(config.groups.flatMap((group) => group.items.map((item) => item.key))).toEqual([
       "localFilesPath",
       "showDefaultLocalPath",
       "showLocalCover",
+      "localLyricPriority",
       "downloadPath",
       "downloadMeta",
       "downloadCover",
@@ -245,6 +250,17 @@ describe("LocalMusicDirectory真实SFC", () => {
     if (!cover?.value) throw new Error("Expected cover setting");
     cover.value.value = false;
     expect(setting.showLocalCover).toBe(false);
+    const priority = config.groups[1].items.find((item) => item.key === "localLyricPriority");
+    if (!priority?.value) throw new Error("Expected local lyric priority setting");
+    expect(priority.type).toBe("select");
+    expect(Vue.toValue(priority.options)?.map((option) => option.value)).toEqual([
+      "sidecar",
+      "embedded",
+    ]);
+    priority.value.value = "embedded";
+    priority.value.value = "embedded";
+    expect(setting.localLyricPriority).toBe("embedded");
+    expect(reloadLocalLyrics).toHaveBeenCalledOnce();
     const item = config.groups[0].items[0];
     if (item.type !== "button") throw new Error("Expected directory button");
     item.action?.();

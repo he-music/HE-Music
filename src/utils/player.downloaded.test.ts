@@ -104,7 +104,16 @@ describe("播放器已下载优先", () => {
     );
     expect(mocks.online).not.toHaveBeenCalled();
     expect(mocks.music.playSong).toBe(mocks.song);
-    expect(mocks.lyrics).toHaveBeenCalledWith("online", "test", undefined, downloaded.entry);
+    await player.reloadLocalLyrics();
+    expect(mocks.lyrics).toHaveBeenCalledTimes(2);
+    expect(mocks.lyrics).toHaveBeenLastCalledWith(
+      "online",
+      "test",
+      undefined,
+      downloaded.entry,
+      expect.any(Function),
+    );
+    expect(mocks.audio.play).toHaveBeenCalledOnce();
     expect(mocks.history).toHaveBeenCalledWith(mocks.song);
   });
 
@@ -112,6 +121,8 @@ describe("播放器已下载优先", () => {
     mocks.setting.preferDownloaded = false;
     const player = (await import("./player")).usePlayer();
     await player.initPlayer(false);
+    await player.reloadLocalLyrics();
+    expect(mocks.lyrics).toHaveBeenCalledOnce();
     expect(mocks.resolve).not.toHaveBeenCalled();
     expect(mocks.online).toHaveBeenCalledOnce();
   });

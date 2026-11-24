@@ -23,7 +23,8 @@ func serveLocalResource(w http.ResponseWriter, r *http.Request, kind string) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	name := r.URL.Query().Get("path")
+	query := r.URL.Query()
+	name := query.Get("path")
 	if !filepath.IsAbs(name) {
 		http.Error(w, "absolute path required", http.StatusBadRequest)
 		return
@@ -58,7 +59,20 @@ func serveLocalResource(w http.ResponseWriter, r *http.Request, kind string) {
 	case "artwork":
 		data, mime = localResourceArtwork(ctx, source, stat.Size(), base)
 	case "lyrics":
-		data = localResourceLyrics(ctx, source, stat.Size(), base)
+		switch query.Get("source") {
+		case "embedded":
+			data = localResourceEmbeddedLyrics(ctx, source, stat.Size())
+		case "sidecar":
+			data = localResourceSidecarLyrics(ctx, base)
+		case "":
+			data = localResourceSidecarLyrics(ctx, base)
+			if len(data) == 0 {
+				data = localResourceEmbeddedLyrics(ctx, source, stat.Size())
+			}
+		default:
+			http.Error(w, "invalid lyrics source", http.StatusBadRequest)
+			return
+		}
 	default:
 		http.NotFound(w, r)
 		return
@@ -110,11 +124,15 @@ func localResourceImageMIME(data []byte) string {
 	}
 }
 
-func localResourceLyrics(ctx context.Context, source io.ReaderAt, size int64, base string) []byte {
+func localResourceSidecarLyrics(ctx context.Context, base string) []byte {
 	data := readLocalResourceSidecar(ctx, base+".lrc", localResourceLyricsLimit)
-	if len(data) != 0 && utf8.Valid(data) {
-		return bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})
+	if !utf8.Valid(data) {
+		return nil
 	}
+	return bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf})
+}
+
+func localResourceEmbeddedLyrics(ctx context.Context, source io.ReaderAt, size int64) []byte {
 	parsed, err := metadata.ParseScan(&displayReader{ctx: ctx, source: source, remaining: 16 << 20}, size)
 	if err != nil || len(parsed.Lyrics) > localResourceLyricsLimit || !utf8.ValidString(parsed.Lyrics) {
 		return nil

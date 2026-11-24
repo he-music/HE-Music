@@ -42,9 +42,16 @@ it("loads full lyric text over HTTP and handles missing lyrics", async () => {
     .mockResolvedValueOnce(new Response(null, { status: 404 }));
   vi.stubGlobal("fetch", fetcher);
   const entry = localEntry();
-  expect(await readLocalLyrics(entry)).toBe(lyric);
-  expect(fetcher).toHaveBeenCalledWith(localResourceURL("lyrics", entry), { credentials: "omit" });
-  expect(await readLocalLyrics(entry)).toBe("");
+  expect(await readLocalLyrics(entry, "embedded")).toBe(lyric);
+  expect(await readLocalLyrics(entry, "sidecar")).toBe("");
+  const first = new URL(fetcher.mock.calls[0][0]);
+  const second = new URL(fetcher.mock.calls[1][0]);
+  expect(first.pathname).toBe("/session/__local/lyrics");
+  expect(first.searchParams.get("path")).toBe(entry.path);
+  expect(first.searchParams.get("source")).toBe("embedded");
+  expect(second.searchParams.get("source")).toBe("sidecar");
+  expect(second.searchParams.get("v")).toBe(first.searchParams.get("v"));
+  expect(fetcher.mock.calls[0][1]).toEqual({ credentials: "omit" });
 });
 
 it("recognizes only local audio URLs on the active gateway and skips redundant CORS probing", async () => {

@@ -8,11 +8,21 @@ const mocks = vi.hoisted(() => ({
   read: vi.fn(),
   publish: vi.fn(),
   online: vi.fn(),
+  settings: { enableLocalLyricsExclude: false, localLyricPriority: "embedded" },
 }));
 vi.mock("@/stores", () => ({
-  useMusicStore: () => ({ playSong: mocks.song, setSongLyric: mocks.publish }),
-  useStatusStore: () => ({ lyricLoading: false, lyricIndex: -1 }),
-  useSettingStore: () => ({ enableLocalLyricsExclude: false }),
+  useMusicStore: () => ({
+    playSong: mocks.song,
+    setSongLyric: mocks.publish,
+    songLyric: mocks.publish.mock.lastCall?.[0],
+  }),
+  useStatusStore: () => ({
+    lyricLoading: false,
+    lyricIndex: -1,
+    currentTime: 0,
+    getSongOffset: () => 0,
+  }),
+  useSettingStore: () => mocks.settings,
 }));
 vi.mock("@/api/song", () => ({ songLyric: mocks.online }));
 vi.mock("@/platform/filesSession", () => ({
@@ -36,6 +46,7 @@ afterEach(() => vi.unstubAllGlobals());
 it("已下载文件歌词按原在线歌曲身份发布，无需在线请求", async () => {
   const manager = (await import("./lyricManager")).default;
   await manager.handleLyric("online", "test", undefined, mocks.owner.libraryEntries[0]);
+  expect(mocks.read).toHaveBeenCalledExactlyOnceWith(mocks.owner.libraryEntries[0], "embedded");
   expect(mocks.publish).toHaveBeenCalledWith(
     expect.objectContaining({
       lrcData: expect.arrayContaining([
@@ -47,6 +58,7 @@ it("已下载文件歌词按原在线歌曲身份发布，无需在线请求", a
     true,
   );
   expect(mocks.online).not.toHaveBeenCalled();
+  expect(mocks.publish).toHaveBeenCalledOnce();
 });
 
 it("读取过程中目录失效时丢弃已下载文件歌词", async () => {

@@ -127,7 +127,7 @@
                 clearable
               />
             </n-form-item>
-            <n-form-item :label="t('common.lyrics')">
+            <n-form-item :label="t('local_metadata.lyrics')">
               <n-input
                 v-model:value="form.lyrics"
                 :autosize="{ minRows: 3, maxRows: 6 }"
