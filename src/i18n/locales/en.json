@@ -28,6 +28,21 @@
     "remove": "Remove",
     "delete_confirm": "Delete playlist “{name}”? Music files will be kept."
   },
+  "lyric_card": {
+    "translation": "Translation",
+    "romaji": "Romanization",
+    "select_all": "Select all",
+    "copy": "Copy ({count})",
+    "save_png": "Save PNG",
+    "download_png": "Download PNG",
+    "saved": "Lyric card saved",
+    "download_started": "Download started. Check your browser’s downloads.",
+    "no_copy_content": "No lyrics to copy",
+    "no_export_content": "Select at least one lyric line with visible text",
+    "unknown_song": "Unknown song",
+    "too_large": "The lyric card is too long. Select fewer lines and try again.",
+    "export_failed": "Could not export the PNG. Please try again."
+  },
   "lyricToolbar": {
     "label": "Lyric options",
     "shortLabel": "Lyrics",

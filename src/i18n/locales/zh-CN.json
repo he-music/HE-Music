@@ -28,6 +28,21 @@
     "remove": "移除",
     "delete_confirm": "删除歌单“{name}”？音乐文件会保留。"
   },
+  "lyric_card": {
+    "translation": "翻译",
+    "romaji": "音译",
+    "select_all": "全选",
+    "copy": "复制（{count}）",
+    "save_png": "保存 PNG",
+    "download_png": "下载 PNG",
+    "saved": "歌词卡片已保存",
+    "download_started": "已发起下载，请查看浏览器的下载记录",
+    "no_copy_content": "没有可复制的内容",
+    "no_export_content": "请至少选择一行有可见内容的歌词",
+    "unknown_song": "未知歌曲",
+    "too_large": "歌词卡片过长，请减少所选行后重试。",
+    "export_failed": "无法导出 PNG，请重试。"
+  },
   "lyricToolbar": {
     "label": "歌词选项",
     "shortLabel": "词",

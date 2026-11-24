@@ -12,6 +12,7 @@ export interface PlatformFiles {
   defaultDirectory: FileMethods["defaultDirectory"];
   importSettings: FileMethods["importSettings"];
   exportSettings: FileMethods["exportSettings"];
+  saveLyricCard?: FileMethods["saveLyricCard"];
   revokeDirectory: FileMethods["revokeDirectory"];
   teardown: FileMethods["teardown"];
   startScan?: FileMethods["startScan"];

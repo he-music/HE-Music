@@ -229,6 +229,8 @@ export interface LocalFileRef {
   version: string;
 }
 
+export type LyricCardSaveStatus = "saved" | "cancelled";
+
 export type LyricsAction = "previous" | "toggle" | "next" | "show-main" | "open-settings";
 
 export interface LyricsAttachment {
@@ -779,6 +781,8 @@ export const NativeFiles = {
   restoreDirectories: bind<[number], RestoredDirectories>("NativeFiles.RestoreDirectories", (epoch: number) => [epoch]),
   revealLocalFile: bind<[number, LocalFileRef], FileActionResult>("NativeFiles.RevealLocalFile", (epoch: number, ref: LocalFileRef) => [epoch, ref]),
   revokeDirectory: bind<[number, string], void>("NativeFiles.RevokeDirectory", (epoch: number, token: string) => [epoch, token]),
+  /** SaveLyricCard writes PNG bytes only to a path selected in the native dialog. */
+  saveLyricCard: bind<[number, string, string], LyricCardSaveStatus>("NativeFiles.SaveLyricCard", (epoch: number, suggestedName: string, payload: string) => [epoch, suggestedName, payload]),
   /**
    * OperationID is a caller-generated 32-byte hex nonce. Reusing it never writes
    * twice; completed operations return their original result while still owned.

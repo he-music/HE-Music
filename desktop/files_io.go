@@ -72,7 +72,11 @@ func newDirectoryToken() (string, error) {
 // Only a picker-returned path reaches this helper. Pin the parent directory and
 // address exactly one basename through Root, never through renderer input.
 func openSettingsParent(path string) (*directoryHandle, string, error) {
-	if !filepath.IsAbs(path) || strings.ToLower(filepath.Ext(path)) != ".json" {
+	return openFileParent(path, ".json")
+}
+
+func openFileParent(path, extension string) (*directoryHandle, string, error) {
+	if !filepath.IsAbs(path) || !strings.EqualFold(filepath.Ext(path), extension) {
 		return nil, "", errFileIO
 	}
 	parent, err := openDirectoryHandle(filepath.Dir(path))
@@ -119,7 +123,11 @@ type preparedSettingsSave struct {
 }
 
 func prepareSettingsSave(path string, data []byte) (*preparedSettingsSave, error) {
-	parent, name, err := openSettingsParent(path)
+	return prepareFileSave(path, data, ".json", ".he-music-settings-")
+}
+
+func prepareFileSave(path string, data []byte, extension, tempPrefix string) (*preparedSettingsSave, error) {
+	parent, name, err := openFileParent(path, extension)
 	if err != nil {
 		return nil, err
 	}
@@ -142,7 +150,7 @@ func prepareSettingsSave(path string, data []byte) (*preparedSettingsSave, error
 	if err != nil {
 		return nil, errFileIO
 	}
-	save.temp = ".he-music-settings-" + token + ".tmp"
+	save.temp = tempPrefix + token + ".tmp"
 	file, err := parent.root.OpenFile(save.temp, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o600)
 	if err != nil {
 		return nil, errFileIO

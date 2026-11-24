@@ -15,6 +15,7 @@ import type {
   RendererSettings,
   SettingsImportResult,
   SettingsExportResult,
+  LyricCardSaveStatus,
   ScanEntry,
   ScanOperation,
   ScanPage,
@@ -232,6 +233,15 @@ export class FilesSession {
 
   exportSettings(settings: RendererSettings): Promise<FileOperationResult<SettingsExportResult>> {
     return this.run((epoch) => this.provider.exportSettings(epoch, settings));
+  }
+
+  saveLyricCard(
+    filename: string,
+    payload: string,
+  ): Promise<FileOperationResult<LyricCardSaveStatus>> {
+    const { saveLyricCard } = this.provider;
+    if (!saveLyricCard) return Promise.resolve({ status: "unavailable" });
+    return this.run((epoch) => saveLyricCard(epoch, filename, payload));
   }
 
   chooseDirectory(): Promise<FileOperationResult<DirectorySelection>> {
