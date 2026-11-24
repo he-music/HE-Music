@@ -3,7 +3,11 @@
     "reorder": "Reorder {name}",
     "keyboard": "Use the Up and Down arrow keys to move",
     "position": "Moved to position {position}",
-    "save_failed": "Could not save the queue order"
+    "save_failed": "Could not save the queue order",
+    "search": "Find a song or artist in the queue",
+    "search_empty": "No matching songs",
+    "locate_result": "Locate in the play queue",
+    "located": "Located at position {position}"
   },
   "local_playlists": {
     "cover": "Playlist cover",

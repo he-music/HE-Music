@@ -3,7 +3,11 @@
     "reorder": "调整《{name}》的顺序",
     "keyboard": "用上、下方向键移动",
     "position": "已移到第 {position} 首",
-    "save_failed": "未能保存播放顺序"
+    "save_failed": "未能保存播放顺序",
+    "search": "搜索队列中的歌曲或歌手",
+    "search_empty": "未找到匹配的歌曲",
+    "locate_result": "在播放队列中定位",
+    "located": "已定位到第 {position} 首"
   },
   "local_playlists": {
     "cover": "歌单封面",

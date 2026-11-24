@@ -1,12 +1,12 @@
 <template>
-  <div class="index">
+  <span class="index">
     <SvgIcon v-if="playing" :size="20" name="Music" />
     <n-text v-else :class="['num', { big: position > 9999 }]" depth="3">{{ position }}</n-text>
-  </div>
-  <div class="data">
+  </span>
+  <span class="data">
     <n-text class="name text-hidden">{{ song.name }}</n-text>
     <n-text class="artists text-hidden" depth="3">{{ artists }}</n-text>
-  </div>
+  </span>
 </template>
 
 <script setup lang="ts">
