@@ -1,25 +1,21 @@
 <template>
-  <div :class="['background', settingStore.playerBackgroundType]">
+  <div :class="['background', backgroundType]">
     <Transition name="fade" mode="out-in">
       <!-- 背景色 -->
-      <div
-        v-if="settingStore.playerBackgroundType === 'color'"
-        :key="musicStore.songCover"
-        class="color"
-      />
+      <div v-if="backgroundType === 'color'" :key="musicStore.songCover" class="color" />
       <!-- 背景模糊 -->
       <s-image
-        v-else-if="settingStore.playerBackgroundType === 'blur'"
+        v-else-if="backgroundType === 'blur'"
         :src="musicStore.songCover"
         :observe-visibility="false"
         class="bg-img"
         alt="cover"
       />
       <!-- 歌手写真 -->
-      <ArtistPhotoBackground v-else-if="settingStore.playerBackgroundType === 'artist-photo'" />
+      <ArtistPhotoBackground v-else-if="backgroundType === 'artist-photo'" />
       <!-- 流体效果 -->
       <BackgroundRender
-        v-else-if="settingStore.playerBackgroundType === 'animation'"
+        v-else-if="backgroundType === 'animation'"
         :album="gatewayProxyUrl(musicStore.songCover)"
         :playing="statusStore.playStatus"
         :fps="settingStore.playerBackgroundFps ?? 60"
@@ -32,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { defineAsyncComponent } from "vue";
+import { computed, defineAsyncComponent } from "vue";
 import { gatewayProxyUrl } from "@/platform/gateway";
 import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 
@@ -42,6 +38,14 @@ const BackgroundRender = defineAsyncComponent(
 const musicStore = useMusicStore();
 const settingStore = useSettingStore();
 const statusStore = useStatusStore();
+
+const backgroundType = computed(() => {
+  const type = settingStore.playerBackgroundType;
+  if (type !== "artist-photo") return type;
+
+  const platform = musicStore.playSong.platform;
+  return musicStore.isLocalSong || !platform || platform === "local" ? "blur" : type;
+});
 </script>
 
 <style lang="scss" scoped>
