@@ -1,5 +1,5 @@
 <template>
-  <div :key="searchKeyword" ref="searchPageRef" class="search">
+  <div class="search platform-page">
     <template v-if="!platformStore.loginRequired">
       <div class="search-filters">
         <PageTabs :value="searchType" category @update:value="tabChange">
@@ -22,17 +22,19 @@
           </n-tab>
         </PageTabs>
       </div>
-      <div class="search-results">
-        <KeepAlive>
-          <component
-            :is="searchComponent"
-            v-if="searchComponent && searchPlatform"
-            :key="`${searchType}:${searchPlatform}`"
-            :keyword="searchKeyword"
-            :platform="searchPlatform"
-          />
-        </KeepAlive>
-      </div>
+      <PagePlatformScroll :reset-key="searchScrollKey">
+        <div class="search-results">
+          <KeepAlive :key="searchKeyword">
+            <component
+              :is="searchComponent"
+              v-if="searchComponent && searchPlatform"
+              :key="`${searchType}:${searchPlatform}`"
+              :keyword="searchKeyword"
+              :platform="searchPlatform"
+            />
+          </KeepAlive>
+        </div>
+      </PagePlatformScroll>
     </template>
     <PlatformAccessEmpty v-else />
   </div>
@@ -40,6 +42,7 @@
 
 <script setup lang="ts">
 import { usePlatformStore } from "@/stores";
+import PagePlatformScroll from "@/components/Page/PagePlatformScroll.vue";
 import PlatformAccessEmpty from "@/components/Page/PlatformAccessEmpty.vue";
 import PageTabs from "@/components/Page/PageTabs.vue";
 import Songs from "@/views/Search/songs.vue";
@@ -59,8 +62,6 @@ const router = useRouter();
 
 const platformStore = usePlatformStore();
 
-const searchPageRef = ref<HTMLElement | null>(null);
-
 // 搜索关键词（从路由派生，响应式）
 const searchKeyword = computed(() => router.currentRoute.value.query.keyword as string);
 
@@ -70,14 +71,8 @@ const searchType = computed(
 );
 const searchPlatform = computed(() => (router.currentRoute.value.query.platform as string) || "");
 
-// 切换搜索条件后从新结果顶部开始。
-watch(
-  [searchKeyword, searchType, searchPlatform],
-  () => {
-    if (router.currentRoute.value.name !== "search") return;
-    searchPageRef.value?.closest<HTMLElement>(".n-scrollbar-container")?.scrollTo({ top: 0 });
-  },
-  { flush: "post" },
+const searchScrollKey = computed(() =>
+  JSON.stringify([searchKeyword.value, searchType.value, searchPlatform.value]),
 );
 
 // 搜索类型 → FeatureSupportFlag 映射
@@ -179,11 +174,7 @@ watch(
 .search {
   width: 100%;
   .search-filters {
-    position: sticky;
-    top: 0;
-    z-index: 20;
-    width: 100%;
-    background: var(--page-toolbar-background, rgb(var(--background)));
+    flex: none;
   }
   .search-results {
     padding-top: 12px;

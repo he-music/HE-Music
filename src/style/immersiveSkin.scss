@@ -87,7 +87,8 @@
   }
 
   #main-content {
-    .page-platform-tabs > .page-tabs > .n-tabs-nav {
+    .page-platform-tabs > .page-tabs > .n-tabs-nav,
+    .search-platform-tabs > .n-tabs-nav {
       .n-tabs-bar {
         visibility: hidden;
       }
@@ -108,10 +109,6 @@
           pointer-events: none;
         }
       }
-    }
-
-    .search-filters {
-      --page-toolbar-background: var(--skin-panel);
     }
 
     .song-data-card,

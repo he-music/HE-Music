@@ -235,9 +235,6 @@ onMounted(() => {
         height: calc(var(--layout-height) * 1px);
         overflow: hidden;
       }
-      &.search {
-        height: auto;
-      }
       &.mobile-detail {
         height: auto;
         min-height: 100%;
