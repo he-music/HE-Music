@@ -7,20 +7,28 @@
       gap: '12px',
     }"
   >
-    <div class="config-section">
-      <n-card class="set-item">
-        <div class="label">
-          <n-text class="name">{{ t("setting.general.theme_skin") }}</n-text>
-        </div>
-        <n-select
-          v-model:value="settingStore.immersiveSkin"
-          :aria-label="t('setting.general.theme_skin')"
-          :options="skinOptions"
-          class="set skin-select"
-          size="small"
-        />
-      </n-card>
-    </div>
+    <fieldset class="appearance-section">
+      <legend class="appearance-title">{{ t("setting.general.theme_skin") }}</legend>
+      <div class="appearance-options">
+        <label v-for="skin in skinOptions" :key="skin.id" class="skin-option">
+          <input
+            class="skin-radio"
+            type="radio"
+            :name="`${appearanceId}-skin`"
+            :value="skin.id"
+            :checked="settingStore.immersiveSkin === skin.id"
+            @change="settingStore.immersiveSkin = skin.id"
+          />
+          <span class="appearance-card skin-card">
+            <SkinPreview :skin="skin.id" />
+            <span class="appearance-label">
+              {{ t(skin.labelKey) }}
+              <span v-if="settingStore.immersiveSkin === skin.id" aria-hidden="true">✓</span>
+            </span>
+          </span>
+        </label>
+      </div>
+    </fieldset>
     <div v-if="!settingStore.activeSkin" class="config-section">
       <n-card class="set-item">
         <div class="label">
@@ -278,7 +286,9 @@
 
 <script setup lang="ts">
 import { useSettingStore, useStatusStore, useDataStore } from "@/stores";
+import { useId } from "vue";
 import { immersiveSkins } from "@/theme/skins";
+import SkinPreview from "./SkinPreview.vue";
 import { useMusicStore } from "@/stores/music";
 import { isEmpty, snakeCase } from "lodash-es";
 import themeColor from "@/assets/data/themeColor.json";
@@ -290,10 +300,12 @@ import blobURLManager from "@/utils/blob";
 const { t } = useI18n();
 const musicStore = useMusicStore();
 const settingStore = useSettingStore();
-const skinOptions = computed(() => [
-  { label: t("setting.general.theme_skin_none"), value: "none" },
-  ...immersiveSkins.map(({ id, labelKey }) => ({ label: t(labelKey), value: id })),
-]);
+const appearanceId = useId();
+const skinOptions = [
+  { id: "none", labelKey: "setting.general.theme_skin_none" },
+  ...immersiveSkins,
+] as const;
+
 const statusStore = useStatusStore();
 const dataStore = useDataStore();
 
@@ -413,13 +425,81 @@ const clearBackgroundImage = async () => {
 </script>
 
 <style lang="scss" scoped>
+.appearance-section {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 2px 3px 3px;
+  border: 0;
+}
+
+.appearance-title {
+  margin: 0 0 6px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.appearance-options {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 102px), 1fr));
+}
+
+.skin-option {
+  position: relative;
+  display: grid;
+}
+
+.skin-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  clip-path: inset(50%);
+}
+
+.appearance-card {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  padding: 6px;
+  border: 1px solid rgba(var(--primary), 0.28);
+  border-radius: 8px;
+  color: inherit;
+  background: transparent;
+  font: inherit;
+  text-align: start;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+
+  &:hover {
+    background: rgba(var(--primary), 0.08);
+  }
+}
+
+.skin-radio:checked + .skin-card {
+  border-color: rgb(var(--primary));
+  background: rgba(var(--primary), 0.12);
+}
+
+.skin-radio:focus-visible + .skin-card {
+  outline: 2px solid currentColor;
+  outline-offset: 1px;
+}
+
+.appearance-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .config-section {
   display: flex;
   flex-direction: column;
   gap: 12px;
-  .skin-select {
-    width: min(170px, 55%);
-  }
 
   .set-item {
     border-radius: 8px;

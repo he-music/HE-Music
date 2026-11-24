@@ -12,6 +12,8 @@
 
 新皮肤的色值、底图、材质和交互高亮集中在自己的 `.ts` 和 `.scss`。主窗口只绘制一张底图，顶栏、侧栏、内容区和播放栏共用这张图。共享界面调整默认覆盖全部沉浸皮肤。 [共享样式](../src/style/immersiveSkin.scss)
 
+在 [皮肤缩略图](../src/components/Modal/Setting/SkinPreview.vue) 的 `skinScenes` 中复用同一底图，让新皮肤在选择前也有缩略图。
+
 ## 变量怎么填
 
 TypeScript 预设里的 `--skin-primary-rgb`、`--skin-base-rgb` 和 `--skin-panel-rgb` 使用逗号分隔的 RGB 通道，例如 `255, 209, 151`。`--skin-text` 和 `--skin-secondary` 使用完整 CSS 颜色。让 `themeOverrides.common` 从同一组常量取值，例如 `primaryColor` 对应主色，`bodyColor` 对应底色，`cardColor` 和 `modalColor` 对应面板色。Naive UI 的配色字段使用可解析的具体色值，例如由通道拼成的 `rgb(255, 209, 151)`。 [实现参考](../src/theme/skins/iceLake.ts)

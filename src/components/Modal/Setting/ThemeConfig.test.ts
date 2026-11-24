@@ -1,8 +1,10 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { reactive } from "vue";
+import { createPinia } from "pinia";
+import { h, reactive } from "vue";
 import { isEmpty, snakeCase } from "lodash-es";
 import themeColors from "@/assets/data/themeColor.json";
-import { getImmersiveSkin, immersiveSkins, type ImmersiveSkin } from "@/theme/skins";
+import { immersiveSkins, type ImmersiveSkin } from "@/theme/skins";
+import { useSettingStore } from "@/stores/setting";
 import { emitHostEvent, flushSfcHost, mountProductionSfc } from "@/test/productionSfc";
 
 const cleanups: Array<() => void> = [];
@@ -12,19 +14,20 @@ afterEach(() => {
 });
 
 function fixture(globalColor: boolean, backgroundMode = "color") {
-  const setting = reactive({
+  const setting = useSettingStore(createPinia());
+  setting.$patch({
     themeGlobalColor: globalColor,
-    immersiveSkin: "none" as ImmersiveSkin,
-    get activeSkin() {
-      return getImmersiveSkin(this.immersiveSkin);
-    },
     themeFollowCover: true,
-    themeColorType: "default",
-    themeCustomColor: "#fe7971",
-    themeVariant: "primary",
+    themeMode: "auto",
+    playerType: "record",
+    playerBackgroundType: "blur",
+    lyricRenderer: "classic",
+    lyricsPosition: "flex-end",
+    showPureLyricSongInfo: false,
   });
   const status = reactive({
     themeBackgroundMode: backgroundMode,
+    pureLyricMode: true,
     get isCustomBackground() {
       return this.themeBackgroundMode !== "color";
     },
@@ -63,6 +66,9 @@ function fixture(globalColor: boolean, backgroundMode = "color") {
         default: { revokeBlobURL: vi.fn(), createBlobURL: () => "blob:background" },
       },
       "@/theme/skins": { immersiveSkins },
+      "./SkinPreview.vue": {
+        default: (props: Record<string, unknown>) => h("SkinPreview", props),
+      },
     },
     [
       "NScrollbar",
@@ -79,16 +85,15 @@ function fixture(globalColor: boolean, backgroundMode = "color") {
   );
   cleanups.push(host.close);
   const globalSwitch = () => host.all().find((node) => node.tag === "NSwitch");
-  const selectSkin = async (value: typeof setting.immersiveSkin) => {
-    const select = host
-      .all()
-      .find((node) => node.props["aria-label"] === "setting.general.theme_skin");
-    if (!select) throw new Error("Missing skin select");
-    emitHostEvent(select, "onUpdate:value", value);
+  const skinOptions = () => host.all().filter((node) => node.props.type === "radio");
+  const selectSkin = async (value: ImmersiveSkin) => {
+    const radio = skinOptions().find((node) => node.props.value === value);
+    if (!radio) throw new Error("Missing skin option");
+    emitHostEvent(radio, "onChange");
     await flushSfcHost();
   };
   const selectVideo = async () => {
-    const input = host.all().find((node) => node.tag === "input");
+    const input = host.all().find((node) => node.props.type === "file");
     if (!input) throw new Error("Missing background file input");
     emitHostEvent(input, "onChange", {
       target: {
@@ -104,8 +109,47 @@ function fixture(globalColor: boolean, backgroundMode = "color") {
     emitHostEvent(button, "onClick");
     await flushSfcHost();
   };
-  return { setting, status, data, message, globalSwitch, selectSkin, selectVideo, clear };
+  return {
+    host,
+    setting,
+    status,
+    data,
+    message,
+    globalSwitch,
+    skinOptions,
+    selectSkin,
+    selectVideo,
+    clear,
+  };
 }
+
+it("在同一个原生单选组显示关闭和注册表中的所有皮肤缩略图", () => {
+  const { host, skinOptions } = fixture(false);
+  expect(skinOptions().map((node) => [node.props.value, node.props.checked])).toEqual([
+    ["none", true],
+    ...immersiveSkins.map(({ id }) => [id, false]),
+  ]);
+  expect(new Set(skinOptions().map((node) => node.props.name)).size).toBe(1);
+  for (const radio of skinOptions()) {
+    expect(radio.parent?.tag).toBe("label");
+    expect(
+      host.all(radio.parent ?? radio).find((node) => node.tag === "SkinPreview")?.props.skin,
+    ).toBe(radio.props.value);
+  }
+});
+
+it("选择及关闭沉浸皮肤不会修改播放器样式、背景或歌词设置", async () => {
+  const { setting, status, selectSkin } = fixture(false);
+  const initialSettings = { ...setting.$state };
+
+  await selectSkin("ice-lake");
+  expect(setting.$state).toEqual({ ...initialSettings, immersiveSkin: "ice-lake" });
+  expect(status.pureLyricMode).toBe(true);
+
+  await selectSkin("none");
+  expect(setting.$state).toEqual(initialSettings);
+  expect(status.pureLyricMode).toBe(true);
+});
 
 it.each([
   ["ice-lake", "dark"],
