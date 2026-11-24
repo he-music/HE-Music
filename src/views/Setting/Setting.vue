@@ -134,9 +134,23 @@ const tabChange = (key: SettingType) => {
 .setting {
   display: flex;
   width: 100%;
-  overflow: scroll;
-  :deep(.n-tabs-pane-wrapper) {
+  min-height: 0;
+  max-height: calc(var(--layout-height) * 1px);
+
+  .tabs > :deep(.n-tabs-nav) {
+    flex: none;
+  }
+
+  .tabs > :deep(.n-tabs-pane-wrapper) {
+    flex: 1;
+    min-height: 0;
     padding: 0;
+
+    > .n-tab-pane {
+      height: 100%;
+      overflow: auto;
+    }
+
     .setting-type {
       transition: opacity 0.2s ease-in-out;
     }

@@ -101,8 +101,23 @@ watch(
 .like {
   display: flex;
   flex-direction: column;
+  .tabs {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    flex: none;
+    padding-block: 8px;
+    background: var(--sticky-surface-background, rgb(var(--background)));
+    backdrop-filter: var(--sticky-surface-filter, none);
+
+    @media (prefers-reduced-transparency: reduce), (prefers-contrast: more) {
+      background: rgb(var(--background));
+      backdrop-filter: none;
+    }
+  }
   .title {
     display: flex;
+    flex-shrink: 0;
     align-items: flex-end;
     line-height: normal;
     margin-top: 12px;
