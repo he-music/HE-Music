@@ -27,6 +27,12 @@
       />
       <DefaultLyric v-else :clock="lyricClock" />
     </div>
+    <LyricEmptyActions
+      v-if="
+        !musicStore.isHasLrc && (!compactToolbar || isPVLyricRenderer(settingStore.lyricRenderer))
+      "
+      class="stage-empty-actions"
+    />
     <!-- 歌词菜单 -->
     <div v-if="compactToolbar" class="mobile-lyric-controls" @touchstart.stop>
       <n-popover
@@ -68,14 +74,27 @@
           <LyricToolbar
             v-else
             compact
+            :can-search="musicStore.isHasLrc && canSearch"
+            :has-manual="musicStore.isHasLrc && hasManual"
+            :restoring="restoring"
             @close="toolbarShow = false"
             @style="toolbarView = 'style'"
+            @search="search"
+            @restore="restore"
           />
         </div>
       </n-popover>
       <MobilePlayButton compact class="lyric-play-button" />
     </div>
-    <LyricToolbar v-else class="lyric-menu" />
+    <LyricToolbar
+      v-else
+      class="lyric-menu"
+      :can-search="musicStore.isHasLrc && canSearch"
+      :has-manual="musicStore.isHasLrc && hasManual"
+      :restoring="restoring"
+      @search="search"
+      @restore="restore"
+    />
   </div>
 </template>
 
@@ -86,11 +105,13 @@ import { usePlayer } from "@/utils/player";
 import { isPVLyricRenderer } from "@/utils/lyric/renderer";
 import { useI18n } from "vue-i18n";
 import LyricToolbar from "./LyricToolbar.vue";
+import LyricEmptyActions from "./LyricEmptyActions.vue";
 import MobilePlayButton from "../PlayerComponents/MobilePlayButton.vue";
 import PlayerStylePanel from "../PlayerStylePanel.vue";
 import audioManager from "@/utils/audioManager";
 import { useLyricPlaybackClock } from "@/components/LyricStage/useLyricPlaybackClock";
 import { useOverlayBack } from "@/composables/useOverlayBack";
+import { useManualLyricActions } from "@/composables/useManualLyricActions";
 
 const AMLyric = defineAsyncComponent(() => import("./AMLyric.vue"));
 const MonetLyric = defineAsyncComponent(() => import("./MonetLyric.vue"));
@@ -105,6 +126,7 @@ const statusStore = useStatusStore();
 const player = usePlayer();
 const { t } = useI18n();
 const { isMobilePlayer: compactToolbar } = useMobile();
+const { canSearch, hasManual, restoring, search, restore } = useManualLyricActions();
 const toolbarShow = ref(false);
 const toolbarView = ref<"tools" | "style">("tools");
 watch(toolbarShow, (show) => {
@@ -150,6 +172,11 @@ const lyricClock = { time: playSeek };
   width: 100%;
   height: 100%;
   min-height: 0;
+  .stage-empty-actions {
+    position: absolute;
+    inset: 50% 0 auto;
+    transform: translateY(-50%);
+  }
   .lyric-stage {
     width: 100%;
     height: 100%;

@@ -1,4 +1,6 @@
 import { LyricLine, LyricWord } from "@applemusic-like-lyrics/lyric";
+import type { SongLyric } from "@/types/lyric";
+import type { LyricInfo } from "@/types/main.hemusic";
 
 export const transSeparator = "[lang:trans]";
 export const romaSeparator = "[lang:roma]";
@@ -49,7 +51,29 @@ const wordLineRegex = /<(?<begin>\d+),(?<end>\d+)>(?<word>.*?)(?=<\d+,\d+>|$)/g;
 const extractLrcRegex = /^(?<lyricTimestamps>(?:\[.+?\])+)(?!\[)(?<content>.+)$/gm;
 const extractTimestampRegex = /\[(?<min>\d+):(?<sec>\d+)(?:\.|:)*(?<ms>\d+)*\]/g;
 
-export const isWordLyric = (lyric: string = "") => wordTimestampRegex.test(lyric);
+export const isWordLyric = (lyric: string = "") => /<\d+,\d+>/.test(lyric);
+
+export function parseSongLyric({
+  lyric = "",
+  trans,
+  roma,
+}: Partial<Pick<LyricInfo, "lyric" | "trans" | "roma">>): SongLyric {
+  const embedded = splitLocalLyrics(lyric);
+  const data = {
+    lyric: embedded.lyric,
+    trans: trans?.trim() || embedded.trans,
+    roma: roma?.trim() || embedded.roma,
+  };
+  return isWordLyric(data.lyric)
+    ? { lrcData: [], yrcData: parseWordLyric(data).line }
+    : { lrcData: parseLineLyric(data).line, yrcData: [] };
+}
+
+export function hasLyricText({ lrcData, yrcData }: SongLyric): boolean {
+  return (yrcData.length ? yrcData : lrcData).some((line) =>
+    line.words.some((word) => word.word.trim()),
+  );
+}
 
 export const parseLyric = ({ lyric, roma, trans }) => {
   if (!isWordLyric(lyric)) {
@@ -65,7 +89,7 @@ export const parseWordLyric = ({ lyric = "", roma = "", trans = "" }) => {
   const spells = parse(removeWordLyric(roma));
   const transLyrics = parse(removeWordLyric(trans));
 
-  for (const { rawTime, time, content } of lyrics) {
+  for (const { time, content } of lyrics) {
     // content
     // <0,648>Love<648,162> <810,810>Story<1620,162> <1782,162>-<1944,162> <2106,972>Taylor<3078,162> <3240,810>
     const words: LyricWord[] = [];
@@ -99,10 +123,8 @@ export const parseWordLyric = ({ lyric = "", roma = "", trans = "" }) => {
 
     const lrc: LyricLine = {
       words: words,
-      translatedLyric:
-        transLyrics.find(({ rawTime: tLyricRawTime }) => tLyricRawTime === rawTime)?.content || "",
-      romanLyric:
-        spells.find(({ rawTime: sLyricRawTime }) => sLyricRawTime === rawTime)?.content || "",
+      translatedLyric: transLyrics.find((line) => line.time === time)?.content || "",
+      romanLyric: spells.find((line) => line.time === time)?.content || "",
       startTime: time,
       endTime: words[words.length - 1]?.endTime || time,
       isBG: false,
@@ -129,7 +151,7 @@ export const parseLineLyric = ({ lyric = "", roma = "", trans = "" }) => {
   const spells = parse(removeWordLyric(roma));
   const transLyrics = parse(removeWordLyric(trans));
 
-  for (const { rawTime, time, content } of lyrics) {
+  for (const { time, content } of lyrics) {
     const lrc: LyricLine = {
       words: [
         {
@@ -139,13 +161,8 @@ export const parseLineLyric = ({ lyric = "", roma = "", trans = "" }) => {
           romanWord: "",
         },
       ],
-      translatedLyric:
-        transLyrics.find(
-          ({ rawTime: tRawTime, time: tTime }) => tRawTime === rawTime || tTime === time,
-        )?.content || "",
-      romanLyric:
-        spells.find(({ rawTime: tRawTime, time: tTime }) => tRawTime === rawTime || tTime === time)
-          ?.content || "",
+      translatedLyric: transLyrics.find((line) => line.time === time)?.content || "",
+      romanLyric: spells.find((line) => line.time === time)?.content || "",
       startTime: time,
       endTime: 0,
       isBG: false,
@@ -172,7 +189,7 @@ const trimContent = (content: string) => {
 };
 
 const parse = (lrc: string) => {
-  const parsedLyrics: { rawTime: string; time: number; content: string }[] = [];
+  const parsedLyrics: { time: number; content: string }[] = [];
 
   const binarySearch = (lyric) => {
     const time = lyric.time;
@@ -205,11 +222,10 @@ const parse = (lrc: string) => {
     for (const timestamp of lyricTimestamps.matchAll(extractTimestampRegex)) {
       if (!timestamp.groups) continue;
       const { min, sec, ms } = timestamp.groups as { min: string; sec: string; ms: string };
-      const rawTime = timestamp[0];
-      const mss = ms?.length == 3 ? ms : ms + "0"; // .02 => .020
-      const time = (Number(min) * 60 + Number(sec)) * 1000 + Number(mss ?? 0);
+      const fraction = (ms ?? "").padEnd(3, "0").slice(0, 3);
+      const time = (Number(min) * 60 + Number(sec)) * 1000 + Number(fraction);
 
-      const parsedLyric = { rawTime, time, content: trimContent(content) };
+      const parsedLyric = { time, content: trimContent(content) };
       parsedLyrics.splice(binarySearch(parsedLyric), 0, parsedLyric);
     }
   }

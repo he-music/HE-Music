@@ -112,6 +112,7 @@ describe("播放器已下载优先", () => {
       undefined,
       downloaded.entry,
       expect.any(Function),
+      true,
     );
     expect(mocks.audio.play).toHaveBeenCalledOnce();
     expect(mocks.history).toHaveBeenCalledWith(mocks.song);

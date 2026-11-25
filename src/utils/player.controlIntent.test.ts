@@ -837,7 +837,14 @@ describe("real Player HTTP control autoplay intent", () => {
       expect(mocks.data.setHistory).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ id: "B" }),
       );
-      expect(mocks.lyrics).toHaveBeenCalledExactlyOnceWith("B", "test", "");
+      expect(mocks.lyrics).toHaveBeenCalledExactlyOnceWith(
+        "B",
+        "test",
+        "",
+        undefined,
+        expect.any(Function),
+        true,
+      );
       control.emit("play");
       await flush();
       expect(manager.paused).toBe(false);
@@ -1205,7 +1212,14 @@ describe("real Player HTTP control autoplay intent", () => {
       expect(mocks.status.playStatus).toBe(true);
       expect(mocks.music.resetMusicData).toHaveBeenCalledOnce();
       expect(mocks.url).toHaveBeenCalledOnce();
-      expect(mocks.lyrics).toHaveBeenCalledExactlyOnceWith("new-radio", "test", "");
+      expect(mocks.lyrics).toHaveBeenCalledExactlyOnceWith(
+        "new-radio",
+        "test",
+        "",
+        undefined,
+        expect.any(Function),
+        true,
+      );
       expect(mocks.data.setHistory).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ id: "new-radio" }),
       );

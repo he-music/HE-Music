@@ -10,15 +10,26 @@ export interface ApplicationStorageProvider {
   clear(namespace: string): Promise<void>;
 }
 
+export const manualLyricsDatabase = {
+  name: "lyrics-data",
+  storeName: "manual",
+  driver: localforage.INDEXEDDB,
+  retryFailedWrites: false,
+} as const;
+
 export const applicationDatabases = [
   { name: "music-data", storeName: "music" },
   { name: "user-data", storeName: "user" },
   { name: "local-data", storeName: "local" },
   { name: "local-data", storeName: "local_download_history" },
   { name: "background-data", storeName: "background" },
+  manualLyricsDatabase,
 ] as const;
 
-type DatabaseOptions = { name: string; storeName?: string; description?: string };
+type DatabaseOptions = Pick<LocalForageOptions, "name" | "storeName" | "description" | "driver"> & {
+  name: string;
+  retryFailedWrites?: boolean;
+};
 interface ApplicationDatabase {
   getItem<T = unknown>(key: string): Promise<T | null>;
   setItem<T>(key: string, value: T): Promise<T>;
@@ -172,7 +183,7 @@ export function registerApplicationWriteCheckpoint(checkpoint: () => void): () =
 export async function flushApplicationWrites(): Promise<void> {
   for (const checkpoint of writeCheckpoints) checkpoint();
   await nativeRenderer?.flush();
-  await databaseWrites.catch(() => {});
+  await databaseWrites;
   for (const [identity, write] of [...failedDatabaseWrites]) {
     if (failedDatabaseWrites.get(identity) !== write) continue;
     await databaseOperation(write.operation, write.namespace, write.key, true);
@@ -188,23 +199,22 @@ function databaseOperation<T>(
   retry = false,
 ): Promise<T> {
   const identity = JSON.stringify(mutationKey === null ? [namespace] : [namespace, mutationKey]);
-  const result = databaseWrites
-    .catch(() => {})
-    .then(async () => {
-      const pending = [...failedDatabaseWrites.values()].some(
-        (write) => write.namespace === namespace,
-      );
-      if (pending && !retry && mutationKey !== null)
-        throw new Error("Application data write pending retry");
-      if (mutationKey === null && !retry) {
-        // Explicit clear supersedes every older deferred write in this database.
-        for (const [key, write] of failedDatabaseWrites) {
-          if (write.namespace === namespace) failedDatabaseWrites.delete(key);
-        }
+  const result = databaseWrites.then(async () => {
+    const pending = [...failedDatabaseWrites.values()].some(
+      (write) => write.namespace === namespace,
+    );
+    if (pending && !retry && mutationKey !== null)
+      throw new Error("Application data write pending retry");
+    if (mutationKey === null && !retry) {
+      // Explicit clear supersedes every older deferred write in this database.
+      for (const [key, write] of failedDatabaseWrites) {
+        if (write.namespace === namespace) failedDatabaseWrites.delete(key);
       }
-      return operation();
-    });
-  databaseWrites = result;
+    }
+    return operation();
+  });
+  // Wait for ordering at flush/quit; only explicitly retryable failures are pending writes.
+  databaseWrites = result.catch(() => {});
   if (mutationKey !== undefined) {
     void result.then(
       () => {
@@ -249,7 +259,10 @@ export function decodeApplicationValue(value: StorageValue): unknown {
   throw new TypeError("Unknown application storage encoding");
 }
 
-export function createApplicationDatabase(options: DatabaseOptions): ApplicationDatabase {
+export function createApplicationDatabase({
+  retryFailedWrites = true,
+  ...options
+}: DatabaseOptions): ApplicationDatabase {
   let browser: LocalForage | undefined;
   const web = () => (browser ??= localforage.createInstance(options));
   const namespace = `${options.name}/${options.storeName ?? "keyvaluepairs"}`;
@@ -273,18 +286,26 @@ export function createApplicationDatabase(options: DatabaseOptions): Application
           return value;
         },
         namespace,
-        key,
+        retryFailedWrites ? key : undefined,
       );
     },
     keys: () =>
       provider ? databaseOperation(() => provider!.keys(namespace), namespace) : web().keys(),
     removeItem: (key) =>
       provider
-        ? databaseOperation(() => provider!.remove(namespace, key), namespace, key)
+        ? databaseOperation(
+            () => provider!.remove(namespace, key),
+            namespace,
+            retryFailedWrites ? key : undefined,
+          )
         : web().removeItem(key),
     clear: () =>
       provider
-        ? databaseOperation(() => provider!.clear(namespace), namespace, null)
+        ? databaseOperation(
+            () => provider!.clear(namespace),
+            namespace,
+            retryFailedWrites ? null : undefined,
+          )
         : web().clear(),
   };
 }

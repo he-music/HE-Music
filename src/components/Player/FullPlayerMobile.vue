@@ -63,6 +63,7 @@
             @click-quality="mobileSongQualityMenuRef?.open(musicStore.playSong)"
           />
           <MobileSongQualityMenu ref="mobileSongQualityMenuRef" />
+          <LyricEmptyActions v-if="!musicStore.isHasLrc" />
           <!-- 进度条 -->
           <div class="progress-section">
             <PlayerTime class="time" />
@@ -146,6 +147,7 @@ import PlayerTime from "./PlayerComponents/PlayerTime.vue";
 import MobilePlayButton from "./PlayerComponents/MobilePlayButton.vue";
 import MobilePlayerSongMenu from "@/components/Menu/MobilePlayerSongMenu.vue";
 import MobileSongQualityMenu from "@/components/Menu/MobileSongQualityMenu.vue";
+import LyricEmptyActions from "./PlayerLyric/LyricEmptyActions.vue";
 
 const musicStore = useMusicStore();
 const settingStore = useSettingStore();

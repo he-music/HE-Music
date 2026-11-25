@@ -147,3 +147,19 @@ it("never resurrects pre-clear writes after a failed clear is retried", async ()
   expect(data.has("old")).toBe(false);
   expect(data.get("new")).toBe("[2]");
 });
+
+it("不会重试失败的手动歌词保存，也不阻挡刷新、退出或导出", async () => {
+  const { native, data } = fixture();
+  const module = await import("./applicationStorage");
+  await module.initializeApplicationStorage(native);
+  const lyrics = module.createApplicationDatabase(module.manualLyricsDatabase);
+  const key = '["kugou","song"]';
+  await lyrics.setItem(key, { lyric: "old" });
+  vi.mocked(native.put).mockRejectedValueOnce(new Error("disk full"));
+  await expect(lyrics.setItem(key, { lyric: "new" })).rejects.toThrow("disk full");
+  await expect(module.flushApplicationWrites()).resolves.toBeUndefined();
+  expect(native.put).toHaveBeenCalledTimes(2);
+  expect(data.get(key)).toBe('{"lyric":"old"}');
+  await lyrics.removeItem(key);
+  expect(data.has(key)).toBe(false);
+});

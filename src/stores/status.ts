@@ -1,6 +1,7 @@
 import { defineStore } from "pinia";
 import type { ColorScheme, PlayModeType, RGB, SortField, SortOrder } from "@/types/main";
 import { CommentConfig, SongInfo } from "@/types/main.hemusic";
+import { manualLyricKey } from "@/utils/manualLyricRecord";
 
 export interface StatusState {
   menuCollapsed: boolean;
@@ -34,6 +35,8 @@ export interface StatusState {
   progress: number;
   /** 每首歌曲的进度偏移（按歌曲 id-platform 记忆） */
   currentTimeOffsetMap: Record<string, number>;
+  manualLyricTarget: string | null;
+  manualLyricOffsets: Record<string, number>;
   currentTimeOffset: number;
   playUblock: boolean;
   mainContentHeight: number;
@@ -113,6 +116,8 @@ export const useStatusStore = defineStore("status", {
     duration: 0,
     progress: 0,
     currentTimeOffsetMap: {},
+    manualLyricTarget: null,
+    manualLyricOffsets: {},
     // 进度偏移
     currentTimeOffset: 0,
     // 封面主题
@@ -200,40 +205,39 @@ export const useStatusStore = defineStore("status", {
      */
     getSongOffset(song?: SongInfo): number {
       if (!song) return 0;
-      const offsetTime = this.currentTimeOffsetMap?.[`${song.platform}-${song.id}`] ?? 0;
-      return Math.floor(offsetTime * 1000);
+      const target = this.manualLyricTarget && manualLyricKey(song);
+      const offsetTime =
+        target && target === this.manualLyricTarget
+          ? this.manualLyricOffsets[target]
+          : this.currentTimeOffsetMap?.[`${song.platform}-${song.id}`];
+      return Math.floor((offsetTime ?? 0) * 1000);
     },
     /** 设置指定歌曲的偏移 */
     setSongOffset(song?: SongInfo, offset: number = 0) {
       if (!song) return;
       if (!this.currentTimeOffsetMap) this.currentTimeOffsetMap = {};
+      const target = this.manualLyricTarget && manualLyricKey(song);
+      const manual = !!target && target === this.manualLyricTarget;
+      const offsets = manual ? this.manualLyricOffsets : this.currentTimeOffsetMap;
+      const key = manual ? target : `${song.platform}-${song.id}`;
       const offsetSeconds = offset / 1000;
       const fixed = Number(offsetSeconds.toFixed(2));
       if (fixed === 0) {
         // 为 0 时移除记录，避免占用空间
-        delete this.currentTimeOffsetMap[`${song.platform}-${song.id}`];
+        delete offsets[key];
       } else {
-        this.currentTimeOffsetMap[`${song.platform}-${song.id}`] = fixed;
+        offsets[key] = fixed;
       }
     },
     /** 调整指定歌曲的偏移（增量） */
     incSongOffset(song?: SongInfo, delta: number = 500) {
       if (!song) return;
-      const current = this.getSongOffset(song);
-      const next = current + delta;
-      if (next === 0) {
-        delete this.currentTimeOffsetMap[`${song.platform}-${song.id}`];
-      } else {
-        this.setSongOffset(song, next);
-      }
+      this.setSongOffset(song, this.getSongOffset(song) + delta);
     },
     /** 重置指定歌曲的偏移为 0 */
     resetSongOffset(song?: SongInfo) {
       if (!song) return;
-      // 直接删除该歌曲记录
-      if (this.currentTimeOffsetMap && `${song.platform}-${song.id}` in this.currentTimeOffsetMap) {
-        delete this.currentTimeOffsetMap[`${song.platform}-${song.id}`];
-      }
+      this.setSongOffset(song, 0);
     },
     /**
      * 设置 EQ 开关

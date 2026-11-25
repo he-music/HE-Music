@@ -12,6 +12,7 @@ const persistedKeys = [
   "currentTime",
   "duration",
   "currentTimeOffsetMap",
+  "manualLyricOffsets",
   "pureLyricMode",
   "playIndex",
   "playRate",

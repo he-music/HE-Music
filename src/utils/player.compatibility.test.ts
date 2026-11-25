@@ -140,7 +140,14 @@ describe("Player HTMLAudio compatibility", () => {
     expect(mocks.status.playStatus).toBe(false);
     expect(mocks.audio.src).toBe("https://audio.example/track.mp3");
     expect(mocks.audio.seek).toHaveBeenCalledWith(12);
-    expect(mocks.lyrics).toHaveBeenCalledWith("a", "test", undefined);
+    expect(mocks.lyrics).toHaveBeenCalledWith(
+      "a",
+      "test",
+      undefined,
+      undefined,
+      expect.any(Function),
+      true,
+    );
     await player.play();
     expect(mocks.status.playStatus).toBe(true);
     expect(mocks.audio.play).toHaveBeenLastCalledWith(undefined, {

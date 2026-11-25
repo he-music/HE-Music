@@ -30,6 +30,10 @@ it.each(["amll", "52hz"])(
         "./AMLyric.vue": { __esModule: true, default: { render: () => h("am-lyric") } },
         "./PVLyric.vue": { __esModule: true, default: { render: () => h("pv-lyric") } },
         "./LyricToolbar.vue": { default: { render: () => null } },
+        "./LyricEmptyActions.vue": { default: { render: () => null } },
+        "@/composables/useManualLyricActions": {
+          useManualLyricActions: () => ({ canSearch: false, hasManual: false }),
+        },
         "../PlayerStylePanel.vue": { default: { render: () => null } },
         "../PlayerComponents/MobilePlayButton.vue": {
           default: { render: () => h("mobile-play-button") },

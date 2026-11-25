@@ -28,7 +28,7 @@ const (
 
 var applicationStorageNamespaces = []string{
 	"renderer", "music-data/music", "user-data/user", "local-data/local",
-	"local-data/local_download_history", "background-data/background",
+	"local-data/local_download_history", "background-data/background", "lyrics-data/manual",
 }
 
 type StorageValue struct {

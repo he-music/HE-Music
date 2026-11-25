@@ -10,6 +10,7 @@ import type { ApplicationBackup, ApplicationStorageRecord, StorageValue } from "
 import { parseDesktopLyricStyle, createDefaultDesktopLyricStyle } from "./desktopLyricStyle";
 import { parseDesktopLyricOptions, createDefaultDesktopLyricOptions } from "./desktopLyricOptions";
 import { localDownloadSnapshot } from "./localDownloadPersistence";
+import { isManualLyric, isManualLyricKey } from "@/utils/manualLyricRecord";
 
 export const applicationBackupMaxBytes = 128 * 1024 * 1024;
 const backupFormat = "he-music-application-data";
@@ -91,6 +92,10 @@ function validateRecord(value: unknown): ApplicationStorageRecord {
     if (new Set(tasks.map((task) => task.id)).size !== tasks.length)
       throw new Error("Duplicate task");
     encoded.value = JSON.stringify({ version: 1, tasks });
+  } else if (namespace === "lyrics-data/manual") {
+    if (data.kind !== "json" || !isManualLyricKey(key) || !isManualLyric(parseJSON(data.value))) {
+      throw new Error("Invalid manual lyric record");
+    }
   } else throw new Error("Unknown backup namespace");
   return { namespace, key, data: encoded };
 }

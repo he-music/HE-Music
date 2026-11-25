@@ -6,12 +6,13 @@ import { isLogin } from "./auth";
 import { isArray, isFunction } from "lodash-es";
 import { NScrollbar } from "naive-ui";
 import router from "@/router";
-import { usePlatformStore } from "@/stores";
+import { useMusicStore, usePlatformStore } from "@/stores";
 import { FeatureSupportFlag } from "@/api/platform";
 import { t } from "@/i18n";
 import { platform } from "@/platform";
 import { openMygoSongInfoEditor, openMygoDownloadSong } from "./mygoFileModals";
 import type { LocalPlaylist } from "@/utils/localPlaylist";
+import { manualLyricKey } from "@/utils/manualLyricRecord";
 
 const openedModals = new Set<string>();
 /**
@@ -451,6 +452,34 @@ export const openCopyLyrics = async () => {
       });
     },
   });
+};
+
+/** 为当前歌曲选择并预览另一份歌词。 */
+export const openLyricSearch = async (target: SongInfo) => {
+  const key = manualLyricKey(target);
+  const modalKey = "lyricSearch";
+  if (!key || isModalOpen(modalKey)) return;
+  setModalOpen(modalKey);
+  try {
+    const { default: LyricSearch } = await import("@/components/Modal/LyricSearch.vue");
+    if (key !== manualLyricKey(useMusicStore().playSong)) {
+      setModalClosed(modalKey);
+      return;
+    }
+    const modal = window.$modal.create({
+      preset: "card",
+      transformOrigin: "center",
+      autoFocus: false,
+      maskClosable: false,
+      style: { width: "680px", maxWidth: "calc(100vw - 24px)" },
+      title: t("lyricSearch.title"),
+      content: () => h(LyricSearch, { target, onClose: () => modal.destroy() }),
+      onAfterLeave: () => setModalClosed(modalKey),
+    });
+  } catch {
+    setModalClosed(modalKey);
+    window.$message.error(t("lyricSearch.searchFailed"));
+  }
 };
 
 /** 打开主题配置弹窗 */

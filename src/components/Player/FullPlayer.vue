@@ -85,6 +85,7 @@
                 <!-- 歌词 -->
                 <PlayerLyric v-if="!noLrc" />
               </div>
+              <LyricEmptyActions v-if="noLrc" class="no-lrc-actions" />
             </div>
           </Transition>
           <!-- 评论 -->
@@ -114,6 +115,7 @@ import { FeatureSupportFlag } from "@/api/platform";
 import { playbackCapabilities } from "@/utils/audioManager";
 import { isPVLyricRenderer } from "@/utils/lyric/renderer";
 import { useOverlayBack } from "@/composables/useOverlayBack";
+import LyricEmptyActions from "./PlayerLyric/LyricEmptyActions.vue";
 
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
@@ -365,6 +367,11 @@ onBeforeUnmount(() => {
     }
     // 无歌词
     &.no-lrc {
+      .no-lrc-actions {
+        position: absolute;
+        bottom: 16px;
+        inset-inline: 0;
+      }
       &:not(.full-screen) {
         .content-left {
           width: 50% !important;

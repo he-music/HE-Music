@@ -2,16 +2,51 @@ import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { songLyric } from "@/api/song";
 import { type SongLyric } from "@/types/lyric";
 import { type LyricLine } from "@applemusic-like-lyrics/lyric";
-import { isWordLyric, parseLineLyric, parseWordLyric, splitLocalLyrics } from "@/utils/lyric";
+import { hasLyricText, parseLineLyric, parseSongLyric, splitLocalLyrics } from "@/utils/lyric";
 import { findLyricBoundary, getActiveLyricIndices } from "@/utils/lyric/timing";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
 import { isCueTrack } from "@/platform/cueTracks";
 import { filesSession } from "@/platform/filesSession";
 import { readLocalLyrics, type LocalLyricSource } from "@/platform/localResource";
 import type { ScanEntry } from "@/platform/mygo.bindings";
+import type { LyricInfo } from "@/types/main.hemusic";
+import { manualLyricKey } from "./manualLyricRecord";
+import { manualLyrics } from "./manualLyrics";
 
 class LyricManager {
   private lyricRequest = 0;
+  private pendingManualWrite = Promise.resolve();
+
+  private writeManual(operation: () => Promise<void>) {
+    const result = this.pendingManualWrite.then(operation);
+    this.pendingManualWrite = result.catch(() => {});
+    return result;
+  }
+
+  public async saveManualLyric(key: string, lyric: LyricInfo) {
+    if (!hasLyricText(parseSongLyric(lyric))) throw new Error("歌词没有可用内容");
+    const status = useStatusStore();
+    await this.writeManual(async () => {
+      await manualLyrics.save(key, lyric);
+      delete status.manualLyricOffsets[key];
+    });
+  }
+
+  public restoreDefaultLyric(key: string) {
+    const status = useStatusStore();
+    return this.writeManual(async () => {
+      await manualLyrics.remove(key);
+      delete status.manualLyricOffsets[key];
+    });
+  }
+
+  public clearManualLyrics() {
+    const status = useStatusStore();
+    return this.writeManual(async () => {
+      await manualLyrics.clear();
+      status.manualLyricOffsets = {};
+    });
+  }
   /**
    * 重置当前歌曲的歌词数据
    * 包括清空歌词数据、重置歌词索引、关闭 TTMLL 歌词等
@@ -20,6 +55,7 @@ class LyricManager {
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
     // 重置歌词数据
+    statusStore.manualLyricTarget = null;
     musicStore.setSongLyric({}, true);
     // 重置歌词索引
     statusStore.lyricIndex = -1;
@@ -32,16 +68,25 @@ class LyricManager {
    * @returns 歌词数据
    */
   private async handleOnlineLyric(id: string, platform: string): Promise<SongLyric> {
-    // 最终结果
-    const result: SongLyric = { lrcData: [], yrcData: [] };
-    // 处理 LRC 歌词
-    const data = await songLyric(id, platform);
-    if (isWordLyric(data.lyric)) {
-      result.yrcData = parseWordLyric(data).line;
-    } else {
-      result.lrcData = parseLineLyric(data).line;
+    return parseSongLyric(await songLyric(id, platform));
+  }
+
+  private async readManualLyric(key: string): Promise<SongLyric | undefined> {
+    try {
+      let writes: Promise<void>;
+      let saved: LyricInfo | null;
+      do {
+        writes = this.pendingManualWrite;
+        await writes;
+        saved = await manualLyrics.get(key);
+      } while (writes !== this.pendingManualWrite);
+      if (!saved) return;
+      const data = parseSongLyric(saved);
+      return hasLyricText(data) ? data : undefined;
+    } catch {
+      // 此浏览器的存储不可用时，仍可正常加载默认歌词。
+      return undefined;
     }
-    return result;
   }
   /**
    * 处理本地歌词
@@ -175,6 +220,7 @@ class LyricManager {
     path?: string,
     downloadedEntry?: ScanEntry,
     isSourceCurrent?: () => boolean,
+    showLoading = true,
   ) {
     const musicStore = useMusicStore();
     const statusStore = useStatusStore();
@@ -185,12 +231,17 @@ class LyricManager {
       musicStore.playSong.id === id &&
       musicStore.playSong.platform === platform &&
       (!isSourceCurrent || isSourceCurrent());
+    const manualKey = manualLyricKey({ id, platform, path });
     const isLocal = Boolean(path || downloadedEntry);
     try {
       // 歌词加载状态
-      statusStore.lyricLoading = true;
-      let lyricData;
-      if (isLocal) {
+      if (showLoading) statusStore.lyricLoading = true;
+      const manualData = manualKey ? await this.readManualLyric(manualKey) : undefined;
+      if (!isCurrent()) return;
+      let lyricData: SongLyric;
+      if (manualData) {
+        lyricData = manualData;
+      } else if (isLocal) {
         lyricData = await this.handleLocalLyric(
           path || downloadedEntry?.relativePath || "",
           id,
@@ -198,21 +249,19 @@ class LyricManager {
           isCurrent,
           downloadedEntry,
         );
-        // 排除本地歌词内容
-        if (settingStore.enableLocalLyricsExclude) {
-          lyricData = this.handleLyricExclude(lyricData);
-        }
       } else {
         lyricData = await this.handleOnlineLyric(id, platform);
-        if (settingStore.enableOnlineLyricsExclude) {
-          // 排除内容
-          lyricData = this.handleLyricExclude(lyricData);
-        }
       }
       // 校验请求有效性：如果期间发生切歌或发起了新的歌词请求，丢弃旧结果
       if (!isCurrent()) return;
+      const exclude =
+        isLocal && !manualData
+          ? settingStore.enableLocalLyricsExclude
+          : settingStore.enableOnlineLyricsExclude;
+      if (exclude) lyricData = this.handleLyricExclude(lyricData);
+      statusStore.manualLyricTarget = manualData ? manualKey : null;
       this.setFinalLyric(lyricData);
-      if (isLocal) statusStore.lyricIndex = this.calculateLyricIndex(statusStore.currentTime);
+      statusStore.lyricIndex = this.calculateLyricIndex(statusStore.currentTime);
     } catch (error) {
       if (isCurrent()) {
         console.error("❌ 处理歌词失败:", error);

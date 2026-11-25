@@ -49,6 +49,15 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
       positiveText: t("common.ok"),
       negativeText: t("common.cancel"),
       onPositiveClick: async () => {
+        try {
+          if (typeof indexedDB !== "undefined") {
+            const { default: lyricManager } = await import("@/utils/lyricManager");
+            await lyricManager.clearManualLyrics();
+          }
+        } catch {
+          window.$message.error(t("lyricSearch.deleteFailed"));
+          return false;
+        }
         // 重置设置
         applicationStorage.clear();
         window.sessionStorage.clear();
@@ -58,6 +67,7 @@ export const useGeneralSettings = (actions: GeneralSettingsActions): SettingConf
           duration: 3000,
           onAfterLeave: () => window.location.reload(),
         });
+        return true;
       },
     });
   };

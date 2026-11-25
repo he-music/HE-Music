@@ -5,6 +5,35 @@
     :aria-label="t('lyricToolbar.label')"
   >
     <button
+      v-if="canSearch"
+      type="button"
+      class="menu-icon"
+      :disabled="restoring"
+      :aria-label="t('lyricSearch.replace')"
+      :title="t('lyricSearch.replace')"
+      aria-haspopup="dialog"
+      @click="
+        emit('close');
+        emit('search');
+      "
+    >
+      <SvgIcon name="Search" />
+    </button>
+    <button
+      v-if="hasManual"
+      type="button"
+      class="menu-icon"
+      :disabled="restoring"
+      :aria-label="t('lyricSearch.restore')"
+      :title="t('lyricSearch.restore')"
+      @click="
+        emit('close');
+        emit('restore');
+      "
+    >
+      <SvgIcon name="Refresh" />
+    </button>
+    <button
       type="button"
       class="menu-icon"
       :aria-label="t('common.copy_lyrics')"
@@ -119,8 +148,13 @@ import { openSetting, openCopyLyrics } from "@/utils/modal";
 import PlayerStylePanel from "../PlayerStylePanel.vue";
 import router from "@/router";
 
-const props = defineProps<{ compact?: boolean }>();
-const emit = defineEmits<{ close: []; style: [] }>();
+const props = defineProps<{
+  compact?: boolean;
+  canSearch?: boolean;
+  hasManual?: boolean;
+  restoring?: boolean;
+}>();
+const emit = defineEmits<{ close: []; style: []; search: []; restore: [] }>();
 const musicStore = useMusicStore();
 const statusStore = useStatusStore();
 const { t } = useI18n();
@@ -239,6 +273,7 @@ const openLyricSetting = () => {
     transform: none;
     pointer-events: auto;
     flex-direction: row;
+    flex-wrap: wrap;
     width: auto;
     max-width: calc(100vw - 32px);
     height: auto;

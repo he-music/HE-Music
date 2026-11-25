@@ -10,7 +10,7 @@ import { resolveKineticJumpGranularity } from "@/utils/lyric/kinetic";
 import { usePlayer } from "@/utils/player";
 import { platform } from "@/platform";
 import { desktopLyricsSession } from "@/platform/desktopLyricsSession";
-import { watch } from "vue";
+import { defineAsyncComponent, watch } from "vue";
 import {
   createDefaultDesktopLyricStyle,
   parseDesktopLyricStyle,
@@ -19,6 +19,10 @@ import {
   createDefaultDesktopLyricOptions,
   parseDesktopLyricOptions,
 } from "@/platform/desktopLyricOptions";
+
+const ManualLyricStorage = defineAsyncComponent(
+  () => import("../components/ManualLyricStorage.vue"),
+);
 
 export const useLyricSettings = (): SettingConfig => {
   const player = usePlayer();
@@ -661,6 +665,12 @@ export const useLyricSettings = (): SettingConfig => {
       {
         title: t("setting.lyrics.content"),
         items: [
+          {
+            key: "manualLyrics",
+            label: t("lyricSearch.manualLyrics"),
+            type: "custom",
+            component: markRaw(ManualLyricStorage),
+          },
           {
             key: "configExcludeLyric",
             label: t("setting.lyrics.lyrics_exclude"),

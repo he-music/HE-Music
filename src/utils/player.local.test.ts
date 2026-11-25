@@ -101,6 +101,7 @@ describe("Player local file audio", () => {
       "song.mp3",
       undefined,
       expect.any(Function),
+      true,
     );
     expect(mocks.audio.play).toHaveBeenCalledOnce();
     expect(mocks.audio.clearSource).toHaveBeenCalledOnce();

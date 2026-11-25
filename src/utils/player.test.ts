@@ -228,7 +228,14 @@ describe("HTTP playback recovery", () => {
       seek: 12,
     });
     expect(mocks.audio.seek).toHaveBeenCalledWith(12);
-    expect(mocks.lyrics).toHaveBeenCalledWith("a", "test", undefined);
+    expect(mocks.lyrics).toHaveBeenCalledWith(
+      "a",
+      "test",
+      undefined,
+      undefined,
+      expect.any(Function),
+      true,
+    );
     expect(mocks.cover).toHaveBeenCalledWith("cover");
   });
 

@@ -2,6 +2,28 @@ import { expect, it } from "vitest";
 import { parseApplicationBackup } from "./applicationBackup";
 import { encodeApplicationValue } from "./applicationStorage";
 
+it("保留手动歌词的来源和原始内容，拒绝非在线曲目的存储键", async () => {
+  const record = {
+    namespace: "lyrics-data/manual",
+    key: JSON.stringify(["qq", "song"]),
+    data: await encodeApplicationValue({
+      platform: "kugou",
+      id: "candidate-id",
+      lyric: "[00:00.00]原词",
+      trans: "[00:00.00]译文",
+      roma: "[00:00.00]罗马音",
+    }),
+  };
+  const wrap = (key: string) =>
+    JSON.stringify({
+      format: "he-music-application-data",
+      version: 1,
+      records: [{ ...record, key }],
+    });
+  expect(parseApplicationBackup(wrap(record.key)).records).toEqual([record]);
+  expect(() => parseApplicationBackup(wrap(JSON.stringify(["local", "song"])))).toThrow();
+});
+
 it("imports an Electron helper export with accounts, playlists, background and native lyric preferences", async () => {
   const backup = parseApplicationBackup(
     JSON.stringify({

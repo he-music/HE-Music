@@ -135,6 +135,7 @@ class Player {
       const status = useStatusStore();
       status.playStatus = false;
       status.playLoading = false;
+      status.lyricLoading = false;
       return released;
     });
     // 初始化媒体会话
@@ -480,10 +481,9 @@ class Player {
     if (this.cuePlayback) this.publishPosition();
   }
 
-  private loadTrackLyrics() {
+  private loadTrackLyrics(showLoading = true) {
     const { id, platform, path } = useMusicStore().playSong;
     const downloadedEntry = this.downloadedPlayback?.entry;
-    if (!path && !downloadedEntry) return lyricManager.handleLyric(id, platform, path);
     const requestId = this.playRequestId;
     return lyricManager.handleLyric(
       id,
@@ -491,7 +491,14 @@ class Player {
       path,
       downloadedEntry,
       () => requestId === this.playRequestId,
+      showLoading,
     );
+  }
+
+  /** 重读当前音源的歌词，不切歌、不跳转播放位置。 */
+  public async reloadTrackLyrics() {
+    if (!useMusicStore().playSong.id || this.lyricTrackRequestId !== this.playRequestId) return;
+    await this.loadTrackLyrics(false);
   }
 
   public async reloadLocalLyrics(): Promise<void> {
@@ -523,6 +530,8 @@ class Player {
       duration: 0,
       progress: 0,
       lyricIndex: -1,
+      lyricLoading: false,
+      manualLyricTarget: null,
       playStatus: false,
       playLoading: false,
     });

@@ -35,7 +35,7 @@ afterEach(async () => {
   vi.resetAllMocks();
 });
 
-it("real FilesSession drains an old history save before clearing only the three extra app stores", async () => {
+it("real FilesSession drains an old history save before clearing the extra app stores", async () => {
   const historyKey = "local-data/local_download_history/history-v1";
   const snapshot = (id: string) => ({
     id,
@@ -52,6 +52,7 @@ it("real FilesSession drains an old history save before clearing only the three 
   backend.data.set(historyKey, { version: 1, tasks: [snapshot("A"), snapshot("B")] });
   backend.data.set("local-data/local/local-songs", ["cached row"]);
   backend.data.set("background-data/background/image", "cached blob");
+  backend.data.set("lyrics-data/manual/lyric", "manual lyric");
   backend.data.set("unrelated/database/key", "untouched");
   backend.drop.mockImplementation(async ({ name, storeName }) => {
     backend.order.push(`drop ${name}/${storeName}`);
@@ -106,10 +107,11 @@ it("real FilesSession drains an old history save before clearing only the three 
   expect(restart).not.toHaveBeenCalled();
   finish?.();
   expect(await task).toEqual({ status: "scheduled", rendererFailed: false, restartFailed: false });
-  expect(backend.order.slice(-3)).toEqual([
+  expect(backend.order.slice(-4)).toEqual([
     "drop local-data/local_download_history",
     "drop local-data/local",
     "drop background-data/background",
+    "drop lyrics-data/manual",
   ]);
   expect(backend.order.lastIndexOf("save completed")).toBeLessThan(
     backend.order.indexOf("drop local-data/local_download_history"),
