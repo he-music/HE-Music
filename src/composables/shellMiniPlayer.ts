@@ -40,7 +40,7 @@ export function createShellMiniPlayerSession(
           : "",
         artwork:
           hasSong && (!song.path || settings.showLocalCover)
-            ? gatewayProxyUrl(music.getSongCover(128))
+            ? gatewayProxyUrl(music.getSongCover(300))
             : "",
         playing: hasSong && status.playStatus,
         canPrevious: hasSong && !status.radioMode && data.playList.length > 1,
