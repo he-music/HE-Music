@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { windowAppearanceSession } from "./windowAppearance";
+import { miniPlayerSession } from "./miniPlayerSession";
 vi.mock("@/composables/shellProtocols", () => ({ createShellProtocolSession: () => undefined }));
 vi.mock("@/composables/shellTaskbar", () => ({ createShellTaskbarSession: () => undefined }));
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -180,6 +181,7 @@ function mountNav() {
     "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
     "@/stores": { useSettingStore },
     "@/platform": { platform: mocks.platform },
+    "@/platform/miniPlayerSession": { miniPlayerSession },
     "@/utils/helper": {},
     "@/utils/env": { isElectron: false, isMac: true },
     "@/utils/modal": {},

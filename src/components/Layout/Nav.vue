@@ -132,6 +132,7 @@ import { useSettingStore } from "@/stores";
 import { openLink, renderIcon } from "@/utils/helper";
 import { isMac } from "@/utils/env";
 import { platform } from "@/platform";
+import { miniPlayerSession } from "@/platform/miniPlayerSession";
 import { openParseSourceUrl, openSetting, openThemeConfig } from "@/utils/modal";
 import { MOBILE_APP_RELEASE_URL } from "@/constants/links";
 import { useI18n } from "vue-i18n";
@@ -254,6 +255,13 @@ const setOptions = computed<DropdownOption[]>(() => [
     type: "divider",
   },
   {
+    key: "mini-player",
+    label: t("miniPlayer.title"),
+    show: platform.kind === "mygo",
+    disabled: !miniPlayerSession.value,
+    icon: renderIcon("MiniPlayer"),
+  },
+  {
     key: "setting",
     label: t("nav.global_setting"),
     icon: renderIcon("Settings"),
@@ -268,6 +276,9 @@ const setSelect = (key: string) => {
       break;
     case "themeConfig":
       openThemeConfig();
+      break;
+    case "mini-player":
+      void miniPlayerSession.value?.open(settingStore.miniPlayerMinimizeMain === true);
       break;
     case "setting":
       if (isSmallScreen.value) {

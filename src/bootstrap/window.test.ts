@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { bootstrapWindow } from "./window";
-import { isDesktopLyricsWindow } from "./windowRole";
+import { desktopWindowRole } from "./windowRole";
 
-const mounts = vi.hoisted(() => ({ main: vi.fn(), lyrics: vi.fn() }));
+const mounts = vi.hoisted(() => ({ main: vi.fn(), lyrics: vi.fn(), miniPlayer: vi.fn() }));
 vi.mock("./mainWindow", () => ({ mountMainWindow: mounts.main }));
 vi.mock("./lyricsWindow", () => ({ mountLyricsWindow: mounts.lyrics }));
+vi.mock("./miniPlayerWindow", () => ({ mountMiniPlayerWindow: mounts.miniPlayer }));
 afterEach(() => vi.resetAllMocks());
 
 describe("窗口启动角色", () => {
@@ -14,10 +15,20 @@ describe("窗口启动角色", () => {
     expect(mounts.main).not.toHaveBeenCalled();
   });
 
+  it.each(["#/mini-player", "#/mini-player?source=window", "#/mini-player#section"])(
+    "迷你播放器地址只加载子页入口：%s",
+    async (hash) => {
+      await bootstrapWindow("mygo", hash);
+      expect(mounts.miniPlayer).toHaveBeenCalledOnce();
+      expect(mounts.main).not.toHaveBeenCalled();
+      expect(mounts.lyrics).not.toHaveBeenCalled();
+    },
+  );
+
   it.each(["#/desktop-lyric?source=window", "#/desktop-lyric#section"])(
     "只解析精确路由路径：%s",
     (hash) => {
-      expect(isDesktopLyricsWindow("mygo", hash)).toBe(true);
+      expect(desktopWindowRole("mygo", hash)).toBe("lyrics");
     },
   );
 
@@ -27,17 +38,20 @@ describe("窗口启动角色", () => {
     "#/desktop-lyric-extra",
     "#/search?keyword=desktop-lyric",
     "#/playlist/desktop-lyric",
+    "#/mini-player-extra",
     "desktop-lyric",
   ])("相似地址仍使用主窗口入口：%s", async (hash) => {
     await bootstrapWindow("mygo", hash);
     expect(mounts.main).toHaveBeenCalledOnce();
     expect(mounts.lyrics).not.toHaveBeenCalled();
+    expect(mounts.miniPlayer).not.toHaveBeenCalled();
   });
 
-  it("Web 不因桌面歌词路径获得原生子页身份", async () => {
-    await bootstrapWindow("web", "#/desktop-lyric");
+  it.each(["#/desktop-lyric", "#/mini-player"])("Web 不因 %s 获得原生子页身份", async (hash) => {
+    await bootstrapWindow("web", hash);
     expect(mounts.main).toHaveBeenCalledOnce();
     expect(mounts.lyrics).not.toHaveBeenCalled();
+    expect(mounts.miniPlayer).not.toHaveBeenCalled();
   });
 
   it("主窗口等待首屏就绪后才完成启动", async () => {

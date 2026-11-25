@@ -20,6 +20,7 @@ import { LinuxGraphicsSession } from "@/platform/linuxGraphics";
 import { createMygoDownloadResolver } from "@/utils/localDownloadResolver";
 import { createShellControlSession } from "./shellControl";
 import { appearanceThemeSourceKey } from "./appearanceThemeSource";
+import { miniPlayerSession } from "@/platform/miniPlayerSession";
 // Serialize shell replacements so an old teardown cannot revoke a newly mounted owner.
 let shellTransition: Promise<void> = Promise.resolve();
 
@@ -100,6 +101,11 @@ export function useDesktopLifecycle(ui: {
   const subscriptions: Array<() => void> = [];
   const reportFailure = (error: unknown) => console.error("桌面生命周期操作失败", error);
   const appearanceThemeSource = inject(appearanceThemeSourceKey, undefined);
+  let miniPlayer: typeof miniPlayerSession.value;
+  const stopMiniPlayer = () => {
+    miniPlayer?.dispose();
+    if (miniPlayerSession.value === miniPlayer) miniPlayerSession.value = undefined;
+  };
   const config = computed<LifecycleConfig>(() => ({
     showCloseAppTip: setting.showCloseAppTip,
     closeAppMethod: setting.closeAppMethod === "hide" ? "hide" : "exit",
@@ -173,6 +179,24 @@ export function useDesktopLifecycle(ui: {
         const initialConfig = config.value;
         const nativeStatus = await lifecycle.ready(initialConfig);
         if (disposed) return;
+        if (platform.kind === "mygo" && platform.miniPlayer) {
+          try {
+            const { createShellMiniPlayerSession } = await import("./shellMiniPlayer");
+            if (disposed) return;
+            miniPlayer = createShellMiniPlayerSession(
+              platform.miniPlayer,
+              () => ({ language: locale.value, theme: appearanceThemeSource?.value ?? "system" }),
+              (error) => {
+                console.error("迷你播放器操作失败", error);
+                window.$message?.error(t("miniPlayer.operation_failed"));
+              },
+            );
+            miniPlayerSession.value = miniPlayer;
+          } catch (error) {
+            console.error("迷你播放器初始化失败", error);
+          }
+          if (disposed) return;
+        }
         stopConfig = watch(
           config,
           (nextConfig) => {
@@ -215,6 +239,7 @@ export function useDesktopLifecycle(ui: {
           .catch((error: unknown) => console.error("桌面歌词会话初始化失败", error));
       } catch (error) {
         reportFailure(error);
+        stopMiniPlayer();
         stopConfig?.();
         await syncingConfig;
         tray.dispose();
@@ -241,6 +266,7 @@ export function useDesktopLifecycle(ui: {
   );
   onBeforeUnmount(() => {
     disposed = true;
+    stopMiniPlayer();
     stopConfig?.();
     stopQuitHandler();
     artwork?.dispose();

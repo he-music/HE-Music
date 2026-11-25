@@ -77,7 +77,11 @@ afterEach(async () => {
 });
 
 function mountNav(
-  options: { mac?: boolean; ready?: Promise<{ trayAvailable: boolean; epoch: number }> } = {},
+  options: {
+    mac?: boolean;
+    ready?: Promise<{ trayAvailable: boolean; epoch: number }>;
+    openMiniPlayer?: (minimizeMain: boolean) => void;
+  } = {},
 ) {
   if (mocks.locale) mocks.locale.value = "zh-CN";
   mocks.setting = Vue.reactive({
@@ -123,9 +127,14 @@ function mountNav(
     "vue-i18n": { useI18n: () => ({ t: (key: string) => key }) },
     "@/stores": { useSettingStore: () => mocks.setting },
     "@/platform": { platform: mocks.platform },
-    "@/utils/helper": {},
+    "@/platform/miniPlayerSession": {
+      miniPlayerSession: Vue.shallowRef(
+        options.openMiniPlayer ? { open: options.openMiniPlayer } : undefined,
+      ),
+    },
+    "@/utils/helper": { renderIcon: () => undefined },
     "@/utils/env": { isElectron: false, isMac: options.mac ?? true },
-    "@/utils/modal": {},
+    "@/utils/modal": { openSetting: mocks.openSetting },
     "@/constants/links": {},
     "@/composables/useOverlayBack": { useOverlayBack: vi.fn() },
     "@/composables/useMobile": {
@@ -175,6 +184,8 @@ function mountNav(
     closeHandlers,
     actions,
     unmount,
+    settingsOptions: () => Vue.unref(state.setOptions),
+    selectSetting: (key: string) => (state.setSelect as (key: string) => void)(key),
     requestClose: () => (state.tryClose as () => void)(),
     nativeBorderless: () => Vue.unref(state.nativeBorderless),
     windowControls: () => Vue.unref(state.showWindowControls),
@@ -198,6 +209,23 @@ function mountNav(
     choose: (action: "hide" | "exit") => (state.hideOrClose as (a: string) => void)(action),
   };
 }
+
+it("设置齿轮直接打开迷你播放器，不跳转到全局设置", () => {
+  const open = vi.fn();
+  mocks.openSetting.mockClear();
+  const nav = mountNav({ openMiniPlayer: open });
+  expect(nav.settingsOptions()).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ key: "mini-player", show: true, disabled: false }),
+    ]),
+  );
+  nav.selectSetting("mini-player");
+  expect(open).toHaveBeenLastCalledWith(false);
+  mocks.setting.miniPlayerMinimizeMain = true;
+  nav.selectSetting("mini-player");
+  expect(open).toHaveBeenLastCalledWith(true);
+  expect(mocks.openSetting).not.toHaveBeenCalled();
+});
 
 describe("Nav native lifecycle setup", () => {
   it("等翻译语言更新后同步托盘文案，并在卸载后停止同步", async () => {

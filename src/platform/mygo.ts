@@ -27,6 +27,7 @@ import { filesSession } from "./filesSession";
 import { createSystemFontsProvider } from "./systemFonts";
 import { createNetworkProxyProvider } from "./networkProxy";
 import { createMpvPlaybackProvider } from "./mpvPlayback";
+import { mygoMiniPlayer } from "./miniPlayer";
 
 export function createMygoPlatform(): PlatformAdapter {
   const os = runtime().platform;
@@ -47,6 +48,7 @@ export function createMygoPlatform(): PlatformAdapter {
     kind: "mygo",
     os: os === "darwin" || os === "win32" || os === "linux" ? os : "unknown",
     capabilities,
+    miniPlayer: mygoMiniPlayer,
     files: NativeFiles,
     mpvPlayback,
     deviceName: DesktopPlatform.deviceName,

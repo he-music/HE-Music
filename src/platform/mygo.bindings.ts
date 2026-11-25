@@ -380,6 +380,47 @@ export interface MetadataSaveRequest {
   patch: Patch;
 }
 
+export type MiniPlayerAction = "previous" | "toggle" | "next" | "favorite" | "pin" | "show-main" | "close";
+
+export interface MiniPlayerClosed {
+  generation: number;
+  failed: boolean;
+}
+
+export interface MiniPlayerCommand {
+  generation: number;
+  action: MiniPlayerAction;
+  trackKey: string;
+  favorite: boolean;
+}
+
+export interface MiniPlayerRequest {
+  generation: number;
+  revision: number;
+  action: MiniPlayerAction;
+}
+
+export interface MiniPlayerSnapshot {
+  trackKey: string;
+  title: string;
+  artist: string;
+  artwork: string;
+  language: string;
+  theme: string;
+  playing: boolean;
+  canPrevious: boolean;
+  canNext: boolean;
+  favorite: boolean;
+  canFavorite: boolean;
+}
+
+export interface MiniPlayerView {
+  generation: number;
+  revision: number;
+  pinned: boolean;
+  playback: MiniPlayerSnapshot;
+}
+
 export interface MpvEvent {
   type: MpvEventType;
   snapshot: MpvSnapshot;
@@ -872,6 +913,16 @@ export const DesktopLyrics = {
   teardown: bind<[number], void>("DesktopLyrics.Teardown", (epoch: number) => [epoch]),
 } as const;
 
+/** All window state is confined to the main thread. The child never owns playback. */
+export const DesktopMiniPlayer = {
+  attach: bind<[], MiniPlayerView>("DesktopMiniPlayer.Attach", () => []),
+  command: bind<[MiniPlayerRequest], void>("DesktopMiniPlayer.Command", (request: MiniPlayerRequest) => [request]),
+  open: bind<[MiniPlayerSnapshot, boolean], number>("DesktopMiniPlayer.Open", (snapshot: MiniPlayerSnapshot, minimizeMain: boolean) => [snapshot, minimizeMain]),
+  publish: bind<[number, MiniPlayerSnapshot], void>("DesktopMiniPlayer.Publish", (generation: number, snapshot: MiniPlayerSnapshot) => [generation, snapshot]),
+  /** Rendered confirms the child applied the initial snapshot to its DOM. */
+  rendered: bind<[number], void>("DesktopMiniPlayer.Rendered", (generation: number) => [generation]),
+} as const;
+
 export const MpvPlayback = {
   clearSource: bind<[number, number], MpvSnapshot>("MpvPlayback.ClearSource", (lifecycle: number, session: number) => [lifecycle, session]),
   destroy: bind<[number], void>("MpvPlayback.Destroy", (lifecycle: number) => [lifecycle]),
@@ -1046,6 +1097,9 @@ export const events = {
   desktopLyricsSnapshot: event<LyricsSnapshot>("desktop:lyrics-snapshot"),
   desktopLyricsClock: event<LyricsClock>("desktop:lyrics-clock"),
   desktopLyricsCommand: event<LyricsCommand>("desktop:lyrics-command"),
+  desktopMiniPlayerState: event<MiniPlayerView>("desktop:mini-player-state"),
+  desktopMiniPlayerClosed: event<MiniPlayerClosed>("desktop:mini-player-closed"),
+  desktopMiniPlayerCommand: event<MiniPlayerCommand>("desktop:mini-player-command"),
   desktopMpv: event<MpvEvent>("desktop:mpv"),
   desktopWindowMaximized: event<boolean>("desktop:window-maximized"),
   desktopWindowFullscreen: event<boolean>("desktop:window-fullscreen"),

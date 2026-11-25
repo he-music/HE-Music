@@ -3,6 +3,7 @@ import type { PlatformShortcuts } from "./shortcuts";
 import type { PlatformSystemMedia } from "./systemMedia";
 import type { PlatformFiles } from "./files";
 import type { PlatformDesktopLyrics } from "./desktopLyrics";
+import type { PlatformMiniPlayer } from "./miniPlayer";
 import type { PlatformUpdates } from "./updates";
 import type { PlatformSystemFonts } from "./systemFonts";
 import type { PlatformProtocols } from "./protocolSession";
@@ -76,6 +77,7 @@ export interface PlatformAdapter {
   readonly systemMedia?: PlatformSystemMedia;
   readonly files?: PlatformFiles;
   readonly desktopLyrics?: PlatformDesktopLyrics;
+  readonly miniPlayer?: PlatformMiniPlayer;
   readonly updates?: PlatformUpdates;
   readonly systemFonts?: PlatformSystemFonts;
   readonly protocols?: PlatformProtocols;

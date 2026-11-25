@@ -129,18 +129,22 @@ it("成功启动不显示失败界面", async () => {
   expect(mocks.recoveryFailure).not.toHaveBeenCalled();
 });
 
-it.each(["web", "lyrics"] as const)("%s 启动失败不执行主窗口原生恢复", async (kind) => {
-  if (kind === "web") {
-    mocks.mygo = false;
-    mocks.platform.mockReturnValue({ kind: "web" });
-  } else {
-    vi.stubGlobal("location", { hash: "#/desktop-lyric" });
-  }
-  mocks.mount.mockRejectedValueOnce(new Error("mount failed"));
-  await import("@/main");
-  await vi.waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
-  expect(mocks.storage).not.toHaveBeenCalled();
-  expect(mocks.recovery).not.toHaveBeenCalled();
-  expect(mocks.gateway).not.toHaveBeenCalled();
-  expect(mocks.mount).toHaveBeenCalledOnce();
-});
+it.each(["web", "desktop-lyric", "mini-player"] as const)(
+  "%s 启动失败不执行主窗口原生恢复",
+  async (kind) => {
+    if (kind === "web") {
+      mocks.mygo = false;
+      mocks.platform.mockReturnValue({ kind: "web" });
+    } else {
+      vi.stubGlobal("location", { hash: `#/${kind}` });
+    }
+    mocks.mount.mockRejectedValueOnce(new Error("mount failed"));
+    await import("@/main");
+    await vi.waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
+    expect(mocks.storage).not.toHaveBeenCalled();
+    expect(mocks.recovery).not.toHaveBeenCalled();
+    expect(mocks.gateway).not.toHaveBeenCalled();
+    expect(mocks.mount).toHaveBeenCalledOnce();
+    if (kind !== "web") expect(mocks.platform).not.toHaveBeenCalled();
+  },
+);

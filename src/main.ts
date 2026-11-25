@@ -12,12 +12,16 @@ import {
   showPreferencesResetRecoveryFailure,
 } from "@/platform/preferencesResetStartup";
 import { bootstrapWindow } from "./bootstrap/window";
-import { isDesktopLyricsWindow } from "./bootstrap/windowRole";
+import { desktopWindowRole } from "./bootstrap/windowRole";
 import { initializeGateway } from "@/platform/gateway";
 import { showStartupFailure } from "./bootstrap/startupFailure";
 
 async function start(): Promise<void> {
-  if (isMyGo() && !isDesktopLyricsWindow("mygo", location.hash)) {
+  if (isMyGo()) {
+    if (desktopWindowRole("mygo", location.hash)) {
+      await bootstrapWindow("mygo", location.hash);
+      return;
+    }
     const { DesktopPlatform, DesktopStorage, DesktopLog } =
       await import("@/platform/mygo.bindings");
     const stopLogging = installApplicationLogging(DesktopLog);
@@ -32,7 +36,7 @@ async function start(): Promise<void> {
     );
   }
   const { platform } = await import("@/platform");
-  if (platform.kind === "mygo" && !isDesktopLyricsWindow(platform.kind, location.hash)) {
+  if (platform.kind === "mygo") {
     if (!window.__HE_MUSIC_GATEWAY_ORIGIN__) throw new Error("本机网络网关未启动");
     await initializeGateway(platform.gateway, String(import.meta.env["VITE_API_URL"]));
   }

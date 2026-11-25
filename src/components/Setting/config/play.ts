@@ -244,6 +244,18 @@ export const usePlaySettings = (): SettingConfig => {
             disabled: !isDesktop,
           },
           {
+            key: "miniPlayerMinimizeMain",
+            label: t("miniPlayer.minimize_main"),
+            type: "switch",
+            show: isDesktop,
+            defaultValue: false,
+            componentProps: { "aria-label": t("miniPlayer.minimize_main") },
+            value: computed({
+              get: () => settingStore.miniPlayerMinimizeMain === true,
+              set: (value) => (settingStore.miniPlayerMinimizeMain = value),
+            }),
+          },
+          {
             key: "memoryLastSeek",
             label: t("setting.play.memory_last_seek"),
             type: "switch",

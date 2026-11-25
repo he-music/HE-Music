@@ -12,8 +12,11 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>HE-Music</title>
     <script id="startup-window-role">
-      if (window.mygo && location.hash.slice(1).split(/[?#]/, 1)[0] === "/desktop-lyric") {
-        document.documentElement.classList.add("desktop-lyrics-window");
+      if (window.mygo) {
+        const path = location.hash.slice(1).split(/[?#]/, 1)[0];
+        if (path === "/desktop-lyric")
+          document.documentElement.classList.add("desktop-lyrics-window");
+        if (path === "/mini-player") document.documentElement.classList.add("mini-player-window");
       }
     </script>
     <style id="startup-loading-style">
@@ -59,7 +62,8 @@
         animation-delay: 0.32s;
       }
 
-      .desktop-lyrics-window #startup-loading {
+      .desktop-lyrics-window #startup-loading,
+      .mini-player-window #startup-loading {
         display: none;
       }
 

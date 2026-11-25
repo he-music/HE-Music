@@ -627,6 +627,13 @@
     "update_now": "Update Now",
     "username_placeholder": "Enter username"
   },
+  "miniPlayer": {
+    "title": "Mini player",
+    "minimize_main": "Minimize the main window when opening the mini player",
+    "no_song": "Nothing playing",
+    "pin": "Keep on top",
+    "operation_failed": "Mini player action failed"
+  },
   "nav": {
     "close_software": "Close Application",
     "collected_playlist": "Saved playlists",

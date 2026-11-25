@@ -107,6 +107,7 @@ const settingSchema: Schema<SettingState> = {
   koreanLyricFont: lyricFont,
   showCloseAppTip: bool,
   closeAppMethod: enumeration("exit", "hide"),
+  miniPlayerMinimizeMain: bool,
   showTaskbarProgress: bool,
   useOnlineService: bool,
   checkUpdateOnStart: bool,

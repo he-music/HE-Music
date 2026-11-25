@@ -38,6 +38,17 @@ const partial = (setting: unknown = {}, shortcut: unknown = {}) => ({
 });
 
 describe("rendererSettings", () => {
+  it("缺省不最小化主窗口，并能导入导出启用的迷你播放器偏好", () => {
+    expect(validateSettingState({}).miniPlayerMinimizeMain).toBe(false);
+    const setting = useSettingStore();
+    setting.miniPlayerMinimizeMain = true;
+    const saved = serializeRendererSettings(setting.$state, useShortcutStore().$state);
+    expect(parseRendererSettings(saved)).toEqual(saved);
+    expect(validateSettingState(JSON.parse(saved["setting-store"])).miniPlayerMinimizeMain).toBe(
+      true,
+    );
+    expect(() => validateSettingState({ miniPlayerMinimizeMain: "true" })).toThrow();
+  });
   it("保留默认 .lrc 优先，并支持导入内嵌歌词优先", () => {
     expect(validateSettingState({}).localLyricPriority).toBe("sidecar");
     const setting = useSettingStore();

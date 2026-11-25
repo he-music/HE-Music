@@ -41,16 +41,18 @@ describe("启动加载界面", () => {
   });
 });
 
-describe("HTML 首次解析时识别歌词窗口", () => {
+describe("HTML 首次解析时识别桌面子窗口", () => {
   it.each([
-    [true, "#/desktop-lyric", true],
-    [true, "#/desktop-lyric?source=window", true],
-    [true, "#/desktop-lyric#section", true],
-    [true, "#/desktop-lyric-extra", false],
-    [true, "#/search?keyword=desktop-lyric", false],
-    [true, "#", false],
-    [false, "#/desktop-lyric", false],
-  ])("native=%s hash=%s，首次解析的角色正确", (native, hash, lyrics) => {
+    [true, "#/desktop-lyric", "desktop-lyrics-window"],
+    [true, "#/desktop-lyric?source=window", "desktop-lyrics-window"],
+    [true, "#/mini-player#section", "mini-player-window"],
+    [true, "#/desktop-lyric-extra", null],
+    [true, "#/mini-player-extra", null],
+    [true, "#/search?keyword=desktop-lyric", null],
+    [true, "#", null],
+    [false, "#/desktop-lyric", null],
+    [false, "#/mini-player", null],
+  ])("native=%s hash=%s，首次解析的角色正确", (native, hash, role) => {
     const add = vi.fn();
     expect(roleScript).toBeTruthy();
     runInNewContext(roleScript ?? "", {
@@ -58,7 +60,7 @@ describe("HTML 首次解析时识别歌词窗口", () => {
       location: { hash },
       document: { documentElement: { classList: { add } } },
     });
-    if (lyrics) expect(add).toHaveBeenCalledWith("desktop-lyrics-window");
+    if (role) expect(add).toHaveBeenCalledWith(role);
     else expect(add).not.toHaveBeenCalled();
   });
 });

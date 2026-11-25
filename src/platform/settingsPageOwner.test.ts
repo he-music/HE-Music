@@ -268,6 +268,14 @@ function mountPage(type: "general" | "lyrics" = "lyrics") {
 }
 
 describe("MainSetting production lazy search/config ownership", () => {
+  it("迷你播放器最小化开关归入现有播放分类", async () => {
+    const page = mountPage("general");
+    await flush();
+    expect(page.search()).toEqual(
+      expect.arrayContaining([expect.objectContaining({ value: "play::miniPlayerMinimizeMain" })]),
+    );
+  });
+
   it("owns style watchers created by lazy search from the general entry and replaces them on locale changes", async () => {
     const store = useSettingStore();
     const page = mountPage("general");

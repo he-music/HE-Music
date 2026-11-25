@@ -44,6 +44,7 @@ export interface SettingState {
   koreanLyricFont: "follow" | FontStyleSelection;
   showCloseAppTip: boolean;
   closeAppMethod: "exit" | "hide";
+  miniPlayerMinimizeMain: boolean;
   showTaskbarProgress: boolean;
   useOnlineService: boolean;
   checkUpdateOnStart: boolean;
@@ -170,6 +171,7 @@ export const createSettingState = (): SettingState => ({
   useOnlineService: true, // 是否使用在线服务
   showCloseAppTip: true, // 显示关闭应用提示
   closeAppMethod: "hide", // 关闭方式
+  miniPlayerMinimizeMain: false,
   showTaskbarProgress: false, // 显示任务栏进度
   checkUpdateOnStart: true, // 启动时检查更新
   skippedUpdateVersion: "", // 兼容旧设置导入；实际跳过记录由官方 updater 管理

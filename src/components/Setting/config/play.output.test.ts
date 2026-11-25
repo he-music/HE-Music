@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   warning: vi.fn(),
   platform: { os: "darwin", mpvPlayback: { initialize: vi.fn(), getOutputDevices: vi.fn() } },
   settings: {
+    miniPlayerMinimizeMain: false,
     playDevice: "",
     playbackEngine: "web-audio",
     outputDevices: { "web-audio": { id: "default", label: "" }, mpv: { id: "default", label: "" } },
@@ -28,6 +29,7 @@ afterEach(() => {
   mocks.env.isMygo = false;
   mocks.platform.os = "darwin";
   mocks.settings.playDevice = "";
+  mocks.settings.miniPlayerMinimizeMain = false;
   mocks.settings.playbackEngine = "web-audio";
   mocks.settings.outputDevices = {
     "web-audio": { id: "default", label: "" },
@@ -61,6 +63,19 @@ function deviceSetting() {
   }
   throw new Error("missing output device setting");
 }
+
+it.each([true, false])("最小化开关沿用播放分类，仅桌面可见：%s", (isDesktop) => {
+  mocks.env.isMygo = isDesktop;
+  const option = usePlaySettings().groups[0].items.find(
+    ({ key }) => key === "miniPlayerMinimizeMain",
+  );
+  expect(option?.show).toBe(isDesktop);
+  expect(option?.defaultValue).toBe(false);
+  if (!option?.value) throw new Error("missing mini player preference");
+  expect(option.value.value).toBe(false);
+  option.value.value = true;
+  expect(mocks.settings.miniPlayerMinimizeMain).toBe(true);
+});
 
 describe("output device feedback", () => {
   it("Windows 远程会话没有麦克风时仍保留并可选择远程输出", async () => {

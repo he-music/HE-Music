@@ -627,6 +627,13 @@
     "update_now": "立即更新",
     "username_placeholder": "请输入用户名"
   },
+  "miniPlayer": {
+    "title": "迷你播放器",
+    "minimize_main": "打开迷你播放器时最小化主窗口",
+    "no_song": "暂无播放",
+    "pin": "窗口置顶",
+    "operation_failed": "迷你播放器操作失败"
+  },
   "nav": {
     "close_software": "关闭软件",
     "collected_playlist": "收藏的歌单",
