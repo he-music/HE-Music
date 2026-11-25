@@ -24,6 +24,8 @@ macOS 沿用 main 分支 Electron 包使用的 `public/icons/icon.icns`，其中
 
 应用与官方 CLI 通过 Go Modules 获取，版本由 `go.mod` 固定，模块内容由 `go.sum` 校验。原 Windows 透明窗口和细边框修正已合入 mygo 0.9.0；仓库不保留 vendor、本地 SDK 补丁或额外源码摘要。
 
+Windows 11 的歌词面板在显示前显式禁用 DWM 原生圆角和描边，保留窗口缩放及锁定穿透逻辑；Windows 10 沿用 SDK 的窗口策略。实测以 Windows 11 25H2 实体机本地桌面为准，先将鼠标移出歌词验证没有外框，再确认悬停控件、拖动缩放和锁定穿透正常；VMware／远程桌面结果仅作对照。
+
 开发、绑定生成和打包通过 `scripts/mygo.mjs` 准备 libmpv（仅 build/dev）并运行 `go tool mygo`；使用 `GOWORK=off` 与 `-mod=readonly`，避免构建过程修改依赖声明。首次构建需要联网下载 Go 模块，之后复用 Go 模块缓存。`go mod verify` 可检查缓存内容。
 
 升级 mygo 时运行 `go get github.com/egoist/mygo@v<版本>`，同步修改 `package.json` 中的 `mygo-cli`、`mygo-runtime`，执行 `pnpm install`、`go mod tidy`、`pnpm generate:desktop` 和 `pnpm check:ci`，审查依赖及生成绑定差异。新版仍需平台实机验收，尤其是 Windows 桌面歌词的透明、边框、缩放和锁定穿透；WebView2 安装引导继续暂停。
