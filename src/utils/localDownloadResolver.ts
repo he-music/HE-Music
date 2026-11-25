@@ -7,15 +7,13 @@ import { validLocalDownloadFormat } from "@/platform/localDownloadPersistence";
 import { audioOutputFormat } from "@/platform/audioSource";
 import { DownloadPreparationError } from "@/platform/localDownloadDiagnostics";
 import { toLineDownloadLyrics } from "./downloadLyrics";
+import { songDetail, songLyric, songUrl } from "@/api/song";
 
 export interface MygoDownloadResolution {
   readonly url: string;
   readonly format: string;
   readonly metadata?: DownloadMetadata;
 }
-
-type SongDetailReader = typeof import("@/api/song").songDetail;
-type SongLyricReader = typeof import("@/api/song").songLyric;
 
 function validResolvedURL(value: unknown): value is string {
   return typeof value === "string" && validDownloadHTTPURL(value);
@@ -27,23 +25,14 @@ function lyricText(value: unknown): string {
 }
 
 export function createMygoDownloadResolver(
-  request: (
-    id: string,
-    platform: string,
-    quality: number,
-    format: string,
-  ) => Promise<unknown> = async (id, platform, quality, format) => {
-    const { songUrl } = await import("@/api/song");
-    return songUrl(id, platform, quality, format, { skipErrorMessage: true });
-  },
-  readDetail: SongDetailReader = async (...args) => {
-    const { songDetail } = await import("@/api/song");
-    return songDetail(...args);
-  },
-  readLyric: SongLyricReader = async (...args) => {
-    const { songLyric } = await import("@/api/song");
-    return songLyric(...args);
-  },
+  request: (id: string, platform: string, quality: number, format: string) => Promise<unknown> = (
+    id,
+    platform,
+    quality,
+    format,
+  ) => songUrl(id, platform, quality, format, { skipErrorMessage: true }),
+  readDetail: typeof songDetail = async (...args) => songDetail(...args),
+  readLyric: typeof songLyric = async (...args) => songLyric(...args),
 ): LocalDownloadResolver {
   return async (quality, source, options): Promise<MygoDownloadResolution> => {
     try {

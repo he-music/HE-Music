@@ -30,6 +30,9 @@ vi.mock("@/stores", () => ({
   useSettingStore: () => mocks.setting,
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => mocks.player }));
+vi.mock("@/utils/auth", () => ({ toLikeSong: vi.fn() }));
+vi.mock("@/utils/modal", () => ({ openSetting: vi.fn() }));
+vi.mock("@/api/song", () => ({ songDetail: vi.fn(), songLyric: vi.fn(), songUrl: vi.fn() }));
 vi.mock("vue-i18n", () => ({
   useI18n: () => ({ locale: { value: "zh-CN" }, t: (key: string) => key }),
 }));

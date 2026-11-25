@@ -33,10 +33,7 @@ export function useDesktopLifecycle(ui: {
   const files = lifecycle
     ? createFilesSession(platform.files, {
         blockAudio: blockLocalAudio,
-        resolveURL: createMygoDownloadResolver(async (id, platform, quality, format) => {
-          const { songUrl } = await import("@/api/song");
-          return songUrl(id, platform, quality, format, { skipErrorMessage: true });
-        }),
+        resolveURL: createMygoDownloadResolver(),
       })
     : undefined;
   const lyrics = lifecycle ? createShellDesktopLyricsSession() : undefined;

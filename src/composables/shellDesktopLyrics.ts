@@ -1,6 +1,7 @@
 import { useMusicStore, useSettingStore, useStatusStore } from "@/stores";
 import { platform } from "@/platform";
 import { usePlayer } from "@/utils/player";
+import { openSetting } from "@/utils/modal";
 import { DesktopLyricsSession } from "@/platform/desktopLyricsSession";
 import {
   createDefaultDesktopLyricStyle,
@@ -100,7 +101,6 @@ export function createShellDesktopLyricsSession(): DesktopLyricsSession | undefi
       else if (command.action === "toggle") await player.playOrPause();
       else if (command.action === "next") await player.nextOrPrev("next");
       else if (command.action === "open-settings") {
-        const { openSetting } = await import("@/utils/modal");
         await openSetting("lyrics", "showDesktopLyric");
       }
     },

@@ -1,5 +1,5 @@
 import Plyr from "plyr";
-import Hls from "hls.js";
+import type Hls from "hls.js";
 import { gatewayProxyUrl } from "@/platform/gateway";
 
 export interface VideoSource {
@@ -26,7 +26,7 @@ export function createVideoPlayback(
   let disposed = false;
   player.on("playing", onPlaying);
 
-  const setSource = (sources: VideoSource[], title: string, poster: string) => {
+  const setSource = async (sources: VideoSource[], title: string, poster: string) => {
     if (disposed || !sources.length) return;
     const current = ++generation;
     player.pause();
@@ -35,12 +35,15 @@ export function createVideoPlayback(
     onHlsQualities([]);
     const first = sources[0];
     if (disposed || !first) return;
-    const useHls = first.type === "application/x-mpegURL" && Hls.isSupported();
+    const Hls =
+      first.type === "application/x-mpegURL" ? (await import("hls.js")).default : undefined;
+    if (disposed || generation !== current) return;
+    const HlsEngine = Hls?.isSupported() ? Hls : undefined;
     player.source = {
       type: "video",
       title,
       poster: gatewayProxyUrl(poster),
-      sources: useHls
+      sources: HlsEngine
         ? [{ ...first, src: "" }]
         : sources.map((source) => ({ ...source, src: gatewayProxyUrl(source.src) })),
     };
@@ -62,15 +65,15 @@ export function createVideoPlayback(
       },
       { once: true },
     );
-    if (useHls) {
-      const stream = new Hls();
+    if (HlsEngine) {
+      const stream = new HlsEngine();
       hls = stream;
-      stream.on(Hls.Events.MANIFEST_PARSED, () => {
+      stream.on(HlsEngine.Events.MANIFEST_PARSED, () => {
         if (disposed || generation !== current) return;
         onHlsQualities([...new Set(stream.levels.map((level) => level.height))].filter(Boolean));
         play();
       });
-      stream.on(Hls.Events.ERROR, (_, data) => {
+      stream.on(HlsEngine.Events.ERROR, (_, data) => {
         if (data.fatal && !disposed && generation === current) onError();
       });
       stream.attachMedia(currentMedia);

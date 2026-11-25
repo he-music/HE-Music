@@ -86,7 +86,7 @@ afterEach(() => {
 });
 
 describe("videoPlayback 资源消费网关", () => {
-  it.each([false, true])("普通视频在 mygo=%s 时派生消费地址并保留原始模型", (mygo) => {
+  it.each([false, true])("普通视频在 mygo=%s 时派生消费地址并保留原始模型", async (mygo) => {
     vi.stubGlobal("window", mygo ? { __HE_MUSIC_GATEWAY_ORIGIN__: gatewayOrigin } : {});
     const { playback } = mount();
     const sources: VideoSource[] = [
@@ -98,7 +98,7 @@ describe("videoPlayback 资源消费网关", () => {
       },
     ];
     const original = structuredClone(sources);
-    playback.setSource(sources, "电影", remotePoster);
+    await playback.setSource(sources, "电影", remotePoster);
     expect(sources).toEqual(original);
     expect(doubles.players[0].source).toMatchObject({
       poster: gatewayProxyUrl(remotePoster),
@@ -107,7 +107,7 @@ describe("videoPlayback 资源消费网关", () => {
     expect(doubles.streams).toHaveLength(0);
   });
 
-  it.each([false, true])("HLS 在 mygo=%s 时保持源格式识别并使用相同网关", (mygo) => {
+  it.each([false, true])("HLS 在 mygo=%s 时保持源格式识别并使用相同网关", async (mygo) => {
     vi.stubGlobal("window", mygo ? { __HE_MUSIC_GATEWAY_ORIGIN__: gatewayOrigin } : {});
     const { playback } = mount();
     const source = {
@@ -115,7 +115,7 @@ describe("videoPlayback 资源消费网关", () => {
       type: "application/x-mpegURL",
       size: 0,
     };
-    playback.setSource([source], "直播", remotePoster);
+    await playback.setSource([source], "直播", remotePoster);
     expect(doubles.streams).toHaveLength(1);
     expect(doubles.streams[0].loadSource).toHaveBeenCalledWith(gatewayProxyUrl(source.src));
     expect(doubles.players[0].source.sources[0].src).toBe("");
@@ -123,7 +123,7 @@ describe("videoPlayback 资源消费网关", () => {
     expect(source.src).toBe("https://video.fixture.invalid/master.m3u8?token=fixture");
   });
 
-  it("不支持 Hls.js 时将 HLS 网关地址交给原生媒体节点", () => {
+  it("不支持 Hls.js 时将 HLS 网关地址交给原生媒体节点", async () => {
     doubles.supported = false;
     vi.stubGlobal("window", { __HE_MUSIC_GATEWAY_ORIGIN__: gatewayOrigin });
     const { playback } = mount();
@@ -132,20 +132,36 @@ describe("videoPlayback 资源消费网关", () => {
       type: "application/x-mpegURL",
       size: 0,
     };
-    playback.setSource([source], "原生 HLS", remotePoster);
+    await playback.setSource([source], "原生 HLS", remotePoster);
     expect(doubles.streams).toHaveLength(0);
     expect(doubles.players[0].source.sources[0].src).toBe(gatewayProxyUrl(source.src));
   });
 
-  it("换源和卸载后忽略迟到的清单与错误回调", () => {
+  it("加载 Hls.js 期间切换到 MP4 时不挂载旧视频流", async () => {
+    vi.stubGlobal("window", {});
+    const { playback } = mount();
+    const hls = {
+      src: "https://video.fixture.invalid/old.m3u8",
+      type: "application/x-mpegURL",
+      size: 0,
+    };
+    const mp4 = { src: "https://video.fixture.invalid/new.mp4", type: "video/mp4", size: 720 };
+    const pending = playback.setSource([hls], "旧视频", remotePoster);
+    await playback.setSource([mp4], "新视频", remotePoster);
+    await pending;
+    expect(doubles.streams).toHaveLength(0);
+    expect(doubles.players[0].source.sources).toEqual([mp4]);
+  });
+
+  it("换源和卸载后忽略迟到的清单与错误回调", async () => {
     vi.stubGlobal("window", { __HE_MUSIC_GATEWAY_ORIGIN__: gatewayOrigin });
     const { playback, media, onError, onQualities } = mount(true);
     const source = (name: string): VideoSource[] => [
       { src: `https://video.fixture.invalid/${name}.m3u8`, type: "application/x-mpegURL", size: 0 },
     ];
-    playback.setSource(source("old"), "旧视频", remotePoster);
+    await playback.setSource(source("old"), "旧视频", remotePoster);
     const old = doubles.streams[0];
-    playback.setSource(source("new"), "新视频", remotePoster);
+    await playback.setSource(source("new"), "新视频", remotePoster);
     expect(old.destroy).toHaveBeenCalledOnce();
     onQualities.mockClear();
     old.handlers.get("manifest")?.();
@@ -165,7 +181,7 @@ describe("videoPlayback 资源消费网关", () => {
     expect(onError).not.toHaveBeenCalled();
     expect(current.destroy).toHaveBeenCalledOnce();
     expect(doubles.players[0].destroy).toHaveBeenCalledOnce();
-    playback.setSource(source("after-unmount"), "已卸载", remotePoster);
+    await playback.setSource(source("after-unmount"), "已卸载", remotePoster);
     expect(doubles.streams).toHaveLength(2);
   });
 });

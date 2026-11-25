@@ -502,7 +502,8 @@ const getVideoData = async (id: string, platform: string) => {
         hlsQuality.value = -1;
       },
     );
-    playback.setSource(sources, result.name, result.cover);
+    await playback.setSource(sources, result.name, result.cover);
+    if (request !== videoRequest) return;
     commentReady.value = JSON.stringify([id, platform]);
   } catch (error) {
     if (request !== videoRequest) return;

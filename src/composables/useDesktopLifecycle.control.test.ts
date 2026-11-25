@@ -69,6 +69,7 @@ vi.mock("@/platform/filesSession", () => ({
   createFilesSession: () => doubles.makeSession("files"),
 }));
 vi.mock("@/platform/localAudioSession", () => ({ blockLocalAudio: () => () => {} }));
+vi.mock("@/api/song", () => ({ songDetail: vi.fn(), songLyric: vi.fn(), songUrl: vi.fn() }));
 vi.mock("@/platform/applicationQuit", () => ({
   installApplicationQuitHandler: () => vi.fn(),
 }));

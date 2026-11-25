@@ -5,7 +5,6 @@ import { filesSession, type FilesSession } from "@/platform/filesSession";
 import { nativeLocalEntry, localFilesSession } from "@/platform/localFilesSession";
 import type { DirectoryGrant, ScanEntry } from "@/platform/mygo.bindings";
 import type { LocalDownloadResolver } from "@/platform/localDownloadSession";
-import { songUrl } from "@/api/song";
 import { createMygoDownloadResolver } from "./localDownloadResolver";
 import { t } from "@/i18n";
 
@@ -203,8 +202,6 @@ const modals = createMygoFileModals({
   create: (options) => window.$modal.create(options),
   warn: (key) => window.$message.warning(t(key)),
   translate: t,
-  resolveURL: createMygoDownloadResolver((id, sourcePlatform, quality, format) =>
-    songUrl(id, sourcePlatform, quality, format, { skipErrorMessage: true }),
-  ),
+  resolveURL: createMygoDownloadResolver(),
 });
 export const { openMygoSongInfoEditor, openMygoDownloadSong } = modals;

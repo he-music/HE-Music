@@ -1,6 +1,8 @@
 import { watch } from "vue";
 import { useDataStore, useMusicStore, useStatusStore } from "@/stores";
 import { usePlayer } from "@/utils/player";
+import { toLikeSong } from "@/utils/auth";
+import { openSetting } from "@/utils/modal";
 import { createPlaybackSongSnapshot } from "@/utils/song";
 import { nativeLocalEntry } from "@/platform/localFilesSession";
 import { TrayPlaybackSession, type TrayPlaybackSource } from "@/platform/trayPlaybackSession";
@@ -25,10 +27,8 @@ export const createShellTraySession = (
   const music = useMusicStore();
   const status = useStatusStore();
   const player = dependencies.player ?? usePlayer();
-  const loadFavorite =
-    dependencies.loadFavorite ?? (async () => (await import("@/utils/auth")).toLikeSong);
-  const loadSettings =
-    dependencies.loadSettings ?? (async () => (await import("@/utils/modal")).openSetting);
+  const loadFavorite = dependencies.loadFavorite ?? (async () => toLikeSong);
+  const loadSettings = dependencies.loadSettings ?? (async () => openSetting);
   const report =
     dependencies.reportFailure ?? ((error: unknown) => console.error("托盘操作失败", error));
   const session = new TrayPlaybackSession(provider, report);

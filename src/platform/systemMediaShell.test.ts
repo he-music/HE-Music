@@ -35,6 +35,9 @@ vi.mock("@/utils/blob", () => ({ default: {} }));
 vi.mock("@/api/artist", () => ({ artistPhotos: vi.fn() }));
 vi.mock("@/utils/helper", () => ({ shuffleArray: vi.fn(), renderOption: vi.fn() }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => mocks.player }));
+vi.mock("@/utils/auth", () => ({ toLikeSong: vi.fn() }));
+vi.mock("@/utils/modal", () => ({ openSetting: vi.fn() }));
+vi.mock("@/api/song", () => ({ songDetail: vi.fn(), songLyric: vi.fn(), songUrl: vi.fn() }));
 vi.mock("vue-i18n", () => ({
   useI18n: () => ({ t: (key: string) => key, locale: Vue.ref("zh-CN") }),
 }));

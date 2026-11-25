@@ -9,12 +9,9 @@ import wasm from "vite-plugin-wasm";
 
 const vendorChunks = {
   "vue-vendor": ["vue", "vue-router", "pinia", "pinia-plugin-persistedstate", "vue-i18n"],
-  "naive-ui": ["naive-ui"],
   "vendor-utils": ["lodash-es", "@vueuse/core", "axios", "dayjs", "js-cookie", "md5"],
   "color-theme": ["@material/material-color-utilities", "jss", "jss-preset-default"],
-  "media-player": ["hls.js", "plyr"],
   markdown: ["marked", "github-markdown-css"],
-  pixi: ["pixi.js"],
 };
 
 // Web 与 mygo 共用渲染配置。
@@ -62,18 +59,28 @@ export function createFrontendConfig(mode: string, desktop = false): UserConfig 
       // 沿用 Vite 7 的浏览器目标，覆盖现有桌面 WebView。
       target: ["chrome107", "edge107", "firefox104", "safari16"],
       minify: "terser",
+      // 完整版 hls.js 是约 597 kB 的单个模块，仅在播放 HLS 视频时加载。
+      chunkSizeWarningLimit: 600,
       rolldownOptions: {
         input: resolve(import.meta.dirname, "index.html"),
         output: {
           strictExecutionOrder: true,
           codeSplitting: {
-            // 只分组明确匹配的依赖，保留渲染库的按需加载。
+            // Pixi 保留自动分包，让浏览器和 Worker 渲染代码各自按需加载。
             includeDependenciesRecursively: false,
-            groups: Object.entries(vendorChunks).map(([name, packages]) => ({
-              name,
-              test: (id) =>
-                packages.some((dependency) => id.includes(`/node_modules/${dependency}/`)),
-            })),
+            groups: [
+              ...Object.entries(vendorChunks).map(([name, packages]) => ({
+                name,
+                test: (id: string) =>
+                  packages.some((dependency) => id.includes(`/node_modules/${dependency}/`)),
+              })),
+              {
+                name: "naive-ui",
+                test: /\/node_modules\/naive-ui\//,
+                entriesAware: true,
+                entriesAwareMergeThreshold: 35_000,
+              },
+            ],
           },
         },
       },

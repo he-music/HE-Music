@@ -54,6 +54,8 @@ vi.mock("./audioManager", () => ({ default: { on: vi.fn(), off: vi.fn() } }));
 vi.mock("./songManager", () => ({ default: {} }));
 vi.mock("./lyricManager", () => ({ default: {} }));
 vi.mock("@/i18n", () => ({ t: (key: string) => key }));
+vi.mock("@/utils/auth", () => ({ toLikeSong: vi.fn() }));
+vi.mock("@/utils/modal", () => ({ openSetting: vi.fn() }));
 vi.mock("@/stores", async () => ({
   ...(await import("@/stores/data")),
   ...(await import("@/stores/status")),

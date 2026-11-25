@@ -33,6 +33,8 @@ vi.mock("@/stores", () => ({
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => mocks.player }));
 vi.mock("@/utils/modal", () => ({ openSetting: mocks.openSetting }));
+vi.mock("@/utils/auth", () => ({ toLikeSong: vi.fn() }));
+vi.mock("@/api/song", () => ({ songDetail: vi.fn(), songLyric: vi.fn(), songUrl: vi.fn() }));
 vi.mock("vue-i18n", async () => {
   const { ref } = await import("vue");
   const locale = ref("zh-CN");

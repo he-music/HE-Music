@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { songDetail, songLyric, songUrl } from "@/api/song";
 
 vi.mock("@/api/song", () => ({ songDetail: vi.fn(), songLyric: vi.fn(), songUrl: vi.fn() }));
 import { createMygoDownloadResolver } from "./localDownloadResolver";
@@ -11,6 +12,16 @@ const source = {
 };
 
 describe("mygo local download resolver candidate", () => {
+  it("默认请求跳过全局错误提示，且不读取未启用的元数据和歌词", async () => {
+    const response = { url: "https://cdn.test/song.mp3", format: "mp3" };
+    vi.mocked(songUrl).mockResolvedValueOnce(response);
+
+    await expect(createMygoDownloadResolver()("320", source)).resolves.toEqual(response);
+    expect(songUrl).toHaveBeenCalledWith("song", "qq", 320, "mp3", { skipErrorMessage: true });
+    expect(songDetail).not.toHaveBeenCalled();
+    expect(songLyric).not.toHaveBeenCalled();
+  });
+
   it("resolves a fresh URL and metadata without exposing credentials in source", async () => {
     const resolve = createMygoDownloadResolver(
       vi.fn(async () => ({ url: "https://cdn.test/signed?token=x", format: "mp3" })),

@@ -32,6 +32,8 @@ vi.mock("@/stores", () => ({
   useStatusStore: () => status,
 }));
 vi.mock("@/utils/player", () => ({ usePlayer: () => player }));
+vi.mock("@/utils/auth", () => ({ toLikeSong: vi.fn() }));
+vi.mock("@/utils/modal", () => ({ openSetting: vi.fn() }));
 vi.mock("@/platform/localFilesSession", () => ({
   nativeLocalEntry: () => (available.value ? {} : undefined),
 }));
