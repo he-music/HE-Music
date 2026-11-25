@@ -71,6 +71,10 @@ const activeThemeOverrides = computed<GlobalThemeOverrides>(() => {
   const overrides = activeSkin.value?.themeOverrides;
   if (!overrides) return themeOverrides.value;
   return {
+    Tooltip: {
+      color: overrides.common?.popoverColor,
+      textColor: overrides.common?.primaryColor,
+    },
     ...overrides,
     common: { fontFamily: themeOverrides.value.common?.fontFamily, ...overrides.common },
   };
