@@ -15,11 +15,12 @@ import (
 // A transfer owns its progress and failure stage until all private files and
 // response resources are cleaned up. The coordinator only publishes job state.
 type downloadTransfer struct {
-	coordinator *downloadCoordinator
-	job         *downloadJob
-	out         *DownloadState
-	stage       string
-	status      int
+	coordinator        *downloadCoordinator
+	job                *downloadJob
+	out                *DownloadState
+	stage              string
+	status             int
+	replayGainEligible bool
 }
 
 func downloadWorkTarget(root *os.Root, target string) (*os.Root, string, os.FileInfo, error) {
@@ -154,7 +155,7 @@ func (t *downloadTransfer) validateAudio(file *os.File, target string) error {
 		t.out.Code = "unsupported"
 		return errDownload
 	}
-	// Discard parsed tags: cached results contain no pictures or unbounded strings.
+	t.replayGainEligible = info.ReplayGain == nil && metadata.CanWriteReplayGain(info.Container)
 	t.stage = "validate_audio"
 	if err := metadata.ValidateAudioPayload(t.job.ctx, reader, t.out.Received); err != nil {
 		t.out.Code = "payload_rejected"
@@ -167,6 +168,11 @@ func (t *downloadTransfer) editAudio(root *os.Root, work *downloadOwnedPrivate, 
 	o := t.job.options
 	if o == nil || o.Metadata == nil {
 		return nil
+	}
+	if o.WriteReplayGain && !t.replayGainEligible {
+		filtered := *o
+		filtered.WriteReplayGain = false
+		o = &filtered
 	}
 	if !t.keepAudio() {
 		return t.editAudioStep(root, work, owned, o, "metadata")
@@ -181,12 +187,12 @@ func (t *downloadTransfer) editAudio(root *os.Root, work *downloadOwnedPrivate, 
 		return nil
 	}
 	cover := *o
-	cover.WriteMetadata, cover.WriteLyrics = false, false
+	cover.WriteMetadata, cover.WriteLyrics, cover.WriteReplayGain = false, false, false
 	return t.editAudioStep(root, work, owned, &cover, "cover")
 }
 
 func (t *downloadTransfer) editAudioStep(root *os.Root, work *downloadOwnedPrivate, owned *[]*downloadOwnedPrivate, options *DownloadOptions, stage string) error {
-	if !options.WriteMetadata && !options.WriteCover && (!options.WriteLyrics || options.Metadata.Lyrics == "") {
+	if !options.WriteMetadata && !options.WriteCover && (!options.WriteLyrics || options.Metadata.Lyrics == "") && !options.WriteReplayGain {
 		return nil
 	}
 	t.stage = "copy_source"

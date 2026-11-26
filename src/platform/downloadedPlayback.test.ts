@@ -45,13 +45,18 @@ function fixture() {
 describe("已下载文件取源", () => {
   it("只读取同歌曲同音质的有效文件，并保留在线身份", async () => {
     const f = fixture();
+    f.entry.metadata.replayGain = { track_gain_db: -8, track_peak: 1 };
     const result = await f.resolve();
     expect(f.request).toHaveBeenCalledWith(
       expect.stringContaining("/__local/audio?"),
       expect.objectContaining({ method: "HEAD", credentials: "omit" }),
     );
     expect(result?.entry).toBe(f.entry);
-    expect(result?.source).toMatchObject({ platform: "local", format: "mp3" });
+    expect(result?.source).toMatchObject({
+      platform: "local",
+      format: "mp3",
+      replayGain: { track_gain_db: -8, track_peak: 1 },
+    });
     expect(f.song).toMatchObject({ id: "online", platform: "test", path: undefined });
     const mpv = await resolveDownloadedPlayback(
       f.song,

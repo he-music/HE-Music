@@ -126,6 +126,24 @@ afterEach(() => {
 });
 
 describe("Player HTMLAudio compatibility", () => {
+  it("在线播放 MP3 也会把单曲响度元数据交给播放引擎", async () => {
+    await loadPlayer();
+    const { default: songManager } = await import("./songManager");
+    const replay_gain = { track_gain_db: -6, track_peak: 0.9 };
+    vi.mocked(songManager.getOnlineSource).mockResolvedValueOnce({
+      url: "https://audio.example/track.mp3",
+      format: "mp3",
+      replay_gain,
+    });
+    await player.initPlayer(true);
+    expect(mocks.audio.play).toHaveBeenCalledWith(
+      "https://audio.example/track.mp3",
+      expect.objectContaining({
+        source: { platform: "test", format: "mp3", replayGain: replay_gain },
+      }),
+    );
+  });
+
   it("keeps a policy-blocked track, lyrics and seek, then resumes on user play", async () => {
     await loadPlayer();
     const next = vi.spyOn(player, "nextOrPrev").mockResolvedValue(undefined);

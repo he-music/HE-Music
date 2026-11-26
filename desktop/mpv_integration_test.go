@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +39,15 @@ func mpvIntegrationLibrary(t *testing.T) *mpvAPI {
 	return api
 }
 
+func checkMpvVolumeGainRange(t *testing.T, api *mpvAPI, handle uintptr) {
+	t.Helper()
+	for _, value := range []string{"-60", "60", "0"} {
+		if err := mpvResult("volume-gain", api.setPropertyString(handle, "volume-gain", value)); err != nil {
+			t.Fatalf("设置 %s dB: %v", value, err)
+		}
+	}
+}
+
 func TestMpvBundledLibraryNullAudio(t *testing.T) {
 	api := mpvIntegrationLibrary(t)
 	handle := api.create()
@@ -49,6 +59,7 @@ func TestMpvBundledLibraryNullAudio(t *testing.T) {
 	for key, value := range map[string]string{
 		"config": "no", "load-scripts": "no", "video": "no", "audio-display": "no",
 		"terminal": "no", "ao": "null", "ao-null-buffer": "0.05", "idle": "yes", "keep-open": "yes", "pause": "yes",
+		"volume-gain-max": strconv.Itoa(mpvReplayGainLimit),
 	} {
 		if err := mpvResult(key, api.setOptionString(handle, key, value)); err != nil {
 			t.Fatal(err)
@@ -102,6 +113,7 @@ func TestMpvBundledLibraryNullAudio(t *testing.T) {
 		duration, err := api.number(handle, "duration")
 		return err == nil && duration > 5.5
 	})
+	checkMpvVolumeGainRange(t, api, handle)
 	setPause := func(value string) {
 		t.Helper()
 		if err := mpvResult("pause", api.setPropertyString(handle, "pause", value)); err != nil {

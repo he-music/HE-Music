@@ -8,6 +8,7 @@ import { createMygoDownloadSettings } from "./localDownloadSettings";
 const state = vi.hoisted(() => ({
   downloadPath: "",
   downloadMeta: true,
+  downloadReplayGain: false,
   downloadKeepAudioOnMetadataFailure: true,
 }));
 vi.mock("@/stores", () => ({ useSettingStore: () => state }));
@@ -15,6 +16,8 @@ vi.mock("@/i18n", () => ({ t: (key: string) => key }));
 afterEach(async () => {
   await filesSession.value?.dispose();
   state.downloadPath = "";
+  state.downloadMeta = true;
+  state.downloadReplayGain = false;
   vi.unstubAllGlobals();
 });
 async function fixture() {
@@ -90,4 +93,17 @@ it("shows the audio preservation switch in download settings", () => {
   expect(item?.type).toBe("switch");
   expect(item?.label).toBe("setting.local.keep_audio_on_metadata_failure");
   expect(toValue(item?.value)).toBe(true);
+});
+
+it("lets users opt into writing ReplayGain independently of other tags", () => {
+  state.downloadMeta = false;
+  const items = createMygoDownloadSettings().groups[0].items;
+  const item = items.find((item) => item.key === "downloadReplayGain");
+  if (!item?.value) throw new Error("Expected ReplayGain switch");
+  expect(item.type).toBe("switch");
+  expect(toValue(item.disabled)).toBeFalsy();
+  expect(item.value.value).toBe(false);
+  item.value.value = true;
+  expect(state.downloadReplayGain).toBe(true);
+  expect(state.downloadMeta).toBe(false);
 });

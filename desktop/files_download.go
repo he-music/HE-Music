@@ -514,12 +514,21 @@ func downloadNativeMetadata(ctx context.Context, client *http.Client, root *os.R
 	}
 
 	patch := downloadMetadataPatch(options, picture)
-	if patch.Title == nil && patch.Album == nil && patch.Artists == nil && patch.Lyrics == nil && patch.Pictures == nil {
+	if !options.WriteReplayGain && !downloadHasTagChanges(patch) {
 		return nil
 	}
 	info, err := audio.Stat()
 	if err != nil {
 		return err
+	}
+	if options.WriteReplayGain && m.ReplayGain.Valid() {
+		original, err := metadata.ParseScan(audio, info.Size())
+		if err == nil && original.ReplayGain == nil && metadata.CanWriteReplayGain(original.Container) {
+			patch.ReplayGain = m.ReplayGain
+		}
+	}
+	if !downloadHasTagChanges(patch) {
+		return nil
 	}
 	if !metadataPatchWithinLimit(patch) {
 		return errDownloadOptions
@@ -536,6 +545,10 @@ func downloadNativeMetadata(ctx context.Context, client *http.Client, root *os.R
 		return errDownloadMetadataReadback
 	}
 	return nil
+}
+
+func downloadHasTagChanges(patch metadata.Patch) bool {
+	return patch.Title != nil || patch.Album != nil || patch.Artists != nil || patch.Lyrics != nil || patch.Pictures != nil || patch.ReplayGain != nil
 }
 
 func downloadMetadataPatch(options *DownloadOptions, picture *metadata.Picture) metadata.Patch {

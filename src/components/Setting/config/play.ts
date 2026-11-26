@@ -331,6 +331,15 @@ export const usePlaySettings = (): SettingConfig => {
             }),
           },
           {
+            key: "replayGainEnabled",
+            label: t("setting.play.replay_gain"),
+            type: "switch",
+            value: computed({
+              get: () => settingStore.replayGainEnabled,
+              set: (value) => (settingStore.replayGainEnabled = value),
+            }),
+          },
+          {
             key: "playbackEngine",
             label: t("mygo.audio.playback_engine"),
             type: "select",

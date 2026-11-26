@@ -646,19 +646,22 @@ class Player {
             this.cuePlayback = { entry: nativeEntry, range, stoppedAtEnd: false };
             seek = this.clampCueSeek(seek);
           }
+          const replayGain = nativeEntry.metadata?.replayGain;
+          const format = nativeEntry.path.split(".").pop()?.toLowerCase() ?? "";
           const source: AudioSourceInfo | undefined =
             engine === "mpv"
               ? {
                   platform: "local",
-                  format: nativeEntry.path.split(".").pop()?.toLowerCase() ?? "",
+                  format,
+                  ...(replayGain ? { replayGain } : {}),
                   localRef: nativeEntry.ref,
                   fileEpoch: filesSession.value?.directories.value.find(
                     (grant) => grant.token === nativeEntry.ref.grantToken,
                   )?.epoch,
                   identity: range ? localSongID(nativeEntry) : id,
                 }
-              : /\.flac$/i.test(nativeEntry.path)
-                ? { platform: "local", format: "flac" }
+              : format === "flac" || replayGain
+                ? { platform: "local", format, ...(replayGain ? { replayGain } : {}) }
                 : undefined;
           await this.createPlayer(url, autoPlay, seek, this.autoPlayOwner, source);
         } catch (error) {
@@ -737,8 +740,10 @@ class Player {
           playerUrl = resolved?.url ?? null;
           if (engine === "mpv" && !playerUrl) throw new Error("Get song URL error");
           const format = resolved?.format;
+          const replayGain = resolved?.replay_gain;
           if (
             engine === "mpv" ||
+            replayGain ||
             format === "flac" ||
             (platform === "migu" && format === "m4a") ||
             (isMygo && platform === "soda" && (format === "m4a" || format === "mp4"))
@@ -746,6 +751,7 @@ class Player {
             source = {
               platform,
               format: format || link.format || "",
+              ...(replayGain ? { replayGain } : {}),
               ...(engine === "mpv" ? { identity: `${platform}:${id}` } : {}),
             };
           }

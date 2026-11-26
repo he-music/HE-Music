@@ -12,6 +12,28 @@ const source = {
 };
 
 describe("mygo local download resolver candidate", () => {
+  it("只有启用响度标签才透传后端增益并保留 0 dB", async () => {
+    const detail = vi.fn();
+    const response = { url: "https://cdn.test/song.mp3", format: "mp3" };
+    const resolve = createMygoDownloadResolver(
+      async () => ({ ...response, replay_gain: { track_gain_db: 0, track_peak: 1.01 } }),
+      detail,
+    );
+    const options = {
+      writeMetadata: false,
+      writeCover: false,
+      writeLyrics: false,
+      saveSidecars: false,
+    };
+    await expect(resolve("320", source, options)).resolves.toEqual(response);
+    await expect(
+      resolve("320", source, { ...options, writeReplayGain: true }),
+    ).resolves.toMatchObject({
+      metadata: { replayGain: { track_gain_db: 0, track_peak: 1.01 } },
+    });
+    expect(detail).not.toHaveBeenCalled();
+  });
+
   it("默认请求跳过全局错误提示，且不读取未启用的元数据和歌词", async () => {
     const response = { url: "https://cdn.test/song.mp3", format: "mp3" };
     vi.mocked(songUrl).mockResolvedValueOnce(response);

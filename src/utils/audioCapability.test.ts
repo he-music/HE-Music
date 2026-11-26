@@ -40,7 +40,9 @@ class FakeAudioContext {
   readonly destination = new FakeNode();
   readonly source = new FakeNode();
   readonly analyser = new FakeNode() as FakeNode & { fftSize: number };
+  readonly normalization = new FakeNode() as FakeNode & { gain: FakeAudioParam };
   readonly gain = new FakeNode() as FakeNode & { gain: FakeAudioParam };
+  private gainCount = 0;
   readonly filters: Array<
     FakeNode & {
       type: string;
@@ -56,6 +58,7 @@ class FakeAudioContext {
 
   constructor(failAt?: string) {
     this.failAt = failAt;
+    this.normalization.gain = new FakeAudioParam();
     this.gain.gain = new FakeAudioParam();
     if (failAt === "connect") this.source.shouldThrow = true;
   }
@@ -76,7 +79,7 @@ class FakeAudioContext {
 
   createGain(): FakeNode {
     if (this.failAt === "gain") throw new Error("gain failed");
-    return this.gain;
+    return this.gainCount++ === 0 ? this.normalization : this.gain;
   }
 
   createBiquadFilter(): FakeNode {
@@ -136,6 +139,7 @@ function graphLease(context: FakeAudioContext): AudioGraphLease {
     context: asContext(context),
     source: source as unknown as MediaElementAudioSourceNode,
     analyser: analyser as unknown as AnalyserNode,
+    normalization: context.normalization as unknown as GainNode,
     gain: gain as unknown as GainNode,
     filters: [],
     dispose: vi.fn(),
@@ -241,7 +245,8 @@ describe("audio capability", () => {
     expect(context.gain.gain.value).toBe(1);
     expect(context.source.connections[0]).toBe(context.filters[0]);
     expect(context.filters[9].connections[0]).toBe(context.analyser);
-    expect(context.analyser.connections[0]).toBe(context.gain);
+    expect(context.analyser.connections[0]).toBe(context.normalization);
+    expect(context.normalization.connections[0]).toBe(context.gain);
     expect(context.gain.connections[0]).toBe(context.destination);
     expect(context.filters.map((filter) => filter.frequency.value)).toEqual(frequencies);
     graph.dispose();
@@ -352,16 +357,26 @@ describe("audio capability", () => {
       createGraph: vi.fn(() => graph),
     });
 
-    await expect(driver.load("https://audio.example/song.mp3")).resolves.toBe("web-audio");
+    driver.setReplayGainEnabled(true);
+    await expect(
+      driver.load("https://audio.example/song.mp3", {
+        platform: "test",
+        format: "mp3",
+        replayGain: { track_gain_db: -6 },
+      }),
+    ).resolves.toBe("web-audio");
+    expect(context.normalization.gain.value).toBeCloseTo(0.501);
     driver.setRate(1.25);
     driver.seek(12);
     await driver.play();
     expect(driver.element).toBe(asElement(plain));
-    expect(plain.volume).toBe(0.7);
+    expect(plain.volume).toBeCloseTo(0.7 * 0.501);
     expect(plain.playbackRate).toBe(1.25);
     expect(plain.currentTime).toBe(12);
     expect(plain.play).toHaveBeenCalledOnce();
     expect(graph.dispose).toHaveBeenCalledOnce();
+    driver.setReplayGainEnabled(false);
+    expect(plain.volume).toBe(0.7);
   });
   it("does not square graph volume", async () => {
     const driver = new AudioProcessingDriver({
@@ -671,6 +686,7 @@ describe("audio capability", () => {
     graph.dispose();
     expect(context.filters[0].disconnectCount).toBe(1);
     expect(context.analyser.disconnectCount).toBe(1);
+    expect(context.normalization.disconnectCount).toBe(1);
     expect(context.gain.disconnectCount).toBe(1);
     expect(context.close).toHaveBeenCalledOnce();
   });

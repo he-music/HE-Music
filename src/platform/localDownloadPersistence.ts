@@ -105,7 +105,8 @@ function downloadOptions(value: unknown): DownloadOptions | undefined {
     typeof value.writeMetadata !== "boolean" ||
     typeof value.writeCover !== "boolean" ||
     typeof value.writeLyrics !== "boolean" ||
-    typeof value.saveSidecars !== "boolean"
+    typeof value.saveSidecars !== "boolean" ||
+    (value.writeReplayGain !== undefined && typeof value.writeReplayGain !== "boolean")
   )
     throw invalid();
   if (
@@ -145,6 +146,7 @@ function downloadOptions(value: unknown): DownloadOptions | undefined {
     writeCover: value.writeCover,
     writeLyrics: value.writeLyrics,
     saveSidecars: value.saveSidecars,
+    ...(value.writeReplayGain === true ? { writeReplayGain: true } : {}),
     ...(value.keepAudioOnMetadataFailure !== undefined
       ? { keepAudioOnMetadataFailure: value.keepAudioOnMetadataFailure }
       : {}),

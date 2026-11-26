@@ -1,9 +1,11 @@
 import { mygoGatewayOrigin } from "./gateway";
+import type { ReplayGain } from "@/utils/replayGain";
 
 export interface SongAudioSource {
   readonly url: string;
   readonly audio_params?: string;
   readonly format: string;
+  readonly replay_gain?: ReplayGain;
 }
 
 /** 请求格式保留给音乐平台；下载扩展名与媒体 MIME 使用解密后的容器格式。 */
@@ -35,7 +37,11 @@ export function resolveSongAudioSource(source: SongAudioSource): SongAudioSource
     audio_params: source.audio_params,
     format,
   });
-  return { url: `${gateway}/__audio?${params}`, format };
+  return {
+    url: `${gateway}/__audio?${params}`,
+    format,
+    ...(source.replay_gain ? { replay_gain: source.replay_gain } : {}),
+  };
 }
 
 export type AudioDecryption = "local" | "server" | null;

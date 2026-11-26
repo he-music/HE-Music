@@ -6,6 +6,8 @@ import packageJson from "@/../package.json";
 import { usePlayer } from "@/utils/player";
 import log from "./log";
 import { useI18n } from "vue-i18n";
+import { watch } from "vue";
+import audioManager from "./audioManager";
 
 // 应用初始化时需要执行的操作
 const init = async () => {
@@ -18,6 +20,15 @@ const init = async () => {
   const player = usePlayer();
 
   locale.value = settingStore.language;
+  watch(
+    () => settingStore.replayGainEnabled,
+    (enabled) => {
+      void audioManager.setReplayGainEnabled(enabled).catch((error: unknown) => {
+        console.error("设置响度均衡失败", error);
+      });
+    },
+    { immediate: true },
+  );
 
   printVersion();
 

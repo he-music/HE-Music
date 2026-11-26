@@ -18,6 +18,7 @@ export interface MpvPlaybackCommands {
   clearSource(lifecycle: number, session: number): Promise<MpvSnapshot>;
   seek(lifecycle: number, session: number, seconds: number): Promise<void>;
   setVolume(lifecycle: number, session: number, volume: number): Promise<void>;
+  setReplayGainDb(lifecycle: number, session: number, db: number): Promise<void>;
   setRate(lifecycle: number, session: number, rate: number): Promise<void>;
   getOutputDevices(lifecycle: number): Promise<MpvOutputDevice[]>;
   setOutputDevice(lifecycle: number, device: string): Promise<void>;

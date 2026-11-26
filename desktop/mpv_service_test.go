@@ -199,6 +199,35 @@ func TestMpvLoadPauseSeekVolumeRateAndNaturalEOF(t *testing.T) {
 	}
 }
 
+func TestMpvReplayGainIsIndependentOfVolume(t *testing.T) {
+	fixture := newMpvFixture(t)
+	p, ctx := fixture.player, t.Context()
+	loaded, err := p.Load(ctx, 1, MpvLoadRequest{Format: "wav"})
+	requireTestNoError(t, err)
+	requireTestNoError(t, p.SetReplayGainDb(ctx, 1, loaded.Session, -6.2))
+	requireTestNoError(t, p.SetVolume(ctx, 1, loaded.Session, 0.3))
+	s := &p.session
+	db, err := s.api.number(s.handle, "volume-gain")
+	requireTestNoError(t, err)
+	if db != -6.2 || s.snapshot.Volume != 0.3 {
+		t.Fatalf("响度增益与用户音量未独立设置: %v dB, volume=%v", db, s.snapshot.Volume)
+	}
+	requireTestNoError(t, p.SetReplayGainDb(ctx, 1, loaded.Session, 0))
+	db, err = s.api.number(s.handle, "volume-gain")
+	requireTestNoError(t, err)
+	if db != 0 {
+		t.Fatalf("旧增益未清除: %v dB", db)
+	}
+	if err := p.SetReplayGainDb(ctx, 1, loaded.Session, 61); err == nil {
+		t.Fatal("未拒绝超出范围的增益")
+	}
+	_, err = p.ClearSource(ctx, 1, loaded.Session)
+	requireTestNoError(t, err)
+	if err := p.SetReplayGainDb(ctx, 1, loaded.Session, 6); !errors.Is(err, context.Canceled) {
+		t.Fatalf("未取消旧代次的增益命令: %v", err)
+	}
+}
+
 func TestMpvPlayConfirmsPlayingWithoutPlaybackRestart(t *testing.T) {
 	fixture := newMpvFixture(t)
 	p, ctx := fixture.player, t.Context()

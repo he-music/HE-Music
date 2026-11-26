@@ -78,6 +78,7 @@ export interface SettingState {
   /** 文件智能分类 */
   folderStrategy: "none" | "artist" | "artist-album";
   downloadMeta: boolean;
+  downloadReplayGain: boolean;
   downloadCover: boolean;
   downloadLyric: boolean;
   downloadLyricTran: boolean;
@@ -90,6 +91,7 @@ export interface SettingState {
   songLevel: string;
   playDevice: "default" | string;
   playbackEngine: PlaybackEngineId;
+  replayGainEnabled: boolean;
   preferDownloaded: boolean;
   outputDevices: PlaybackOutputDevices;
   autoPlay: boolean;
@@ -182,6 +184,7 @@ export const createSettingState = (): SettingState => ({
   songLevel: "320mp3", // 音质
   playDevice: "default", // 播放设备
   playbackEngine: "web-audio",
+  replayGainEnabled: false,
   preferDownloaded: true,
   outputDevices: defaultOutputDevices(),
   autoPlay: false, // 自动播放
@@ -246,6 +249,7 @@ export const createSettingState = (): SettingState => ({
   fileNameFormat: "title-artist",
   folderStrategy: "none",
   downloadMeta: true, // 同时下载元信息
+  downloadReplayGain: false,
   downloadCover: true, // 同时下载封面
   downloadLyric: true, // 同时下载歌词
   downloadLyricTran: false, // 下载歌词翻译

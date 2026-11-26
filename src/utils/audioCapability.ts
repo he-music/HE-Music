@@ -1,4 +1,5 @@
 import { isMygoGatewayResourceUrl } from "@/platform/gateway";
+import { replayGainScale, trackReplayGainDb, type ReplayGain } from "./replayGain";
 
 export type AudioSourceAccess = "native" | "web-audio";
 
@@ -8,6 +9,7 @@ export interface AudioSourceInfo {
   readonly localRef?: import("@/platform/mygo.bindings").LocalFileRef;
   readonly fileEpoch?: number;
   readonly identity?: string;
+  readonly replayGain?: ReplayGain;
 }
 
 export interface AudioSourceProbeOptions {
@@ -74,6 +76,7 @@ export interface AudioGraphLease {
   readonly context: AudioContext;
   readonly source: MediaElementAudioSourceNode;
   readonly analyser: AnalyserNode;
+  readonly normalization: GainNode;
   readonly gain: GainNode;
   readonly filters: readonly BiquadFilterNode[];
   dispose(): void;
@@ -93,6 +96,7 @@ export function createAudioGraph(
   const context = (options.contextFactory ?? (() => new AudioContext()))();
   let source: MediaElementAudioSourceNode | undefined;
   let analyser: AnalyserNode | undefined;
+  let normalization: GainNode | undefined;
   let gain: GainNode | undefined;
   const filters: BiquadFilterNode[] = [];
 
@@ -100,6 +104,7 @@ export function createAudioGraph(
     source = context.createMediaElementSource(element);
     analyser = context.createAnalyser();
     analyser.fftSize = 512;
+    normalization = context.createGain();
     gain = context.createGain();
     gain.gain.value = clampVolume(options.volume);
     for (const frequency of options.frequencies) {
@@ -117,10 +122,11 @@ export function createAudioGraph(
       current = filter;
     }
     current.connect(analyser);
-    analyser.connect(gain);
+    analyser.connect(normalization);
+    normalization.connect(gain);
     gain.connect(context.destination);
   } catch (error) {
-    disposeNodes(source, analyser, gain, filters);
+    disposeNodes([source, ...filters, analyser, normalization, gain]);
     void closeContext(context);
     throw error;
   }
@@ -130,24 +136,20 @@ export function createAudioGraph(
     context,
     source,
     analyser,
+    normalization,
     gain,
     filters,
     dispose() {
       if (disposed) return;
       disposed = true;
-      disposeNodes(source, analyser, gain, filters);
+      disposeNodes([source, ...filters, analyser, normalization, gain]);
       void closeContext(context);
     },
   };
 }
 
-function disposeNodes(
-  source: AudioNode | undefined,
-  analyser: AudioNode | undefined,
-  gain: AudioNode | undefined,
-  filters: readonly AudioNode[],
-): void {
-  for (const node of [source, ...filters, analyser, gain]) {
+function disposeNodes(nodes: readonly (AudioNode | undefined)[]): void {
+  for (const node of nodes) {
     try {
       node?.disconnect();
     } catch {
@@ -269,6 +271,7 @@ export class AudioProcessingDriver {
   private readonly generation = new AudioSourceGeneration();
   private probeController: AbortController | undefined;
   private volume: number;
+  private replayGainEnabled = false;
   private rate = 1;
   private listeners = new Map<AudioDriverEvent, Set<(event: Event) => void>>();
   private activeCleanup: (() => void) | undefined;
@@ -338,6 +341,7 @@ export class AudioProcessingDriver {
     previousProbe?.abort();
     this.stopCurrent(generation);
     if (!this.isCurrent(generation)) return "native";
+    this.sourceInfo = sourceInfo;
     const probe =
       this.options.probe ?? ((source, signal) => canUseWebAudioSource(source, { signal }));
     const shouldProcess = await boundedProbe(
@@ -368,11 +372,11 @@ export class AudioProcessingDriver {
       }
       if (graph) {
         this.graph = graph;
+        graph.normalization.gain.value = this.normalizationScale;
         this.activate(element, generation);
         if (!this.matches(generation, element)) return "native";
         this.emit("processingchange", new Event("processingchange"));
-        if (this.matches(generation, element))
-          this.assignSource(element, url, generation, sourceInfo);
+        if (this.matches(generation, element)) this.assignSource(element, url, generation);
         return this.matches(generation, element) && this.graph ? "web-audio" : "native";
       }
     }
@@ -380,7 +384,7 @@ export class AudioProcessingDriver {
     this.activate(this.plainElement, generation);
     if (this.matches(generation, this.plainElement)) {
       this.plainElement.crossOrigin = null;
-      this.assignSource(this.plainElement, url, generation, sourceInfo);
+      this.assignSource(this.plainElement, url, generation);
     }
     return "native";
   }
@@ -518,7 +522,21 @@ export class AudioProcessingDriver {
       gain.gain.cancelScheduledValues(context.currentTime);
       gain.gain.setValueAtTime(this.volume, context.currentTime);
     }
-    this.activeElement.volume = this.graph ? 1 : this.volume;
+    this.activeElement.volume = this.elementVolume;
+  }
+  setReplayGainEnabled(enabled: boolean): void {
+    if (enabled === this.replayGainEnabled) return;
+    this.replayGainEnabled = enabled;
+    if (this.graph) this.graph.normalization.gain.value = this.normalizationScale;
+    else this.activeElement.volume = this.elementVolume;
+  }
+  private get normalizationScale(): number {
+    return this.replayGainEnabled
+      ? replayGainScale(trackReplayGainDb(this.sourceInfo?.replayGain))
+      : 1;
+  }
+  private get elementVolume(): number {
+    return this.graph ? 1 : clampVolume(this.volume * this.normalizationScale);
   }
   setRate(value: number): void {
     this.rate = value;
@@ -587,20 +605,15 @@ export class AudioProcessingDriver {
     this.activeCleanup = () => {
       handlers.forEach((handler, event) => element.removeEventListener(event, handler));
     };
-    element.volume = this.graph ? 1 : this.volume;
+    element.volume = this.elementVolume;
     if (!this.matches(generation, element)) return;
     element.defaultPlaybackRate = this.rate;
     if (this.matches(generation, element)) element.playbackRate = this.rate;
   }
-  private assignSource(
-    element: HTMLAudioElement,
-    url: string,
-    generation: number,
-    sourceInfo?: AudioSourceInfo,
-  ): void {
+  private assignSource(element: HTMLAudioElement, url: string, generation: number): void {
     if (!this.matches(generation, element)) return;
+    const sourceInfo = this.sourceInfo;
     this.currentUrl = url;
-    this.sourceInfo = sourceInfo;
     this.sourceError = false;
     this.removeSourceNode(element);
     const sourceType =
@@ -682,10 +695,11 @@ export class AudioProcessingDriver {
     const sourceInfo = this.sourceInfo;
     this.stopCurrent(generation);
     if (!this.isCurrent(generation)) return;
+    this.sourceInfo = sourceInfo;
     this.activate(this.plainElement, generation);
     if (!this.matches(generation, this.plainElement)) return;
     this.plainElement.crossOrigin = null;
-    this.assignSource(this.plainElement, url, generation, sourceInfo);
+    this.assignSource(this.plainElement, url, generation);
     if (this.matches(generation, this.plainElement))
       this.restorePosition(this.plainElement, generation, position);
   }

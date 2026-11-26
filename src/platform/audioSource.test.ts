@@ -35,6 +35,7 @@ describe("prepared local audio", () => {
       url: "https://cdn.example/歌曲?sig=a%2Bb&part=1&part=2",
       audio_params: "prepared_params-123",
       format,
+      replay_gain: { track_gain_db: 0, track_peak: 0.7 },
     };
     const result = resolveSongAudioSource(source);
     const local = new URL(result.url);
@@ -45,6 +46,8 @@ describe("prepared local audio", () => {
     expect(local.searchParams.has("p")).toBe(false);
     expect(result).not.toHaveProperty("audio_params");
     expect(result.format).toBe(format);
+    expect(result.replay_gain).toEqual(source.replay_gain);
+    expect(local.searchParams.has("replay_gain")).toBe(false);
     expect(local.pathname).toBe("/session-secret/__audio");
     expect(isMygoGatewayResourceUrl(result.url)).toBe(true);
     expect(gatewayProxyUrl(result.url)).toBe(result.url);

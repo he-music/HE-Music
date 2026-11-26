@@ -94,6 +94,7 @@ export interface IPlaybackEngine {
   seek(seconds: number): Promise<void>;
   setVolume(value: number): Promise<void>;
   getVolume(): number;
+  setReplayGainEnabled(enabled: boolean): Promise<void>;
   setRate(rate: number): Promise<void>;
   getRate(): number;
   getOutputDevices(): Promise<readonly AudioOutputDevice[]>;

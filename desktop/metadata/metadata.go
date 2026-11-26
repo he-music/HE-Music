@@ -42,6 +42,7 @@ type Info struct {
 	Channels        int
 	BitsPerSample   int
 	Codec           string
+	ReplayGain      *ReplayGain `json:"replayGain,omitempty"`
 }
 
 // Patch uses nil to preserve a field, and a pointer to an empty value to clear
@@ -55,6 +56,7 @@ type Patch struct {
 	Comment      *string
 	Lyrics       *string
 	Pictures     *[]Picture
+	ReplayGain   *ReplayGain `json:"-"`
 }
 
 // WorkingCopy is deliberately pathless. It must refer to a private copy, never
@@ -97,6 +99,7 @@ func parse(src io.ReaderAt, size int64, pictures bool) (Info, error) {
 		DurationSeconds: audio.Duration.Seconds(), BitrateKbps: float64(audio.Bitrate) / 1000,
 		SampleRateHz: audio.SampleRate, Channels: audio.Channels,
 		BitsPerSample: audio.BitDepth, Codec: audio.Codec,
+		ReplayGain: readReplayGain(f),
 	}
 	if info.Container == "dff" {
 		if layout, err := inspectDFF(payloadSource{ctx: context.Background(), r: src, size: size}); err == nil {
@@ -227,6 +230,12 @@ func editWorkingCopy(ctx context.Context, src WorkingCopy, size int64, patch Pat
 		for _, p := range *patch.Pictures {
 			f.AddImage(mtag.Picture{MIME: p.MIME, Type: mtag.PictureType(p.Type), Description: p.Description, Data: p.Data})
 		}
+	}
+	if patch.ReplayGain != nil {
+		if !patch.ReplayGain.Valid() || !CanWriteReplayGain(f.Container().String()) {
+			return ErrUnsupportedContainer
+		}
+		setReplayGain(f, patch.ReplayGain)
 	}
 	if err := errors.Join(f.Errs()...); err != nil {
 		return err

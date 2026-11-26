@@ -30,6 +30,7 @@ function fixture() {
     clearSource: vi.fn(async () => snapshot()),
     seek: vi.fn(async () => {}),
     setVolume: vi.fn(async () => {}),
+    setReplayGainDb: vi.fn(async () => {}),
     setRate: vi.fn(async () => {}),
     getOutputDevices: vi.fn(async () => []),
     setOutputDevice: vi.fn(async () => {}),

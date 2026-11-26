@@ -7,12 +7,15 @@ import (
 	"errors"
 	"net/url"
 	"path"
+
+	"github.com/he-music/HE-Music/desktop/metadata"
 )
 
 // DownloadOptions is the immutable, bounded native download configuration.
 type DownloadOptions struct {
 	RelativeDirectory          string            `json:"relativeDirectory,omitempty"`
 	WriteMetadata              bool              `json:"writeMetadata"`
+	WriteReplayGain            bool              `json:"writeReplayGain,omitzero"`
 	WriteCover                 bool              `json:"writeCover"`
 	WriteLyrics                bool              `json:"writeLyrics"`
 	SaveSidecars               bool              `json:"saveSidecars"`
@@ -20,11 +23,12 @@ type DownloadOptions struct {
 	Metadata                   *DownloadMetadata `json:"metadata,omitempty"`
 }
 type DownloadMetadata struct {
-	Title    string   `json:"title"`
-	Artists  []string `json:"artists"`
-	Album    string   `json:"album"`
-	Lyrics   string   `json:"lyrics"`
-	CoverURL string   `json:"coverURL,omitempty"`
+	Title      string               `json:"title"`
+	Artists    []string             `json:"artists"`
+	Album      string               `json:"album"`
+	Lyrics     string               `json:"lyrics"`
+	CoverURL   string               `json:"coverURL,omitempty"`
+	ReplayGain *metadata.ReplayGain `json:"replayGain,omitempty"`
 }
 
 const (
@@ -45,7 +49,8 @@ func downloadNativeOptionsSnapshot(in *DownloadOptions) (*DownloadOptions, error
 		return nil, err
 	}
 	out := *in
-	if !in.WriteMetadata && !in.WriteCover && !in.WriteLyrics && !in.SaveSidecars {
+	out.WriteReplayGain = in.WriteReplayGain && in.Metadata != nil && in.Metadata.ReplayGain.Valid()
+	if !in.WriteMetadata && !in.WriteCover && !in.WriteLyrics && !in.SaveSidecars && !out.WriteReplayGain {
 		out.Metadata = nil
 		if out.RelativeDirectory == "" {
 			return nil, nil
@@ -55,6 +60,14 @@ func downloadNativeOptionsSnapshot(in *DownloadOptions) (*DownloadOptions, error
 	if in.Metadata != nil {
 		m := *in.Metadata
 		m.Artists = append([]string(nil), in.Metadata.Artists...)
+		m.ReplayGain = nil
+		if out.WriteReplayGain {
+			gain := *in.Metadata.ReplayGain
+			if gain.Peak != nil {
+				gain.Peak = new(*gain.Peak)
+			}
+			m.ReplayGain = &gain
+		}
 		out.Metadata = &m
 	}
 	return &out, nil
@@ -67,7 +80,8 @@ func validateDownloadNativeOptions(o *DownloadOptions) error {
 	if len(o.RelativeDirectory) > 240 || validateLocalRelativePath(o.RelativeDirectory) != nil && o.RelativeDirectory != "" {
 		return errDownloadOptions
 	}
-	if !o.WriteMetadata && !o.WriteCover && !o.WriteLyrics && !o.SaveSidecars {
+	writesReplayGain := o.WriteReplayGain && o.Metadata != nil && o.Metadata.ReplayGain.Valid()
+	if !o.WriteMetadata && !o.WriteCover && !o.WriteLyrics && !o.SaveSidecars && !writesReplayGain {
 		return nil
 	}
 	m := o.Metadata

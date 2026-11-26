@@ -172,7 +172,7 @@ func TestMetadataRoundTrip(t *testing.T) {
 			artists := []string{"歌手甲", "AC/DC", "artist; literal"}
 			albumArtists := []string{"专辑艺术家", "ensemble"}
 			pictures := []Picture{{"image/png", 3, "front", cover(t)}, {"image/png", 4, "back", cover(t)}}
-			edit(t, work, Patch{&title, &artists, &album, &albumArtists, &comment, &lyrics, &pictures})
+			edit(t, work, Patch{Title: &title, Artists: &artists, Album: &album, AlbumArtists: &albumArtists, Comment: &comment, Lyrics: &lyrics, Pictures: &pictures})
 			got := readInfo(t, work, false)
 			assertMetadataRoundTripInfo(t, got, tc.format, Info{Title: title, Album: album, Comment: comment, Lyrics: lyrics, Artists: artists, AlbumArtists: albumArtists, Pictures: pictures})
 			assertMetadataScan(t, work, artists)

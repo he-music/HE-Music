@@ -89,6 +89,7 @@ export interface DownloadMetadata {
   album: string;
   lyrics: string;
   coverURL?: string;
+  replayGain?: ReplayGain;
 }
 
 export interface DownloadOperation {
@@ -99,6 +100,7 @@ export interface DownloadOperation {
 export interface DownloadOptions {
   relativeDirectory?: string;
   writeMetadata: boolean;
+  writeReplayGain?: boolean;
   writeCover: boolean;
   writeLyrics: boolean;
   saveSidecars: boolean;
@@ -174,6 +176,7 @@ export interface Info {
   Channels: number;
   BitsPerSample: number;
   Codec: string;
+  replayGain?: ReplayGain;
 }
 
 export interface LifecycleConfig {
@@ -571,6 +574,11 @@ export interface RendererSettingsDocument {
   renderer: RendererSettings;
 }
 
+export interface ReplayGain {
+  track_gain_db: number;
+  track_peak?: number;
+}
+
 export interface RestoredDirectories {
   grants: DirectoryGrant[];
   unavailable: string[];
@@ -935,6 +943,7 @@ export const MpvPlayback = {
   seek: bind<[number, number, number], void>("MpvPlayback.Seek", (lifecycle: number, session: number, seconds: number) => [lifecycle, session, seconds]),
   setOutputDevice: bind<[number, string], void>("MpvPlayback.SetOutputDevice", (lifecycle: number, device: string) => [lifecycle, device]),
   setRate: bind<[number, number, number], void>("MpvPlayback.SetRate", (lifecycle: number, session: number, value: number) => [lifecycle, session, value]),
+  setReplayGainDb: bind<[number, number, number], void>("MpvPlayback.SetReplayGainDb", (lifecycle: number, session: number, db: number) => [lifecycle, session, db]),
   setVolume: bind<[number, number, number], void>("MpvPlayback.SetVolume", (lifecycle: number, session: number, value: number) => [lifecycle, session, value]),
   snapshot: bind<[number], MpvSnapshot>("MpvPlayback.Snapshot", (lifecycle: number) => [lifecycle]),
   stop: bind<[number, number], MpvSnapshot>("MpvPlayback.Stop", (lifecycle: number, session: number) => [lifecycle, session]),

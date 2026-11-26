@@ -277,6 +277,11 @@ export class BrowserPlaybackEngine implements IPlaybackEngine {
     return this.volume;
   }
 
+  async setReplayGainEnabled(enabled: boolean): Promise<void> {
+    this.ensureUsable();
+    this.driver.setReplayGainEnabled(enabled);
+  }
+
   async setRate(rate: number): Promise<void> {
     this.ensureUsable();
     this.driver.setRate(rate);

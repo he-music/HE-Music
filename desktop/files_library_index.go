@@ -23,6 +23,8 @@ type libraryIndexDocument struct {
 	Entries []libraryIndexEntry `json:"entries"`
 }
 
+const libraryIndexVersion = 2
+
 type libraryIndexStore struct {
 	sync.Mutex
 	path    string
@@ -57,7 +59,7 @@ func prepareLibraryIndex(directory string) error {
 	defer file.Close()
 	var doc libraryIndexDocument
 	decoder := json.NewDecoder(file)
-	if err = decoder.Decode(&doc); err != nil || doc.Version != 1 {
+	if err = decoder.Decode(&doc); err != nil || doc.Version != 1 && doc.Version != libraryIndexVersion {
 		store.err = errors.New("invalid local music index")
 		return store.err
 	}
@@ -69,6 +71,10 @@ func prepareLibraryIndex(directory string) error {
 		if !filepath.IsAbs(entry.Directory) || validateLocalRelativePath(entry.Relative) != nil || entry.Size < 0 {
 			store.err = errors.New("invalid local music index entry")
 			return store.err
+		}
+		// 旧索引没有扫描响度标签，下一次扫描时重新读取文件。
+		if doc.Version != libraryIndexVersion {
+			continue
 		}
 		entry.Metadata = boundedScanInfo(entry.Metadata)
 		store.entries[libraryIndexKey(entry.Directory, entry.Relative)] = entry
@@ -122,7 +128,7 @@ func flushLibraryIndex() error {
 	if !store.dirty {
 		return nil
 	}
-	doc := libraryIndexDocument{Version: 1, Entries: make([]libraryIndexEntry, 0, len(store.entries))}
+	doc := libraryIndexDocument{Version: libraryIndexVersion, Entries: make([]libraryIndexEntry, 0, len(store.entries))}
 	for _, entry := range store.entries {
 		doc.Entries = append(doc.Entries, entry)
 	}

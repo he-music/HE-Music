@@ -64,7 +64,9 @@ class Context {
   currentTime = 0;
   destination = new GraphNode();
   filters: GraphNode[] = [];
+  normalization = new GraphNode();
   gain = new GraphNode();
+  private gainCount = 0;
   sourceElement: Media | undefined;
   streams: StreamDestination[] = [];
   createMediaStreamDestination() {
@@ -81,7 +83,7 @@ class Context {
     return new GraphNode();
   }
   createGain() {
-    return this.gain;
+    return this.gainCount++ === 0 ? this.normalization : this.gain;
   }
   createBiquadFilter() {
     const filter = new GraphNode();
@@ -330,6 +332,25 @@ describe("production AudioManager Web Audio consumption", () => {
     expect(later).not.toHaveBeenCalled();
     expect(manager.paused).toBe(false);
   });
+  it("响度均衡独立于音量，并在切到无元数据音源后清除", async () => {
+    await manager.setVolume(0.4);
+    const volume = manager.getVolume();
+    await manager.play("https://audio.invalid/cors.mp3", {
+      source: { platform: "test", format: "mp3", replayGain: { track_gain_db: -6 } },
+    });
+    const first = lastContext();
+    expect(first.normalization.gain.value).toBe(1);
+    await manager.setReplayGainEnabled(true);
+    expect(first.normalization.gain.value).toBeCloseTo(0.501);
+    expect(first.gain.gain.value).toBe(volume);
+    expect(manager.getVolume()).toBe(volume);
+    await manager.setReplayGainEnabled(false);
+    expect(first.normalization.gain.value).toBe(1);
+    await manager.setReplayGainEnabled(true);
+    await manager.play("https://audio.invalid/next.mp3");
+    expect(lastContext().normalization.gain.value).toBe(1);
+  });
+
   it("uses the source graph for EQ and spectrum, applies volume once, and restores saved gains on the next source", async () => {
     manager.setVolume(0.4);
     manager.setRate(1.25);

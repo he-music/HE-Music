@@ -20,7 +20,7 @@ _Static_assert(sizeof(end_event) == 32, "end ABI");
 
 typedef struct {
     int idle, paused, loaded, device_missing, fail_pause, fail_device, fail_enumerate;
-    double position, volume, speed, loads, seeks, destroys;
+    double position, volume, volume_gain, speed, loads, seeks, destroys;
     int64_t entry;
     int queue[32], count, cursor;
     event event_storage;
@@ -45,6 +45,7 @@ int mpv_set_property_string(void *ctx, const char *name, const char *value) {
     handle *h = ctx;
     if (!strcmp(name, "pause")) { if (h->fail_pause) return -11; h->paused = !strcmp(value, "yes"); }
     if (!strcmp(name, "volume")) h->volume = atof(value);
+    if (!strcmp(name, "volume-gain")) h->volume_gain = atof(value);
     if (!strcmp(name, "speed")) h->speed = atof(value);
     if (!strcmp(name, "audio-device")) { if (h->fail_device) return -11; snprintf(h->device, sizeof(h->device), "%s", value); }
     if (!strcmp(name, "ao")) snprintf(h->ao, sizeof(h->ao), "%s", value);
@@ -81,6 +82,7 @@ int mpv_get_property(void *ctx, const char *name, int format, void *out) {
         if (!strcmp(name, "test-loads")) value = h->loads;
         if (!strcmp(name, "test-seeks")) value = h->seeks;
         if (!strcmp(name, "volume")) value = h->volume;
+        if (!strcmp(name, "volume-gain")) value = h->volume_gain;
         if (!strcmp(name, "speed")) value = h->speed;
         *(double *)out = value; return 0;
     }

@@ -55,6 +55,8 @@ var (
 	desktopMpvEvent = mygo.NewEvent[MpvEvent]("desktop:mpv")
 )
 
+const mpvReplayGainLimit = 60
+
 // 所有 C 调用（包括零超时 WaitEvent）均持有 mu；在下一次 WaitEvent 或销毁前
 // 完成事件和 node 数据复制，原生裸指针不得跨调用保存。
 type mpvSession struct {
@@ -191,6 +193,7 @@ func (s *mpvSession) initializeLocked(ctx context.Context, api *mpvAPI, testAO s
 		{"demuxer-lavf-o", "protocol_whitelist=none"},
 		{"audio-fallback-to-null", "no"},
 		{"audio-client-name", "HE-Music"},
+		{"volume-gain-max", strconv.Itoa(mpvReplayGainLimit)},
 		{"pause", "yes"},
 		{"idle", "yes"},
 		{"keep-open", "no"},
@@ -457,6 +460,15 @@ func (p *MpvPlayback) SetVolume(ctx context.Context, lifecycle, session uint64, 
 		s.snapshot.Volume = value
 		s.emitLocked("volumechange")
 		return nil
+	})
+}
+
+func (p *MpvPlayback) SetReplayGainDb(ctx context.Context, lifecycle, session uint64, db float64) error {
+	if !finiteMpv(db) || math.Abs(db) > mpvReplayGainLimit {
+		return mpvFail("engine", "invalid replay gain")
+	}
+	return p.withSession(ctx, lifecycle, session, func(s *mpvSession) error {
+		return mpvResult("volume-gain", s.api.setPropertyString(s.handle, "volume-gain", strconv.FormatFloat(db, 'f', -1, 64)))
 	})
 }
 

@@ -310,6 +310,7 @@ func metadataPatchMatches(info metadata.Info, patch metadata.Patch) bool {
 		(patch.Lyrics == nil || info.Lyrics == *patch.Lyrics) &&
 		(patch.Artists == nil || slices.Equal(info.Artists, *patch.Artists)) &&
 		(patch.AlbumArtists == nil || slices.Equal(info.AlbumArtists, *patch.AlbumArtists)) &&
+		(patch.ReplayGain == nil || reflect.DeepEqual(info.ReplayGain, patch.ReplayGain)) &&
 		(patch.Pictures == nil || len(info.Pictures) == 0 && len(*patch.Pictures) == 0 ||
 			reflect.DeepEqual(info.Pictures, *patch.Pictures))
 }

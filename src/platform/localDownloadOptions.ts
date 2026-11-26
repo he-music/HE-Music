@@ -82,7 +82,8 @@ export function createLocalDownloadPlan(
     | "downloadLyric"
     | "saveMetaFile"
     | "downloadKeepAudioOnMetadataFailure"
-  >,
+  > &
+    Partial<Pick<SettingState, "downloadReplayGain">>,
 ): LocalDownloadPlan {
   const artists = names(song.artists);
   const artist = artists.length ? artists.join("、") : "unknown";
@@ -110,6 +111,7 @@ export function createLocalDownloadPlan(
     options: {
       ...(relativeDirectory ? { relativeDirectory } : {}),
       writeMetadata,
+      ...(settings.downloadReplayGain ? { writeReplayGain: true } : {}),
       keepAudioOnMetadataFailure: settings.downloadKeepAudioOnMetadataFailure,
       writeCover: writeMetadata && settings.downloadCover,
       writeLyrics: writeMetadata && settings.downloadLyric,

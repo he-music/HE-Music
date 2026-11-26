@@ -1,4 +1,5 @@
 import type { PlatformMpvPlayback, MpvSnapshot, MpvEvent } from "@/platform/mpvPlayback";
+import { trackReplayGainDb } from "@/utils/replayGain";
 import { MpvPlaybackClock } from "./MpvPlaybackClock";
 import {
   audioEventTypes,
@@ -34,6 +35,9 @@ export class MpvPlaybackEngine implements IPlaybackEngine {
   private activeLoadRevision = 0;
   private source = "";
   private volume = 1;
+  private replayGainEnabled = false;
+  private sourceReplayGainDb = 0;
+  private appliedReplayGainDb = 0;
   private rate = 1;
   private failure?: PlaybackError;
   private destroyed = false;
@@ -134,6 +138,9 @@ export class MpvPlaybackEngine implements IPlaybackEngine {
       await this.provider.setVolume(loaded.lifecycle, loaded.session, this.volume);
       await this.provider.setRate(loaded.lifecycle, loaded.session, this.rate);
       if (revision !== this.revision) return;
+      this.sourceReplayGainDb = trackReplayGainDb(options.source?.replayGain);
+      await this.applyReplayGain(loaded);
+      if (revision !== this.revision) return;
       this.loading = false;
       if (this.intent && (this.intentRevision !== intentRevision || options.autoPlay !== false))
         await this.provider.play(loaded.lifecycle, loaded.session);
@@ -181,6 +188,19 @@ export class MpvPlaybackEngine implements IPlaybackEngine {
   }
   getVolume() {
     return this.volume;
+  }
+  async setReplayGainEnabled(enabled: boolean): Promise<void> {
+    if (enabled === this.replayGainEnabled) return;
+    this.replayGainEnabled = enabled;
+    await this.enqueue(async () => {
+      if (this.snapshot && this.source && !this.loading) await this.applyReplayGain(this.snapshot);
+    });
+  }
+  private async applyReplayGain(snapshot: MpvSnapshot): Promise<void> {
+    const db = this.replayGainEnabled ? this.sourceReplayGainDb : 0;
+    if (db === this.appliedReplayGainDb) return;
+    await this.provider.setReplayGainDb(snapshot.lifecycle, snapshot.session, db);
+    this.appliedReplayGainDb = db;
   }
   async setRate(value: number): Promise<void> {
     this.rate = value;

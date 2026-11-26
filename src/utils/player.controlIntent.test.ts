@@ -400,6 +400,7 @@ function mpvProvider(): PlatformMpvPlayback {
       update({ position });
     }),
     setVolume: vi.fn(async () => {}),
+    setReplayGainDb: vi.fn(async () => {}),
     setRate: vi.fn(async () => {}),
     setOutputDevice: vi.fn(async () => {}),
     getOutputDevices: vi.fn(async () => []),
@@ -631,6 +632,7 @@ describe("real Player + MpvPlaybackEngine errors", () => {
         stop: vi.fn(async () => next()),
         seek: vi.fn(async () => {}),
         setVolume: vi.fn(async () => {}),
+        setReplayGainDb: vi.fn(async () => {}),
         setRate: vi.fn(async () => {}),
         setOutputDevice: vi.fn(async () => {}),
         getOutputDevices: vi.fn(async () => []),

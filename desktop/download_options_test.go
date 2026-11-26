@@ -3,7 +3,28 @@ package main
 import (
 	"strings"
 	"testing"
+
+	"github.com/he-music/HE-Music/desktop/metadata"
 )
+
+func TestDownloadNativeOptionsRequiresReplayGainOptIn(t *testing.T) {
+	settings := &DownloadOptions{Metadata: &DownloadMetadata{ReplayGain: &metadata.ReplayGain{GainDB: -8, Peak: new(1.0)}}}
+	got, err := downloadNativeOptionsSnapshot(settings)
+	if err != nil || got != nil {
+		t.Fatalf("未开启写入时仍有标签选项: %v, %v", got, err)
+	}
+	settings.WriteReplayGain = true
+	got, err = downloadNativeOptionsSnapshot(settings)
+	requireTestNoError(t, err)
+	*settings.Metadata.ReplayGain.Peak = -1
+	if got == nil || !got.WriteReplayGain || got.Metadata.ReplayGain.GainDB != -8 || *got.Metadata.ReplayGain.Peak != 1 {
+		t.Fatalf("未独立保存已启用的增益标签: %+v", got)
+	}
+	got, err = downloadNativeOptionsSnapshot(settings)
+	if err != nil || got != nil {
+		t.Fatalf("无效标签应跳过: %v, %v", got, err)
+	}
+}
 
 func TestDownloadNativeOptionsSnapshotIsBoundedAndImmutable(t *testing.T) {
 	artists := []string{"a/b", "c"}

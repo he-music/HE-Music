@@ -225,6 +225,7 @@ export function validDownloadOptions(options: DownloadOptions | undefined): bool
     return false;
   if (
     !options.writeMetadata &&
+    !options.writeReplayGain &&
     !options.writeCover &&
     !options.writeLyrics &&
     !options.saveSidecars
@@ -1024,12 +1025,12 @@ export class LocalDownloadSession {
     options: DownloadOptions | undefined,
     metadata: DownloadMetadata | undefined,
   ): DownloadOptions | undefined {
-    return options && metadata
-      ? {
-          ...options,
-          metadata: { ...options.metadata, ...metadata, artists: [...metadata.artists] },
-        }
-      : options;
+    if (!options) return;
+    const current = metadata ?? options.metadata;
+    if (!current) return options;
+    const resolved = { ...options.metadata, ...current, artists: [...current.artists] };
+    if (!options.writeReplayGain || !metadata?.replayGain) delete resolved.replayGain;
+    return { ...options, metadata: resolved };
   }
 
   private relativePath(filename: string, options?: DownloadOptions): string {

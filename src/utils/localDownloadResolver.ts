@@ -8,6 +8,7 @@ import { audioOutputFormat } from "@/platform/audioSource";
 import { DownloadPreparationError } from "@/platform/localDownloadDiagnostics";
 import { toLineDownloadLyrics } from "./downloadLyrics";
 import { songDetail, songLyric, songUrl } from "@/api/song";
+import { parseReplayGain } from "./replayGain";
 
 export interface MygoDownloadResolution {
   readonly url: string;
@@ -50,6 +51,10 @@ export function createMygoDownloadResolver(
         throw new DownloadPreparationError("unsupported_format");
       const needMetadata = options?.writeMetadata || options?.writeCover;
       const needLyrics = options?.writeLyrics;
+      const replayGain =
+        options?.writeReplayGain && "replay_gain" in response
+          ? parseReplayGain(response.replay_gain)
+          : undefined;
       const [detailResult, lyricResult] = await Promise.all([
         needMetadata
           ? readDetail(source.id, source.platform).catch(() => undefined)
@@ -100,6 +105,7 @@ export function createMygoDownloadResolver(
         artists: artists.length ? [...artists] : [...(captured?.artists ?? [])],
         album: album || captured?.album || "",
         lyrics: toLineDownloadLyrics(fetchedLyrics || captured?.lyrics),
+        ...(replayGain ? { replayGain } : {}),
         ...(resolvedCover && validDownloadHTTPURL(resolvedCover)
           ? { coverURL: resolvedCover }
           : {}),
@@ -107,7 +113,7 @@ export function createMygoDownloadResolver(
       return {
         url,
         format: outputFormat,
-        ...(needMetadata || needLyrics ? { metadata } : {}),
+        ...(needMetadata || needLyrics || replayGain ? { metadata } : {}),
       };
     } catch (error) {
       if (error instanceof DownloadPreparationError) throw error;

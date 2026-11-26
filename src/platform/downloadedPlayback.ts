@@ -92,6 +92,7 @@ export async function resolveDownloadedPlayback(
         source: {
           platform: "local",
           format,
+          ...(entry.metadata?.replayGain ? { replayGain: entry.metadata.replayGain } : {}),
           ...(engine === "mpv"
             ? {
                 localRef: entry.ref,

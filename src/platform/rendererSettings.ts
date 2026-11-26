@@ -138,6 +138,7 @@ const settingSchema: Schema<SettingState> = {
   fileNameFormat: enumeration("title", "artist-title", "title-artist"),
   folderStrategy: enumeration("none", "artist", "artist-album"),
   downloadMeta: bool,
+  downloadReplayGain: bool,
   downloadCover: bool,
   downloadLyric: bool,
   downloadLyricTran: bool,
@@ -150,6 +151,7 @@ const settingSchema: Schema<SettingState> = {
   songLevel: string,
   playDevice: string,
   playbackEngine: enumeration("web-audio", "mpv"),
+  replayGainEnabled: bool,
   preferDownloaded: bool,
   outputDevices: (value) => {
     const input = object(value);

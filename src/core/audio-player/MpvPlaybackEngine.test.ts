@@ -52,6 +52,7 @@ function setup() {
       next({ position: seconds });
     }),
     setVolume: vi.fn(async () => {}),
+    setReplayGainDb: vi.fn(async () => {}),
     setRate: vi.fn(async () => {}),
     getOutputDevices: vi.fn(async () => [{ id: "auto", label: "Default", available: true }]),
     setOutputDevice: vi.fn(async () => {}),
@@ -99,6 +100,27 @@ describe("MpvPlaybackEngine", () => {
     expect(provider.snapshot).not.toHaveBeenCalled();
     expect(engine.src).toBe("song-id");
   });
+  it("起播前应用单曲增益，切换设置或音源时恢复增益，不改用户音量", async () => {
+    const { engine, provider } = setup();
+    await engine.setReplayGainEnabled(true);
+    await engine.setVolume(0.4);
+    await engine.play("A", {
+      source: { platform: "test", format: "flac", replayGain: { track_gain_db: -6 } },
+    });
+    expect(provider.setReplayGainDb).toHaveBeenLastCalledWith(1, 1, -6);
+    expect(vi.mocked(provider.setReplayGainDb).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(provider.play).mock.invocationCallOrder[0],
+    );
+    await engine.setReplayGainEnabled(false);
+    expect(provider.setReplayGainDb).toHaveBeenLastCalledWith(1, 1, 0);
+    await engine.setReplayGainEnabled(true);
+    expect(provider.setReplayGainDb).toHaveBeenLastCalledWith(1, 1, -6);
+    await engine.play("B");
+    expect(provider.setReplayGainDb).toHaveBeenLastCalledWith(1, 2, 0);
+    expect(provider.setVolume).toHaveBeenLastCalledWith(1, 2, 0.4);
+    expect(engine.getVolume()).toBe(0.4);
+  });
+
   it.each(["pause", "clear"])("加载期间 %s 不复活播放", async (operation) => {
     const { engine, provider, next } = setup();
     const loading = deferred<MpvSnapshot>();

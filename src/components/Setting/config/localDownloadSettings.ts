@@ -106,10 +106,19 @@ export function createMygoDownloadSettings(hooks: MygoDownloadSettingsHooks = {}
             }),
           })),
           {
+            key: "downloadReplayGain",
+            label: t("setting.local.download_replay_gain"),
+            type: "switch" as const,
+            value: computed({
+              get: () => settings.downloadReplayGain,
+              set: (value: boolean) => (settings.downloadReplayGain = value),
+            }),
+          },
+          {
             key: "downloadKeepAudioOnMetadataFailure",
             label: t("setting.local.keep_audio_on_metadata_failure"),
             type: "switch" as const,
-            disabled: computed(() => !settings.downloadMeta),
+            disabled: computed(() => !settings.downloadMeta && !settings.downloadReplayGain),
             value: computed({
               get: () => settings.downloadKeepAudioOnMetadataFailure,
               set: (value: boolean) => {

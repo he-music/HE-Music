@@ -240,6 +240,7 @@ describe("LocalMusicDirectory真实SFC", () => {
       "downloadCover",
       "downloadLyric",
       "saveMetaFile",
+      "downloadReplayGain",
       "downloadKeepAudioOnMetadataFailure",
       "fileNameFormat",
       "folderStrategy",

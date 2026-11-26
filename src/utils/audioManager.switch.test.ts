@@ -51,6 +51,7 @@ function engine(id: PlaybackEngineId) {
     clearSource: vi.fn(async () => {}),
     seek: vi.fn(async () => {}),
     setVolume: vi.fn(async () => {}),
+    setReplayGainEnabled: vi.fn(async () => {}),
     getVolume: () => 0.5,
     setRate: vi.fn(async () => {}),
     getRate: () => 1.5,
@@ -83,6 +84,7 @@ describe("AudioManager 引擎切换", () => {
     doubles.engines.set("mpv", native.value);
     const { AudioManager } = await import("./audioManager");
     const manager = new AudioManager(old.value);
+    await manager.setReplayGainEnabled(true);
     const { activePlaybackEngine, playbackDecryption } =
       await import("@/core/audio-player/playbackCapabilities");
     await manager.play("https://decrypt.example/?audio_params=params");
@@ -100,6 +102,7 @@ describe("AudioManager 引擎切换", () => {
     await switching;
     expect(old.value.destroy).toHaveBeenCalledOnce();
     expect(native.value.init).toHaveBeenCalledOnce();
+    expect(native.value.setReplayGainEnabled).toHaveBeenCalledWith(true);
     for (const listener of delayedEvent) listener({ type: "ended", sessionId: 1 });
     expect(end).not.toHaveBeenCalled();
     expect(manager.engineId).toBe("mpv");

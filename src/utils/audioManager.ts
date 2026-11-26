@@ -42,6 +42,7 @@ export class AudioManager {
   private switchTail: Promise<void> = Promise.resolve();
   private pendingSwitches = 0;
   private eventRevision = 0;
+  private replayGainEnabled = false;
 
   constructor(private engine: IPlaybackEngine = new BrowserPlaybackEngine()) {
     this.unsubscribe = engine.onEvent((event) => {
@@ -75,6 +76,7 @@ export class AudioManager {
       });
       this.syncCapabilities();
       await engine.init();
+      await engine.setReplayGainEnabled(this.replayGainEnabled);
     };
     const result = this.switchTail.then(switchEngine).finally(() => {
       --this.pendingSwitches;
@@ -134,6 +136,11 @@ export class AudioManager {
 
   public getVolume(): number {
     return this.engine.getVolume();
+  }
+
+  public setReplayGainEnabled(enabled: boolean): Promise<void> {
+    this.replayGainEnabled = enabled;
+    return this.engine.setReplayGainEnabled(enabled);
   }
 
   public setRate(value: number): Promise<void> {
