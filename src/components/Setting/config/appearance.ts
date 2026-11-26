@@ -3,6 +3,7 @@ import { openFontManager, openThemeConfig } from "@/utils/modal";
 import { SettingConfig } from "@/types/settings";
 import { computed, ref } from "vue";
 import { t } from "@/i18n";
+import { activePlaybackEngine } from "@/core/audio-player/playbackCapabilities";
 import { platform } from "@/platform";
 import { windowAppearanceSession } from "@/platform/windowAppearance";
 import { linuxGraphicsSession } from "@/platform/linuxGraphics";
@@ -392,7 +393,12 @@ export const useAppearanceSettings = (): SettingConfig => {
             key: "showSpectrums",
             label: t("setting.play.show_spectrum"),
             type: "switch",
-            description: t("setting.play.show_spectrum_tip"),
+            description: () =>
+              t(
+                activePlaybackEngine.value === "mpv"
+                  ? "setting.play.show_spectrum_mpv_unsupported"
+                  : "setting.play.show_spectrum_tip",
+              ),
             value: computed({
               get: () => settingStore.showSpectrums,
               set: (v) => (settingStore.showSpectrums = v),

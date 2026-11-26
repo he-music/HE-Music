@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { isRef, toValue } from "vue";
+import { activePlaybackEngine } from "@/core/audio-player/playbackCapabilities";
 import {
   WindowAppearanceSession,
   windowAppearanceSession,
@@ -56,9 +57,23 @@ beforeEach(() => {
   vi.stubGlobal("window", { $message: messages, $dialog: { warning } });
 });
 afterEach(() => {
+  activePlaybackEngine.value = "web-audio";
   sessions.splice(0).forEach((session) => session.dispose());
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+});
+
+it("shows the mpv spectrum limitation only while mpv is active", () => {
+  const item = useAppearanceSettings()
+    .groups.flatMap((group) => group.items)
+    .find((item) => item.key === "showSpectrums");
+  if (!item) throw new Error("Missing music spectrum setting");
+
+  expect(toValue(item.description)).toBe("setting.play.show_spectrum_tip");
+  activePlaybackEngine.value = "mpv";
+  expect(toValue(item.description)).toBe("setting.play.show_spectrum_mpv_unsupported");
+  activePlaybackEngine.value = "web-audio";
+  expect(toValue(item.description)).toBe("setting.play.show_spectrum_tip");
 });
 
 it("search construction performs no native IO and keeps an unavailable shell disabled", () => {

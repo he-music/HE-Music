@@ -1147,6 +1147,7 @@
       "show_playlist_count": "播放列表歌曲数量",
       "show_spectrum": "音乐频谱",
       "show_spectrum_tip": "开启音乐频谱会影响性能或增加内存占用，如遇问题请关闭",
+      "show_spectrum_mpv_unsupported": "mpv 播放引擎暂不支持音乐频谱",
       "smtc": "SMTC",
       "smtc_output_high_quality_cover": "输出高清封面",
       "smtc_output_high_quality_cover_tip": "开启 SMTC 时是否输出高清封面",

@@ -1147,6 +1147,7 @@
       "show_playlist_count": "Play Queue Song Count",
       "show_spectrum": "Music Spectrum",
       "show_spectrum_tip": "Enabling music spectrum greatly affects performance. Turn off if experiencing issues.",
+      "show_spectrum_mpv_unsupported": "Music spectrum is not currently supported by the mpv playback engine.",
       "smtc": "SMTC",
       "smtc_output_high_quality_cover": "Output High-Quality Cover",
       "smtc_output_high_quality_cover_tip": "Output high-quality cover when SMTC is enabled",
