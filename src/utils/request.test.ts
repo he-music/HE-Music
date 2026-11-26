@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     refreshTokenApi: vi.fn(),
     openCaptcha: vi.fn(),
     dataStore: {
+      identityRevision: 0,
       userLoginStatus: true,
       token: "access-token",
       refreshToken: "refresh-token",
@@ -67,6 +68,8 @@ describe("HE Music Token 刷新", () => {
   beforeEach(async () => {
     vi.resetModules();
     vi.clearAllMocks();
+    mocks.refreshTokenApi.mockReset();
+    mocks.hemusicServer.request.mockReset();
     vi.stubEnv("VITE_API_URL", "https://api.fixture.invalid");
     vi.stubGlobal("window", { $message: { error: mocks.messageError } });
     mocks.axiosCreate
@@ -74,6 +77,7 @@ describe("HE Music Token 刷新", () => {
       .mockReturnValueOnce(mocks.hemusicServer);
     mocks.clearUserData.mockResolvedValue(undefined);
     mocks.dataStore.userLoginStatus = true;
+    mocks.dataStore.identityRevision = 0;
     mocks.dataStore.token = "access-token";
     mocks.dataStore.refreshToken = "refresh-token";
     mocks.dataStore.expiresAt = 1;
@@ -415,6 +419,49 @@ describe("HE Music Token 刷新", () => {
     expect(mocks.clearUserData).not.toHaveBeenCalled();
     expect(mocks.openUserLogin).not.toHaveBeenCalled();
     expect(mocks.openCaptcha).not.toHaveBeenCalled();
+  });
+
+  it("平台请求先完成刷新时，迟到的歌曲地址 401 使用新令牌重试一次", async () => {
+    const intercept = mocks.hemusicServer.interceptors.request.use.mock.calls[0][0];
+    const songError = {
+      ...createHttpError(401),
+      config: intercept({ url: "/v1/song/url", headers: new AxiosHeaders() }),
+    };
+    const platformsError = {
+      ...createHttpError(401),
+      config: intercept({ url: "/v1/platforms", headers: new AxiosHeaders() }),
+    };
+    const songResponse = { data: { url: "https://audio.example/song.mp3" } };
+    mocks.refreshTokenApi.mockResolvedValueOnce({
+      access_token: "renewed-access",
+      refresh_token: "renewed-refresh",
+      expires_at: 2,
+    });
+    mocks.hemusicServer.request
+      .mockResolvedValueOnce({ data: { list: [] } })
+      .mockResolvedValueOnce(songResponse);
+
+    await handleResponseError(platformsError);
+    expect(songError.config.headers.get("Authorization")).toBe("Bearer access-token");
+    await expect(handleResponseError(songError)).resolves.toBe(songResponse);
+    expect(mocks.refreshTokenApi).toHaveBeenCalledOnce();
+    expect(mocks.hemusicServer.request).toHaveBeenCalledTimes(2);
+    expect(songError.config.headers.get("Authorization")).toBe("Bearer renewed-access");
+    expect(songError.config._authRetried).toBe(true);
+    expect(mocks.openUserLogin).not.toHaveBeenCalled();
+  });
+
+  it("重新登录后的迟到 401 不使用新身份重试", async () => {
+    const intercept = mocks.hemusicServer.interceptors.request.use.mock.calls[0][0];
+    const error = {
+      ...createHttpError(401),
+      config: intercept({ url: "/v1/song/url", headers: new AxiosHeaders() }),
+    };
+    mocks.dataStore.identityRevision++;
+    await expect(handleResponseError(error)).rejects.toBe(error);
+    expect(mocks.refreshTokenApi).not.toHaveBeenCalled();
+    expect(mocks.hemusicServer.request).not.toHaveBeenCalled();
+    expect(mocks.clearUserData).not.toHaveBeenCalled();
   });
 
   it("密码验证码重试保留登录字段，只取得一次票据且不重复请求", async () => {

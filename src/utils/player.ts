@@ -72,6 +72,7 @@ class Player {
   private playRequestId = 0;
   /** 独立于界面加载状态，防止获取音源期间重复初始化。 */
   private initializingRequestId?: number;
+  private authBlockedPlayback?: { requestId: number; seek: number; quality: string };
   private lyricTrackRequestId?: number;
   /** radio API 等待期尚无新 source request，须单独标识这次操作。 */
   private radioOperation?: symbol;
@@ -585,6 +586,7 @@ class Player {
     if (!preserveIntent) this.autoPlayIntent = autoPlay;
     this.autoPlayOwner = canAutoPlay;
     const currentRequestId = ++this.playRequestId;
+    this.authBlockedPlayback = undefined;
     this.clearCuePlayback();
     this.initializingRequestId = currentRequestId;
     this.pendingAutoPlay = canAutoPlay
@@ -749,12 +751,23 @@ class Player {
           }
         } catch (err) {
           if (currentRequestId !== this.playRequestId) return;
-          if (engine === "mpv" || preserveIntent) throw err;
-          this.logPlaybackError("❌ 获取歌曲地址出错：", err);
-          // 如果是 AxiosError 的 401 就忽略
+          if (preserveIntent) throw err;
           if (err instanceof AxiosError && err.response?.status === 401) {
+            this.logPlaybackError("❌ 获取歌曲地址出错：", err);
+            // 请求层已完成鉴权处理，不把 401 当作媒体错误自动切歌。
+            if (audioManager.src) {
+              await audioManager
+                .clearSource()
+                .catch((error: unknown) => this.logPlaybackError("清除旧音源失败：", error));
+              if (currentRequestId !== this.playRequestId) return;
+            }
+            this.authBlockedPlayback = { requestId: currentRequestId, seek, quality };
+            statusStore.playStatus = false;
+            statusStore.playLoading = false;
             return;
           }
+          if (engine === "mpv") throw err;
+          this.logPlaybackError("❌ 获取歌曲地址出错：", err);
           window.$message.error(t("message.no_song_link"));
           await this.recovery.handlePlaybackError(undefined);
           return;
@@ -812,6 +825,12 @@ class Player {
       }
     }
   }
+  /** 登录成功后只恢复仍属于当前歌曲的鉴权中断，不重启正常的预加载。 */
+  public retryAfterLogin(): void {
+    const blocked = this.authBlockedPlayback;
+    if (blocked?.requestId !== this.playRequestId || this.radioOperation) return;
+    void this.initPlayer(this.autoPlayIntent, blocked.seek, blocked.quality, this.autoPlayOwner);
+  }
   /**
    * 播放
    */
@@ -824,6 +843,11 @@ class Player {
     this.autoPlayIntent = true;
     this.autoPlayOwner = canAutoPlay;
     if (this.initializingRequestId !== undefined && !audioManager.src) return;
+    const blocked = this.authBlockedPlayback;
+    if (blocked?.requestId === this.playRequestId) {
+      await this.initPlayer(true, blocked.seek, blocked.quality, canAutoPlay);
+      return;
+    }
     const cue = this.cuePlayback;
     if (cue?.stoppedAtEnd) {
       await this.initPlayer(true, 0, "", canAutoPlay);

@@ -8,16 +8,12 @@ const mocks = vi.hoisted(() => ({
     resetIdentityCaches: vi.fn(),
   },
   platform: { loadPlatforms: vi.fn() },
-  status: { playLoading: true },
-  setting: { autoPlay: false },
   update: vi.fn(),
-  player: { initPlayer: vi.fn(), getSeek: () => 12 },
+  player: { retryAfterLogin: vi.fn() },
 }));
 vi.mock("@/stores", () => ({
   useDataStore: () => mocks.data,
   usePlatformStore: () => mocks.platform,
-  useStatusStore: () => mocks.status,
-  useSettingStore: () => mocks.setting,
 }));
 vi.mock("./auth", () => ({ updateUserData: mocks.update }));
 vi.mock("./player", () => ({ usePlayer: () => mocks.player }));
@@ -52,7 +48,7 @@ describe("completeLogin", () => {
       mocks.platform.loadPlatforms.mock.invocationCallOrder[0],
     );
     expect(mocks.platform.loadPlatforms).toHaveBeenCalledOnce();
-    expect(mocks.player.initPlayer).toHaveBeenCalledWith(false, 12);
+    expect(mocks.player.retryAfterLogin).toHaveBeenCalledOnce();
   });
   it("用户刷新失败仍刷新平台和播放器并报告固定错误", async () => {
     mocks.update.mockRejectedValue(new Error("synthetic sensitive"));
@@ -60,7 +56,7 @@ describe("completeLogin", () => {
       "Login data refresh failed",
     );
     expect(mocks.platform.loadPlatforms).toHaveBeenCalledOnce();
-    expect(mocks.player.initPlayer).toHaveBeenCalledOnce();
+    expect(mocks.player.retryAfterLogin).toHaveBeenCalledOnce();
     expect(mocks.data.userLoginStatus).toBe(true);
   });
   it("缺失凭据不更改登录状态", async () => {

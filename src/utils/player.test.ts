@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AxiosError, AxiosHeaders } from "axios";
 
 const mocks = vi.hoisted(() => ({
   mygo: false,
@@ -78,6 +79,7 @@ beforeEach(async () => {
   mocks.audio.play.mockReset().mockResolvedValue(undefined);
   mocks.audio.clearSource.mockImplementation(() => {
     mocks.audio.src = "";
+    return Promise.resolve();
   });
   mocks.audio.getErrorCode.mockReturnValue(4);
   mocks.audio.on.mockImplementation((name, callback) => mocks.callbacks.set(name, callback));
@@ -151,6 +153,64 @@ describe("online source format admission", () => {
     vi.spyOn(player, "selectPlayQuality").mockReturnValue({ name: "test", format: "mflac" });
     await player.initPlayer(false);
     expect(mocks.audio.play.mock.calls[0]?.[1]).not.toHaveProperty("source");
+  });
+});
+
+describe("歌曲地址 401", () => {
+  const unauthorized = () =>
+    new AxiosError("Request failed with status code 401", "ERR_BAD_REQUEST", undefined, undefined, {
+      data: {},
+      status: 401,
+      statusText: "Unauthorized",
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+    });
+
+  async function mockOnlineSource() {
+    vi.spyOn(player, "selectPlayQuality").mockReturnValue({ name: "test", format: "mp3" });
+    const { default: songManager } = await import("./songManager");
+    return vi.mocked(songManager.getOnlineSource);
+  }
+
+  it.each([false, true])("结束加载后可重试，并保留进度（手动播放：%s）", async (manual) => {
+    const getOnlineSource = await mockOnlineSource();
+    getOnlineSource.mockRejectedValueOnce(unauthorized());
+    mocks.audio.src = "https://audio.example/previous.mp3";
+    await player.initPlayer(false, 12_000, "test");
+    expect(mocks.status.playLoading).toBe(false);
+    expect(mocks.status.playStatus).toBe(false);
+    expect(mocks.audio.src).toBe("");
+    expect(mocks.audio.play).not.toHaveBeenCalled();
+
+    if (manual) await player.playOrPause();
+    else player.retryAfterLogin();
+    await vi.waitFor(() =>
+      expect(mocks.audio.play).toHaveBeenCalledExactlyOnceWith(
+        "https://audio.example/next.mp3",
+        expect.objectContaining({ seek: 12, autoPlay: manual }),
+      ),
+    );
+    mocks.audio.paused = !manual;
+    const ready = manual ? "playing" : "canplay";
+    mocks.callbacks.get(ready)?.(new Event(ready));
+    expect(mocks.status.playLoading).toBe(false);
+  });
+
+  it("旧请求的 401 不结束新请求的加载，也不会在登录后重试", async () => {
+    const getOnlineSource = await mockOnlineSource();
+    let rejectOld!: (error: Error) => void;
+    getOnlineSource.mockReturnValueOnce(
+      new Promise((_, reject) => {
+        rejectOld = reject;
+      }),
+    );
+    const old = player.initPlayer(false);
+    await player.initPlayer(false);
+    rejectOld(unauthorized());
+    await old;
+    expect(mocks.status.playLoading).toBe(true);
+    player.retryAfterLogin();
+    expect(getOnlineSource).toHaveBeenCalledTimes(2);
   });
 });
 

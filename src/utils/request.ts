@@ -1,4 +1,10 @@
-import axios, { AxiosError, AxiosInstance, AxiosRequestConfig, AxiosResponse } from "axios";
+import axios, {
+  AxiosError,
+  AxiosInstance,
+  AxiosRequestConfig,
+  AxiosResponse,
+  CanceledError,
+} from "axios";
 import { useDataStore, useSettingStore } from "@/stores";
 import { openCaptcha, openUserLogin } from "@/utils/modal";
 import { refreshTokenApi } from "@/api/auth";
@@ -16,6 +22,8 @@ export type HemusicRequestConfig = AxiosRequestConfig & {
   /** 非幂等操作禁止刷新令牌后重放原请求。 */
   skipAuthRefresh?: boolean;
   _authRetried?: boolean;
+  /** 请求发出时的登录身份；仅刷新 Token 不会改变身份。 */
+  _authIdentityRevision?: number;
 };
 
 // Token 刷新并发保护
@@ -84,11 +92,21 @@ serverHemusic.interceptors.request.use(
   (request) => {
     // pinia
     const settingStore = useSettingStore();
+    const dataStore = useDataStore();
+    const options: HemusicRequestConfig = request;
+    if (
+      options._authRetried &&
+      options._authIdentityRevision !== undefined &&
+      options._authIdentityRevision !== dataStore.identityRevision
+    ) {
+      throw new CanceledError("登录身份已变更");
+    }
     if (!request.params) request.params = {};
-    const token = useDataStore().token;
+    const token = dataStore.token;
     if (token) request.headers.set("Authorization", "Bearer " + token);
     request.headers.set("Accept-Language", `${settingStore.language};q=0.9`);
     if (isHemusicRequest(request, API_URL)) {
+      options._authIdentityRevision = dataStore.identityRevision;
       const instanceID = getClientInstanceID();
       if (instanceID) request.headers.set(clientInstanceHeader, instanceID);
       else request.headers.delete(clientInstanceHeader);
@@ -122,6 +140,7 @@ serverHemusic.interceptors.request.use(
 serverHemusic.interceptors.response.use(
   (response: AxiosResponse) => response,
   async (error: AxiosError) => {
+    if (error instanceof CanceledError) return Promise.reject(error);
     const { response, config } = error;
     // 状态码处理
     switch (response?.status) {
@@ -133,26 +152,35 @@ serverHemusic.interceptors.response.use(
         const options: HemusicRequestConfig | undefined = config;
         if (options?.skipAuthRefresh) break;
         const dataStore = useDataStore();
+        const identityRevision = dataStore.identityRevision;
+        const requestRevision = options?._authIdentityRevision;
+        if (requestRevision !== undefined && requestRevision !== identityRevision) {
+          return Promise.reject(error);
+        }
+        const url = gatewayRequestURL(config);
+        const canRetry = !options?._authRetried && !isSkipRefreshUrl(url);
         const sentAuthorization = config?.headers.get?.("Authorization");
-        if (
-          (sentAuthorization && sentAuthorization !== `Bearer ${dataStore.token}`) ||
-          (config?.headers.has?.("Authorization") === false && dataStore.token)
-        ) {
+        if (sentAuthorization && sentAuthorization !== `Bearer ${dataStore.token}`) {
+          // 其他请求已为同一登录身份刷新 Token，迟到的 401 直接使用新 Token 重试一次。
+          if (canRetry && requestRevision !== undefined && dataStore.token && config && options) {
+            options._authRetried = true;
+            config.headers.set("Authorization", "Bearer " + dataStore.token);
+            return serverHemusic.request(config);
+          }
+          return Promise.reject(error);
+        }
+        if (config?.headers.has?.("Authorization") === false && dataStore.token) {
           return Promise.reject(error);
         }
         const refreshToken = dataStore.refreshToken;
         // 匿名 401 由入口展示登录按钮，不弹全局登录框，也不重放为其他身份。
-        if (!dataStore.token && !config?.headers.get?.("Authorization")) {
+        if (!dataStore.token && !sentAuthorization) {
           return Promise.reject(error);
         }
         // 刷新请求的 401 交给发起刷新流程的外层请求统一处理，避免重复登出
-        if (gatewayRequestURL(config)?.includes(REFRESH_TOKEN_URL)) return Promise.reject(error);
+        if (url?.includes(REFRESH_TOKEN_URL)) return Promise.reject(error);
         // 有 refreshToken 且不是登录/刷新接口，尝试自动刷新
-        if (
-          refreshToken &&
-          !options?._authRetried &&
-          !isSkipRefreshUrl(gatewayRequestURL(config))
-        ) {
+        if (refreshToken && canRetry) {
           if (options) options._authRetried = true;
           const originalToken = dataStore.token;
           if (isRefreshing) {
@@ -160,7 +188,9 @@ serverHemusic.interceptors.response.use(
             return new Promise((resolve, reject) => {
               pendingQueue.push({ resolve, reject });
             }).then((token) => {
-              if (dataStore.token !== token) return Promise.reject(error);
+              if (dataStore.identityRevision !== identityRevision || dataStore.token !== token) {
+                return Promise.reject(error);
+              }
               if (config) {
                 config.headers.set("Authorization", "Bearer " + token);
                 return serverHemusic.request(config);
@@ -172,7 +202,11 @@ serverHemusic.interceptors.response.use(
           isRefreshing = true;
           try {
             const res = await refreshTokenApi(refreshToken, await getDeviceInfo());
-            if (dataStore.token !== originalToken || dataStore.refreshToken !== refreshToken) {
+            if (
+              dataStore.identityRevision !== identityRevision ||
+              dataStore.token !== originalToken ||
+              dataStore.refreshToken !== refreshToken
+            ) {
               processPendingQueue(error);
               return Promise.reject(error);
             }
@@ -190,7 +224,11 @@ serverHemusic.interceptors.response.use(
           } catch (refreshError) {
             // 刷新失败时拒绝所有等待请求，只有 refresh token 明确失效才强制退出
             processPendingQueue(refreshError);
-            if (isInvalidRefreshTokenError(refreshError) && dataStore.token === originalToken) {
+            if (
+              isInvalidRefreshTokenError(refreshError) &&
+              dataStore.identityRevision === identityRevision &&
+              dataStore.token === originalToken
+            ) {
               try {
                 await dataStore.clearUserData();
               } catch (clearError) {

@@ -1,5 +1,5 @@
 import { applicationStorage } from "@/platform/applicationStorage";
-import { useDataStore, usePlatformStore, useSettingStore, useStatusStore } from "@/stores";
+import { useDataStore, usePlatformStore } from "@/stores";
 import { updateUserData } from "./auth";
 import { usePlayer } from "./player";
 
@@ -16,8 +16,6 @@ export async function completeLogin(result: LoginResult): Promise<void> {
   if (!token) throw new Error("Missing login token");
   const dataStore = useDataStore();
   const platformStore = usePlatformStore();
-  const statusStore = useStatusStore();
-  const settingStore = useSettingStore();
   const player = usePlayer();
   const resetCaches = dataStore.resetIdentityCaches();
   dataStore.token = token;
@@ -31,7 +29,7 @@ export async function completeLogin(result: LoginResult): Promise<void> {
     updateUserData(),
     platformStore.loadPlatforms(),
   ]);
-  if (statusStore.playLoading) player.initPlayer(settingStore.autoPlay, player.getSeek());
+  player.retryAfterLogin();
   if (updates.some((update) => update.status === "rejected")) {
     throw new Error("Login data refresh failed");
   }
