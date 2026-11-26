@@ -1,4 +1,4 @@
-# 与 srv-he-music 统一的 Go 代码检查与格式化规则。
+# 与后端统一的 Go 代码检查与格式化规则。
 version: "2"
 output:
   formats:
